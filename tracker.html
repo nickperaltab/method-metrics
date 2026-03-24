@@ -145,6 +145,66 @@ td select:focus{border-color:var(--accent)}
 .lens-result td{padding:6px 12px;white-space:nowrap}
 .lens-result .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
 .lens-loading{color:var(--text-dim);font-size:11px;font-family:var(--font-mono);padding:8px 0}
+
+/* New Metric Wizard */
+.wizard-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.wizard{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:90%;max-width:900px;max-height:90vh;overflow-y:auto;padding:28px 32px}
+.wizard h2{font-size:16px;color:var(--text-bright);margin-bottom:4px}
+.wizard .wiz-subtitle{color:var(--text-dim);font-size:12px;margin-bottom:20px}
+.wizard-close{position:absolute;top:16px;right:20px;background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer}
+.wiz-step{margin-bottom:20px}
+.wiz-step-label{font-family:var(--font-mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.wiz-step-num{background:var(--accent-dim);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.wiz-sql{
+  background:var(--bg);border:1px solid var(--border);color:#a5f3c4;
+  padding:14px 16px;border-radius:6px;font-family:var(--font-mono);font-size:12px;
+  width:100%;min-height:120px;resize:vertical;outline:none;line-height:1.6;
+}
+.wiz-sql:focus{border-color:var(--accent)}
+.wiz-sql::placeholder{color:#2a3a30}
+.wiz-input{
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:4px;font-family:var(--font-sans);font-size:13px;
+  width:100%;outline:none;
+}
+.wiz-input:focus{border-color:var(--accent)}
+.wiz-row{display:flex;gap:12px;margin-bottom:12px}
+.wiz-row > *{flex:1}
+.wiz-field label{display:block;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.wiz-btn{
+  background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);
+  padding:8px 20px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);
+  font-size:12px;font-weight:600;transition:all .15s;
+}
+.wiz-btn:hover{background:#0d2b1f;filter:brightness(1.2)}
+.wiz-btn:disabled{opacity:.4;cursor:not-allowed}
+.wiz-btn-secondary{background:var(--bg);border:1px solid var(--border);color:var(--text-dim)}
+.wiz-btn-secondary:hover{border-color:var(--text-dim);color:var(--text)}
+.wiz-preview{margin-top:12px;overflow-x:auto;max-height:250px;overflow-y:auto}
+.wiz-preview table{font-size:12px}
+.wiz-preview th{background:var(--bg);position:sticky;top:0}
+.wiz-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.wiz-suggestion{
+  background:var(--bg);border:1px solid var(--border);color:var(--text-dim);
+  padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;
+  font-family:var(--font-mono);transition:all .15s;display:flex;align-items:center;gap:6px;
+}
+.wiz-suggestion:hover{border-color:var(--accent);color:var(--accent)}
+.wiz-suggestion.selected{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.wiz-suggestion .check{display:none}
+.wiz-suggestion.selected .check{display:inline}
+.wiz-columns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.wiz-col-tag{background:var(--blue-bg);border:1px solid #1a2d4a;color:var(--blue);padding:2px 8px;border-radius:3px;font-size:11px;font-family:var(--font-mono)}
+.wiz-derived-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.wiz-derived-row:last-child{border-bottom:none}
+.add-metric-btn{
+  position:fixed;bottom:24px;right:24px;z-index:50;
+  background:var(--accent);color:var(--bg);border:none;
+  width:48px;height:48px;border-radius:50%;cursor:pointer;
+  font-size:24px;font-weight:700;box-shadow:0 4px 16px rgba(52,211,153,.3);
+  transition:all .15s;display:flex;align-items:center;justify-content:center;
+}
+.add-metric-btn:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(52,211,153,.4)}
 .dep-pill{cursor:pointer;transition:all .15s}
 .dep-pill:hover{filter:brightness(1.3);transform:scale(1.05)}
 .notes-area{
@@ -376,6 +436,17 @@ function renderApp() {
   renderThead();
   applyFilters();
   updateBqStatus();
+
+  // Add floating "+" button
+  if (!document.getElementById('add-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'add-btn';
+    btn.className = 'add-metric-btn';
+    btn.textContent = '+';
+    btn.title = 'Add new metric';
+    btn.onclick = openWizard;
+    document.body.appendChild(btn);
+  }
 }
 
 function renderThead() {
@@ -758,6 +829,297 @@ function resetFilters() {
 function esc(s) {
   if (!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- New Metric Wizard ---
+
+// Known dimension columns and what lenses they enable
+const KNOWN_DIMS = {
+  'Channel': { lens: 'By Channel', type: 'transform' },
+  'SignupCountry': { lens: 'By Country', type: 'transform' },
+  'CustDatIndustry': { lens: 'By Industry', type: 'transform' },
+  'SyncType': { lens: 'By Sync Type', type: 'transform' },
+  'SyncTypeRegion': { lens: 'By Sync Region', type: 'transform' },
+  'Vertical': { lens: 'By Vertical', type: 'transform' },
+  'CompanyAccount': { lens: 'By Account', type: 'transform' },
+};
+const DATE_PATTERNS = ['Date', 'SignupDate', 'SyncDate', 'TxnDate', 'CancellationDate', 'FirstSaaSInvoiceTxnDate'];
+
+let wizardState = { columns: [], rows: [], sql: '', name: '', stage: '', dateCol: null, selectedLenses: new Set(), selectedDerived: [] };
+
+function openWizard() {
+  wizardState = { columns: [], rows: [], sql: '', name: '', stage: 'trials', dateCol: null, selectedLenses: new Set(), selectedDerived: [] };
+  renderWizard();
+}
+
+function closeWizard() {
+  document.getElementById('wizard-root')?.remove();
+}
+
+function renderWizard() {
+  let existing = document.getElementById('wizard-root');
+  if (!existing) {
+    existing = document.createElement('div');
+    existing.id = 'wizard-root';
+    document.body.appendChild(existing);
+  }
+
+  const hasResults = wizardState.columns.length > 0;
+  const dateCol = wizardState.dateCol;
+  const dims = wizardState.columns.filter(c => KNOWN_DIMS[c]);
+  const hasDateCol = !!dateCol;
+
+  // Suggest derived metrics based on existing primitives
+  const primitiveList = allMetrics.filter(m => m.metric_type === 'primitive' && m.view_name);
+  const suggestedDerived = hasResults ? primitiveList.map(p => ({
+    id: p.id,
+    name: `Rate: ${wizardState.name || 'New'} / ${p.name}`,
+    formula: `SAFE_DIVIDE(new_metric, ${p.name}) * 100`,
+    primitive: p.name,
+  })) : [];
+
+  existing.innerHTML = `<div class="wizard-overlay" onclick="if(event.target===this)closeWizard()">
+    <div class="wizard" style="position:relative">
+      <button class="wizard-close" onclick="closeWizard()">&times;</button>
+      <h2>New Metric</h2>
+      <p class="wiz-subtitle">Paste SQL, preview results, auto-generate breakdowns and views</p>
+
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">1</span> Define</div>
+        <div class="wiz-row">
+          <div class="wiz-field"><label>Name</label><input class="wiz-input" id="wiz-name" placeholder="e.g. Trials" value="${esc(wizardState.name)}" oninput="wizardState.name=this.value"></div>
+          <div class="wiz-field"><label>Stage</label>
+            <select class="wiz-input" id="wiz-stage" onchange="wizardState.stage=this.value">
+              ${['trials','sync','conversion','cancellation','revenue','kpi','financial','forecast','attribution','underlying'].map(s =>
+                `<option value="${s}"${wizardState.stage===s?' selected':''}>${s}</option>`
+              ).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="wiz-field"><label>SQL Query</label>
+          <textarea class="wiz-sql" id="wiz-sql" placeholder="SELECT ... FROM \`project-for-method-dw.revenue.Account\` WHERE ...">${esc(wizardState.sql)}</textarea>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="wiz-btn" onclick="runWizardSql()" ${!bqToken?'disabled title="Connect BQ first"':''}>Run SQL</button>
+          ${!bqToken ? '<span style="color:var(--text-dim);font-size:11px;align-self:center">Connect BQ first to preview</span>' : ''}
+        </div>
+      </div>
+
+      ${hasResults ? `
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">2</span> Preview <span style="color:var(--text-dim);font-size:10px;text-transform:none;letter-spacing:0">${wizardState.rows.length} rows</span></div>
+        <div style="margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text-dim)">Columns detected:</span>
+          <div class="wiz-columns">
+            ${wizardState.columns.map(c => {
+              const isDate = DATE_PATTERNS.some(p => c.toLowerCase().includes(p.toLowerCase()));
+              const isDim = KNOWN_DIMS[c];
+              return `<span class="wiz-col-tag" style="${isDate?'border-color:var(--green);color:var(--green)':isDim?'border-color:#a78bfa;color:#a78bfa':''}">${c}${isDate?' (date)':''}${isDim?' (dim)':''}</span>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="wiz-preview">
+          <table>
+            <thead><tr>${wizardState.columns.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+            <tbody>${wizardState.rows.slice(0, 10).map(r => `<tr>${wizardState.columns.map(c => {
+              const v = r[c];
+              const isNum = !isNaN(v) && v !== null && v !== '';
+              return `<td class="${isNum?'num':''}">${isNum ? Number(v).toLocaleString() : (v||'—')}</td>`;
+            }).join('')}</tr>`).join('')}
+            ${wizardState.rows.length > 10 ? `<tr><td colspan="${wizardState.columns.length}" style="color:var(--text-dim);text-align:center">... ${wizardState.rows.length - 10} more rows</td></tr>` : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">3</span> Suggested Breakdowns</div>
+        <div class="wiz-suggestions">
+          ${hasDateCol ? `
+            <div class="wiz-suggestion ${wizardState.selectedLenses.has('monthly')?'selected':''}" onclick="toggleLens('monthly',this)"><span class="check">&#10003; </span>Monthly</div>
+            <div class="wiz-suggestion ${wizardState.selectedLenses.has('weekly')?'selected':''}" onclick="toggleLens('weekly',this)"><span class="check">&#10003; </span>Weekly</div>
+            <div class="wiz-suggestion ${wizardState.selectedLenses.has('yoy')?'selected':''}" onclick="toggleLens('yoy',this)"><span class="check">&#10003; </span>Year over Year</div>
+          ` : '<span style="color:var(--text-dim);font-size:11px">No date column detected — time-based breakdowns not available</span>'}
+          ${dims.map(c => `
+            <div class="wiz-suggestion ${wizardState.selectedLenses.has('dim_'+c)?'selected':''}" onclick="toggleLens('dim_${c}',this)"><span class="check">&#10003; </span>${KNOWN_DIMS[c].lens}</div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">4</span> Suggested Derived Rates</div>
+        ${suggestedDerived.length > 0 ? `
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Combine with existing primitives:</div>
+          <div class="wiz-suggestions">
+            ${suggestedDerived.slice(0, 6).map(d => `
+              <div class="wiz-suggestion ${wizardState.selectedDerived.includes(d.id)?'selected':''}" onclick="toggleDerived(${d.id},this)"><span class="check">&#10003; </span>${d.primitive} rate</div>
+            `).join('')}
+          </div>
+        ` : '<span style="color:var(--text-dim);font-size:11px">Run SQL first to see suggestions</span>'}
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="wiz-btn wiz-btn-secondary" onclick="closeWizard()">Cancel</button>
+        <button class="wiz-btn" onclick="createMetricFromWizard()" ${!wizardState.name?'disabled':''}>Create Metric${wizardState.selectedLenses.size > 0 ? ` + ${wizardState.selectedLenses.size} Breakdowns` : ''}</button>
+      </div>
+      ` : ''}
+    </div>
+  </div>`;
+}
+
+async function runWizardSql() {
+  const sql = document.getElementById('wiz-sql')?.value?.trim();
+  if (!sql || !bqToken) return;
+
+  wizardState.sql = sql;
+  try {
+    const rows = await queryBq(sql + (sql.toLowerCase().includes(' limit ') ? '' : ' LIMIT 100'));
+    if (!rows || rows.length === 0) { alert('Query returned 0 rows'); return; }
+    wizardState.columns = Object.keys(rows[0]);
+    wizardState.rows = rows;
+
+    // Auto-detect date column
+    wizardState.dateCol = wizardState.columns.find(c =>
+      DATE_PATTERNS.some(p => c.toLowerCase() === p.toLowerCase())
+    ) || null;
+
+    renderWizard();
+  } catch (e) {
+    alert('Query failed: ' + e.message);
+  }
+}
+
+function toggleLens(key, el) {
+  if (wizardState.selectedLenses.has(key)) wizardState.selectedLenses.delete(key);
+  else wizardState.selectedLenses.add(key);
+  renderWizard();
+}
+
+function toggleDerived(id, el) {
+  const idx = wizardState.selectedDerived.indexOf(id);
+  if (idx >= 0) wizardState.selectedDerived.splice(idx, 1);
+  else wizardState.selectedDerived.push(id);
+  renderWizard();
+}
+
+async function createMetricFromWizard() {
+  const name = wizardState.name?.trim();
+  if (!name) return;
+
+  const viewName = 'v_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/, '');
+
+  // Step 1: Create BQ view
+  if (bqToken && wizardState.sql) {
+    try {
+      await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${viewName}\` AS ${wizardState.sql}`);
+    } catch (e) {
+      alert('Failed to create BQ view: ' + e.message);
+      return;
+    }
+  }
+
+  // Step 2: Create Supabase row
+  const metric = {
+    name: name,
+    stage: wizardState.stage || 'trials',
+    status: 'review',
+    metric_type: 'primitive',
+    view_name: viewName,
+    view_definition: wizardState.sql,
+    source: 'bigquery',
+    priority: 'medium',
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics`, {
+    method: 'POST',
+    headers: { ...HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify(metric),
+  });
+  if (!res.ok) { alert('Failed to create metric in Supabase'); return; }
+  const created = await res.json();
+  const newId = created[0]?.id;
+
+  // Step 3: Create breakdown views if selected
+  const dateCol = wizardState.dateCol;
+  for (const lens of wizardState.selectedLenses) {
+    let breakdownSql, breakdownView, breakdownName;
+
+    if (lens === 'monthly' && dateCol) {
+      breakdownView = `${viewName}_monthly`;
+      breakdownName = `${name} Monthly`;
+      breakdownSql = `SELECT FORMAT_DATE('%Y-%m', ${dateCol}) AS period, COUNT(*) AS actual FROM \`project-for-method-dw.revenue.${viewName}\` GROUP BY 1 ORDER BY 1`;
+    } else if (lens === 'weekly' && dateCol) {
+      breakdownView = `${viewName}_weekly`;
+      breakdownName = `${name} Weekly`;
+      breakdownSql = `SELECT FORMAT_DATE('%Y-W%V', ${dateCol}) AS week, COUNT(*) AS actual FROM \`project-for-method-dw.revenue.${viewName}\` WHERE ${dateCol} >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY) GROUP BY 1 ORDER BY 1`;
+    } else if (lens === 'yoy' && dateCol) {
+      breakdownView = `${viewName}_yoy`;
+      breakdownName = `${name} YoY`;
+      breakdownSql = `SELECT EXTRACT(YEAR FROM ${dateCol}) AS year, EXTRACT(MONTH FROM ${dateCol}) AS month_num, FORMAT_DATE('%b', ${dateCol}) AS month_name, COUNT(*) AS actual FROM \`project-for-method-dw.revenue.${viewName}\` GROUP BY 1, 2, 3 ORDER BY 1, 2`;
+    } else if (lens.startsWith('dim_')) {
+      const dim = lens.replace('dim_', '');
+      breakdownView = `${viewName}_by_${dim.toLowerCase()}`;
+      breakdownName = `${name} ${KNOWN_DIMS[dim]?.lens || 'By ' + dim}`;
+      breakdownSql = `SELECT ${dim}, COUNT(*) AS value FROM \`project-for-method-dw.revenue.${viewName}\` GROUP BY 1 ORDER BY value DESC`;
+    }
+
+    if (breakdownSql && breakdownView) {
+      try {
+        await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${breakdownView}\` AS ${breakdownSql}`);
+        await fetch(`${SUPABASE_URL}/rest/v1/metrics`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            name: breakdownName,
+            stage: wizardState.stage,
+            status: 'review',
+            metric_type: 'breakdown',
+            view_name: breakdownView,
+            view_definition: breakdownSql,
+            primitive_metric_id: newId,
+            source: 'bigquery',
+          }),
+        });
+      } catch (e) {
+        console.error(`Failed to create breakdown ${breakdownView}:`, e);
+      }
+    }
+  }
+
+  // Step 4: Create derived rate views if selected
+  for (const primId of wizardState.selectedDerived) {
+    const prim = allMetrics.find(m => m.id === primId);
+    if (!prim) continue;
+    const derivedView = `${viewName}_per_${prim.view_name?.replace('v_', '') || primId}`;
+    const derivedName = `${name} / ${prim.name} Rate`;
+    const derivedSql = `SELECT a.period, a.actual AS ${viewName.replace('v_','')}, b.actual AS ${prim.view_name?.replace('v_','') || 'base'}, ROUND(SAFE_DIVIDE(a.actual, b.actual) * 100, 2) AS rate FROM \`project-for-method-dw.revenue.${viewName}_monthly\` a LEFT JOIN \`project-for-method-dw.revenue.${prim.view_name}_monthly\` b ON a.period = b.period`;
+
+    try {
+      await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${derivedView}\` AS ${derivedSql}`);
+      await fetch(`${SUPABASE_URL}/rest/v1/metrics`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          name: derivedName,
+          stage: wizardState.stage,
+          status: 'review',
+          metric_type: 'derived',
+          view_name: derivedView,
+          view_definition: derivedSql,
+          depends_on: [newId, primId],
+          source: 'bigquery',
+        }),
+      });
+    } catch (e) {
+      console.error(`Failed to create derived ${derivedView}:`, e);
+    }
+  }
+
+  // Reload and close
+  closeWizard();
+  allMetrics = [];
+  await loadMetrics();
+  renderApp();
 }
 
 // --- Init ---
