@@ -81,6 +81,7 @@ tr.data-row.expanded td{background:var(--surface);border-bottom-color:transparen
 .type-breakdown{background:var(--blue-bg);color:var(--blue);border:1px solid #1a2d4a}
 .type-derived{background:var(--yellow-bg);color:var(--yellow);border:1px solid #332b0a}
 .type-catalog{background:var(--gray-bg);color:var(--gray);border:1px solid #1f242d}
+.type-transform{background:#1a0f2e;color:#a78bfa;border:1px solid #2d1f5e}
 
 /* Status dots */
 .status{display:flex;align-items:center;gap:6px;white-space:nowrap}
@@ -166,6 +167,7 @@ td select:focus{border-color:var(--accent)}
 .group-breakdown .group-title{color:var(--blue)}
 .group-derived .group-title{color:var(--yellow)}
 .group-catalog .group-title{color:var(--gray)}
+.group-transform .group-title{color:#a78bfa}
 
 /* Loading */
 .loading{display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:12px}
@@ -225,6 +227,10 @@ async function updateMetric(id, fields) {
 
 // --- Classification ---
 function getType(m) {
+  if (m.metric_type && m.metric_type !== 'catalog') {
+    return m.metric_type.charAt(0).toUpperCase() + m.metric_type.slice(1);
+  }
+  // Fallback for rows without metric_type
   if (m.primitive_metric_id) return 'Breakdown';
   if (m.depends_on && m.depends_on.length > 0) return 'Derived';
   if (!m.chart_sql && !m.view_name) return 'Catalog';
@@ -346,6 +352,7 @@ function renderApp() {
           <option value="">All</option>
           <option value="Primitive">Primitive</option>
           <option value="Breakdown">Breakdown</option>
+          <option value="Transform">Transform</option>
           <option value="Derived">Derived</option>
           <option value="Catalog">Catalog</option>
         </select>
@@ -404,6 +411,7 @@ function renderTable() {
   const groups = [
     { key: 'Primitive', label: 'Primitives', cls: 'group-primitive' },
     { key: 'Breakdown', label: 'Breakdowns', cls: 'group-breakdown' },
+    { key: 'Transform', label: 'Transforms', cls: 'group-transform' },
     { key: 'Derived', label: 'Derived', cls: 'group-derived' },
     { key: 'Catalog', label: 'Catalog', cls: 'group-catalog' },
   ];
