@@ -971,9 +971,16 @@ async function runWizardSql() {
   const sql = document.getElementById('wiz-sql')?.value?.trim();
   if (!sql || !bqToken) return;
 
-  wizardState.sql = sql;
+  // Fix smart quotes and typographic characters that break SQL
+  wizardState.sql = sql
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2260/g, '!=')
+    .replace(/\u2265/g, '>=')
+    .replace(/\u2264/g, '<=');
+  const cleanSql = wizardState.sql;
   try {
-    const rows = await queryBq(sql + (sql.toLowerCase().includes(' limit ') ? '' : ' LIMIT 100'));
+    const rows = await queryBq(cleanSql + (cleanSql.toLowerCase().includes(' limit ') ? '' : ' LIMIT 100'));
     if (!rows || rows.length === 0) { alert('Query returned 0 rows'); return; }
     wizardState.columns = Object.keys(rows[0]);
     wizardState.rows = rows;
