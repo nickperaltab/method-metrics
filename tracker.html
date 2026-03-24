@@ -757,18 +757,34 @@ function updateBqStatus() {
   }
 }
 
+function cleanSqlText(sql) {
+  return sql
+    .replace(/[\u2018\u2019\u0060\u00B4]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2260/g, '!=')
+    .replace(/\u2265/g, '>=')
+    .replace(/\u2264/g, '<=')
+    .replace(/`/g, '`'); // normalize backticks
+}
+
 async function queryBq(sql) {
   if (!bqToken) return null;
+  const clean = cleanSqlText(sql);
+  console.log('BQ query:', clean);
   const res = await fetch('https://bigquery.googleapis.com/bigquery/v2/projects/project-for-method-dw/queries', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: sql, useLegacySql: false, maxResults: 100 }),
+    body: JSON.stringify({ query: clean, useLegacySql: false, maxResults: 100 }),
   });
   if (!res.ok) {
     if (res.status === 401) { bqToken = null; localStorage.removeItem('bq_access_token'); }
-    throw new Error(`BQ ${res.status}`);
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`BQ ${res.status}: ${errBody.substring(0, 200)}`);
   }
   const data = await res.json();
+  if (data.errors && data.errors.length > 0) {
+    throw new Error('BQ error: ' + data.errors[0].message);
+  }
   if (!data.rows) return [];
   const fields = data.schema.fields.map(f => f.name);
   return data.rows.map(r => {
@@ -981,7 +997,7 @@ async function runWizardSql() {
   const cleanSql = wizardState.sql;
   try {
     const rows = await queryBq(cleanSql + (cleanSql.toLowerCase().includes(' limit ') ? '' : ' LIMIT 100'));
-    if (!rows || rows.length === 0) { alert('Query returned 0 rows'); return; }
+    if (!rows || rows.length === 0) { alert('Query returned 0 rows. Open browser console (Cmd+Option+J) to see the actual SQL sent to BQ.'); return; }
     wizardState.columns = Object.keys(rows[0]);
     wizardState.rows = rows;
 
