@@ -585,12 +585,27 @@ function renderExpandPanel(m) {
     ? `<div class="expand-section"><div class="expand-label">BQ View</div><div style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">revenue.${m.view_name}</div></div>`
     : '';
 
+  const sqlText = m.view_definition || m.chart_sql || '';
+
   return `<tr class="expand-row"><td colspan="9"><div class="expand-panel" id="${panelId}">
     ${viewInfo}
     ${parentHtml}
     <div class="expand-section">
-      <div class="expand-label">SQL Definition ${m.view_name ? `<span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">(BQ view: revenue.${m.view_name})</span>` : ''}</div>
-      <div class="sql-block" id="sql-${m.id}">${esc(m.view_definition || m.chart_sql || 'No SQL definition')}</div>
+      <div class="expand-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>SQL Definition ${m.view_name ? `<span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">(BQ view: revenue.${m.view_name})</span>` : ''}</span>
+        <div style="display:flex;gap:6px">
+          <button class="lens-btn" onclick="event.stopPropagation();toggleSqlEdit(${m.id})" id="edit-btn-${m.id}">Edit</button>
+          <button class="lens-btn" onclick="event.stopPropagation();testSql(${m.id})" title="Run query and preview results">Test</button>
+        </div>
+      </div>
+      <div class="sql-block" id="sql-display-${m.id}" ${sqlText ? '' : 'style="display:none"'}>${esc(sqlText) || 'No SQL definition'}</div>
+      <textarea class="wiz-sql" id="sql-edit-${m.id}" style="display:none;margin-top:6px" onclick="event.stopPropagation()">${esc(sqlText)}</textarea>
+      <div id="sql-edit-actions-${m.id}" style="display:none;margin-top:8px;gap:6px">
+        <button class="wiz-btn" onclick="event.stopPropagation();saveSqlEdit(${m.id})">Save SQL</button>
+        <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();saveSqlAndCreateView(${m.id})">Save + Update BQ View</button>
+        <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();toggleSqlEdit(${m.id})">Cancel</button>
+      </div>
+      <div id="sql-test-result-${m.id}" style="margin-top:8px"></div>
     </div>
     <div class="expand-section">
       <div class="expand-label">Depends On</div>
@@ -608,6 +623,9 @@ function renderExpandPanel(m) {
     <div class="expand-section">
       <div class="expand-label">Notes</div>
       <textarea class="notes-area" placeholder="Add notes, context, verification details..." onclick="event.stopPropagation()" onchange="saveField(${m.id},'notes',this.value,this)">${esc(m.notes || '')}</textarea>
+    </div>
+    <div class="expand-section" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
+      <button class="lens-btn" style="color:var(--red);border-color:#3d1a1a" onclick="event.stopPropagation();deleteMetric(${m.id},'${esc(m.name)}')">Delete Metric</button>
     </div>
   </div></td></tr>`;
 }
@@ -845,6 +863,132 @@ function resetFilters() {
 function esc(s) {
   if (!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- Edit, Test, Delete ---
+
+function toggleSqlEdit(id) {
+  const display = document.getElementById(`sql-display-${id}`);
+  const editor = document.getElementById(`sql-edit-${id}`);
+  const actions = document.getElementById(`sql-edit-actions-${id}`);
+  const btn = document.getElementById(`edit-btn-${id}`);
+  if (!editor) return;
+
+  const isEditing = editor.style.display !== 'none';
+  display.style.display = isEditing ? '' : 'none';
+  editor.style.display = isEditing ? 'none' : '';
+  actions.style.display = isEditing ? 'none' : 'flex';
+  btn.textContent = isEditing ? 'Edit' : 'Cancel';
+}
+
+async function saveSqlEdit(id) {
+  const editor = document.getElementById(`sql-edit-${id}`);
+  if (!editor) return;
+  const sql = editor.value.trim();
+
+  await updateMetric(id, { view_definition: sql, chart_sql: sql });
+
+  const m = allMetrics.find(x => x.id === id);
+  if (m) { m.view_definition = sql; m.chart_sql = sql; }
+
+  toggleSqlEdit(id);
+  const display = document.getElementById(`sql-display-${id}`);
+  if (display) { display.textContent = sql; display.style.display = ''; }
+}
+
+async function saveSqlAndCreateView(id) {
+  const editor = document.getElementById(`sql-edit-${id}`);
+  if (!editor || !bqToken) { alert('Connect BQ first'); return; }
+  const sql = editor.value.trim();
+  if (!sql) return;
+
+  const m = allMetrics.find(x => x.id === id);
+  const viewName = m?.view_name || 'v_' + (m?.name || 'metric_' + id).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/, '');
+
+  try {
+    await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${viewName}\` AS ${sql}`);
+    await updateMetric(id, { view_definition: sql, chart_sql: sql, view_name: viewName });
+    if (m) { m.view_definition = sql; m.chart_sql = sql; m.view_name = viewName; }
+
+    toggleSqlEdit(id);
+    const display = document.getElementById(`sql-display-${id}`);
+    if (display) { display.textContent = sql; display.style.display = ''; }
+    alert(`View revenue.${viewName} updated`);
+  } catch (e) {
+    alert('Failed to create BQ view: ' + e.message);
+  }
+}
+
+async function testSql(id) {
+  const m = allMetrics.find(x => x.id === id);
+  const resultEl = document.getElementById(`sql-test-result-${id}`);
+  if (!resultEl || !bqToken) { alert('Connect BQ first'); return; }
+
+  // Use the editor value if editing, otherwise the saved definition
+  const editor = document.getElementById(`sql-edit-${id}`);
+  const isEditing = editor && editor.style.display !== 'none';
+  let sql = isEditing ? editor.value.trim() : (m?.view_definition || m?.chart_sql);
+
+  if (m?.view_name && !isEditing) {
+    sql = `SELECT * FROM \`project-for-method-dw.revenue.${m.view_name}\``;
+  }
+
+  if (!sql) { resultEl.innerHTML = '<span style="color:var(--text-dim)">No SQL to test</span>'; return; }
+
+  resultEl.innerHTML = '<div class="lens-loading">Running...</div>';
+
+  try {
+    const limitSql = sql.toLowerCase().includes(' limit ') ? sql : sql + ' LIMIT 20';
+    const rows = await queryBq(limitSql);
+    if (!rows || rows.length === 0) {
+      resultEl.innerHTML = '<div class="lens-loading">Query returned 0 rows</div>';
+      return;
+    }
+    const cols = Object.keys(rows[0]);
+    resultEl.innerHTML = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${rows.length} rows (limited to 20)</div>
+      <div class="wiz-preview"><table>
+        <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${cols.map(c => {
+          const v = r[c];
+          const isNum = !isNaN(v) && v !== null && v !== '';
+          return `<td class="${isNum ? 'num' : ''}">${isNum ? Number(v).toLocaleString() : (v || '—')}</td>`;
+        }).join('')}</tr>`).join('')}</tbody>
+      </table></div>`;
+  } catch (e) {
+    resultEl.innerHTML = `<div class="lens-loading" style="color:var(--red)">${e.message}</div>`;
+  }
+}
+
+async function deleteMetric(id, name) {
+  const dependents = getDependents(id);
+  let msg = `Delete "${name}" (id ${id})?`;
+  if (dependents.length > 0) {
+    msg += `\n\nWARNING: ${dependents.length} metric(s) depend on this:\n${dependents.map(d => '  - ' + d.name).join('\n')}`;
+  }
+  if (!confirm(msg)) return;
+
+  // Delete from Supabase
+  await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: HEADERS,
+  });
+
+  // Optionally delete BQ view
+  const m = allMetrics.find(x => x.id === id);
+  if (m?.view_name && bqToken) {
+    if (confirm(`Also delete BQ view revenue.${m.view_name}?`)) {
+      try {
+        await queryBq(`DROP VIEW IF EXISTS \`project-for-method-dw.revenue.${m.view_name}\``);
+      } catch (e) {
+        console.error('Failed to drop view:', e);
+      }
+    }
+  }
+
+  allMetrics = allMetrics.filter(x => x.id !== id);
+  expandedId = null;
+  applyFilters();
+  renderTable();
 }
 
 // --- New Metric Wizard ---
