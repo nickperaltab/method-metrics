@@ -1,15 +1,20 @@
 import React from 'react';
+import TopBar from './components/TopBar';
+import Explorer from './components/Explorer';
 import { useMetrics } from './hooks/useMetrics';
+import { useBqAuth } from './hooks/useBqAuth';
 
 export default function App() {
-  const { metrics, grouped, loading, error } = useMetrics();
+  const { grouped, loading: metricsLoading } = useMetrics();
+  const { connected, userEmail, connect } = useBqAuth();
 
   return (
     <div style={{ background: '#06080a', color: '#c8cdd3', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
-      <h1 style={{ padding: 32, color: '#edf0f3' }}>Method Explorer</h1>
-      <p style={{ padding: '0 32px', color: '#5a6370' }}>
-        {loading ? 'Loading metrics...' : error ? `Error: ${error}` : `Loaded ${metrics.length} metrics (${grouped.primitives.length} primitives, ${grouped.derived.length} derived)`}
-      </p>
+      <TopBar connected={connected} userEmail={userEmail} onConnect={connect} />
+      {metricsLoading
+        ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
+        : <Explorer grouped={grouped} bqConnected={connected} />
+      }
     </div>
   );
 }
