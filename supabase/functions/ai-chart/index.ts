@@ -31,7 +31,9 @@ Guidelines:
 - For comparisons (by channel, by country), use the category column for x_field and chart_type "bar"
 - For rates/percentages, prefer chart_type "line"
 - Pick the most specific metric that matches the request
-- y_field should typically be a numeric/quantitative column`;
+- If there is a numeric/quantitative column available, use it for y_field
+- If no numeric column exists (only dates and strings), set y_field to "COUNT" — the frontend will aggregate row counts automatically
+- When y_field is "COUNT", the chart will show the count of rows grouped by x_field`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
