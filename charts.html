@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Method — Charts</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06080a;--surface:#0c0f12;--border:#1a1e24;--border-hover:#2a3038;
+  --text:#c8cdd3;--text-dim:#5a6370;--text-bright:#edf0f3;
+  --green:#34d399;--green-bg:#0a1f17;--blue:#60a5fa;--blue-bg:#0c1929;
+  --yellow:#fbbf24;--yellow-bg:#1a1608;--red:#f87171;
+  --accent:#34d399;--accent-dim:#1a3d2e;
+  --font-mono:'JetBrains Mono',monospace;--font-sans:'DM Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.top-bar{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)}
+.top-bar-left{display:flex;align-items:center;gap:16px}
+.logo{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:var(--accent-dim);padding:5px 10px;border-radius:4px;border:1px solid #1a3d2e}
+.nav-links{display:flex;gap:8px}
+.nav-links a{color:var(--text-dim);text-decoration:none;font-size:13px;padding:4px 12px;border-radius:4px;transition:all .15s}
+.nav-links a:hover{color:var(--text)}
+.nav-links a.active{background:var(--accent-dim);color:var(--accent)}
+#bq-status{font-family:var(--font-mono);font-size:11px}
+
+.page{padding:32px;max-width:1400px;margin:0 auto}
+h2{font-size:16px;font-weight:700;color:var(--text-bright);margin-bottom:16px;letter-spacing:-.01em}
+h3{font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:8px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em}
+
+.section{margin-bottom:40px;padding:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+
+/* Chart grid */
+.chart-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.chart-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.chart-card h3{margin-bottom:10px;font-size:12px}
+.chart-card canvas{width:100%!important;height:220px!important}
+.chart-card .stat{font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--text-bright);margin-bottom:8px}
+.chart-card .stat-label{font-size:11px;color:var(--text-dim)}
+
+/* Controls */
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.ctrl-group{display:flex;align-items:center;gap:6px}
+.ctrl-label{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+.ctrl-btn{background:var(--bg);border:1px solid var(--border);color:var(--text-dim);padding:5px 14px;border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:11px;transition:all .15s}
+.ctrl-btn:hover{border-color:var(--border-hover);color:var(--text)}
+.ctrl-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.ctrl-btn.dim-active{background:#1a0f2e;border-color:#a78bfa;color:#a78bfa}
+select.ctrl-select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:4px;font-size:12px;outline:none}
+select.ctrl-select:focus{border-color:var(--accent)}
+
+/* Builder */
+.builder-layout{display:grid;grid-template-columns:280px 1fr;gap:20px;min-height:400px}
+.builder-sidebar{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-y:auto;max-height:500px}
+.builder-main{position:relative}
+.builder-main canvas{width:100%!important;height:400px!important}
+.metric-checkbox{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;transition:background .1s}
+.metric-checkbox:hover{background:var(--surface)}
+.metric-checkbox input{accent-color:var(--accent)}
+.metric-checkbox .badge{font-family:var(--font-mono);font-size:9px;padding:1px 6px;border-radius:3px;margin-left:auto}
+
+/* Validation */
+.val-tree{font-family:var(--font-mono);font-size:12px;line-height:2;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.val-tree .indent{margin-left:20px;border-left:1px solid var(--border);padding-left:12px}
+.val-btn{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:600;transition:all .15s}
+.val-btn:hover{filter:brightness(1.2)}
+.val-btn.danger{background:#1c0c0c;border-color:var(--red);color:var(--red)}
+.val-results{margin-top:12px}
+.val-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.val-row .name{color:var(--text)}
+.val-row .val{font-family:var(--font-mono);color:var(--text-bright)}
+.val-row .changed{color:var(--yellow)}
+
+.loading-msg{color:var(--text-dim);font-size:12px;font-family:var(--font-mono);padding:20px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo">Method</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="tracker.html">Tracker</a>
+      <a href="charts.html" class="active">Charts</a>
+    </div>
+  </div>
+  <div id="bq-status"></div>
+</div>
+
+<div class="page" id="app">
+  <div class="loading-msg">Connecting...</div>
+</div>
+
+<script>
+// --- Config ---
+const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
+const HEADERS = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+const BQ_CLIENT_ID = '546732685010-nojjfak7esmun2taour8r5pakrsrg3aq.apps.googleusercontent.com';
+const PALETTE = ['#34d399','#60a5fa','#fbbf24','#f87171','#a78bfa','#38bdf8','#fb923c','#e879f9','#4ade80','#f472b6','#818cf8','#22d3ee'];
+
+let allMetrics = [];
+let bqToken = null;
+let charts = {};
+
+// --- Supabase ---
+async function loadMetrics() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?select=*&order=id`, { headers: HEADERS });
+  allMetrics = await res.json();
+}
+
+// --- BQ Auth ---
+function initBqAuth() {
+  const stored = localStorage.getItem('bq_access_token');
+  if (stored) { bqToken = stored; updateBqStatus(); }
+}
+
+function connectBq() {
+  if (!window.google?.accounts?.oauth2) return;
+  google.accounts.oauth2.initTokenClient({
+    client_id: BQ_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/bigquery',
+    callback: (r) => { if (r.access_token) { bqToken = r.access_token; localStorage.setItem('bq_access_token', bqToken); updateBqStatus(); renderPage(); } },
+  }).requestAccessToken();
+}
+
+function updateBqStatus() {
+  const el = document.getElementById('bq-status');
+  if (el) el.innerHTML = bqToken
+    ? '<span style="color:var(--green)">&#9679; BQ Connected</span>'
+    : '<button onclick="connectBq()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:4px 12px;border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:11px">Connect BigQuery</button>';
+}
+
+function cleanSqlText(sql) {
+  return sql.replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/\u2260/g,'!=').replace(/\u2265/g,'>=').replace(/\u2264/g,'<=');
+}
+
+async function queryBq(sql) {
+  if (!bqToken) return null;
+  const clean = cleanSqlText(sql);
+  const res = await fetch('https://bigquery.googleapis.com/bigquery/v2/projects/project-for-method-dw/queries', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: clean, useLegacySql: false, maxResults: 10000 }),
+  });
+  if (!res.ok) {
+    if (res.status === 401) { bqToken = null; localStorage.removeItem('bq_access_token'); }
+    throw new Error(`BQ ${res.status}`);
+  }
+  const data = await res.json();
+  if (!data.rows) return [];
+  const fields = data.schema.fields.map(f => f.name);
+  return data.rows.map(r => { const o = {}; fields.forEach((f,i) => o[f] = r.f[i].v); return o; });
+}
+
+// --- Helpers ---
+function getPrimitives() { return allMetrics.filter(m => m.metric_type === 'primitive'); }
+function getFoundationals() { return allMetrics.filter(m => m.metric_type === 'foundational'); }
+function getDerived() { return allMetrics.filter(m => m.metric_type === 'derived' && m.formula); }
+function getDimensions() { return allMetrics.filter(m => m.metric_type === 'dimension'); }
+function getTimeDims() { return getDimensions().filter(d => d.required_column === '_DATE_'); }
+function getGroupDims() { return getDimensions().filter(d => d.required_column !== '_DATE_'); }
+function metricName(id) { const m = allMetrics.find(x => x.id === id); return m ? m.name : '#'+id; }
+
+function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+
+function chartOpts(opts = {}) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    indexAxis: opts.horizontal ? 'y' : 'x',
+    plugins: {
+      legend: { display: opts.legend !== false, labels: { color: '#c8cdd3', font: { size: 11 } } },
+      title: opts.title ? { display: true, text: opts.title, color: '#888', font: { size: 11 } } : { display: false },
+    },
+    scales: {
+      x: { ticks: { color: '#5a6370', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#1a1e24' } },
+      y: { ticks: { color: '#5a6370', font: { size: 10 } }, grid: { color: '#1a1e24' }, beginAtZero: true },
+    },
+  };
+}
+
+// --- Build SQL for a metric + dimension ---
+async function queryMetricWithDim(metric, timeDim, groupDim) {
+  if (!metric.view_name) return [];
+  const table = `\`project-for-method-dw.revenue.${metric.view_name}\``;
+
+  // Detect columns for this view
+  let cols;
+  try {
+    const r = await queryBq(`SELECT column_name, data_type FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name='${metric.view_name}'`);
+    cols = r.map(x => ({ name: x.column_name, type: x.data_type }));
+  } catch { return []; }
+
+  const dateCols = cols.filter(c => ['DATE','TIMESTAMP','DATETIME'].includes(c.type));
+  const numCols = cols.filter(c => ['FLOAT64','INT64','NUMERIC','FLOAT','INTEGER','BIGNUMERIC'].includes(c.type));
+  const dc = dateCols[0]?.name;
+  const hasAmount = numCols.some(c => c.name.toLowerCase().includes('amount') || c.name.toLowerCase().includes('expense'));
+  const agg = hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
+
+  // If single dimension with a full SQL template, use it
+  if (timeDim && !groupDim) {
+    const sql = timeDim.view_definition
+      ?.replace(/\{table\}/g, table)
+      .replace(/\{date\}/g, dc || 'SignupDate')
+      .replace(/\{agg\}/g, agg);
+    if (sql) return await queryBq(sql);
+  }
+  if (groupDim && !timeDim) {
+    const sql = groupDim.view_definition
+      ?.replace(/\{table\}/g, table)
+      .replace(/\{date\}/g, dc || 'SignupDate')
+      .replace(/\{agg\}/g, agg);
+    if (sql) return await queryBq(sql);
+  }
+
+  // Combined: build manually
+  const selects = [], groups = [], orders = [];
+  let where = '';
+  if (timeDim && dc) {
+    if (timeDim.name === 'Monthly') { selects.push(`FORMAT_DATE('%Y-%m',${dc}) AS period`); groups.push(`FORMAT_DATE('%Y-%m',${dc})`); orders.push('period'); }
+    else if (timeDim.name === 'Weekly') { selects.push(`FORMAT_DATE('%Y-W%V',${dc}) AS week`); groups.push(`FORMAT_DATE('%Y-W%V',${dc})`); orders.push('week'); where = ` WHERE ${dc}>=DATE_SUB(CURRENT_DATE(),INTERVAL 90 DAY)`; }
+    else if (timeDim.name === 'Year over Year') { selects.push(`EXTRACT(YEAR FROM ${dc}) AS year`,`FORMAT_DATE('%b',${dc}) AS month`); groups.push(`EXTRACT(YEAR FROM ${dc})`,`FORMAT_DATE('%b',${dc})`,`EXTRACT(MONTH FROM ${dc})`); orders.push('year',`EXTRACT(MONTH FROM ${dc})`); }
+  }
+  if (groupDim && groupDim.required_column !== '_DATE_') {
+    selects.push(groupDim.required_column);
+    groups.push(groupDim.required_column);
+  }
+  if (selects.length === 0 && dc) { selects.push(`FORMAT_DATE('%Y-%m',${dc}) AS period`); groups.push(`FORMAT_DATE('%Y-%m',${dc})`); orders.push('period'); }
+  selects.push(`${agg} AS value`);
+  return await queryBq(`SELECT ${selects.join(',')} FROM ${table}${where} GROUP BY ${groups.join(',')} ORDER BY ${orders.length?orders.join(','):'1'} LIMIT 500`);
+}
+
+// --- Compute derived metric ---
+async function queryDerivedWithDim(derived, timeDim, groupDim) {
+  if (!derived.depends_on || !derived.formula) return [];
+  const depIds = derived.depends_on;
+  const depMetrics = depIds.map(id => allMetrics.find(m => m.id === id)).filter(Boolean);
+  if (depMetrics.length === 0) return [];
+
+  // Query each dependency with the same dimension
+  const results = {};
+  for (const dep of depMetrics) {
+    results[dep.id] = await queryMetricWithDim(dep, timeDim, groupDim);
+  }
+
+  // Get time labels from the first dependency
+  const firstResult = results[depMetrics[0].id] || [];
+  const timeCol = Object.keys(firstResult[0] || {}).find(k => k !== 'value') || 'period';
+
+  return firstResult.map(row => {
+    const label = row[timeCol];
+    let formula = derived.formula;
+    for (const dep of depMetrics) {
+      const depRow = (results[dep.id] || []).find(r => r[timeCol] === label);
+      const val = depRow ? Number(depRow.value) : 0;
+      formula = formula.replace(new RegExp(`\\{${dep.id}\\}`, 'g'), val);
+    }
+    // Evaluate the formula
+    let computed;
+    try {
+      const safeFormula = formula.replace(/SAFE_DIVIDE\(([^,]+),([^)]+)\)/g, '(($2)===0?0:($1)/($2))');
+      computed = eval(safeFormula);
+    } catch { computed = 0; }
+    return { [timeCol]: label, value: Math.round(computed * 100) / 100 };
+  });
+}
+
+// --- State ---
+let interactiveState = { timeDim: null, groupDim: null };
+let builderState = { selectedMetrics: new Set(), timeDim: null, groupDim: null };
+
+// --- Render ---
+async function renderPage() {
+  const app = document.getElementById('app');
+  if (!bqToken) {
+    app.innerHTML = '<div class="loading-msg">Connect BigQuery to view charts</div>';
+    updateBqStatus();
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="section" id="sec-core">
+      <h2>Core Metrics</h2>
+      <div class="chart-grid" id="core-grid"></div>
+    </div>
+
+    <div class="section" id="sec-interactive">
+      <h2>Interactive</h2>
+      <div class="controls" id="interactive-controls"></div>
+      <div class="chart-grid" id="interactive-grid"></div>
+    </div>
+
+    <div class="section" id="sec-builder">
+      <h2>Chart Builder</h2>
+      <div class="controls" id="builder-controls"></div>
+      <div class="builder-layout">
+        <div class="builder-sidebar" id="builder-sidebar"></div>
+        <div class="builder-main"><canvas id="builder-canvas"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-validation">
+      <h2>Validation</h2>
+      <div id="val-content"></div>
+    </div>
+  `;
+
+  renderCoreMetrics();
+  renderInteractiveControls();
+  renderInteractiveCharts();
+  renderBuilderControls();
+  renderBuilderSidebar();
+  renderValidation();
+}
+
+// --- Section 1: Core Metrics ---
+const CORE_METRICS = [
+  { id: 54, label: 'Trials' },
+  { id: 55, label: 'Syncs' },
+  { id: 56, label: 'Conversions' },
+  { derived: true, id: 20, label: 'Conversion Rate', suffix: '%' },
+  { derived: true, id: 25, label: 'Sync Rate', suffix: '%' },
+  { derived: true, id: 46, label: 'Churn Rate', suffix: '%' },
+];
+
+async function renderCoreMetrics() {
+  const grid = document.getElementById('core-grid');
+  const monthly = getTimeDims().find(d => d.name === 'Monthly');
+
+  grid.innerHTML = CORE_METRICS.map(cm =>
+    `<div class="chart-card"><h3>${cm.label}</h3><div class="stat" id="core-stat-${cm.id}">...</div><canvas id="core-${cm.id}"></canvas></div>`
+  ).join('');
+
+  for (const cm of CORE_METRICS) {
+    const m = allMetrics.find(x => x.id === cm.id);
+    if (!m) continue;
+    let rows;
+    if (cm.derived) { rows = await queryDerivedWithDim(m, monthly, null); }
+    else { rows = await queryMetricWithDim(m, monthly, null); }
+    if (!rows || rows.length === 0) continue;
+
+    const labels = rows.map(r => r.period || r.week || r.year || Object.values(r)[0]);
+    const data = rows.map(r => Number(r.value));
+    const latest = data[data.length - 1];
+
+    const statEl = document.getElementById(`core-stat-${cm.id}`);
+    if (statEl) statEl.textContent = cm.suffix ? latest.toFixed(1) + cm.suffix : latest.toLocaleString();
+
+    destroyChart(`core-${cm.id}`);
+    charts[`core-${cm.id}`] = new Chart(document.getElementById(`core-${cm.id}`), {
+      type: 'line',
+      data: { labels, datasets: [{ label: cm.label, data, borderColor: PALETTE[CORE_METRICS.indexOf(cm)], backgroundColor: PALETTE[CORE_METRICS.indexOf(cm)] + '20', tension: .3, fill: true, pointRadius: 2 }] },
+      options: chartOpts({ legend: false }),
+    });
+  }
+}
+
+// --- Section 2: Interactive ---
+function renderInteractiveControls() {
+  const timeDims = getTimeDims();
+  const groupDims = getGroupDims();
+  const el = document.getElementById('interactive-controls');
+
+  el.innerHTML = `
+    <span class="ctrl-label">Time</span>
+    ${timeDims.map(d => `<button class="ctrl-btn ${interactiveState.timeDim?.id===d.id?'active':''}" onclick="setInteractiveTime(${d.id})">${d.name}</button>`).join('')}
+    <span class="ctrl-label" style="margin-left:12px">Group by</span>
+    <button class="ctrl-btn ${!interactiveState.groupDim?'dim-active':''}" onclick="setInteractiveGroup(null)">None</button>
+    ${groupDims.map(d => `<button class="ctrl-btn ${interactiveState.groupDim?.id===d.id?'dim-active':''}" onclick="setInteractiveGroup(${d.id})">${d.name}</button>`).join('')}
+  `;
+
+  if (!interactiveState.timeDim) interactiveState.timeDim = timeDims.find(d => d.name === 'Monthly');
+}
+
+function setInteractiveTime(dimId) {
+  interactiveState.timeDim = allMetrics.find(m => m.id === dimId);
+  renderInteractiveControls();
+  renderInteractiveCharts();
+}
+
+function setInteractiveGroup(dimId) {
+  interactiveState.groupDim = dimId ? allMetrics.find(m => m.id === dimId) : null;
+  renderInteractiveControls();
+  renderInteractiveCharts();
+}
+
+async function renderInteractiveCharts() {
+  const grid = document.getElementById('interactive-grid');
+  grid.innerHTML = CORE_METRICS.map(cm =>
+    `<div class="chart-card"><h3>${cm.label}</h3><canvas id="int-${cm.id}"></canvas></div>`
+  ).join('');
+
+  for (const cm of CORE_METRICS) {
+    const m = allMetrics.find(x => x.id === cm.id);
+    if (!m) continue;
+    let rows;
+    if (cm.derived) { rows = await queryDerivedWithDim(m, interactiveState.timeDim, interactiveState.groupDim); }
+    else { rows = await queryMetricWithDim(m, interactiveState.timeDim, interactiveState.groupDim); }
+    if (!rows || rows.length === 0) continue;
+
+    destroyChart(`int-${cm.id}`);
+    const canvas = document.getElementById(`int-${cm.id}`);
+    const rcols = Object.keys(rows[0]);
+    const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
+    const labelCols = rcols.filter(c => c !== valueCol);
+
+    if (interactiveState.groupDim && labelCols.length >= 2) {
+      // Grouped bar
+      const timeCol = labelCols[0];
+      const dimCol = labelCols[1];
+      const timeLabels = [...new Set(rows.map(r => r[timeCol]))];
+      const dimValues = [...new Set(rows.map(r => r[dimCol]))].slice(0, 10);
+      charts[`int-${cm.id}`] = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: timeLabels, datasets: dimValues.map((dv, i) => ({
+          label: dv || '(none)',
+          data: timeLabels.map(tl => { const row = rows.find(r => r[timeCol]===tl && r[dimCol]===dv); return row ? Number(row[valueCol]) : 0; }),
+          backgroundColor: PALETTE[i % PALETTE.length] + 'cc',
+        })) },
+        options: chartOpts(),
+      });
+    } else {
+      // Line
+      const labels = rows.map(r => labelCols.length ? r[labelCols[0]] : '');
+      const data = rows.map(r => Number(r[valueCol]));
+      charts[`int-${cm.id}`] = new Chart(canvas, {
+        type: interactiveState.groupDim ? 'bar' : 'line',
+        data: { labels, datasets: [{ label: cm.label, data, borderColor: PALETTE[CORE_METRICS.indexOf(cm)], backgroundColor: PALETTE[CORE_METRICS.indexOf(cm)] + (interactiveState.groupDim ? 'cc' : '20'), tension: .3, fill: !interactiveState.groupDim, pointRadius: 2 }] },
+        options: chartOpts({ legend: false, horizontal: interactiveState.groupDim && !interactiveState.timeDim }),
+      });
+    }
+  }
+}
+
+// --- Section 3: Chart Builder ---
+function renderBuilderControls() {
+  const timeDims = getTimeDims();
+  const groupDims = getGroupDims();
+  const el = document.getElementById('builder-controls');
+
+  el.innerHTML = `
+    <span class="ctrl-label">Time</span>
+    ${timeDims.map(d => `<button class="ctrl-btn ${builderState.timeDim?.id===d.id?'active':''}" onclick="setBuilderTime(${d.id})">${d.name}</button>`).join('')}
+    <span class="ctrl-label" style="margin-left:12px">Group by</span>
+    <button class="ctrl-btn ${!builderState.groupDim?'dim-active':''}" onclick="setBuilderGroup(null)">None</button>
+    ${groupDims.map(d => `<button class="ctrl-btn ${builderState.groupDim?.id===d.id?'dim-active':''}" onclick="setBuilderGroup(${d.id})">${d.name}</button>`).join('')}
+  `;
+
+  if (!builderState.timeDim) builderState.timeDim = timeDims.find(d => d.name === 'Monthly');
+}
+
+function renderBuilderSidebar() {
+  const el = document.getElementById('builder-sidebar');
+  const metrics = [...getPrimitives(), ...getFoundationals(), ...getDerived()];
+  el.innerHTML = '<h3>Select Metrics</h3>' + metrics.map(m => {
+    const checked = builderState.selectedMetrics.has(m.id);
+    const typeLabel = m.metric_type;
+    const typeColor = { primitive: 'var(--green)', foundational: '#38bdf8', derived: 'var(--yellow)' }[typeLabel] || 'var(--text-dim)';
+    return `<label class="metric-checkbox">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleBuilderMetric(${m.id})">
+      <span>${m.name}</span>
+      <span class="badge" style="color:${typeColor};border:1px solid ${typeColor}30;background:${typeColor}10">${typeLabel}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleBuilderMetric(id) {
+  if (builderState.selectedMetrics.has(id)) builderState.selectedMetrics.delete(id);
+  else builderState.selectedMetrics.add(id);
+  renderBuilderChart();
+}
+
+function setBuilderTime(dimId) {
+  builderState.timeDim = allMetrics.find(m => m.id === dimId);
+  renderBuilderControls();
+  renderBuilderChart();
+}
+
+function setBuilderGroup(dimId) {
+  builderState.groupDim = dimId ? allMetrics.find(m => m.id === dimId) : null;
+  renderBuilderControls();
+  renderBuilderChart();
+}
+
+async function renderBuilderChart() {
+  if (builderState.selectedMetrics.size === 0) return;
+
+  const canvas = document.getElementById('builder-canvas');
+  destroyChart('builder');
+
+  const datasets = [];
+  let allLabels = [];
+
+  let i = 0;
+  for (const metricId of builderState.selectedMetrics) {
+    const m = allMetrics.find(x => x.id === metricId);
+    if (!m) continue;
+
+    let rows;
+    if (m.formula) { rows = await queryDerivedWithDim(m, builderState.timeDim, builderState.groupDim); }
+    else { rows = await queryMetricWithDim(m, builderState.timeDim, builderState.groupDim); }
+    if (!rows || rows.length === 0) { i++; continue; }
+
+    const rcols = Object.keys(rows[0]);
+    const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
+    const labelCol = rcols.find(c => c !== valueCol) || rcols[0];
+    const labels = rows.map(r => r[labelCol]);
+    const data = rows.map(r => Number(r[valueCol]));
+
+    if (labels.length > allLabels.length) allLabels = labels;
+
+    datasets.push({
+      label: m.name,
+      data,
+      borderColor: PALETTE[i % PALETTE.length],
+      backgroundColor: PALETTE[i % PALETTE.length] + '30',
+      tension: .3,
+      fill: false,
+      pointRadius: 3,
+    });
+    i++;
+  }
+
+  charts['builder'] = new Chart(canvas, {
+    type: 'line',
+    data: { labels: allLabels, datasets },
+    options: chartOpts({ legend: true }),
+  });
+}
+
+// --- Section 4: Validation ---
+function renderValidation() {
+  const el = document.getElementById('val-content');
+  const primitives = getPrimitives();
+
+  el.innerHTML = `
+    <div class="controls">
+      <span class="ctrl-label">Select Primitive</span>
+      <select class="ctrl-select" id="val-select" onchange="renderDependencyTree()">
+        <option value="">Choose...</option>
+        ${primitives.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+      </select>
+      <button class="val-btn" onclick="runValidation()" style="margin-left:12px">Test Propagation</button>
+    </div>
+    <div id="val-tree-container"></div>
+    <div id="val-test-results"></div>
+  `;
+}
+
+function renderDependencyTree() {
+  const id = parseInt(document.getElementById('val-select')?.value);
+  const container = document.getElementById('val-tree-container');
+  if (!id || !container) return;
+
+  const m = allMetrics.find(x => x.id === id);
+  function getChildren(parentId) {
+    return allMetrics.filter(x =>
+      x.primitive_metric_id === parentId ||
+      (x.depends_on && x.depends_on.includes(parentId))
+    );
+  }
+
+  function renderNode(metric, depth = 0) {
+    const children = getChildren(metric.id);
+    const typeColor = { primitive: 'var(--green)', derived: 'var(--yellow)', transform: '#a78bfa', breakdown: 'var(--blue)', foundational: '#38bdf8', dimension: '#fb923c' }[metric.metric_type] || 'var(--text-dim)';
+    let html = `<div style="color:${typeColor}">${metric.name} <span style="color:var(--text-dim);font-size:10px">(${metric.metric_type})</span></div>`;
+    if (children.length > 0) {
+      html += `<div class="indent">${children.map(c => renderNode(c, depth + 1)).join('')}</div>`;
+    }
+    return html;
+  }
+
+  container.innerHTML = `<div class="val-tree">${renderNode(m)}</div>`;
+}
+
+async function runValidation() {
+  const id = parseInt(document.getElementById('val-select')?.value);
+  if (!id || !bqToken) return;
+
+  const m = allMetrics.find(x => x.id === id);
+  if (!m?.view_name) return;
+
+  const results = document.getElementById('val-test-results');
+  results.innerHTML = '<div class="loading-msg">Running validation...</div>';
+
+  // Get current count from primitive
+  const monthly = getTimeDims().find(d => d.name === 'Monthly');
+  const before = await queryMetricWithDim(m, monthly, null);
+  const beforeTotal = before.reduce((s, r) => s + Number(r.value), 0);
+
+  // Get derived metrics that depend on this
+  const derived = getDerived().filter(d => d.depends_on?.includes(id));
+  const derivedBefore = {};
+  for (const d of derived) {
+    const rows = await queryDerivedWithDim(d, monthly, null);
+    derivedBefore[d.id] = rows;
+  }
+
+  results.innerHTML = `
+    <h3 style="margin-top:16px">Current Values</h3>
+    <div class="val-row"><span class="name">${m.name} (total)</span><span class="val">${beforeTotal.toLocaleString()}</span></div>
+    ${derived.map(d => {
+      const rows = derivedBefore[d.id] || [];
+      const latest = rows.length > 0 ? Number(rows[rows.length - 1].value).toFixed(2) : '—';
+      return `<div class="val-row"><span class="name">${d.name} (latest)</span><span class="val">${latest}</span></div>`;
+    }).join('')}
+    <div style="margin-top:12px;color:var(--text-dim);font-size:11px">
+      To test propagation: modify the primitive's BQ view (e.g., add a WHERE filter), then re-run this to see updated values.
+    </div>
+  `;
+}
+
+// --- Init ---
+initBqAuth();
+loadMetrics().then(() => { renderPage(); }).catch(e => {
+  document.getElementById('app').innerHTML = `<div class="loading-msg" style="color:var(--red)">Failed: ${e.message}</div>`;
+});
+</script>
+</body>
+</html>
