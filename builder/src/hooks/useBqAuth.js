@@ -6,10 +6,15 @@ export function useBqAuth() {
   const [userEmail, setUserEmail] = useState(null);
 
   useEffect(() => {
-    initBqAuth((token) => {
-      setConnected(true);
-      fetchEmail(token);
-    });
+    initBqAuth(
+      (token) => {
+        setConnected(true);
+        fetchEmail(token);
+      },
+      () => {
+        setConnected(false);
+      }
+    );
   }, []);
 
   async function fetchEmail(token) {
