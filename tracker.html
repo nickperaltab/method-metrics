@@ -255,6 +255,9 @@ td select:focus{border-color:var(--accent)}
 .group-transform .group-title{color:#a78bfa}
 .group-foundational .group-title{color:#38bdf8}
 .group-composite .group-title{color:#c084fc}
+.group-dimension .group-title{color:#fb923c}
+.type-dimension{background:#1a1008;color:#fb923c;border:1px solid #3d2a0a}
+.type-select-dimension{color:#fb923c;background:#1a1008}
 
 /* Loading */
 .loading{display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:12px}
@@ -449,6 +452,7 @@ function renderApp() {
           <option value="Transform">Transform</option>
           <option value="Derived">Derived</option>
           <option value="Composite">Composite</option>
+          <option value="Dimension">Dimension</option>
           <option value="Breakdown">Breakdown</option>
           <option value="Catalog">Catalog</option>
         </select>
@@ -521,6 +525,7 @@ function renderTable() {
     { key: 'Transform', label: 'Transforms', cls: 'group-transform' },
     { key: 'Derived', label: 'Derived', cls: 'group-derived' },
     { key: 'Composite', label: 'Composite', cls: 'group-composite' },
+    { key: 'Dimension', label: 'Dimensions', cls: 'group-dimension' },
     { key: 'Breakdown', label: 'Breakdowns', cls: 'group-breakdown' },
     { key: 'Catalog', label: 'Catalog', cls: 'group-catalog' },
   ];
@@ -566,7 +571,7 @@ function renderMetricRow(m) {
     <td style="font-weight:600;color:var(--text-bright)">${esc(m.name)}</td>
     <td>
       <select class="type-select type-select-${(m.metric_type||'catalog')}" onclick="event.stopPropagation()" onchange="saveType(${m.id},this.value,this)">
-        ${['primitive','foundational','transform','derived','composite','breakdown','catalog'].map(t =>
+        ${['primitive','foundational','transform','derived','composite','dimension','breakdown','catalog'].map(t =>
           `<option value="${t}"${(m.metric_type||'catalog')===t?' selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`
         ).join('')}
       </select>
@@ -695,14 +700,24 @@ function classifyColumns(cols) {
 }
 
 function buildLensOptions(cols) {
-  const { dateCols, dimCols } = classifyColumns(cols);
+  // Get dimension definitions from Supabase
+  const dimensions = allMetrics.filter(m => m.metric_type === 'dimension');
+  const colNames = cols.map(c => c.name);
+  const { dateCols } = classifyColumns(cols);
+  const hasDate = dateCols.length > 0;
+
   const lenses = [];
-  if (dateCols.length > 0) {
-    lenses.push({ key: 'monthly', label: 'Monthly', type: 'time' });
-    lenses.push({ key: 'weekly', label: 'Weekly', type: 'time' });
-    lenses.push({ key: 'yoy', label: 'Year over Year', type: 'time' });
+  for (const dim of dimensions) {
+    const req = dim.required_column;
+    // Time dimensions: require any date column
+    if (req === '_DATE_' && hasDate) {
+      lenses.push({ key: `dim_${dim.id}`, label: dim.name, type: 'time', dimId: dim.id });
+    }
+    // Column dimensions: require specific column
+    else if (req !== '_DATE_' && colNames.includes(req)) {
+      lenses.push({ key: `dim_${dim.id}`, label: dim.name, type: 'dim', dimId: dim.id });
+    }
   }
-  dimCols.forEach(c => lenses.push({ key: `dim_${c.name}`, label: `By ${c.name}`, type: 'dim' }));
   return lenses;
 }
 
@@ -713,40 +728,61 @@ function buildCombinedSql(viewName, cols, selectedKeys) {
   const agg = hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
   const table = `\`project-for-method-dw.revenue.${viewName}\``;
 
+  // If only one dimension selected and it has a full SQL template, use it directly
+  if (selectedKeys.size === 1) {
+    const key = [...selectedKeys][0];
+    const dimId = parseInt(key.replace('dim_', ''));
+    const dim = allMetrics.find(m => m.id === dimId);
+    if (dim?.view_definition) {
+      return dim.view_definition
+        .replace(/\{table\}/g, table)
+        .replace(/\{date\}/g, dc || 'SignupDate')
+        .replace(/\{agg\}/g, agg);
+    }
+  }
+
+  // Multiple dimensions selected — build combined SQL
   const selects = [];
   const groups = [];
   const orders = [];
   let whereExtra = '';
+  let isTimeDim = false;
 
   for (const key of selectedKeys) {
-    if (key === 'monthly' && dc) {
-      selects.push(`FORMAT_DATE('%Y-%m', ${dc}) AS period`);
-      groups.push(`FORMAT_DATE('%Y-%m', ${dc})`);
-      orders.push('period');
-    } else if (key === 'weekly' && dc) {
-      selects.push(`FORMAT_DATE('%Y-W%V', ${dc}) AS week`);
-      groups.push(`FORMAT_DATE('%Y-W%V', ${dc})`);
-      orders.push('week');
-      whereExtra = ` WHERE ${dc} >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)`;
-    } else if (key === 'yoy' && dc) {
-      selects.push(`EXTRACT(YEAR FROM ${dc}) AS year`);
-      selects.push(`FORMAT_DATE('%b', ${dc}) AS month`);
-      groups.push(`EXTRACT(YEAR FROM ${dc})`);
-      groups.push(`FORMAT_DATE('%b', ${dc})`);
-      groups.push(`EXTRACT(MONTH FROM ${dc})`);
-      orders.push('year');
-      orders.push(`EXTRACT(MONTH FROM ${dc})`);
-    } else if (key.startsWith('dim_')) {
-      const dim = key.replace('dim_', '');
-      selects.push(dim);
-      groups.push(dim);
+    const dimId = parseInt(key.replace('dim_', ''));
+    const dim = allMetrics.find(m => m.id === dimId);
+    if (!dim) continue;
+
+    if (dim.required_column === '_DATE_' && dc) {
+      isTimeDim = true;
+      if (dim.name === 'Monthly') {
+        selects.push(`FORMAT_DATE('%Y-%m', ${dc}) AS period`);
+        groups.push(`FORMAT_DATE('%Y-%m', ${dc})`);
+        orders.push('period');
+      } else if (dim.name === 'Weekly') {
+        selects.push(`FORMAT_DATE('%Y-W%V', ${dc}) AS week`);
+        groups.push(`FORMAT_DATE('%Y-W%V', ${dc})`);
+        orders.push('week');
+        whereExtra = ` WHERE ${dc} >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)`;
+      } else if (dim.name === 'Year over Year') {
+        selects.push(`EXTRACT(YEAR FROM ${dc}) AS year`);
+        selects.push(`FORMAT_DATE('%b', ${dc}) AS month`);
+        groups.push(`EXTRACT(YEAR FROM ${dc})`);
+        groups.push(`FORMAT_DATE('%b', ${dc})`);
+        groups.push(`EXTRACT(MONTH FROM ${dc})`);
+        orders.push('year');
+        orders.push(`EXTRACT(MONTH FROM ${dc})`);
+      }
+    } else if (dim.required_column && dim.required_column !== '_DATE_') {
+      selects.push(dim.required_column);
+      groups.push(dim.required_column);
     }
   }
 
   if (selects.length === 0) return null;
   selects.push(`${agg} AS value`);
 
-  return `SELECT ${selects.join(', ')} FROM ${table}${whereExtra} GROUP BY ${groups.join(', ')} ORDER BY ${orders.length ? orders.join(', ') : '1'} LIMIT 100`;
+  return `SELECT ${selects.join(', ')} FROM ${table}${whereExtra} GROUP BY ${groups.join(', ')} ORDER BY ${orders.length ? orders.join(', ') : 'value DESC'} LIMIT 100`;
 }
 
 function renderTransformsSection(m) {
@@ -782,20 +818,23 @@ const lensCharts = {};
 
 async function loadLenses(metricId) {
   const m = allMetrics.find(x => x.id === metricId);
-  if (!m?.view_name || !bqToken) return;
+  if (!m?.view_name) return;
 
-  const cols = await getViewColumns(m.view_name);
-  if (!cols) return;
-
-  const lenses = buildLensOptions(cols);
   const bar = document.getElementById(`lens-bar-${metricId}`);
   if (!bar) return;
 
-  if (!activeLenses[metricId]) activeLenses[metricId] = { time: null, dims: new Set() };
+  if (!bqToken) {
+    bar.innerHTML = '<span class="lens-loading">Connect BQ to use transforms</span>';
+    return;
+  }
 
+  const cols = await getViewColumns(m.view_name);
+  if (!cols) { bar.innerHTML = '<span class="lens-loading">Could not detect columns</span>'; return; }
+
+  const lenses = buildLensOptions(cols);
+  if (!activeLenses[metricId]) activeLenses[metricId] = { time: null, dims: new Set() };
   const state = activeLenses[metricId];
 
-  // Time lenses (radio — one at a time)
   const timeLenses = lenses.filter(l => l.type === 'time');
   const dimLenses = lenses.filter(l => l.type === 'dim');
 
@@ -880,6 +919,9 @@ async function runTransformChart(metricId) {
     const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
     const labelCols = rcols.filter(c => c !== valueCol);
 
+    // Determine chart type from selected dimensions
+    const timeDimId = state.time ? parseInt(state.time.replace('dim_', '')) : null;
+    const timeDim = timeDimId ? allMetrics.find(m => m.id === timeDimId) : null;
     const hasDim = state.dims.size > 0;
     const hasTime = !!state.time;
 
