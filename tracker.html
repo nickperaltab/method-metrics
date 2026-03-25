@@ -528,7 +528,7 @@ function renderMetricRow(m) {
     <td style="font-weight:600;color:var(--text-bright)">${esc(m.name)}</td>
     <td><span class="type-badge ${typeCls}">${type}</span></td>
     <td>${m.stage || '—'}</td>
-    <td><input class="editable-text" value="${esc(m.source || '')}" placeholder="—" onclick="event.stopPropagation()" onchange="saveField(${m.id},'source',this.value,this)"></td>
+    <td><input class="editable-text" value="${esc(m.source || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'source',this.value,this)"></td>
     <td>
       <select onclick="event.stopPropagation()" onchange="saveField(${m.id},'priority',this.value,this)">
         <option value="high"${m.priority==='high'?' selected':''}>High</option>
@@ -622,7 +622,7 @@ function renderExpandPanel(m) {
     </div>` : ''}
     <div class="expand-section">
       <div class="expand-label">Notes</div>
-      <textarea class="notes-area" placeholder="Add notes, context, verification details..." onclick="event.stopPropagation()" onchange="saveField(${m.id},'notes',this.value,this)">${esc(m.notes || '')}</textarea>
+      <textarea class="notes-area" placeholder="Add notes, context, verification details..." onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'notes',this.value,this)">${esc(m.notes || '')}</textarea>
     </div>
     <div class="expand-section" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
       <button class="lens-btn" style="color:var(--red);border-color:#3d1a1a" onclick="event.stopPropagation();deleteMetric(${m.id},'${esc(m.name)}')">Delete Metric</button>
@@ -833,6 +833,14 @@ function scrollToMetric(id) {
       setTimeout(() => row.style.outline = '', 2000);
     }
   }, 50);
+}
+
+// Debounced autosave — waits 500ms after last keystroke before saving
+const _debounceTimers = {};
+function debounceSave(id, field, value, el) {
+  const key = `${id}_${field}`;
+  clearTimeout(_debounceTimers[key]);
+  _debounceTimers[key] = setTimeout(() => saveField(id, field, value, el), 500);
 }
 
 async function saveField(id, field, value, el) {
