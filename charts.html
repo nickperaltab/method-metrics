@@ -266,10 +266,19 @@ async function queryDerivedWithDim(derived, timeDim, groupDim, extraWhere) {
   const depMetrics = depIds.map(id => allMetrics.find(m => m.id === id)).filter(Boolean);
   if (depMetrics.length === 0) return [];
 
-  // Query each dependency with the same dimension and filter
+  // Query each dependency with the same dimension
+  // Only apply extraWhere if the primitive's view has the required column
   const results = {};
   for (const dep of depMetrics) {
-    results[dep.id] = await queryMetricWithDim(dep, timeDim, groupDim, extraWhere);
+    let depWhere = extraWhere;
+    if (depWhere && dep.view_name) {
+      try {
+        const cols = await getViewCols(dep.view_name);
+        const colName = depWhere.split(/\s/)[0]; // e.g., "Att_Pay_Per_Click" from "Att_Pay_Per_Click > 0"
+        if (!cols.some(c => c.name === colName)) depWhere = null; // column doesn't exist, skip filter
+      } catch { depWhere = null; }
+    }
+    results[dep.id] = await queryMetricWithDim(dep, timeDim, groupDim, depWhere);
   }
 
   // Get time labels from the first dependency
