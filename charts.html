@@ -373,11 +373,23 @@ function renderFunnelControls() {
   el.innerHTML = `
     <span class="ctrl-label">Time</span>
     ${timeDims.map(d => `<button class="ctrl-btn ${interactiveState.timeDim?.id===d.id?'active':''}" onclick="setFunnelTime(${d.id})">${d.name}</button>`).join('')}
+    <span class="ctrl-label" style="margin-left:12px">Attribution Channel</span>
+    <select class="ctrl-select" onchange="setFunnelChannel(this.value)">
+      ${ATT_CHANNELS.map(c => `<option value="${c}" ${interactiveState.channelFilter===c?'selected':''}>${c}</option>`).join('')}
+    </select>
   `;
 }
 
 function setFunnelTime(dimId) {
   interactiveState.timeDim = allMetrics.find(m => m.id === dimId);
+  renderFunnelControls();
+  renderRatesControls();
+  renderFunnelChart();
+  renderRatesChart();
+}
+
+function setFunnelChannel(channel) {
+  interactiveState.channelFilter = channel;
   renderFunnelControls();
   renderRatesControls();
   renderFunnelChart();
@@ -393,7 +405,9 @@ async function renderFunnelChart() {
   for (const fm of FUNNEL_METRICS) {
     const m = allMetrics.find(x => x.id === fm.id);
     if (!m) continue;
-    const rows = await queryMetricWithDim(m, interactiveState.timeDim, null);
+    const ch = interactiveState.channelFilter;
+    const channelWhere = (ch && ch !== 'All' && ATT_COL_MAP[ch]) ? `${ATT_COL_MAP[ch]} > 0` : null;
+    const rows = await queryMetricWithDim(m, interactiveState.timeDim, null, channelWhere);
     if (!rows || rows.length === 0) continue;
 
     const rcols = Object.keys(rows[0]);
