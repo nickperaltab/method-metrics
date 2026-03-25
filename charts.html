@@ -220,7 +220,7 @@ function getTimeParts(timeDim, dateCol) {
   }
 }
 
-async function queryMetricWithDim(metric, timeDim, groupDim) {
+async function queryMetricWithDim(metric, timeDim, groupDim, extraWhere) {
   if (!metric.view_name) return [];
   const table = `\`project-for-method-dw.revenue.${metric.view_name}\``;
 
@@ -228,14 +228,17 @@ async function queryMetricWithDim(metric, timeDim, groupDim) {
   try { cols = await getViewCols(metric.view_name); } catch { return []; }
   const dc = detectDateCol(cols);
   const agg = getAgg(metric);
-  const timeParts = getTimeParts(timeDim, dc || 'SignupDate');
 
   // Always use a group template. Default to "No Grouping" if none selected.
   const template = groupDim?.view_definition
     || allMetrics.find(m => m.name === 'No Grouping' && m.metric_type === 'dimension')?.view_definition
     || 'SELECT {time_select} {agg} AS value FROM {table} {time_where} GROUP BY {time_group} 1 ORDER BY {time_order} 1 LIMIT 500';
 
-  const sql = template
+  // If the template contains _date (attribution unpivot), time parts should reference _date
+  const timeCol = template.includes('_date') ? '_date' : (dc || 'SignupDate');
+  const timeParts = getTimeParts(timeDim, timeCol);
+
+  let sql = template
     .replace(/\{table\}/g, table)
     .replace(/\{date\}/g, dc || 'SignupDate')
     .replace(/\{agg\}/g, agg)
@@ -244,20 +247,29 @@ async function queryMetricWithDim(metric, timeDim, groupDim) {
     .replace(/\{time_order\}/g, timeParts.order)
     .replace(/\{time_where\}/g, timeParts.where);
 
+  // Add extra WHERE filter if provided (e.g., channel filter)
+  if (extraWhere) {
+    if (sql.toUpperCase().includes('WHERE')) {
+      sql = sql.replace(/WHERE/i, `WHERE ${extraWhere} AND`);
+    } else {
+      sql = sql.replace(/GROUP BY/i, `WHERE ${extraWhere} GROUP BY`);
+    }
+  }
+
   return await queryBq(sql);
 }
 
 // --- Compute derived metric ---
-async function queryDerivedWithDim(derived, timeDim, groupDim) {
+async function queryDerivedWithDim(derived, timeDim, groupDim, extraWhere) {
   if (!derived.depends_on || !derived.formula) return [];
   const depIds = derived.depends_on;
   const depMetrics = depIds.map(id => allMetrics.find(m => m.id === id)).filter(Boolean);
   if (depMetrics.length === 0) return [];
 
-  // Query each dependency with the same dimension
+  // Query each dependency with the same dimension and filter
   const results = {};
   for (const dep of depMetrics) {
-    results[dep.id] = await queryMetricWithDim(dep, timeDim, groupDim);
+    results[dep.id] = await queryMetricWithDim(dep, timeDim, groupDim, extraWhere);
   }
 
   // Get time labels from the first dependency
@@ -284,7 +296,9 @@ async function queryDerivedWithDim(derived, timeDim, groupDim) {
 }
 
 // --- State ---
-let interactiveState = { timeDim: null, groupDim: null };
+const ATT_CHANNELS = ['All','SEO','PPC','OPN','Social','Email','Referral','Direct','Partners','Content','Remarketing','Other','None'];
+const ATT_COL_MAP = { SEO:'Att_SEO', PPC:'Att_Pay_Per_Click', OPN:'Att_OPN_Other_Peoples_Networks', Social:'Att_Social', Email:'Att_Email', Referral:'Att_Referral_Link', Direct:'Att_Direct', Partners:'Att_Partners', Content:'Att_Content', Remarketing:'Att_Remarketing', Other:'Att_Other', None:'Att_None' };
+let interactiveState = { timeDim: null, groupDim: null, channelFilter: 'All' };
 let builderState = { selectedMetrics: new Set(), timeDim: null, groupDim: null };
 
 // --- Render ---
@@ -305,6 +319,7 @@ async function renderPage() {
 
     <div class="section" id="sec-rates">
       <h2>Rates</h2>
+      <div class="controls" id="rates-controls"></div>
       <div style="height:350px;position:relative"><canvas id="rates-canvas"></canvas></div>
     </div>
 
@@ -322,6 +337,7 @@ async function renderPage() {
   `;
 
   renderFunnelControls();
+  renderRatesControls();
   renderFunnelChart();
   renderRatesChart();
   renderBuilderControls();
@@ -354,6 +370,7 @@ function renderFunnelControls() {
 function setFunnelTime(dimId) {
   interactiveState.timeDim = allMetrics.find(m => m.id === dimId);
   renderFunnelControls();
+  renderRatesControls();
   renderFunnelChart();
   renderRatesChart();
 }
@@ -390,6 +407,22 @@ async function renderFunnelChart() {
   });
 }
 
+function renderRatesControls() {
+  const el = document.getElementById('rates-controls');
+  if (!el) return;
+  el.innerHTML = `
+    <span class="ctrl-label">Attribution Channel</span>
+    <select class="ctrl-select" onchange="setChannelFilter(this.value)">
+      ${ATT_CHANNELS.map(c => `<option value="${c}" ${interactiveState.channelFilter===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+  `;
+}
+
+function setChannelFilter(channel) {
+  interactiveState.channelFilter = channel;
+  renderRatesChart();
+}
+
 async function renderRatesChart() {
   destroyChart('rates');
   const canvas = document.getElementById('rates-canvas');
@@ -399,7 +432,10 @@ async function renderRatesChart() {
   for (const rm of RATE_METRICS) {
     const m = allMetrics.find(x => x.id === rm.id);
     if (!m) continue;
-    const rows = await queryDerivedWithDim(m, interactiveState.timeDim, null);
+    // Build channel filter
+    const ch = interactiveState.channelFilter;
+    const channelWhere = (ch && ch !== 'All' && ATT_COL_MAP[ch]) ? `${ATT_COL_MAP[ch]} > 0` : null;
+    const rows = await queryDerivedWithDim(m, interactiveState.timeDim, null, channelWhere);
     if (!rows || rows.length === 0) continue;
 
     const rcols = Object.keys(rows[0]);
