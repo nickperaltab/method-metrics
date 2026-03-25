@@ -11,14 +11,20 @@ Do NOT invent metric names, column names, or IDs.
 
 Return ONLY valid JSON (no markdown, no explanation outside JSON) in this format:
 {
-  "metric_id": <integer>,
-  "chart_type": "bar" | "line" | "scatter" | "area" | "point" | "arc",
+  "metrics": [
+    {"metric_id": <integer>, "y_field": "<column_name or COUNT>", "label": "<short label>"}
+  ],
   "x_field": "<column_name>",
-  "y_field": "<column_name>",
+  "chart_type": "bar" | "line" | "scatter" | "area" | "point" | "arc" | "horizontal_bar",
   "color_field": "<column_name or null>",
+  "time_bucket": "month" | "week" | "day",
   "last_n_months": <integer or null>,
+  "channel_filter": "<channel name or null>",
   "explanation": "<one sentence describing what the chart shows>"
 }
+
+For single-metric requests, the metrics array will have one entry.
+For backward compatibility, you may also return "metric_id" and "y_field" at the top level instead of a "metrics" array — the frontend normalizes both forms.
 
 If the user asks for something that doesn't match any available metric, return:
 {
@@ -27,8 +33,13 @@ If the user asks for something that doesn't match any available metric, return:
 }
 
 Guidelines:
+- Multi-metric: when the user asks for multiple things ("trials and syncs", "funnel metrics", "compare trials vs syncs"), return multiple entries in the metrics array. Each entry needs its own metric_id, y_field, and a short label.
+- time_bucket: "month" (default), "week", or "day". Use "week" when user says "weekly", "day" when user says "daily" or "per day". Default to "month" if not specified.
+- channel_filter: when the user mentions a specific channel ("SEO trials", "PPC conversions"), return the channel name. Valid values: "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". Set to null if no channel mentioned.
+- color_field: when user asks "by country" or similar dimensional breakdowns, set this to the column name (e.g. "SignupCountry"). But for "by channel" attribution breakdowns, do NOT use color_field — instead return separate metrics per channel or use channel_filter.
+- chart_type: use "horizontal_bar" for group-only comparisons without a time axis.
 - For time-series requests (by month, over time, trend), use a temporal column for x_field and chart_type "line"
-- For comparisons (by channel, by country), use the category column for x_field and chart_type "bar"
+- For comparisons (by country, by group), use the category column for x_field and chart_type "bar"
 - For rates/percentages, prefer chart_type "line"
 - Pick the most specific metric that matches the request
 - If there is a numeric/quantitative column available, use it for y_field
@@ -67,7 +78,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
+      max_tokens: 500,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
     }),
