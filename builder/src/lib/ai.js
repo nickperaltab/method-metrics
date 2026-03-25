@@ -59,7 +59,7 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
     xField: result.x_field,
     yField: result.y_field,
     colorField: result.color_field || null,
-    filters: result.filters || {},
+    lastNMonths: result.last_n_months || null,
     explanation: result.explanation || '',
   };
 }

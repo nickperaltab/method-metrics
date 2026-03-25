@@ -126,6 +126,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
           xField: result.xField,
           yField: result.yField,
           colorField: result.colorField || null,
+          lastNMonths: result.lastNMonths || null,
         };
         setChartSpec(validateSpec(aiSpec, loaded.fields));
       }
@@ -183,6 +184,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
               yField={chartSpec.yField}
               colorField={chartSpec.colorField}
               chartType={chartSpec.chartType}
+              lastNMonths={chartSpec.lastNMonths}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
