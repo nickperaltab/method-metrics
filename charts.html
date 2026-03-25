@@ -186,54 +186,77 @@ function chartOpts(opts = {}) {
 }
 
 // --- Build SQL for a metric + dimension ---
+// Column cache per view
+const _colCache = {};
+async function getViewCols(viewName) {
+  if (_colCache[viewName]) return _colCache[viewName];
+  const r = await queryBq(`SELECT column_name, data_type FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name='${viewName}'`);
+  _colCache[viewName] = r.map(x => ({ name: x.column_name, type: x.data_type }));
+  return _colCache[viewName];
+}
+
+function detectAgg(cols) {
+  const numCols = cols.filter(c => ['FLOAT64','INT64','NUMERIC','FLOAT','INTEGER','BIGNUMERIC'].includes(c.type));
+  const hasAmount = numCols.some(c => c.name.toLowerCase().includes('amount') || c.name.toLowerCase().includes('expense'));
+  return hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
+}
+
+function detectDateCol(cols) {
+  const dateCols = cols.filter(c => ['DATE','TIMESTAMP','DATETIME'].includes(c.type));
+  return dateCols[0]?.name || null;
+}
+
+// Get time parts from a time dimension's JSON view_definition
+function getTimeParts(timeDim, dateCol) {
+  if (!timeDim?.view_definition) return { select: '', group: '', order: '', where: '' };
+  try {
+    const parts = JSON.parse(timeDim.view_definition);
+    return {
+      select: (parts.select || '').replace(/\{date\}/g, dateCol),
+      group: (parts.group || '').replace(/\{date\}/g, dateCol),
+      order: (parts.order || '').replace(/\{date\}/g, dateCol),
+      where: (parts.where || '').replace(/\{date\}/g, dateCol),
+    };
+  } catch {
+    return { select: '', group: '', order: '', where: '' };
+  }
+}
+
 async function queryMetricWithDim(metric, timeDim, groupDim) {
   if (!metric.view_name) return [];
   const table = `\`project-for-method-dw.revenue.${metric.view_name}\``;
 
-  // Detect columns for this view
   let cols;
-  try {
-    const r = await queryBq(`SELECT column_name, data_type FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name='${metric.view_name}'`);
-    cols = r.map(x => ({ name: x.column_name, type: x.data_type }));
-  } catch { return []; }
+  try { cols = await getViewCols(metric.view_name); } catch { return []; }
+  const dc = detectDateCol(cols);
+  const agg = detectAgg(cols);
+  const timeParts = getTimeParts(timeDim, dc || 'SignupDate');
 
-  const dateCols = cols.filter(c => ['DATE','TIMESTAMP','DATETIME'].includes(c.type));
-  const numCols = cols.filter(c => ['FLOAT64','INT64','NUMERIC','FLOAT','INTEGER','BIGNUMERIC'].includes(c.type));
-  const dc = dateCols[0]?.name;
-  const hasAmount = numCols.some(c => c.name.toLowerCase().includes('amount') || c.name.toLowerCase().includes('expense'));
-  const agg = hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
-
-  // If single dimension with a full SQL template, use it
-  if (timeDim && !groupDim) {
-    const sql = timeDim.view_definition
-      ?.replace(/\{table\}/g, table)
-      .replace(/\{date\}/g, dc || 'SignupDate')
-      .replace(/\{agg\}/g, agg);
-    if (sql) return await queryBq(sql);
-  }
-  if (groupDim && !timeDim) {
+  // If we have a group dimension, use its template with time placeholders
+  if (groupDim?.view_definition) {
     const sql = groupDim.view_definition
-      ?.replace(/\{table\}/g, table)
+      .replace(/\{table\}/g, table)
       .replace(/\{date\}/g, dc || 'SignupDate')
-      .replace(/\{agg\}/g, agg);
-    if (sql) return await queryBq(sql);
+      .replace(/\{agg\}/g, agg)
+      .replace(/\{time_select\}/g, timeParts.select)
+      .replace(/\{time_group\}/g, timeParts.group)
+      .replace(/\{time_order\}/g, timeParts.order)
+      .replace(/\{time_where\}/g, timeParts.where);
+    return await queryBq(sql);
   }
 
-  // Combined: build manually
-  const selects = [], groups = [], orders = [];
-  let where = '';
+  // Time only (no group dim) — build a simple time query from the time parts
   if (timeDim && dc) {
-    if (timeDim.name === 'Monthly') { selects.push(`FORMAT_DATE('%Y-%m',${dc}) AS period`); groups.push(`FORMAT_DATE('%Y-%m',${dc})`); orders.push('period'); }
-    else if (timeDim.name === 'Weekly') { selects.push(`FORMAT_DATE('%Y-W%V',${dc}) AS week`); groups.push(`FORMAT_DATE('%Y-W%V',${dc})`); orders.push('week'); where = ` WHERE ${dc}>=DATE_SUB(CURRENT_DATE(),INTERVAL 90 DAY)`; }
-    else if (timeDim.name === 'Year over Year') { selects.push(`EXTRACT(YEAR FROM ${dc}) AS year`,`FORMAT_DATE('%b',${dc}) AS month`); groups.push(`EXTRACT(YEAR FROM ${dc})`,`FORMAT_DATE('%b',${dc})`,`EXTRACT(MONTH FROM ${dc})`); orders.push('year',`EXTRACT(MONTH FROM ${dc})`); }
+    const sql = `SELECT ${timeParts.select} ${agg} AS value FROM ${table} ${timeParts.where} GROUP BY ${timeParts.group.replace(/,\s*$/, '')} ORDER BY ${timeParts.order.replace(/,\s*$/, '')} LIMIT 500`;
+    return await queryBq(sql);
   }
-  if (groupDim && groupDim.required_column !== '_DATE_') {
-    selects.push(groupDim.required_column);
-    groups.push(groupDim.required_column);
+
+  // Fallback: monthly
+  if (dc) {
+    return await queryBq(`SELECT FORMAT_DATE('%Y-%m',${dc}) AS period, ${agg} AS value FROM ${table} GROUP BY 1 ORDER BY 1`);
   }
-  if (selects.length === 0 && dc) { selects.push(`FORMAT_DATE('%Y-%m',${dc}) AS period`); groups.push(`FORMAT_DATE('%Y-%m',${dc})`); orders.push('period'); }
-  selects.push(`${agg} AS value`);
-  return await queryBq(`SELECT ${selects.join(',')} FROM ${table}${where} GROUP BY ${groups.join(',')} ORDER BY ${orders.length?orders.join(','):'1'} LIMIT 500`);
+
+  return [];
 }
 
 // --- Compute derived metric ---
@@ -258,14 +281,15 @@ async function queryDerivedWithDim(derived, timeDim, groupDim) {
     let formula = derived.formula;
     for (const dep of depMetrics) {
       const depRow = (results[dep.id] || []).find(r => r[timeCol] === label);
-      const val = depRow ? Number(depRow.value) : 0;
-      formula = formula.replace(new RegExp(`\\{${dep.id}\\}`, 'g'), val);
+      const val = depRow ? parseFloat(depRow.value) || 0 : 0;
+      formula = formula.replace(new RegExp(`\\{${dep.id}\\}`, 'g'), String(val));
     }
-    // Evaluate the formula
-    let computed;
+    let computed = 0;
     try {
-      const safeFormula = formula.replace(/SAFE_DIVIDE\(([^,]+),([^)]+)\)/g, '(($2)===0?0:($1)/($2))');
-      computed = eval(safeFormula);
+      // SAFE_DIVIDE(a, b) → b === 0 ? 0 : a / b
+      const safeFormula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, '(($2)===0?0:($1)/($2))');
+      computed = Function('"use strict"; return (' + safeFormula + ')')();
+      if (!isFinite(computed)) computed = 0;
     } catch { computed = 0; }
     return { [timeCol]: label, value: Math.round(computed * 100) / 100 };
   });
@@ -285,15 +309,15 @@ async function renderPage() {
   }
 
   app.innerHTML = `
-    <div class="section" id="sec-core">
-      <h2>Core Metrics</h2>
-      <div class="chart-grid" id="core-grid"></div>
+    <div class="section" id="sec-funnel">
+      <h2>Funnel</h2>
+      <div class="controls" id="funnel-controls"></div>
+      <div style="height:350px;position:relative"><canvas id="funnel-canvas"></canvas></div>
     </div>
 
-    <div class="section" id="sec-interactive">
-      <h2>Interactive</h2>
-      <div class="controls" id="interactive-controls"></div>
-      <div class="chart-grid" id="interactive-grid"></div>
+    <div class="section" id="sec-rates">
+      <h2>Rates</h2>
+      <div style="height:350px;position:relative"><canvas id="rates-canvas"></canvas></div>
     </div>
 
     <div class="section" id="sec-builder">
@@ -311,131 +335,106 @@ async function renderPage() {
     </div>
   `;
 
-  renderCoreMetrics();
-  renderInteractiveControls();
-  renderInteractiveCharts();
+  renderFunnelControls();
+  renderFunnelChart();
+  renderRatesChart();
   renderBuilderControls();
   renderBuilderSidebar();
   renderValidation();
 }
 
-// --- Section 1: Core Metrics ---
-const CORE_METRICS = [
-  { id: 54, label: 'Trials' },
-  { id: 55, label: 'Syncs' },
-  { id: 56, label: 'Conversions' },
-  { derived: true, id: 20, label: 'Conversion Rate', suffix: '%' },
-  { derived: true, id: 25, label: 'Sync Rate', suffix: '%' },
-  { derived: true, id: 46, label: 'Churn Rate', suffix: '%' },
+// --- Section 1: Funnel (Trials + Syncs + Conversions on one chart) ---
+const FUNNEL_METRICS = [
+  { id: 54, label: 'Trials', color: '#34d399' },
+  { id: 55, label: 'Syncs', color: '#60a5fa' },
+  { id: 56, label: 'Conversions', color: '#fbbf24' },
+];
+const RATE_METRICS = [
+  { id: 20, label: 'Conversion Rate', color: '#34d399' },
+  { id: 25, label: 'Sync Rate', color: '#60a5fa' },
+  { id: 46, label: 'Churn Rate', color: '#f87171' },
 ];
 
-async function renderCoreMetrics() {
-  const grid = document.getElementById('core-grid');
-  const monthly = getTimeDims().find(d => d.name === 'Monthly');
-
-  grid.innerHTML = CORE_METRICS.map(cm =>
-    `<div class="chart-card"><h3>${cm.label}</h3><div class="stat" id="core-stat-${cm.id}">...</div><canvas id="core-${cm.id}"></canvas></div>`
-  ).join('');
-
-  for (const cm of CORE_METRICS) {
-    const m = allMetrics.find(x => x.id === cm.id);
-    if (!m) continue;
-    let rows;
-    if (cm.derived) { rows = await queryDerivedWithDim(m, monthly, null); }
-    else { rows = await queryMetricWithDim(m, monthly, null); }
-    if (!rows || rows.length === 0) continue;
-
-    const labels = rows.map(r => r.period || r.week || r.year || Object.values(r)[0]);
-    const data = rows.map(r => Number(r.value));
-    const latest = data[data.length - 1];
-
-    const statEl = document.getElementById(`core-stat-${cm.id}`);
-    if (statEl) statEl.textContent = cm.suffix ? latest.toFixed(1) + cm.suffix : latest.toLocaleString();
-
-    destroyChart(`core-${cm.id}`);
-    charts[`core-${cm.id}`] = new Chart(document.getElementById(`core-${cm.id}`), {
-      type: 'line',
-      data: { labels, datasets: [{ label: cm.label, data, borderColor: PALETTE[CORE_METRICS.indexOf(cm)], backgroundColor: PALETTE[CORE_METRICS.indexOf(cm)] + '20', tension: .3, fill: true, pointRadius: 2 }] },
-      options: chartOpts({ legend: false }),
-    });
-  }
-}
-
-// --- Section 2: Interactive ---
-function renderInteractiveControls() {
+function renderFunnelControls() {
   const timeDims = getTimeDims();
-  const groupDims = getGroupDims();
-  const el = document.getElementById('interactive-controls');
+  const el = document.getElementById('funnel-controls');
+  if (!interactiveState.timeDim) interactiveState.timeDim = timeDims.find(d => d.name === 'Monthly');
 
   el.innerHTML = `
     <span class="ctrl-label">Time</span>
-    ${timeDims.map(d => `<button class="ctrl-btn ${interactiveState.timeDim?.id===d.id?'active':''}" onclick="setInteractiveTime(${d.id})">${d.name}</button>`).join('')}
-    <span class="ctrl-label" style="margin-left:12px">Group by</span>
-    <button class="ctrl-btn ${!interactiveState.groupDim?'dim-active':''}" onclick="setInteractiveGroup(null)">None</button>
-    ${groupDims.map(d => `<button class="ctrl-btn ${interactiveState.groupDim?.id===d.id?'dim-active':''}" onclick="setInteractiveGroup(${d.id})">${d.name}</button>`).join('')}
+    ${timeDims.map(d => `<button class="ctrl-btn ${interactiveState.timeDim?.id===d.id?'active':''}" onclick="setFunnelTime(${d.id})">${d.name}</button>`).join('')}
   `;
-
-  if (!interactiveState.timeDim) interactiveState.timeDim = timeDims.find(d => d.name === 'Monthly');
 }
 
-function setInteractiveTime(dimId) {
+function setFunnelTime(dimId) {
   interactiveState.timeDim = allMetrics.find(m => m.id === dimId);
-  renderInteractiveControls();
-  renderInteractiveCharts();
+  renderFunnelControls();
+  renderFunnelChart();
+  renderRatesChart();
 }
 
-function setInteractiveGroup(dimId) {
-  interactiveState.groupDim = dimId ? allMetrics.find(m => m.id === dimId) : null;
-  renderInteractiveControls();
-  renderInteractiveCharts();
-}
+async function renderFunnelChart() {
+  destroyChart('funnel');
+  const canvas = document.getElementById('funnel-canvas');
+  const datasets = [];
+  let allLabels = [];
 
-async function renderInteractiveCharts() {
-  const grid = document.getElementById('interactive-grid');
-  grid.innerHTML = CORE_METRICS.map(cm =>
-    `<div class="chart-card"><h3>${cm.label}</h3><canvas id="int-${cm.id}"></canvas></div>`
-  ).join('');
-
-  for (const cm of CORE_METRICS) {
-    const m = allMetrics.find(x => x.id === cm.id);
+  for (const fm of FUNNEL_METRICS) {
+    const m = allMetrics.find(x => x.id === fm.id);
     if (!m) continue;
-    let rows;
-    if (cm.derived) { rows = await queryDerivedWithDim(m, interactiveState.timeDim, interactiveState.groupDim); }
-    else { rows = await queryMetricWithDim(m, interactiveState.timeDim, interactiveState.groupDim); }
+    const rows = await queryMetricWithDim(m, interactiveState.timeDim, null);
     if (!rows || rows.length === 0) continue;
 
-    destroyChart(`int-${cm.id}`);
-    const canvas = document.getElementById(`int-${cm.id}`);
     const rcols = Object.keys(rows[0]);
     const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
-    const labelCols = rcols.filter(c => c !== valueCol);
+    const labelCol = rcols.find(c => c !== valueCol);
+    const labels = rows.map(r => r[labelCol]);
+    const data = rows.map(r => parseFloat(r[valueCol]) || 0);
+    if (labels.length > allLabels.length) allLabels = labels;
 
-    if (interactiveState.groupDim && labelCols.length >= 2) {
-      // Grouped bar
-      const timeCol = labelCols[0];
-      const dimCol = labelCols[1];
-      const timeLabels = [...new Set(rows.map(r => r[timeCol]))];
-      const dimValues = [...new Set(rows.map(r => r[dimCol]))].slice(0, 10);
-      charts[`int-${cm.id}`] = new Chart(canvas, {
-        type: 'bar',
-        data: { labels: timeLabels, datasets: dimValues.map((dv, i) => ({
-          label: dv || '(none)',
-          data: timeLabels.map(tl => { const row = rows.find(r => r[timeCol]===tl && r[dimCol]===dv); return row ? Number(row[valueCol]) : 0; }),
-          backgroundColor: PALETTE[i % PALETTE.length] + 'cc',
-        })) },
-        options: chartOpts(),
-      });
-    } else {
-      // Line
-      const labels = rows.map(r => labelCols.length ? r[labelCols[0]] : '');
-      const data = rows.map(r => Number(r[valueCol]));
-      charts[`int-${cm.id}`] = new Chart(canvas, {
-        type: interactiveState.groupDim ? 'bar' : 'line',
-        data: { labels, datasets: [{ label: cm.label, data, borderColor: PALETTE[CORE_METRICS.indexOf(cm)], backgroundColor: PALETTE[CORE_METRICS.indexOf(cm)] + (interactiveState.groupDim ? 'cc' : '20'), tension: .3, fill: !interactiveState.groupDim, pointRadius: 2 }] },
-        options: chartOpts({ legend: false, horizontal: interactiveState.groupDim && !interactiveState.timeDim }),
-      });
-    }
+    datasets.push({
+      label: fm.label, data, borderColor: fm.color,
+      backgroundColor: fm.color + '20', tension: .3, fill: false, pointRadius: 3,
+    });
   }
+
+  charts['funnel'] = new Chart(canvas, {
+    type: 'line',
+    data: { labels: allLabels, datasets },
+    options: chartOpts({ legend: true }),
+  });
+}
+
+async function renderRatesChart() {
+  destroyChart('rates');
+  const canvas = document.getElementById('rates-canvas');
+  const datasets = [];
+  let allLabels = [];
+
+  for (const rm of RATE_METRICS) {
+    const m = allMetrics.find(x => x.id === rm.id);
+    if (!m) continue;
+    const rows = await queryDerivedWithDim(m, interactiveState.timeDim, null);
+    if (!rows || rows.length === 0) continue;
+
+    const rcols = Object.keys(rows[0]);
+    const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
+    const labelCol = rcols.find(c => c !== valueCol);
+    const labels = rows.map(r => r[labelCol]);
+    const data = rows.map(r => parseFloat(r[valueCol]) || 0);
+    if (labels.length > allLabels.length) allLabels = labels;
+
+    datasets.push({
+      label: rm.label, data, borderColor: rm.color,
+      backgroundColor: rm.color + '20', tension: .3, fill: false, pointRadius: 3,
+    });
+  }
+
+  charts['rates'] = new Chart(canvas, {
+    type: 'line',
+    data: { labels: allLabels, datasets },
+    options: chartOpts({ legend: true }),
+  });
 }
 
 // --- Section 3: Chart Builder ---
