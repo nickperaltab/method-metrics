@@ -13,7 +13,7 @@ export default function App() {
       <TopBar connected={connected} userEmail={userEmail} onConnect={connect} />
       {metricsLoading
         ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-        : <Explorer grouped={grouped} metrics={metrics} bqConnected={connected} />
+        : <Explorer grouped={grouped} metrics={metrics} bqConnected={connected} userEmail={userEmail} />
       }
     </div>
   );
