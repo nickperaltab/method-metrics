@@ -116,17 +116,38 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
   const xLabel = formatFieldLabel(xField);
   const yLabel = effectiveYField === 'count' ? 'Count' : formatFieldLabel(yField);
 
+  // Format YYYY-MM dates to "Jan '24" style
+  const isDateAxis = chartData.length > 0 && /^\d{4}-\d{2}/.test(String(chartData[0]?.[xField] || ''));
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function formatDateLabel(val) {
+    if (!val || typeof val !== 'string') return val;
+    const parts = val.split('-');
+    if (parts.length >= 2) {
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const year = parts[0].slice(2);
+      return `${MONTH_NAMES[monthIdx] || parts[1]} '${year}`;
+    }
+    return val;
+  }
+
   const commonProps = {
     data: chartData,
-    margin: { top: 8, right: 24, left: 8, bottom: 8 },
+    margin: { top: 8, right: 24, left: 8, bottom: 24 },
   };
+
+  // Show every Nth label to avoid overlap
+  const tickInterval = chartData.length > 24 ? 2 : chartData.length > 12 ? 1 : 0;
 
   const xAxisProps = {
     dataKey: xField,
     tick: axisStyle,
     axisLine: { stroke: THEME.grid },
     tickLine: { stroke: THEME.grid },
-    label: { value: xLabel, position: 'insideBottom', offset: -4, style: { ...axisStyle, fill: THEME.textMuted } },
+    tickFormatter: isDateAxis ? formatDateLabel : undefined,
+    interval: tickInterval,
+    angle: chartData.length > 12 ? -45 : 0,
+    textAnchor: chartData.length > 12 ? 'end' : 'middle',
+    height: 60,
   };
 
   const yAxisProps = {
