@@ -230,31 +230,21 @@ async function queryMetricWithDim(metric, timeDim, groupDim) {
   const agg = getAgg(metric);
   const timeParts = getTimeParts(timeDim, dc || 'SignupDate');
 
-  // If we have a group dimension, use its template with time placeholders
-  if (groupDim?.view_definition) {
-    const sql = groupDim.view_definition
-      .replace(/\{table\}/g, table)
-      .replace(/\{date\}/g, dc || 'SignupDate')
-      .replace(/\{agg\}/g, agg)
-      .replace(/\{time_select\}/g, timeParts.select)
-      .replace(/\{time_group\}/g, timeParts.group)
-      .replace(/\{time_order\}/g, timeParts.order)
-      .replace(/\{time_where\}/g, timeParts.where);
-    return await queryBq(sql);
-  }
+  // Always use a group template. Default to "No Grouping" if none selected.
+  const template = groupDim?.view_definition
+    || allMetrics.find(m => m.name === 'No Grouping' && m.metric_type === 'dimension')?.view_definition
+    || 'SELECT {time_select} {agg} AS value FROM {table} {time_where} GROUP BY {time_group} 1 ORDER BY {time_order} 1 LIMIT 500';
 
-  // Time only (no group dim) — build a simple time query from the time parts
-  if (timeDim && dc) {
-    const sql = `SELECT ${timeParts.select} ${agg} AS value FROM ${table} ${timeParts.where} GROUP BY ${timeParts.group.replace(/,\s*$/, '')} ORDER BY ${timeParts.order.replace(/,\s*$/, '')} LIMIT 500`;
-    return await queryBq(sql);
-  }
+  const sql = template
+    .replace(/\{table\}/g, table)
+    .replace(/\{date\}/g, dc || 'SignupDate')
+    .replace(/\{agg\}/g, agg)
+    .replace(/\{time_select\}/g, timeParts.select)
+    .replace(/\{time_group\}/g, timeParts.group)
+    .replace(/\{time_order\}/g, timeParts.order)
+    .replace(/\{time_where\}/g, timeParts.where);
 
-  // Fallback: monthly
-  if (dc) {
-    return await queryBq(`SELECT FORMAT_DATE('%Y-%m',${dc}) AS period, ${agg} AS value FROM ${table} GROUP BY 1 ORDER BY 1`);
-  }
-
-  return [];
+  return await queryBq(sql);
 }
 
 // --- Compute derived metric ---
