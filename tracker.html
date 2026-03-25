@@ -881,6 +881,9 @@ function debounceSave(id, field, value, el) {
 }
 
 async function saveField(id, field, value, el) {
+  // Update local state immediately so re-renders show the new value
+  const m = allMetrics.find(x => x.id === id);
+  if (m) m[field] = value;
   await updateMetric(id, { [field]: value });
   if (el) { el.classList.add('save-flash'); setTimeout(() => el.classList.remove('save-flash'), 600); }
   if (field === 'status' || field === 'assigned_to') {
