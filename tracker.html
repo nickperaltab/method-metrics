@@ -652,11 +652,7 @@ function renderExpandPanel(m) {
       <div class="expand-label">Used By (${dependents.length})</div>
       <div class="dep-pills">${revDeps}</div>
     </div>
-    ${PRIMITIVE_SCHEMA[m.view_name] ? `<div class="expand-section">
-      <div class="expand-label">Breakdowns</div>
-      <div class="lens-bar">${getLensButtons(m.view_name)}</div>
-      <div class="lens-result"></div>
-    </div>` : ''}
+    ${m.view_name ? renderTransformsSection(m) : ''}
     <div class="expand-section">
       <div class="expand-label">Notes</div>
       <textarea class="notes-area" placeholder="Add notes, context, verification details..." onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'notes',this.value,this)">${esc(m.notes || '')}</textarea>
@@ -667,64 +663,187 @@ function renderExpandPanel(m) {
   </div></td></tr>`;
 }
 
-// --- Breakdown lens definitions ---
-// Each primitive declares its date column and available dimensions
-const PRIMITIVE_SCHEMA = {
-  'v_trials': { dateCol: 'SignupDate', dims: ['Channel','SignupCountry','CustDatIndustry','SyncType','Vertical'] },
-  'v_syncs': { dateCol: 'SyncDate', dims: ['SyncType','SyncTypeRegion','SignupCountry','Vertical'] },
-  'v_conversions': { dateCol: 'FirstSaaSInvoiceTxnDate', dims: ['Channel','SignupCountry','CustDatIndustry','Vertical'] },
-  'v_cancellations': { dateCol: 'CancellationDate', dims: ['SignupCountry','CustDatIndustry'] },
-  'v_bom_customers': { dateCol: 'TxnDate', dims: [] },
-  'v_new_net_saas': { dateCol: 'TxnDate', dims: [], agg: 'ROUND(SUM(SaaSAmount),0)' },
-  'v_new_dep_revenue': { dateCol: 'TxnDate', dims: [], agg: 'ROUND(SUM(SaaSAmount),0)' },
-  'v_total_net_saas': { dateCol: 'TxnDate', dims: [], agg: 'ROUND(SUM(SaaSAmount + SaaSExpense),0)' },
-  'v_total_dep_revenue': { dateCol: 'TxnDate', dims: [], agg: 'ROUND(SUM(SaaSAmount),0)' },
-};
+// --- Dynamic Transforms ---
+// Column cache per view
+const viewColumnCache = {};
+// Active lens selections per metric
+const activeLenses = {};
 
-function getLensButtons(viewName) {
-  const schema = PRIMITIVE_SCHEMA[viewName];
-  if (!schema) return '';
-  const isCount = !schema.agg;
-  const lenses = [
-    { key: 'monthly', label: 'Monthly' },
-    { key: 'weekly', label: 'Weekly' },
-    { key: 'yoy', label: 'Year over Year' },
-  ];
-  schema.dims.forEach(d => lenses.push({ key: `dim_${d}`, label: `By ${d}` }));
-  return lenses.map(l =>
-    `<button class="lens-btn" onclick="event.stopPropagation();runLens('${viewName}','${l.key}',this)">${l.label}</button>`
-  ).join('');
+async function getViewColumns(viewName) {
+  if (viewColumnCache[viewName]) return viewColumnCache[viewName];
+  if (!bqToken) return null;
+  try {
+    const rows = await queryBq(`SELECT column_name, data_type FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = '${viewName}' ORDER BY ordinal_position`);
+    const cols = rows.map(r => ({ name: r.column_name, type: r.data_type }));
+    viewColumnCache[viewName] = cols;
+    return cols;
+  } catch { return null; }
 }
 
-async function runLens(viewName, lensKey, btnEl) {
-  const schema = PRIMITIVE_SCHEMA[viewName];
-  if (!schema || !bqToken) return;
+function classifyColumns(cols) {
+  const dateCols = cols.filter(c => ['DATE','TIMESTAMP','DATETIME'].includes(c.type));
+  const numCols = cols.filter(c => ['FLOAT64','INT64','NUMERIC','FLOAT','INTEGER','BIGNUMERIC'].includes(c.type));
+  const dimCols = cols.filter(c => c.type === 'STRING' && c.name !== 'CompanyAccount');
+  return { dateCols, numCols, dimCols };
+}
 
-  // Toggle active state
-  const bar = btnEl.parentElement;
-  bar.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
-  btnEl.classList.add('active');
+function buildLensOptions(cols) {
+  const { dateCols, dimCols } = classifyColumns(cols);
+  const lenses = [];
+  if (dateCols.length > 0) {
+    lenses.push({ key: 'monthly', label: 'Monthly', type: 'time' });
+    lenses.push({ key: 'weekly', label: 'Weekly', type: 'time' });
+    lenses.push({ key: 'yoy', label: 'Year over Year', type: 'time' });
+  }
+  dimCols.forEach(c => lenses.push({ key: `dim_${c.name}`, label: `By ${c.name}`, type: 'dim' }));
+  return lenses;
+}
 
-  const resultEl = btnEl.closest('.expand-panel').querySelector('.lens-result');
+function buildCombinedSql(viewName, cols, selectedKeys) {
+  const { dateCols, numCols } = classifyColumns(cols);
+  const dc = dateCols[0]?.name;
+  const hasAmount = numCols.some(c => c.name.toLowerCase().includes('amount') || c.name.toLowerCase().includes('expense'));
+  const agg = hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
+  const table = `\`project-for-method-dw.revenue.${viewName}\``;
+
+  const selects = [];
+  const groups = [];
+  const orders = [];
+  let whereExtra = '';
+
+  for (const key of selectedKeys) {
+    if (key === 'monthly' && dc) {
+      selects.push(`FORMAT_DATE('%Y-%m', ${dc}) AS period`);
+      groups.push(`FORMAT_DATE('%Y-%m', ${dc})`);
+      orders.push('period');
+    } else if (key === 'weekly' && dc) {
+      selects.push(`FORMAT_DATE('%Y-W%V', ${dc}) AS week`);
+      groups.push(`FORMAT_DATE('%Y-W%V', ${dc})`);
+      orders.push('week');
+      whereExtra = ` WHERE ${dc} >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)`;
+    } else if (key === 'yoy' && dc) {
+      selects.push(`EXTRACT(YEAR FROM ${dc}) AS year`);
+      selects.push(`FORMAT_DATE('%b', ${dc}) AS month`);
+      groups.push(`EXTRACT(YEAR FROM ${dc})`);
+      groups.push(`FORMAT_DATE('%b', ${dc})`);
+      groups.push(`EXTRACT(MONTH FROM ${dc})`);
+      orders.push('year');
+      orders.push(`EXTRACT(MONTH FROM ${dc})`);
+    } else if (key.startsWith('dim_')) {
+      const dim = key.replace('dim_', '');
+      selects.push(dim);
+      groups.push(dim);
+    }
+  }
+
+  if (selects.length === 0) return null;
+  selects.push(`${agg} AS value`);
+
+  return `SELECT ${selects.join(', ')} FROM ${table}${whereExtra} GROUP BY ${groups.join(', ')} ORDER BY ${orders.length ? orders.join(', ') : '1'} LIMIT 100`;
+}
+
+function renderTransformsSection(m) {
+  if (!m.view_name) return '';
+
+  const metricId = m.id;
+  const active = activeLenses[metricId] || new Set();
+
+  // Saved transforms from Supabase
+  const savedTransforms = allMetrics.filter(t =>
+    t.primitive_metric_id === metricId && (t.metric_type === 'transform' || t.metric_type === 'breakdown')
+  );
+
+  return `<div class="expand-section">
+    <div class="expand-label">Transforms</div>
+    ${savedTransforms.length > 0 ? `
+      <div style="margin-bottom:10px">
+        <span style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono)">SAVED</span>
+        <div class="dep-pills" style="margin-top:4px">
+          ${savedTransforms.map(t => `<span class="dep-pill" style="background:var(--green-bg);border-color:#133d2a;color:var(--green);cursor:pointer" onclick="event.stopPropagation();scrollToMetric(${t.id})" title="Click to view">${t.name}</span>`).join('')}
+        </div>
+      </div>
+    ` : ''}
+    <div style="margin-bottom:6px">
+      <span style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono)">AVAILABLE LENSES</span>
+      <span style="font-size:9px;color:var(--text-dim);margin-left:8px">(multi-select to combine)</span>
+    </div>
+    <div class="lens-bar" id="lens-bar-${metricId}">
+      <span class="lens-loading" id="lens-loading-${metricId}">${bqToken ? 'Detecting columns...' : 'Connect BQ to use lenses'}</span>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px" id="lens-actions-${metricId}" style="display:none"></div>
+    <div class="lens-result" id="lens-result-${metricId}"></div>
+  </div>`;
+}
+
+async function loadLenses(metricId) {
+  const m = allMetrics.find(x => x.id === metricId);
+  if (!m?.view_name || !bqToken) return;
+
+  const cols = await getViewColumns(m.view_name);
+  if (!cols) return;
+
+  const lenses = buildLensOptions(cols);
+  const bar = document.getElementById(`lens-bar-${metricId}`);
+  if (!bar) return;
+
+  if (!activeLenses[metricId]) activeLenses[metricId] = new Set();
+  const active = activeLenses[metricId];
+
+  bar.innerHTML = lenses.map(l =>
+    `<button class="lens-btn ${active.has(l.key)?'active':''}" onclick="event.stopPropagation();toggleLensSelection(${metricId},'${l.key}')">${l.label}</button>`
+  ).join('');
+
+  updateLensActions(metricId);
+}
+
+function toggleLensSelection(metricId, key) {
+  if (!activeLenses[metricId]) activeLenses[metricId] = new Set();
+  const active = activeLenses[metricId];
+  if (active.has(key)) active.delete(key); else active.add(key);
+
+  // Update button styles
+  const bar = document.getElementById(`lens-bar-${metricId}`);
+  if (bar) {
+    bar.querySelectorAll('.lens-btn').forEach(btn => {
+      const btnKey = btn.onclick.toString().match(/'([^']+)'\)/)?.[1];
+      if (btnKey) btn.classList.toggle('active', active.has(btnKey));
+    });
+  }
+  updateLensActions(metricId);
+}
+
+function updateLensActions(metricId) {
+  const actions = document.getElementById(`lens-actions-${metricId}`);
+  if (!actions) return;
+  const active = activeLenses[metricId] || new Set();
+
+  if (active.size === 0) {
+    actions.innerHTML = '';
+    actions.style.display = 'none';
+    return;
+  }
+
+  actions.style.display = 'flex';
+  const labels = [...active].map(k => k.startsWith('dim_') ? k.replace('dim_','') : k).join(' + ');
+  actions.innerHTML = `
+    <button class="wiz-btn" onclick="event.stopPropagation();runCombinedLens(${metricId})">Run: ${labels}</button>
+    <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();activeLenses[${metricId}].clear();loadLenses(${metricId});document.getElementById('lens-result-${metricId}').innerHTML=''">Clear</button>
+  `;
+}
+
+async function runCombinedLens(metricId) {
+  const m = allMetrics.find(x => x.id === metricId);
+  if (!m?.view_name || !bqToken) return;
+
+  const resultEl = document.getElementById(`lens-result-${metricId}`);
   if (!resultEl) return;
   resultEl.innerHTML = '<div class="lens-loading">Running query...</div>';
 
-  const dc = schema.dateCol;
-  const agg = schema.agg || 'COUNT(*)';
-  const table = `\`project-for-method-dw.revenue.${viewName}\``;
-  let sql;
+  const cols = await getViewColumns(m.view_name);
+  if (!cols) { resultEl.innerHTML = '<div class="lens-loading">Could not detect columns</div>'; return; }
 
-  if (lensKey === 'monthly') {
-    sql = `SELECT FORMAT_DATE('%Y-%m', ${dc}) AS period, ${agg} AS value FROM ${table} GROUP BY 1 ORDER BY 1`;
-  } else if (lensKey === 'weekly') {
-    sql = `SELECT FORMAT_DATE('%Y-W%V', ${dc}) AS week, ${agg} AS value FROM ${table} WHERE ${dc} >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY) GROUP BY 1 ORDER BY 1`;
-  } else if (lensKey === 'yoy') {
-    sql = `SELECT EXTRACT(YEAR FROM ${dc}) AS year, FORMAT_DATE('%b', ${dc}) AS month, ${agg} AS value FROM ${table} GROUP BY 1, 2, EXTRACT(MONTH FROM ${dc}) ORDER BY 1, EXTRACT(MONTH FROM ${dc})`;
-  } else if (lensKey.startsWith('dim_')) {
-    const dim = lensKey.replace('dim_', '');
-    sql = `SELECT ${dim}, ${agg} AS value FROM ${table} WHERE ${dc} >= DATE_TRUNC(CURRENT_DATE(), MONTH) GROUP BY 1 ORDER BY value DESC LIMIT 20`;
-  }
-
+  const active = activeLenses[metricId] || new Set();
+  const sql = buildCombinedSql(m.view_name, cols, active);
   if (!sql) { resultEl.innerHTML = ''; return; }
 
   try {
@@ -733,17 +852,57 @@ async function runLens(viewName, lensKey, btnEl) {
       resultEl.innerHTML = '<div class="lens-loading">No data returned</div>';
       return;
     }
-    const cols = Object.keys(rows[0]);
-    resultEl.innerHTML = `<table>
-      <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map(r => `<tr>${cols.map(c => {
-        const v = r[c];
-        const isNum = !isNaN(v) && v !== null && v !== '';
-        return `<td class="${isNum ? 'num' : ''}">${isNum ? Number(v).toLocaleString() : (v || '—')}</td>`;
-      }).join('')}</tr>`).join('')}</tbody>
-    </table>`;
+    const rcols = Object.keys(rows[0]);
+    const labels = [...active].map(k => k.startsWith('dim_') ? k.replace('dim_','') : k).join('_');
+
+    resultEl.innerHTML = `
+      <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+        <table><thead><tr>${rcols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${rcols.map(c => {
+          const v = r[c];
+          const isNum = !isNaN(v) && v !== null && v !== '';
+          return `<td class="${isNum ? 'num' : ''}">${isNum ? Number(v).toLocaleString() : (v || '—')}</td>`;
+        }).join('')}</tr>`).join('')}</tbody></table>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();saveAsTransform(${metricId},'${labels}')">Save as Transform</button>
+      </div>
+      <div style="margin-top:4px"><code style="font-size:10px;color:var(--text-dim)">${esc(sql)}</code></div>
+    `;
   } catch (e) {
     resultEl.innerHTML = `<div class="lens-loading" style="color:var(--red)">Query failed: ${e.message}</div>`;
+  }
+}
+
+async function saveAsTransform(metricId, labels) {
+  const m = allMetrics.find(x => x.id === metricId);
+  if (!m?.view_name || !bqToken) return;
+
+  const cols = await getViewColumns(m.view_name);
+  const active = activeLenses[metricId] || new Set();
+  const sql = buildCombinedSql(m.view_name, cols, active);
+  if (!sql) return;
+
+  const viewName = `${m.view_name}_${labels}`;
+  const name = `${m.name} — ${labels.replace(/_/g, ' + ')}`;
+
+  try {
+    await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${viewName}\` AS ${sql}`);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        name, stage: m.stage, status: 'review', metric_type: 'transform',
+        view_name: viewName, view_definition: sql, primitive_metric_id: metricId, source: 'bigquery',
+      }),
+    });
+    const created = await res.json();
+    if (created?.[0]) allMetrics.push(created[0]);
+    alert(`Transform saved: ${name}`);
+    // Refresh the transforms section
+    loadLenses(metricId);
+  } catch (e) {
+    alert('Failed: ' + e.message);
   }
 }
 
@@ -854,6 +1013,11 @@ function toggleExpand(id, event) {
   if (event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
   expandedId = expandedId === id ? null : id;
   renderTable();
+  // Load lenses for expanded metric
+  if (expandedId === id) {
+    const m = allMetrics.find(x => x.id === id);
+    if (m?.view_name) loadLenses(id);
+  }
 }
 
 function scrollToMetric(id) {
@@ -869,6 +1033,8 @@ function scrollToMetric(id) {
       row.style.outline = '2px solid var(--accent)';
       setTimeout(() => row.style.outline = '', 2000);
     }
+    const m = allMetrics.find(x => x.id === id);
+    if (m?.view_name) loadLenses(id);
   }, 50);
 }
 
