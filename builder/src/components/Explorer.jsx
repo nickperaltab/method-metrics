@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { GraphicWalker } from '@kanaries/graphic-walker';
+import React, { useState, useCallback } from 'react';
 import MetricPicker from './MetricPicker';
 import AiPrompt from './AiPrompt';
+import ChartRenderer from './ChartRenderer';
 import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
@@ -11,7 +11,7 @@ const styles = {
   layout: { display: 'grid', gridTemplateColumns: '260px 1fr', gap: 20, padding: 24, minHeight: 'calc(100vh - 52px)' },
   main: { display: 'flex', flexDirection: 'column', gap: 16 },
   status: { color: '#5a6370', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", padding: 20, textAlign: 'center' },
-  gwContainer: { flex: 1, background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8, overflow: 'hidden', minHeight: 500 },
+  chartContainer: { flex: 1, background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8, overflow: 'hidden', minHeight: 500 },
 };
 
 const schemaCache = {};
@@ -27,14 +27,14 @@ function castRow(row, fields) {
 
 export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
   const [selectedMetric, setSelectedMetric] = useState(null);
-  const [gwData, setGwData] = useState(null);
-  const [gwFields, setGwFields] = useState(null);
+  const [chartData, setChartData] = useState(null);
+  const [chartFields, setChartFields] = useState(null);
+  const [chartSpec, setChartSpec] = useState(null); // { chartType, xField, yField, colorField }
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [aiExplanation, setAiExplanation] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const storeRef = useRef(null);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   const loadMetricData = useCallback(async (metric) => {
@@ -44,17 +44,30 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
     schemaCache[metric.view_name] = result.schema;
     const fields = mapBqSchemaToGwFields(result.schema);
     const rows = result.rows.map(row => castRow(row, fields));
-    setGwData(rows);
-    setGwFields(fields);
+    setChartData(rows);
+    setChartFields(fields);
     setSelectedMetric(metric);
     return { rows, fields };
   }, [loadView]);
 
-  const handleSelectMetric = useCallback((metric) => {
+  const deriveDefaultSpec = useCallback((fields) => {
+    const temporal = fields.find(f => f.semanticType === 'temporal');
+    const nominal = fields.find(f => f.semanticType === 'nominal');
+    const quantitative = fields.find(f => f.semanticType === 'quantitative');
+    const xField = (temporal || nominal)?.fid || fields[0]?.fid;
+    const yField = quantitative?.fid || fields[1]?.fid || fields[0]?.fid;
+    return { chartType: 'bar', xField, yField, colorField: null };
+  }, []);
+
+  const handleSelectMetric = useCallback(async (metric) => {
     setAiError(null);
     setAiExplanation(null);
-    loadMetricData(metric);
-  }, [loadMetricData]);
+    setChartSpec(null);
+    const result = await loadMetricData(metric);
+    if (result) {
+      setChartSpec(deriveDefaultSpec(result.fields));
+    }
+  }, [loadMetricData, deriveDefaultSpec]);
 
   const handleAiPrompt = useCallback(async (prompt) => {
     setAiLoading(true);
@@ -67,7 +80,15 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
         return;
       }
       setAiExplanation(result.explanation);
-      await loadMetricData(result.metric);
+      const loaded = await loadMetricData(result.metric);
+      if (loaded) {
+        setChartSpec({
+          chartType: result.chart_type || result.chartType || 'bar',
+          xField: result.x_field || result.xField,
+          yField: result.y_field || result.yField,
+          colorField: result.color_field || result.colorField || null,
+        });
+      }
     } catch (e) {
       setAiError(e.message);
     } finally {
@@ -76,7 +97,7 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
   }, [metrics, loadMetricData]);
 
   const handleSave = useCallback(async () => {
-    if (!storeRef.current || !selectedMetric) return;
+    if (!selectedMetric || !chartSpec) return;
 
     const name = window.prompt('Name this chart:');
     if (!name) return;
@@ -84,20 +105,11 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
     setSaving(true);
     setSaveSuccess(false);
     try {
-      const spec = {};
-      try {
-        if (storeRef.current.exportViewSpec) {
-          Object.assign(spec, storeRef.current.exportViewSpec());
-        } else if (storeRef.current.vizStore?.exportViewSpec) {
-          Object.assign(spec, storeRef.current.vizStore.exportViewSpec());
-        }
-      } catch { /* GW spec export may not be available */ }
-
       await saveChart({
         name,
         createdBy: userEmail || 'anonymous',
         metricIds: [selectedMetric.id],
-        gwSpec: spec,
+        gwSpec: { ...chartSpec },
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -106,7 +118,7 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
     } finally {
       setSaving(false);
     }
-  }, [selectedMetric, userEmail]);
+  }, [selectedMetric, chartSpec, userEmail]);
 
   const loading = dataLoading || aiLoading;
 
@@ -122,10 +134,16 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
           <div style={styles.status}>Describe a chart above, or select a metric from the sidebar</div>
         )}
         {loading && <div style={styles.status}>Loading...</div>}
-        {gwData && gwFields && !loading && (
+        {chartData && chartSpec && !loading && (
           <>
-            <div style={styles.gwContainer}>
-              <GraphicWalker data={gwData} rawFields={gwFields} dark="dark" storeRef={storeRef} />
+            <div style={styles.chartContainer}>
+              <ChartRenderer
+                data={chartData}
+                xField={chartSpec.xField}
+                yField={chartSpec.yField}
+                colorField={chartSpec.colorField}
+                chartType={chartSpec.chartType}
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
               {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}
