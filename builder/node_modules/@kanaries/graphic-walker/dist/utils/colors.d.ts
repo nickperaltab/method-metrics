@@ -1,0 +1,11 @@
+import { IUIThemeConfig, IColorPalette } from '../interfaces';
+export declare function parseColorToHSL(color: string): string;
+export declare function parseColorToHex(color: string): string;
+export declare function ColorConfigToCSS(config: IUIThemeConfig): string;
+export declare function getColorConfigFromPalette(colors: IColorPalette): IUIThemeConfig;
+export declare function getPaletteFromColor(color: string): IColorPalette;
+export declare const zincTheme: IUIThemeConfig;
+export declare const slateTheme: IUIThemeConfig;
+export declare const grayTheme: IUIThemeConfig;
+export declare const neutralTheme: IUIThemeConfig;
+export declare const stoneTheme: IUIThemeConfig;

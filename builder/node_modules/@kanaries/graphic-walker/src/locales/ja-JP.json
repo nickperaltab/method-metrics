@@ -1,0 +1,359 @@
+{
+    "config": {
+        "scheme": "スキーム",
+        "primary_color": "プライマリカラー",
+        "color_palette": "カラーパレット",
+        "theme": "テーマ",
+        "opacity": "不透明度",
+        "default_color_palette": "デフォルト",
+        "size": "サイズ",
+        "min_domain": "最小ドメイン",
+        "max_domain": "最大ドメイン",
+        "range": "範囲",
+        "format": "フォーマット",
+        "numberFormat": "数字",
+        "timeFormat": "日付",
+        "normalizedNumberFormat": "正規化された数字",
+        "background": "背景",
+        "color": "色",
+        "independence": "独立したスケーリング",
+        "x": "x軸",
+        "y": "y軸",
+        "zeroScale": "０を含む",
+        "misc": "その他",
+        "formatGuidesDocs": "フォーマットガイド",
+        "readHere": "ここを読む",
+        "svg": "SVGを使う",
+        "customTile": "地図タイルをカスタマイズ",
+        "customOffset": "タイムゾーンをカスタマイズ",
+        "map_settings": "地図設定",
+        "map_settings_desc": "地図の可視化の表示方法とカスタム地図タイルサービスの使用方法を設定します。",
+        "customTile_desc": "地理的可視化のためのカスタム地図タイルURLを指定します。",
+        "choropleth_settings": "コロプレス設定",
+        "choropleth_settings_desc": "コロプレス地図での地理的形状とデータの表示方法を制御します。",
+        "include_unmatched": "マッチしないコロプレスをスケールに含める",
+        "include_unmatched_desc": "カラースケールを計算する際にデータの一致がない地域を含めます。",
+        "include_shapes": "データのない形状を含める",
+        "include_shapes_desc": "関連するデータ値がなくても、すべての地理的形状を表示します。",
+        "visualization_settings": "可視化設定",
+        "visualization_settings_desc": "すべての可視化に対する一般的な設定を構成します。",
+        "zeroScale_desc": "データ範囲に合わせて自動スケーリングする代わりに、数値軸をゼロから始めるように強制します。",
+        "svg_desc": "高品質だがパフォーマンスが低下する可能性のあるSVGレンダラーを使用します。",
+        "timezone_settings": "タイムゾーン設定",
+        "timezone_settings_desc": "異なるタイムゾーン間での時間ベースのデータの表示方法を設定します。",
+        "customOffset_desc": "時間ベースのデータを表示するためのカスタムタイムゾーンを指定します。"
+    },
+    "constant": {
+        "row_count": "行数",
+        "mea_key": "名",
+        "mea_val": "値",
+        "paint_key": "キャンバスでのフィールド",
+        "analytic_type": {
+            "dimension": "ディメンション",
+            "measure": "メジャー"
+        },
+        "semantic_type": {
+            "nominal": "名義尺度",
+            "ordinal": "順序尺度",
+            "temporal": "時間尺度",
+            "quantitative": "数量尺度"
+        },
+        "mark_type": {
+            "__enum__": "マークタイプ",
+            "auto": "自動",
+            "bar": "バー",
+            "line": "ライン",
+            "area": "エリア",
+            "trail": "トレイル",
+            "point": "散布図",
+            "circle": "円",
+            "tick": "棒線図",
+            "rect": "長方形",
+            "arc": "アーク",
+            "boxplot": "ボックスプロット",
+            "table": "テーブル",
+            "text": "文字",
+            "poi": "POI",
+            "choropleth": "コロプレス"
+        },
+        "stack_mode": {
+            "__enum__": "スタックモード",
+            "none": "なし",
+            "stack": "スタック",
+            "normalize": "正規化",
+            "center": "中央"
+        },
+        "layout_type": {
+            "__enum__": "レイアウトタイプ",
+            "auto": "自動",
+            "fixed": "固定",
+            "full": "コンテナー"
+        },
+        "exploration_mode": {
+            "__enum__": "探索モード",
+            "none": "オフ",
+            "brush": "ブラシ",
+            "point": "ポイント"
+        },
+        "brush_mode": {
+            "__enum__": "ブラシの方向",
+            "default": "両方",
+            "x": "X軸のみ",
+            "y": "Y軸のみ"
+        },
+        "draggable_key": {
+            "fields": "フィールド",
+            "columns": "X軸",
+            "rows": "Y軸",
+            "color": "色",
+            "opacity": "不透明度",
+            "size": "大きさ",
+            "shape": "形状",
+            "theta": "角度",
+            "radius": "半径",
+            "filters": "フィルター",
+            "text": "テキスト",
+            "longitude": "経度",
+            "latitude": "緯度",
+            "geoId": "地理ID"
+        },
+        "aggregator": {
+            "sum": "合計",
+            "mean": "平均",
+            "count": "件数",
+            "median": "中央値",
+            "min": "最小値",
+            "max": "最大値",
+            "q1": "第一四分位数",
+            "q3": "第三四分位数",
+            "stdev": "標準偏差",
+            "variance": "分散"
+        },
+        "filter_type": {
+            "one_of": "値のセット",
+            "one_of_desc": "指定された値を選択します",
+            "range": "範囲",
+            "range_desc": "範囲 [開始, 終了] 内の値を選択します",
+            "temporal_range": "日付範囲",
+            "temporal_range_desc": "日付範囲 [開始, 終了] 内の値を選択します"
+        }
+    },
+    "App": {
+        "labels": {
+            "data_interpretation": "データ解釈",
+            "data_view": "データ一覧"
+        },
+        "segments": {
+            "vis": "可視化",
+            "data": "データ",
+            "chat": "会話"
+        },
+        "feedback": {
+            "vote": "Askvizの結果はどうですか？",
+            "voteup": "いいね",
+            "votedown": "ダメかも",
+            "report": "Askvizを改善することに手伝って、正しいチャットを教えてもよろしいですか？",
+            "report_button": "フィードバック"
+        }
+    },
+    "DataSource": {
+        "labels": {
+            "cur_dataset": "現在のデータセット"
+        },
+        "buttons": {
+            "create_dataset": "データセットを作成",
+            "export_as_file": "ファイルとして保存",
+            "import_file": "Graphic Walkerファイルをインポート"
+        },
+        "dialog": {
+            "create_data_source": "新しいデータソース",
+            "data_types": "データソースの種類",
+            "text_file_data": "ローカルファイル",
+            "public_data": "公開データセット",
+            "data_source_type": "データソースの種類：{{sourceType}}",
+            "file": {
+                "open": "開く...",
+                "submit": "提出する",
+                "dataset_name": "データセット名",
+                "choose_file": "データファイルを選択してください",
+                "get_start_desc": "データセットの作成を始めましょう。"
+            },
+            "public": {
+                "submit": "提出する"
+            }
+        }
+    },
+    "main": {
+        "tablist": {
+            "new": "+ 新規作成",
+            "auto_title": "グラフ {{idx}}",
+            "chart_name": "グラフ名",
+            "remove_confirm": "このグラフを削除してもよろしいですか？"
+        },
+        "askviz": {
+            "placeholder": "データセットから描画したい視覚化は何ですか？"
+        },
+        "tabpanel": {
+            "menubar": {
+                "undo": "元に戻す",
+                "redo": "やり直し"
+            },
+            "settings": {
+                "toggle": {
+                    "aggregation": "集計",
+                    "stack": "スタック",
+                    "axes_resize": "軸のサイズ変更",
+                    "debug": "デバッグ"
+                },
+                "sort": "並べ替えの順序",
+                "button": {
+                    "ascending": "昇順に並べ替える",
+                    "descending": "降順に並べ替える",
+                    "transpose": "転置",
+                    "config": "設定",
+                    "export_chart": "エクスポート",
+                    "export_chart_as": "{{type}}としてエクスポート",
+                    "export_code": "コードをエクスポート",
+                    "geojson": "地理情報設定",
+                    "painter": "データキャンバスを開く",
+                    "disabled_painter": {
+                        "aggergation": "データキャンバスを作るには集計をオフにするが必要",
+                        "temporal": "時間的フィールドはまたデータキャンバスで使うことができない",
+                        "count": "データキャンバスを作るにはフィールドをXY軸に設置してください"
+                    }
+                },
+                "paint": {
+                    "palette": "パレット",
+                    "eraser": "消しゴム",
+                    "color": "色",
+                    "label": "ラベル",
+                    "brush_size": "ブラシサイズ",
+                    "save_paint": "キャンバスを保存",
+                    "reset_paint": "キャンバスをリセット",
+                    "cancel": "キャンセル",
+                    "delete_paint": "キャンバスを削除"
+                },
+                "limit": "クエリ制限 (行数) を有効にする",
+                "size": "サイズ変更",
+                "size_setting": {
+                    "width": "幅",
+                    "height": "高さ"
+                },
+                "table": {
+                    "summary": "サマリを表示"
+                },
+                "geography": "地理情報設定",
+                "geography_settings": {
+                    "geoKey": "フィーチャーID",
+                    "format": "データ形式",
+                    "geojson": "GeoJSON",
+                    "topojson": "TopoJSON",
+                    "objectKey": "Feature のキー",
+                    "jsonInputPlaceholder": "{{format}}ファイルをここに",
+                    "href": "{{format}} URL",
+                    "hrefPlaceholder": "{{format}} URLを入力",
+                    "load": "ロード",
+                    "loading": "地理データを読み込んでいます..."
+                }
+            },
+            "DatasetFields": {
+                "field_list": "フィールド一覧"
+            }
+        }
+    },
+    "filters": {
+        "to_edit": "このルールを編集",
+        "empty_rule": "! (未設定)",
+        "editing": "フィルターの設定",
+        "form": {
+            "name": "フィールド",
+            "aggregation": "集計",
+            "rule": "ルール"
+        },
+        "header": {
+            "visibility": "表示",
+            "value": "ラベル",
+            "count": "件数"
+        },
+        "selected_keys": "{{ count }}件が選択されました",
+        "btn": {
+            "select_all": "すべて選択",
+            "unselect_all": "すべての選択を解除",
+            "reverse": "選択を反転する",
+            "confirm": "確認",
+            "cancel": "キャンセル"
+        },
+        "range": {
+            "start_value": "最小",
+            "end_value": "最大"
+        }
+    },
+    "explain": {
+        "lg_than": "より大きい",
+        "sm_than": "より小さい",
+        "expection": "期待値",
+        "unrecognized": "未認識",
+        "score": "スコア",
+        "contains": "を含む",
+        "reason": {
+            "selection_dim_distribution": "次元のヒント",
+            "selection_mea_distribution": "尺度のヒント",
+            "children_major_factor": "主要要因",
+            "children_outlier": "外れ値"
+        }
+    },
+    "actions": {
+        "prev": "前へ",
+        "next": "次へ",
+        "drop_field": "ここにフィールドをドロップ",
+        "confirm": "確認",
+        "cancel": "キャンセル"
+    },
+    "field_menu": {
+        "to_dim": "ディメンションに変更",
+        "to_mea": "メジャーに変更",
+        "new_calc": "計算フィールドを作成",
+        "bin": "ビン",
+        "binCount": "ビンカウント",
+        "log": "対数({{ base }})",
+        "binCustom": "ビン（カスタム）",
+        "logCustom": "対数（カスタム）",
+        "semantic_type": {
+            "name": "セマンティックタイプの変更",
+            "types": {
+                "nominal": "名義",
+                "ordinal": "序数",
+                "quantitative": "量的",
+                "temporal": "時間的"
+            }
+        },
+        "drill": {
+            "name": "時間単位",
+            "feature_name": "時間特性",
+            "levels": {
+                "year": "年",
+                "quarter": "四半期",
+                "month": "月",
+                "week": "週",
+                "weekday": "曜日",
+                "day": "日",
+                "hour": "時",
+                "minute": "分",
+                "second": "秒",
+                "iso_year": "ISO年",
+                "iso_week": "ISO週",
+                "iso_weekday": "ISO曜日"
+            }
+        }
+    },
+    "calc": {
+        "bin_panel_title": "ビン",
+        "bin_panel_desc": "フィールドのビン構成を設定する",
+        "bin_panel_option_widths": "等しい幅のビン",
+        "bin_panel_option_counts": "等しい数のビン",
+        "bin_panel_number": "ビンの数",
+        "log_panel_title": "対数変換",
+        "log_panel_desc": "フィールドの対数設定を設定する",
+        "log_panel_number": "対数の底"
+    }
+}

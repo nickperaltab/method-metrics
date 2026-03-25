@@ -1,0 +1,365 @@
+{
+    "config": {
+        "scheme": "方案",
+        "primary_color": "主要颜色",
+        "color_palette": "调色板",
+        "theme": "主题",
+        "opacity": "不透明度",
+        "default_color_palette": "默认",
+        "size": "尺寸",
+        "min_domain": "最小域值",
+        "max_domain": "最大域值",
+        "range": "范围",
+        "format": "格式",
+        "numberFormat": "数字格式",
+        "timeFormat": "时间格式",
+        "normalizedNumberFormat": "标准化数字格式",
+        "background": "背景",
+        "color": "颜色",
+        "independence": "独立性",
+        "x": "x轴",
+        "y": "y轴",
+        "zeroScale": "零刻度",
+        "misc": "其他",
+        "formatGuidesDocs": "格式指南",
+        "readHere": "阅读此处",
+        "svg": "使用SVG",
+        "customTile": "使用自定义的地图区块",
+        "customOffset": "使用自定义的时区",
+        "map_settings": "地图设置",
+        "map_settings_desc": "配置地图可视化显示方式和使用自定义地图瓦片服务。",
+        "customTile_desc": "为地理可视化指定自定义地图瓦片URL。",
+        "choropleth_settings": "区域图设置",
+        "choropleth_settings_desc": "控制区域图中地理形状和数据的显示方式。",
+        "include_unmatched": "在比例尺中包含未匹配的区域",
+        "include_unmatched_desc": "在计算颜色比例尺时包含没有数据匹配的区域。",
+        "include_shapes": "包含没有数据的形状",
+        "include_shapes_desc": "显示所有地理形状，即使它们没有关联的数据值。",
+        "visualization_settings": "可视化设置",
+        "visualization_settings_desc": "配置所有可视化的通用设置。",
+        "zeroScale_desc": "强制数值轴从零开始，而不是根据数据范围自动缩放。",
+        "svg_desc": "使用SVG渲染器代替Canvas，可获得更高质量但可能降低性能。",
+        "timezone_settings": "时区设置",
+        "timezone_settings_desc": "配置时间数据在不同时区之间的显示方式。",
+        "customOffset_desc": "为显示基于时间的数据指定自定义时区。"
+    },
+    "constant": {
+        "row_count": "行数",
+        "mea_key": "度量名称",
+        "mea_val": "度量值",
+        "paint_key": "绘制字段",
+        "analytic_type": {
+            "dimension": "维度",
+            "measure": "度量"
+        },
+        "semantic_type": {
+            "nominal": "类别类型",
+            "ordinal": "有序类型",
+            "temporal": "时间类型",
+            "quantitative": "数值类型"
+        },
+        "mark_type": {
+            "__enum__": "标记类型",
+            "auto": "自动",
+            "bar": "条形",
+            "line": "折线",
+            "area": "面积",
+            "trail": "痕迹",
+            "point": "散点",
+            "circle": "圆",
+            "tick": "标记",
+            "rect": "矩形",
+            "arc": "弧形",
+            "boxplot": "统计箱",
+            "table": "表格",
+            "text": "文本",
+            "poi": "兴趣点",
+            "choropleth": "区域图"
+        },
+        "coord_system": {
+            "__enum__": "坐标系统",
+            "generic": "通用",
+            "geographic": "地理"
+        },
+        "layout_type": {
+            "__enum__": "尺寸模式",
+            "auto": "自动",
+            "fixed": "固定",
+            "full": "容器"
+        },
+        "exploration_mode": {
+            "__enum__": "探索交互",
+            "none": "关",
+            "brush": "范围",
+            "point": "目标"
+        },
+        "brush_mode": {
+            "__enum__": "框选方向",
+            "default": "所有",
+            "x": "仅 X 轴",
+            "y": "仅 Y 轴"
+        },
+        "stack_mode": {
+            "__enum__": "堆叠模式",
+            "none": "关闭",
+            "stack": "堆叠",
+            "normalize": "归一化",
+            "center": "中央"
+        },
+        "draggable_key": {
+            "fields": "字段",
+            "columns": "列",
+            "rows": "行",
+            "color": "颜色",
+            "opacity": "透明度",
+            "size": "大小",
+            "shape": "形状",
+            "theta": "角度",
+            "radius": "半径",
+            "filters": "筛选器",
+            "details": "信息",
+            "text": "文本",
+            "longitude": "经度",
+            "latitude": "纬度",
+            "geoId": "地理 ID"
+        },
+        "aggregator": {
+            "sum": "求和",
+            "mean": "平均值",
+            "count": "计数",
+            "median": "中位数",
+            "min": "最小值",
+            "max": "最大值",
+            "q1": "Q1",
+            "q3": "Q3",
+            "stdev": "标准差",
+            "variance": "方差"
+        },
+        "filter_type": {
+            "one_of": "按值筛选",
+            "one_of_desc": "选择指定的值",
+            "range": "按范围筛选",
+            "range_desc": "选择范围内的值 [开始, 结束]",
+            "temporal_range": "按日期范围筛选",
+            "temporal_range_desc": "选择日期范围内的值 [开始, 结束]"
+        }
+    },
+    "App": {
+        "labels": {
+            "data_interpretation": "数据解读",
+            "data_view": "查看数据"
+        },
+        "segments": {
+            "vis": "可视化",
+            "data": "数据",
+            "chat": "会话"
+        },
+        "feedback": {
+            "vote": "对Askviz的结果满意吗？",
+            "voteup": "满意",
+            "votedown": "不满意",
+            "report": "为了改进AskViz，请将正确的图表反馈给我们",
+            "report_button": "反馈"
+        }
+    },
+    "DataSource": {
+        "labels": {
+            "cur_dataset": "当前数据集"
+        },
+        "buttons": {
+            "create_dataset": "创建数据集",
+            "export_as_file": "保存到文件",
+            "import_file": "导入文件"
+        },
+        "dialog": {
+            "create_data_source": "创建数据源",
+            "data_types": "选择类型",
+            "text_file_data": "导入文件",
+            "public_data": "公共数据集",
+            "data_source_type": "数据源类型：{{sourceType}}",
+            "file": {
+                "open": "打开文件...",
+                "submit": "确认",
+                "dataset_name": "数据集名称",
+                "choose_file": "选择文件",
+                "get_start_desc": "创建一个数据集以开始分析"
+            },
+            "public": {
+                "submit": "确认"
+            }
+        }
+    },
+    "main": {
+        "tablist": {
+            "new": "+ 新建",
+            "auto_title": "图表 {{idx}}",
+            "chart_name": "图表名称",
+            "remove_confirm": "你确定要删除这个图表吗？"
+        },
+        "askviz": {
+            "placeholder": "想从数据集中绘制哪种可视化呢?"
+        },
+        "tabpanel": {
+            "menubar": {
+                "undo": "撤销",
+                "redo": "重做"
+            },
+            "settings": {
+                "toggle": {
+                    "aggregation": "聚合度量",
+                    "stack": "开启堆叠",
+                    "axes_resize": "坐标系缩放",
+                    "debug": "图表调试"
+                },
+                "sort": "排序",
+                "button": {
+                    "ascending": "升序排序",
+                    "descending": "降序排序",
+                    "transpose": "转置",
+                    "config": "配置",
+                    "export_chart": "导出",
+                    "export_chart_as": "导出 {{type}}",
+                    "export_code": "导出代码",
+                    "geojson": "地理信息配置",
+                    "painter": "打开数据绘板",
+                    "disabled_painter": {
+                        "aggergation": "创建绘制字段需要关闭聚合",
+                        "temporal": "绘制字段暂不支持时间字段",
+                        "count": "在x和y轴上分别放置一个字段来创建绘制字段"
+                    }
+                },
+                "paint": {
+                    "palette": "色板",
+                    "eraser": "橡皮",
+                    "color": "颜色",
+                    "label": "标签",
+                    "brush_size": "笔刷大小",
+                    "save_paint": "保存画板",
+                    "reset_paint": "重置画板",
+                    "cancel": "取消改动",
+                    "delete_paint": "删除画板"
+                },
+                "limit": "启用查询限制（行）",
+                "size": "调整尺寸",
+                "size_setting": {
+                    "width": "宽度",
+                    "height": "高度"
+                },
+                "table": {
+                    "summary": "显示摘要"
+                },
+                "geography": "地理信息配置",
+                "geography_settings": {
+                    "geoKey": "地理 ID",
+                    "format": "数据格式",
+                    "geojson": "GeoJSON",
+                    "topojson": "TopoJSON",
+                    "objectKey": "提取要素键",
+                    "jsonInputPlaceholder": "拖动{{format}}文件到此",
+                    "href": "{{format}} URL",
+                    "hrefPlaceholder": "输入在线资源地址",
+                    "load": "加载",
+                    "loading": "加载地理数据中..."
+                }
+            },
+            "DatasetFields": {
+                "field_list": "字段列表"
+            }
+        }
+    },
+    "filters": {
+        "to_edit": "编辑这条规则",
+        "empty_rule": "! (空的规则)",
+        "editing": "筛选器规则设定",
+        "form": {
+            "name": "字段",
+            "aggregation": "聚合",
+            "rule": "规则"
+        },
+        "header": {
+            "visibility": "可见",
+            "value": "标签",
+            "count": "计数"
+        },
+        "selected_keys": "{{ count }} 个标签已选择",
+        "btn": {
+            "select_all": "全部选中",
+            "unselect_all": "全部取消",
+            "reverse": "选择反向",
+            "confirm": "确认",
+            "cancel": "取消"
+        },
+        "range": {
+            "start_value": "起始值",
+            "end_value": "终止值"
+        }
+    },
+    "explain": {
+        "lg_than": "大于",
+        "sm_than": "小于",
+        "expection": "期望值",
+        "unrecognized": "未识别",
+        "score": "得分",
+        "contains": "包含",
+        "reason": {
+            "selection_dim_distribution": "维度线索",
+            "selection_mea_distribution": "度量线索",
+            "children_major_factor": "子节点主要因素",
+            "children_outlier": "子节点异常"
+        }
+    },
+    "actions": {
+        "prev": "向前",
+        "next": "向后",
+        "drop_field": "拖拽字段至此",
+        "confirm": "确认",
+        "cancel": "取消"
+    },
+    "field_menu": {
+        "to_dim": "移动到维度",
+        "to_mea": "移动到度量",
+        "new_calc": "新的计算字段",
+        "bin": "分箱",
+        "binCount": "计数分箱",
+        "log": "对数（{{ base }}）",
+        "binCustom": "自定义分箱",
+        "logCustom": "自定义对数",
+        "semantic_type": {
+            "name": "更改语义类型",
+            "types": {
+                "nominal": "名义",
+                "ordinal": "序数",
+                "quantitative": "计量",
+                "temporal": "时间"
+            }
+        },
+        "drill": {
+            "name": "时间粒度",
+            "feature_name": "时间特征",
+            "levels": {
+                "year": "年",
+                "quarter": "季度",
+                "month": "月",
+                "week": "周",
+                "weekdat": "星期几",
+                "day": "日",
+                "hour": "时",
+                "minute": "分",
+                "second": "秒",
+                "iso_year": "ISO年",
+                "iso_week": "ISO周",
+                "iso_weekday": "ISO星期几"
+            }
+        }
+    },
+    "calc": {
+        "bin_panel_title": "分箱",
+        "bin_panel_desc": "设置字段的箱体配置",
+        "bin_panel_option_widths": "等宽箱体",
+        "bin_panel_option_counts": "等量箱体",
+        "bin_panel_number": "箱体数量",
+        "log_panel_title": "对数变换",
+        "log_panel_desc": "设置字段的对数配置",
+        "log_panel_number": "对数底数"
+    }
+}

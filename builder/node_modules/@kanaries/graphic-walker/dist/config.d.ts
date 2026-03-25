@@ -1,0 +1,73 @@
+import { DraggableFieldState, IAggregator, ICoordMode, IEmbedMenuItem, IStackMode } from './interfaces';
+export declare const GLOBAL_CONFIG: {
+    AGGREGATOR_LIST: IAggregator[];
+    CHART_LAYOUT_TYPE: ("fixed" | "auto" | "full")[];
+    COORD_TYPES: ICoordMode[];
+    GEOM_TYPES: Record<ICoordMode, string[]>;
+    MAX_HISTORY_SIZE: number;
+    STACK_MODE: IStackMode[];
+    META_FIELD_KEYS: (keyof DraggableFieldState)[];
+    CHANNEL_LIMIT: {
+        rows: number;
+        columns: number;
+        color: number;
+        opacity: number;
+        size: number;
+        shape: number;
+        theta: number;
+        radius: number;
+        details: number;
+        text: number;
+    };
+    POSITION_CHANNEL_CONFIG_LIST: ("size" | "color" | "shape" | "opacity" | "x" | "y")[];
+    NON_POSITION_CHANNEL_CONFIG_LIST: ("size" | "color" | "shape" | "opacity" | "x" | "y")[];
+    EMBEDED_MENU_LIST: IEmbedMenuItem[];
+    RENDERER_TYPES: ("vega-lite" | "observable-plot")[];
+    PAINT_MAP_SIZE: number;
+    PAINT_SIZE_FACTOR: number;
+    PAINT_MIN_BRUSH_SIZE: number;
+    PAINT_DEFAULT_BRUSH_SIZE: number;
+    PAINT_MAX_BRUSH_SIZE: number;
+    KEYWORD_DEBOUNCE_SETTING: {
+        timeout: number;
+        leading?: boolean | undefined;
+        maxWait?: number | undefined;
+        trailing?: boolean | undefined;
+    };
+};
+export declare function getGlobalConfig(): {
+    AGGREGATOR_LIST: IAggregator[];
+    CHART_LAYOUT_TYPE: ("fixed" | "auto" | "full")[];
+    COORD_TYPES: ICoordMode[];
+    GEOM_TYPES: Record<ICoordMode, string[]>;
+    MAX_HISTORY_SIZE: number;
+    STACK_MODE: IStackMode[];
+    META_FIELD_KEYS: (keyof DraggableFieldState)[];
+    CHANNEL_LIMIT: {
+        rows: number;
+        columns: number;
+        color: number;
+        opacity: number;
+        size: number;
+        shape: number;
+        theta: number;
+        radius: number;
+        details: number;
+        text: number;
+    };
+    POSITION_CHANNEL_CONFIG_LIST: ("size" | "color" | "shape" | "opacity" | "x" | "y")[];
+    NON_POSITION_CHANNEL_CONFIG_LIST: ("size" | "color" | "shape" | "opacity" | "x" | "y")[];
+    EMBEDED_MENU_LIST: IEmbedMenuItem[];
+    RENDERER_TYPES: ("vega-lite" | "observable-plot")[];
+    PAINT_MAP_SIZE: number;
+    PAINT_SIZE_FACTOR: number;
+    PAINT_MIN_BRUSH_SIZE: number;
+    PAINT_DEFAULT_BRUSH_SIZE: number;
+    PAINT_MAX_BRUSH_SIZE: number;
+    KEYWORD_DEBOUNCE_SETTING: {
+        timeout: number;
+        leading?: boolean | undefined;
+        maxWait?: number | undefined;
+        trailing?: boolean | undefined;
+    };
+};

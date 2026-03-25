@@ -1,0 +1,25 @@
+import { IChannelScales, IRow, IStackMode, IViewField, VegaGlobalConfig } from '../interfaces';
+export declare function toVegaSpec({ rows: rowsRaw, columns: columnsRaw, color, opacity, size, details, radius, shape, text, theta, interactiveScale, dataSource, layoutMode, width, height, defaultAggregated, geomType, stack, scales, mediaTheme, vegaConfig, displayOffset, }: {
+    rows: readonly IViewField[];
+    columns: readonly IViewField[];
+    color?: IViewField;
+    opacity?: IViewField;
+    size?: IViewField;
+    shape?: IViewField;
+    theta?: IViewField;
+    radius?: IViewField;
+    text?: IViewField;
+    details?: Readonly<IViewField[]>;
+    interactiveScale: boolean;
+    dataSource: readonly IRow[];
+    layoutMode: string;
+    width: number;
+    height: number;
+    defaultAggregated: boolean;
+    stack: IStackMode;
+    geomType: string;
+    scales?: IChannelScales;
+    mediaTheme: 'dark' | 'light';
+    vegaConfig: VegaGlobalConfig;
+    displayOffset?: number;
+}): any[];
