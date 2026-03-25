@@ -16,7 +16,7 @@ Return ONLY valid JSON (no markdown, no explanation outside JSON) in this format
   "x_field": "<column_name>",
   "y_field": "<column_name>",
   "color_field": "<column_name or null>",
-  "filters": {},
+  "last_n_months": <integer or null>,
   "explanation": "<one sentence describing what the chart shows>"
 }
 
@@ -33,7 +33,8 @@ Guidelines:
 - Pick the most specific metric that matches the request
 - If there is a numeric/quantitative column available, use it for y_field
 - If no numeric column exists (only dates and strings), set y_field to "COUNT" — the frontend will aggregate row counts automatically
-- When y_field is "COUNT", the chart will show the count of rows grouped by x_field`;
+- When y_field is "COUNT", the chart will show the count of rows grouped by x_field
+- If the user mentions a time range ("last 3 months", "last year", "recent", "last few months"), set last_n_months to the appropriate integer (e.g., 3, 6, 12). "Last few" = 6. "Recent" = 3. "This year" = 12. If no time range mentioned, set to null (show all data)`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

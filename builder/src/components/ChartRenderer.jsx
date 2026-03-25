@@ -50,7 +50,7 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function ChartRenderer({ data, xField, yField, colorField, chartType }) {
+export default function ChartRenderer({ data, xField, yField, colorField, chartType, lastNMonths }) {
   if (!data || data.length === 0) {
     return (
       <div style={{
@@ -115,6 +115,11 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
   const color = COLORS[0];
   const xLabel = formatFieldLabel(xField);
   const yLabel = effectiveYField === 'count' ? 'Count' : formatFieldLabel(yField);
+
+  // Apply time range filter if specified
+  if (lastNMonths && chartData.length > lastNMonths) {
+    chartData = chartData.slice(-lastNMonths);
+  }
 
   // Format YYYY-MM dates to "Jan '24" style
   const isDateAxis = chartData.length > 0 && /^\d{4}-\d{2}/.test(String(chartData[0]?.[xField] || ''));
