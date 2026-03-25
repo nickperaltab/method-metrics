@@ -313,13 +313,11 @@ async function renderPage() {
       <div class="controls" id="builder-controls"></div>
       <div class="builder-layout">
         <div class="builder-sidebar" id="builder-sidebar"></div>
-        <div class="builder-main"><canvas id="builder-canvas"></canvas></div>
+        <div class="builder-main">
+          <div id="builder-error"></div>
+          <canvas id="builder-canvas"></canvas>
+        </div>
       </div>
-    </div>
-
-    <div class="section" id="sec-validation">
-      <h2>Validation</h2>
-      <div id="val-content"></div>
     </div>
   `;
 
@@ -328,7 +326,6 @@ async function renderPage() {
   renderRatesChart();
   renderBuilderControls();
   renderBuilderSidebar();
-  renderValidation();
 }
 
 // --- Section 1: Funnel (Trials + Syncs + Conversions on one chart) ---
@@ -479,129 +476,58 @@ async function renderBuilderChart() {
   if (builderState.selectedMetrics.size === 0) return;
 
   const canvas = document.getElementById('builder-canvas');
+  const errEl = document.getElementById('builder-error');
   destroyChart('builder');
+  if (errEl) errEl.textContent = '';
 
   const datasets = [];
   let allLabels = [];
+  const errors = [];
 
   let i = 0;
   for (const metricId of builderState.selectedMetrics) {
     const m = allMetrics.find(x => x.id === metricId);
     if (!m) continue;
 
-    let rows;
-    if (m.formula) { rows = await queryDerivedWithDim(m, builderState.timeDim, builderState.groupDim); }
-    else { rows = await queryMetricWithDim(m, builderState.timeDim, builderState.groupDim); }
-    if (!rows || rows.length === 0) { i++; continue; }
+    try {
+      let rows;
+      if (m.formula) { rows = await queryDerivedWithDim(m, builderState.timeDim, builderState.groupDim); }
+      else { rows = await queryMetricWithDim(m, builderState.timeDim, builderState.groupDim); }
+      if (!rows || rows.length === 0) { errors.push(`${m.name}: no data`); i++; continue; }
 
-    const rcols = Object.keys(rows[0]);
-    const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
-    const labelCol = rcols.find(c => c !== valueCol) || rcols[0];
-    const labels = rows.map(r => r[labelCol]);
-    const data = rows.map(r => Number(r[valueCol]));
+      const rcols = Object.keys(rows[0]);
+      const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
+      const labelCol = rcols.find(c => c !== valueCol) || rcols[0];
+      const labels = rows.map(r => r[labelCol]);
+      const data = rows.map(r => parseFloat(r[valueCol]) || 0);
 
-    if (labels.length > allLabels.length) allLabels = labels;
+      if (labels.length > allLabels.length) allLabels = labels;
 
-    datasets.push({
-      label: m.name,
-      data,
-      borderColor: PALETTE[i % PALETTE.length],
-      backgroundColor: PALETTE[i % PALETTE.length] + '30',
-      tension: .3,
-      fill: false,
-      pointRadius: 3,
-    });
+      datasets.push({
+        label: m.name, data,
+        borderColor: PALETTE[i % PALETTE.length],
+        backgroundColor: PALETTE[i % PALETTE.length] + '30',
+        tension: .3, fill: false, pointRadius: 3,
+      });
+    } catch (e) {
+      errors.push(`${m.name}: ${e.message}`);
+    }
     i++;
   }
 
-  charts['builder'] = new Chart(canvas, {
-    type: 'line',
-    data: { labels: allLabels, datasets },
-    options: chartOpts({ legend: true }),
-  });
-}
-
-// --- Section 4: Validation ---
-function renderValidation() {
-  const el = document.getElementById('val-content');
-  const primitives = getPrimitives();
-
-  el.innerHTML = `
-    <div class="controls">
-      <span class="ctrl-label">Select Primitive</span>
-      <select class="ctrl-select" id="val-select" onchange="renderDependencyTree()">
-        <option value="">Choose...</option>
-        ${primitives.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-      </select>
-      <button class="val-btn" onclick="runValidation()" style="margin-left:12px">Test Propagation</button>
-    </div>
-    <div id="val-tree-container"></div>
-    <div id="val-test-results"></div>
-  `;
-}
-
-function renderDependencyTree() {
-  const id = parseInt(document.getElementById('val-select')?.value);
-  const container = document.getElementById('val-tree-container');
-  if (!id || !container) return;
-
-  const m = allMetrics.find(x => x.id === id);
-  function getChildren(parentId) {
-    return allMetrics.filter(x =>
-      x.primitive_metric_id === parentId ||
-      (x.depends_on && x.depends_on.includes(parentId))
-    );
+  if (errEl && errors.length > 0) {
+    errEl.innerHTML = errors.map(e => `<div style="color:var(--red);font-size:11px">${e}</div>`).join('');
   }
 
-  function renderNode(metric, depth = 0) {
-    const children = getChildren(metric.id);
-    const typeColor = { primitive: 'var(--green)', derived: 'var(--yellow)', transform: '#a78bfa', breakdown: 'var(--blue)', foundational: '#38bdf8', dimension: '#fb923c' }[metric.metric_type] || 'var(--text-dim)';
-    let html = `<div style="color:${typeColor}">${metric.name} <span style="color:var(--text-dim);font-size:10px">(${metric.metric_type})</span></div>`;
-    if (children.length > 0) {
-      html += `<div class="indent">${children.map(c => renderNode(c, depth + 1)).join('')}</div>`;
-    }
-    return html;
+  if (datasets.length > 0) {
+    charts['builder'] = new Chart(canvas, {
+      type: 'line',
+      data: { labels: allLabels, datasets },
+      options: chartOpts({ legend: true }),
+    });
   }
-
-  container.innerHTML = `<div class="val-tree">${renderNode(m)}</div>`;
 }
 
-async function runValidation() {
-  const id = parseInt(document.getElementById('val-select')?.value);
-  if (!id || !bqToken) return;
-
-  const m = allMetrics.find(x => x.id === id);
-  if (!m?.view_name) return;
-
-  const results = document.getElementById('val-test-results');
-  results.innerHTML = '<div class="loading-msg">Running validation...</div>';
-
-  // Get current count from primitive
-  const monthly = getTimeDims().find(d => d.name === 'Monthly');
-  const before = await queryMetricWithDim(m, monthly, null);
-  const beforeTotal = before.reduce((s, r) => s + Number(r.value), 0);
-
-  // Get derived metrics that depend on this
-  const derived = getDerived().filter(d => d.depends_on?.includes(id));
-  const derivedBefore = {};
-  for (const d of derived) {
-    const rows = await queryDerivedWithDim(d, monthly, null);
-    derivedBefore[d.id] = rows;
-  }
-
-  results.innerHTML = `
-    <h3 style="margin-top:16px">Current Values</h3>
-    <div class="val-row"><span class="name">${m.name} (total)</span><span class="val">${beforeTotal.toLocaleString()}</span></div>
-    ${derived.map(d => {
-      const rows = derivedBefore[d.id] || [];
-      const latest = rows.length > 0 ? Number(rows[rows.length - 1].value).toFixed(2) : '—';
-      return `<div class="val-row"><span class="name">${d.name} (latest)</span><span class="val">${latest}</span></div>`;
-    }).join('')}
-    <div style="margin-top:12px;color:var(--text-dim);font-size:11px">
-      To test propagation: modify the primitive's BQ view (e.g., add a WHERE filter), then re-run this to see updated values.
-    </div>
-  `;
-}
 
 // --- Init ---
 initBqAuth();
