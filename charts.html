@@ -461,7 +461,9 @@ function toggleBuilderMetric(id) {
 }
 
 function setBuilderTime(dimId) {
-  builderState.timeDim = allMetrics.find(m => m.id === dimId);
+  const dim = allMetrics.find(m => m.id === dimId);
+  // Radio behavior — toggle off if clicking the same one
+  builderState.timeDim = (builderState.timeDim?.id === dimId) ? null : dim;
   renderBuilderControls();
   renderBuilderChart();
 }
@@ -480,52 +482,116 @@ async function renderBuilderChart() {
   destroyChart('builder');
   if (errEl) errEl.textContent = '';
 
-  const datasets = [];
-  let allLabels = [];
   const errors = [];
+  const hasTime = !!builderState.timeDim;
+  const hasGroup = !!builderState.groupDim;
 
-  let i = 0;
+  // Collect all query results
+  const allResults = [];
   for (const metricId of builderState.selectedMetrics) {
     const m = allMetrics.find(x => x.id === metricId);
     if (!m) continue;
-
     try {
       let rows;
       if (m.formula) { rows = await queryDerivedWithDim(m, builderState.timeDim, builderState.groupDim); }
       else { rows = await queryMetricWithDim(m, builderState.timeDim, builderState.groupDim); }
-      if (!rows || rows.length === 0) { errors.push(`${m.name}: no data`); i++; continue; }
-
-      const rcols = Object.keys(rows[0]);
-      const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
-      const labelCol = rcols.find(c => c !== valueCol) || rcols[0];
-      const labels = rows.map(r => r[labelCol]);
-      const data = rows.map(r => parseFloat(r[valueCol]) || 0);
-
-      if (labels.length > allLabels.length) allLabels = labels;
-
-      datasets.push({
-        label: m.name, data,
-        borderColor: PALETTE[i % PALETTE.length],
-        backgroundColor: PALETTE[i % PALETTE.length] + '30',
-        tension: .3, fill: false, pointRadius: 3,
-      });
+      if (!rows || rows.length === 0) { errors.push(`${m.name}: no data`); continue; }
+      allResults.push({ metric: m, rows });
     } catch (e) {
       errors.push(`${m.name}: ${e.message}`);
     }
-    i++;
   }
 
   if (errEl && errors.length > 0) {
     errEl.innerHTML = errors.map(e => `<div style="color:var(--red);font-size:11px">${e}</div>`).join('');
   }
+  if (allResults.length === 0) return;
 
-  if (datasets.length > 0) {
-    charts['builder'] = new Chart(canvas, {
-      type: 'line',
-      data: { labels: allLabels, datasets },
-      options: chartOpts({ legend: true }),
-    });
+  // Determine columns
+  const sampleCols = Object.keys(allResults[0].rows[0]);
+  const valueCol = sampleCols.find(c => c === 'value') || sampleCols[sampleCols.length - 1];
+  const nonValueCols = sampleCols.filter(c => c !== valueCol);
+
+  let chartType, datasets, labels;
+
+  if (hasTime && hasGroup && nonValueCols.length >= 2) {
+    // TIME + GROUP → grouped bar chart
+    // Columns: [timeCol, groupCol, value]
+    const timeCol = nonValueCols[0];
+    const groupCol = nonValueCols[1];
+    const firstResult = allResults[0];
+    const timeLabels = [...new Set(firstResult.rows.map(r => r[timeCol]))];
+    const groupValues = [...new Set(firstResult.rows.map(r => r[groupCol]))].slice(0, 12);
+
+    labels = timeLabels;
+    datasets = [];
+    let ci = 0;
+    for (const res of allResults) {
+      for (const gv of groupValues) {
+        datasets.push({
+          label: allResults.length > 1 ? `${res.metric.name} — ${gv || '(none)'}` : (gv || '(none)'),
+          data: timeLabels.map(tl => {
+            const row = res.rows.find(r => r[timeCol] === tl && r[groupCol] === gv);
+            return row ? parseFloat(row[valueCol]) || 0 : 0;
+          }),
+          backgroundColor: PALETTE[ci % PALETTE.length] + 'cc',
+          borderColor: PALETTE[ci % PALETTE.length],
+          borderWidth: 1,
+        });
+        ci++;
+      }
+    }
+    chartType = 'bar';
+
+  } else if (hasGroup && !hasTime) {
+    // GROUP only → horizontal bar
+    const labelCol = nonValueCols[0];
+    const firstResult = allResults[0];
+    labels = firstResult.rows.map(r => r[labelCol]).slice(0, 20);
+
+    datasets = [];
+    let ci = 0;
+    for (const res of allResults) {
+      datasets.push({
+        label: res.metric.name,
+        data: labels.map(l => {
+          const row = res.rows.find(r => r[labelCol] === l);
+          return row ? parseFloat(row[valueCol]) || 0 : 0;
+        }),
+        backgroundColor: PALETTE[ci % PALETTE.length] + 'cc',
+        borderColor: PALETTE[ci % PALETTE.length],
+        borderWidth: 1,
+      });
+      ci++;
+    }
+    chartType = 'bar';
+
+  } else {
+    // TIME only (or fallback) → line chart, one line per metric
+    const labelCol = nonValueCols[0];
+    labels = [];
+    datasets = [];
+    let ci = 0;
+    for (const res of allResults) {
+      const l = res.rows.map(r => r[labelCol]);
+      const d = res.rows.map(r => parseFloat(r[valueCol]) || 0);
+      if (l.length > labels.length) labels = l;
+      datasets.push({
+        label: res.metric.name, data: d,
+        borderColor: PALETTE[ci % PALETTE.length],
+        backgroundColor: PALETTE[ci % PALETTE.length] + '20',
+        tension: .3, fill: false, pointRadius: 3,
+      });
+      ci++;
+    }
+    chartType = 'line';
   }
+
+  charts['builder'] = new Chart(canvas, {
+    type: chartType,
+    data: { labels, datasets },
+    options: chartOpts({ legend: true, horizontal: hasGroup && !hasTime }),
+  });
 }
 
 
