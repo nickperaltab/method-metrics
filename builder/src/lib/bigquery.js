@@ -8,11 +8,28 @@ export function getBqToken() {
   return bqToken;
 }
 
-export function initBqAuth(onSuccess) {
+export async function initBqAuth(onSuccess, onFail) {
   const stored = localStorage.getItem('bq_access_token');
-  if (stored) {
-    bqToken = stored;
-    onSuccess?.(stored);
+  if (!stored) return;
+
+  // Validate the token is still alive
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${stored}` },
+    });
+    if (res.ok) {
+      bqToken = stored;
+      onSuccess?.(stored);
+    } else {
+      // Token expired — clear it
+      localStorage.removeItem('bq_access_token');
+      bqToken = null;
+      onFail?.();
+    }
+  } catch {
+    localStorage.removeItem('bq_access_token');
+    bqToken = null;
+    onFail?.();
   }
 }
 
