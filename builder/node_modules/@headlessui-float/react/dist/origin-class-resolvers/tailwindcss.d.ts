@@ -1,0 +1,3 @@
+import type { OriginClassResolver } from './type';
+export declare const tailwindcssOriginSafelist: string[];
+export declare const tailwindcssOriginClassResolver: OriginClassResolver;

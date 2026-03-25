@@ -1,0 +1,12 @@
+import { IGWProps } from './interfaces';
+import { ILocalTableProps, ILocalVizAppProps, IRemoteTableProps, IRemoteVizAppProps } from './root';
+import { ILocalPureRendererProps, IRemotePureRendererProps } from './renderer/pureRenderer';
+export declare function embedGraphicWalker(dom: HTMLElement | null, props: ILocalVizAppProps | undefined): any;
+export declare function embedGraphicWalker(dom: HTMLElement | null, props: IRemoteVizAppProps | undefined): any;
+export declare function embedGraphicWalker(dom: HTMLElement | null, props: IGWProps | undefined): any;
+export declare function embedGraphicRenderer(dom: HTMLElement | null, props: ILocalVizAppProps | undefined): any;
+export declare function embedGraphicRenderer(dom: HTMLElement | null, props: IRemoteVizAppProps | undefined): any;
+export declare function embedTableWalker(dom: HTMLElement | null, props: ILocalTableProps | undefined): any;
+export declare function embedTableWalker(dom: HTMLElement | null, props: IRemoteTableProps | undefined): any;
+export declare function embedPureRenderer(dom: HTMLElement | null, props: ILocalPureRendererProps): any;
+export declare function embedPureRenderer(dom: HTMLElement | null, props: IRemotePureRendererProps): any;

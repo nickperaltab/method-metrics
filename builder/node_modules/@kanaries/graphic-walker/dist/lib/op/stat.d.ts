@@ -1,0 +1,10 @@
+export declare function mean(nums: number[]): number;
+export declare function sum(nums: number[]): number;
+export declare function median(nums: number[]): number;
+export declare function variance(nums: number[]): number;
+export declare function stdev(nums: number[]): number;
+export declare function max(nums: number[]): number;
+export declare function min(nums: number[]): number;
+export declare function count(nums: any[]): number;
+export declare function countTruly(nums: any[]): number;
+export declare function distinctCount(datas: any[]): number;
