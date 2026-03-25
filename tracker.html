@@ -1005,10 +1005,18 @@ const KNOWN_DIMS = {
 };
 const DATE_PATTERNS = ['Date', 'SignupDate', 'SyncDate', 'TxnDate', 'CancellationDate', 'FirstSaaSInvoiceTxnDate'];
 
-let wizardState = { columns: [], rows: [], sql: '', name: '', stage: '', dateCol: null, selectedLenses: new Set(), selectedDerived: [] };
+// Available BQ tables for simple builder
+const BQ_TABLES = [
+  { value: 'project-for-method-dw.revenue.Account', label: 'revenue.Account', desc: 'Signups, conversions, cancellations, attribution' },
+  { value: 'project-for-method-dw.revenue.Funnel', label: 'revenue.Funnel', desc: 'Sync events, trial events' },
+  { value: 'project-for-method-dw.revenue.TransLineFlattened', label: 'revenue.TransLineFlattened', desc: 'MRR, BOM customers, revenue' },
+  { value: 'project-for-method-dw.revenue.method_forecast', label: 'revenue.method_forecast', desc: 'Budgets and forecasts' },
+];
+
+let wizardState = { mode: 'simple', columns: [], rows: [], sql: '', name: '', stage: '', dateCol: null, selectedLenses: new Set(), selectedDerived: [], builder: { table: '', tableColumns: [], selectedCols: new Set(), filters: [] } };
 
 function openWizard() {
-  wizardState = { columns: [], rows: [], sql: '', name: '', stage: 'trials', dateCol: null, selectedLenses: new Set(), selectedDerived: [] };
+  wizardState = { mode: 'simple', columns: [], rows: [], sql: '', name: '', stage: 'trials', dateCol: null, selectedLenses: new Set(), selectedDerived: [], builder: { table: '', tableColumns: [], selectedCols: new Set(), filters: [] } };
   renderWizard();
 }
 
@@ -1042,12 +1050,15 @@ function renderWizard() {
     <div class="wizard" style="position:relative">
       <button class="wizard-close" onclick="closeWizard()">&times;</button>
       <h2>New Metric</h2>
-      <p class="wiz-subtitle">Paste SQL, preview results, auto-generate breakdowns and views</p>
+      <div style="display:flex;gap:8px;margin:8px 0 16px">
+        <button class="lens-btn ${wizardState.mode==='simple'?'active':''}" onclick="wizardState.mode='simple';renderWizard()">Simple</button>
+        <button class="lens-btn ${wizardState.mode==='advanced'?'active':''}" onclick="wizardState.mode='advanced';renderWizard()">Advanced (SQL)</button>
+      </div>
 
       <div class="wiz-step">
         <div class="wiz-step-label"><span class="wiz-step-num">1</span> Define</div>
         <div class="wiz-row">
-          <div class="wiz-field"><label>Name</label><input class="wiz-input" id="wiz-name" placeholder="e.g. Trials" value="${esc(wizardState.name)}" oninput="wizardState.name=this.value"></div>
+          <div class="wiz-field"><label>Name</label><input class="wiz-input" id="wiz-name" placeholder="e.g. US Trials" value="${esc(wizardState.name)}" oninput="wizardState.name=this.value"></div>
           <div class="wiz-field"><label>Stage</label>
             <select class="wiz-input" id="wiz-stage" onchange="wizardState.stage=this.value">
               ${['trials','sync','conversion','cancellation','revenue','kpi','financial','forecast','attribution','underlying'].map(s =>
@@ -1056,14 +1067,84 @@ function renderWizard() {
             </select>
           </div>
         </div>
-        <div class="wiz-field"><label>SQL Query</label>
-          <textarea class="wiz-sql" id="wiz-sql" placeholder="SELECT ... FROM \`project-for-method-dw.revenue.Account\` WHERE ...">${esc(wizardState.sql)}</textarea>
+      </div>
+
+      ${wizardState.mode === 'simple' ? `
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">2</span> Pick Table</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${BQ_TABLES.map(t => `
+            <div class="wiz-suggestion ${wizardState.builder.table===t.value?'selected':''}" onclick="selectBuilderTable('${t.value}')">
+              <span class="check">&#10003; </span>
+              <div><strong>${t.label}</strong><div style="font-size:10px;color:var(--text-dim);font-family:var(--font-sans)">${t.desc}</div></div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      ${wizardState.builder.tableColumns.length > 0 ? `
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">3</span> Pick Columns</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          <button class="lens-btn" onclick="builderSelectAll()" style="font-size:10px">Select All</button>
+          <button class="lens-btn" onclick="builderSelectNone()" style="font-size:10px">Clear</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto">
+          ${wizardState.builder.tableColumns.map(c => {
+            const sel = wizardState.builder.selectedCols.has(c.name);
+            const isDate = DATE_PATTERNS.some(p => c.name.toLowerCase().includes(p.toLowerCase()));
+            const isDim = KNOWN_DIMS[c.name];
+            const tagStyle = isDate ? 'border-color:var(--green);color:var(--green)' : isDim ? 'border-color:#a78bfa;color:#a78bfa' : '';
+            return `<span class="wiz-suggestion ${sel?'selected':''}" style="padding:4px 10px;font-size:11px;${tagStyle}" onclick="toggleBuilderCol('${c.name}')"><span class="check">&#10003; </span>${c.name} <span style="color:var(--text-dim);font-size:9px">${c.type}</span></span>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">4</span> Filters <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">(optional)</span></div>
+        <div id="builder-filters">
+          ${wizardState.builder.filters.map((f, i) => `
+            <div class="wiz-row" style="margin-bottom:6px;align-items:center">
+              <div class="wiz-field" style="flex:2"><select class="wiz-input" onchange="wizardState.builder.filters[${i}].col=this.value;buildSqlFromBuilder()">
+                <option value="">Column...</option>
+                ${wizardState.builder.tableColumns.map(c => `<option value="${c.name}"${f.col===c.name?' selected':''}>${c.name}</option>`).join('')}
+              </select></div>
+              <div class="wiz-field" style="flex:1"><select class="wiz-input" onchange="wizardState.builder.filters[${i}].op=this.value;buildSqlFromBuilder()">
+                <option value="="${f.op==='='?' selected':''}>= equals</option>
+                <option value="!="${f.op==='!='?' selected':''}>!= not equals</option>
+                <option value=">="${f.op==='>='?' selected':''}>>= at least</option>
+                <option value="<="${f.op==='<='?' selected':''}><= at most</option>
+                <option value="LIKE"${f.op==='LIKE'?' selected':''}>LIKE contains</option>
+              </select></div>
+              <div class="wiz-field" style="flex:2"><input class="wiz-input" placeholder="Value..." value="${esc(f.val||'')}" oninput="wizardState.builder.filters[${i}].val=this.value;buildSqlFromBuilder()"></div>
+              <button class="lens-btn" style="color:var(--red);border-color:#3d1a1a;padding:6px 10px" onclick="wizardState.builder.filters.splice(${i},1);renderWizard()">&#10005;</button>
+            </div>
+          `).join('')}
+        </div>
+        <button class="lens-btn" onclick="wizardState.builder.filters.push({col:'',op:'=',val:''});renderWizard()" style="font-size:11px">+ Add Filter</button>
+      </div>
+
+      <div class="wiz-step">
+        <div class="wiz-step-label">Generated SQL</div>
+        <div class="sql-block" style="font-size:11px">${esc(wizardState.sql) || '<span style="color:var(--text-dim)">Select a table and columns above</span>'}</div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="wiz-btn" onclick="runWizardSql()" ${!bqToken||!wizardState.sql?'disabled':''}>Preview Results</button>
+          ${!bqToken ? '<span style="color:var(--text-dim);font-size:11px;align-self:center">Connect BQ first</span>' : ''}
+        </div>
+      </div>
+      ` : ''}
+      ` : `
+      <div class="wiz-step">
+        <div class="wiz-step-label"><span class="wiz-step-num">2</span> SQL Query</div>
+        <div class="wiz-field">
+          <textarea class="wiz-sql" id="wiz-sql" placeholder="SELECT ... FROM &#96;project-for-method-dw.revenue.Account&#96; WHERE ...">${esc(wizardState.sql)}</textarea>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px">
           <button class="wiz-btn" onclick="runWizardSql()" ${!bqToken?'disabled title="Connect BQ first"':''}>Run SQL</button>
           ${!bqToken ? '<span style="color:var(--text-dim);font-size:11px;align-self:center">Connect BQ first to preview</span>' : ''}
         </div>
       </div>
+      `}
 
       ${hasResults ? `
       <div class="wiz-step">
@@ -1127,8 +1208,85 @@ function renderWizard() {
   </div>`;
 }
 
+// --- Simple Builder helpers ---
+
+async function selectBuilderTable(tableValue) {
+  wizardState.builder.table = tableValue;
+  wizardState.builder.selectedCols = new Set();
+  wizardState.builder.tableColumns = [];
+  wizardState.sql = '';
+  renderWizard();
+
+  if (!bqToken) return;
+
+  // Fetch column schema
+  try {
+    const shortName = tableValue.split('.').pop();
+    const dataset = tableValue.split('.')[1];
+    const rows = await queryBq(`SELECT column_name, data_type FROM \`${tableValue.split('.')[0]}.${dataset}.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = '${shortName}' ORDER BY ordinal_position`);
+    wizardState.builder.tableColumns = rows.map(r => ({ name: r.column_name, type: r.data_type }));
+    // Auto-select common useful columns
+    const autoSelect = ['SignupDate', 'CompanyAccount', 'Channel', 'SignupCountry', 'CustDatIndustry', 'Vertical', 'SyncType', 'EventType', 'TxnDate', 'SaaSAmount', 'CancellationDate', 'FirstSaaSInvoiceTxnDate'];
+    wizardState.builder.tableColumns.forEach(c => {
+      if (autoSelect.includes(c.name)) wizardState.builder.selectedCols.add(c.name);
+    });
+    buildSqlFromBuilder();
+    renderWizard();
+  } catch (e) {
+    console.error('Failed to fetch columns:', e);
+  }
+}
+
+function toggleBuilderCol(colName) {
+  if (wizardState.builder.selectedCols.has(colName)) wizardState.builder.selectedCols.delete(colName);
+  else wizardState.builder.selectedCols.add(colName);
+  buildSqlFromBuilder();
+  renderWizard();
+}
+
+function builderSelectAll() {
+  wizardState.builder.tableColumns.forEach(c => wizardState.builder.selectedCols.add(c.name));
+  buildSqlFromBuilder();
+  renderWizard();
+}
+
+function builderSelectNone() {
+  wizardState.builder.selectedCols.clear();
+  buildSqlFromBuilder();
+  renderWizard();
+}
+
+function buildSqlFromBuilder() {
+  const b = wizardState.builder;
+  if (!b.table || b.selectedCols.size === 0) { wizardState.sql = ''; return; }
+
+  const cols = [...b.selectedCols].join(', ');
+  let sql = `SELECT ${cols}\nFROM \`${b.table}\``;
+
+  const validFilters = b.filters.filter(f => f.col && f.val);
+  if (validFilters.length > 0) {
+    const wheres = validFilters.map(f => {
+      const val = f.val;
+      const isNum = !isNaN(val) && val.trim() !== '';
+      const isBool = val.toLowerCase() === 'true' || val.toLowerCase() === 'false';
+      if (f.op === 'LIKE') return `${f.col} LIKE '%${val}%'`;
+      if (isBool) return `${f.col} = ${val.toUpperCase()}`;
+      if (isNum) return `${f.col} ${f.op} ${val}`;
+      return `${f.col} ${f.op} '${val}'`;
+    });
+    sql += `\nWHERE ${wheres.join('\n  AND ')}`;
+  }
+
+  wizardState.sql = sql;
+}
+
 async function runWizardSql() {
-  const sql = document.getElementById('wiz-sql')?.value?.trim();
+  let sql;
+  if (wizardState.mode === 'simple') {
+    sql = wizardState.sql;
+  } else {
+    sql = document.getElementById('wiz-sql')?.value?.trim();
+  }
   if (!sql || !bqToken) return;
 
   // Fix smart quotes and typographic characters that break SQL
