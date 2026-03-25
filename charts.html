@@ -195,10 +195,8 @@ async function getViewCols(viewName) {
   return _colCache[viewName];
 }
 
-function detectAgg(cols) {
-  const numCols = cols.filter(c => ['FLOAT64','INT64','NUMERIC','FLOAT','INTEGER','BIGNUMERIC'].includes(c.type));
-  const hasAmount = numCols.some(c => c.name.toLowerCase().includes('amount') || c.name.toLowerCase().includes('expense'));
-  return hasAmount ? `ROUND(SUM(${numCols[0].name}), 0)` : 'COUNT(*)';
+function getAgg(metric) {
+  return metric.agg_expression || 'COUNT(*)';
 }
 
 function detectDateCol(cols) {
@@ -229,7 +227,7 @@ async function queryMetricWithDim(metric, timeDim, groupDim) {
   let cols;
   try { cols = await getViewCols(metric.view_name); } catch { return []; }
   const dc = detectDateCol(cols);
-  const agg = detectAgg(cols);
+  const agg = getAgg(metric);
   const timeParts = getTimeParts(timeDim, dc || 'SignupDate');
 
   // If we have a group dimension, use its template with time placeholders
