@@ -75,15 +75,46 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
     );
   }
 
-  // Cast numeric y values
-  const chartData = data.map(row => ({
-    ...row,
-    [yField]: row[yField] != null ? Number(row[yField]) : null,
-  }));
+  // Aggregate data if needed
+  let chartData;
+  let effectiveYField = yField;
+
+  if (yField === 'COUNT' || yField === xField) {
+    // No numeric column — count rows grouped by xField
+    effectiveYField = 'count';
+    const counts = {};
+    for (const row of data) {
+      let key = row[xField];
+      // Truncate dates to month (YYYY-MM) for time grouping
+      if (key && typeof key === 'string' && /^\d{4}-\d{2}/.test(key)) {
+        key = key.substring(0, 7);
+      }
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    chartData = Object.entries(counts)
+      .map(([key, count]) => ({ [xField]: key, count }))
+      .sort((a, b) => (a[xField] > b[xField] ? 1 : -1));
+  } else {
+    // Has a real numeric y column — cast and use directly
+    chartData = data.map(row => ({
+      ...row,
+      [yField]: row[yField] != null ? Number(row[yField]) : null,
+    }));
+    // If data looks like raw rows with dates, aggregate by truncated date
+    if (chartData.length > 100 && data[0]?.[xField] && /^\d{4}-\d{2}/.test(String(data[0][xField]))) {
+      const agg = {};
+      for (const row of chartData) {
+        const key = String(row[xField]).substring(0, 7);
+        if (!agg[key]) agg[key] = { [xField]: key, [yField]: 0 };
+        agg[key][yField] += row[yField] || 0;
+      }
+      chartData = Object.values(agg).sort((a, b) => (a[xField] > b[xField] ? 1 : -1));
+    }
+  }
 
   const color = COLORS[0];
   const xLabel = formatFieldLabel(xField);
-  const yLabel = formatFieldLabel(yField);
+  const yLabel = effectiveYField === 'count' ? 'Count' : formatFieldLabel(yField);
 
   const commonProps = {
     data: chartData,
@@ -122,7 +153,7 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <Tooltip content={<CustomTooltip />} />
-          <Line type="monotone" dataKey={yField} stroke={color} dot={false} strokeWidth={2} />
+          <Line type="monotone" dataKey={effectiveYField} stroke={color} dot={false} strokeWidth={2} />
         </LineChart>
       );
     }
@@ -134,7 +165,7 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey={yField} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} />
+          <Area type="monotone" dataKey={effectiveYField} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} />
         </AreaChart>
       );
     }
@@ -144,7 +175,7 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
         <ScatterChart {...commonProps}>
           <CartesianGrid {...gridProps} />
           <XAxis dataKey={xField} type="number" name={xLabel} tick={axisStyle} axisLine={{ stroke: THEME.grid }} tickLine={{ stroke: THEME.grid }} />
-          <YAxis dataKey={yField} type="number" name={yLabel} tick={axisStyle} axisLine={{ stroke: THEME.grid }} tickLine={{ stroke: THEME.grid }} width={72} />
+          <YAxis dataKey={effectiveYField} type="number" name={yLabel} tick={axisStyle} axisLine={{ stroke: THEME.grid }} tickLine={{ stroke: THEME.grid }} width={72} />
           <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
           <Scatter data={chartData} fill={color} />
         </ScatterChart>
@@ -158,7 +189,7 @@ export default function ChartRenderer({ data, xField, yField, colorField, chartT
         <XAxis {...xAxisProps} />
         <YAxis {...yAxisProps} />
         <Tooltip content={<CustomTooltip />} />
-        <Bar dataKey={yField} fill={color} radius={[3, 3, 0, 0]} />
+        <Bar dataKey={effectiveYField} fill={color} radius={[3, 3, 0, 0]} />
       </BarChart>
     );
   };

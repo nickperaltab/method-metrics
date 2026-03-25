@@ -41,6 +41,7 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
   const viewSchema = schemaMap[metric.view_name];
   if (viewSchema) {
     const colNames = new Set(viewSchema.map(f => f.name));
+    colNames.add('COUNT'); // Allow COUNT as a virtual y-field
     for (const field of [result.x_field, result.y_field, result.color_field].filter(Boolean)) {
       if (!colNames.has(field)) {
         return { error: `Column "${field}" not found in ${metric.view_name}`, suggestion: `Available columns: ${[...colNames].join(', ')}` };

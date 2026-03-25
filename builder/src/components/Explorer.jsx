@@ -55,8 +55,9 @@ export default function Explorer({ grouped, metrics, bqConnected, userEmail }) {
     const nominal = fields.find(f => f.semanticType === 'nominal');
     const quantitative = fields.find(f => f.semanticType === 'quantitative');
     const xField = (temporal || nominal)?.fid || fields[0]?.fid;
-    const yField = quantitative?.fid || fields[1]?.fid || fields[0]?.fid;
-    return { chartType: 'bar', xField, yField, colorField: null };
+    const yField = quantitative?.fid || 'COUNT';
+    const chartType = temporal ? 'line' : 'bar';
+    return { chartType, xField, yField, colorField: null };
   }, []);
 
   const handleSelectMetric = useCallback(async (metric) => {
