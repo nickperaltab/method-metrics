@@ -81,6 +81,24 @@ tr.data-row.expanded td{background:var(--surface);border-bottom-color:transparen
 .type-breakdown{background:var(--blue-bg);color:var(--blue);border:1px solid #1a2d4a}
 .type-derived{background:var(--yellow-bg);color:var(--yellow);border:1px solid #332b0a}
 .type-catalog{background:var(--gray-bg);color:var(--gray);border:1px solid #1f242d}
+.type-foundational{background:#0c1929;color:#38bdf8;border:1px solid #1a3d5c}
+.type-composite{background:#1a0f2e;color:#c084fc;border:1px solid #2d1f5e}
+
+/* Type dropdown */
+.type-select{
+  background:transparent;border:1px solid transparent;border-radius:4px;
+  padding:2px 4px;font-family:var(--font-mono);font-size:10px;font-weight:600;
+  letter-spacing:.04em;cursor:pointer;outline:none;
+}
+.type-select:hover{border-color:var(--border)}
+.type-select:focus{border-color:var(--accent)}
+.type-select-primitive{color:var(--green);background:var(--green-bg)}
+.type-select-foundational{color:#38bdf8;background:#0c1929}
+.type-select-breakdown{color:var(--blue);background:var(--blue-bg)}
+.type-select-transform{color:#a78bfa;background:#1a0f2e}
+.type-select-derived{color:var(--yellow);background:var(--yellow-bg)}
+.type-select-composite{color:#c084fc;background:#1a0f2e}
+.type-select-catalog{color:var(--gray);background:var(--gray-bg)}
 .type-transform{background:#1a0f2e;color:#a78bfa;border:1px solid #2d1f5e}
 
 /* Status dots */
@@ -228,6 +246,8 @@ td select:focus{border-color:var(--accent)}
 .group-derived .group-title{color:var(--yellow)}
 .group-catalog .group-title{color:var(--gray)}
 .group-transform .group-title{color:#a78bfa}
+.group-foundational .group-title{color:#38bdf8}
+.group-composite .group-title{color:#c084fc}
 
 /* Loading */
 .loading{display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:12px}
@@ -287,14 +307,21 @@ async function updateMetric(id, fields) {
 
 // --- Classification ---
 function getType(m) {
-  if (m.metric_type && m.metric_type !== 'catalog') {
-    return m.metric_type.charAt(0).toUpperCase() + m.metric_type.slice(1);
-  }
-  // Fallback for rows without metric_type
+  if (m.metric_type) return m.metric_type.charAt(0).toUpperCase() + m.metric_type.slice(1);
   if (m.primitive_metric_id) return 'Breakdown';
   if (m.depends_on && m.depends_on.length > 0) return 'Derived';
   if (!m.chart_sql && !m.view_name) return 'Catalog';
   return 'Primitive';
+}
+
+async function saveType(id, value, el) {
+  await updateMetric(id, { metric_type: value });
+  const m = allMetrics.find(x => x.id === id);
+  if (m) m.metric_type = value;
+  // Update dropdown color
+  el.className = 'type-select type-select-' + value;
+  // Re-render to move to correct group
+  applyFilters();
 }
 
 function metricName(id) {
@@ -411,9 +438,11 @@ function renderApp() {
         <select id="f-type" onchange="applyFilters()">
           <option value="">All</option>
           <option value="Primitive">Primitive</option>
-          <option value="Breakdown">Breakdown</option>
+          <option value="Foundational">Foundational</option>
           <option value="Transform">Transform</option>
           <option value="Derived">Derived</option>
+          <option value="Composite">Composite</option>
+          <option value="Breakdown">Breakdown</option>
           <option value="Catalog">Catalog</option>
         </select>
       </div>
@@ -481,9 +510,11 @@ function renderTable() {
   // Group by type
   const groups = [
     { key: 'Primitive', label: 'Primitives', cls: 'group-primitive' },
-    { key: 'Breakdown', label: 'Breakdowns', cls: 'group-breakdown' },
+    { key: 'Foundational', label: 'Foundational', cls: 'group-foundational' },
     { key: 'Transform', label: 'Transforms', cls: 'group-transform' },
     { key: 'Derived', label: 'Derived', cls: 'group-derived' },
+    { key: 'Composite', label: 'Composite', cls: 'group-composite' },
+    { key: 'Breakdown', label: 'Breakdowns', cls: 'group-breakdown' },
     { key: 'Catalog', label: 'Catalog', cls: 'group-catalog' },
   ];
 
@@ -526,7 +557,13 @@ function renderMetricRow(m) {
   return `<tr class="data-row ${isExpanded ? 'expanded' : ''}" data-id="${m.id}" onclick="toggleExpand(${m.id}, event)">
     <td style="font-family:var(--font-mono);color:var(--text-dim);font-size:11px">${m.id}</td>
     <td style="font-weight:600;color:var(--text-bright)">${esc(m.name)}</td>
-    <td><span class="type-badge ${typeCls}">${type}</span></td>
+    <td>
+      <select class="type-select type-select-${(m.metric_type||'catalog')}" onclick="event.stopPropagation()" onchange="saveType(${m.id},this.value,this)">
+        ${['primitive','foundational','transform','derived','composite','breakdown','catalog'].map(t =>
+          `<option value="${t}"${(m.metric_type||'catalog')===t?' selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`
+        ).join('')}
+      </select>
+    </td>
     <td>${m.stage || '—'}</td>
     <td><input class="editable-text" value="${esc(m.source || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'source',this.value,this)"></td>
     <td>
