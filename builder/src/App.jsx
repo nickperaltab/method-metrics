@@ -5,7 +5,7 @@ import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
 
 export default function App() {
-  const { metrics, grouped, loading: metricsLoading } = useMetrics();
+  const { metrics, loading: metricsLoading } = useMetrics();
   const { connected, userEmail, connect } = useBqAuth();
 
   return (
@@ -13,7 +13,7 @@ export default function App() {
       <TopBar connected={connected} userEmail={userEmail} onConnect={connect} />
       {metricsLoading
         ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-        : <Explorer grouped={grouped} metrics={metrics} bqConnected={connected} userEmail={userEmail} />
+        : <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} />
       }
     </div>
   );
