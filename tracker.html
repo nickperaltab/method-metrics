@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -163,6 +164,12 @@ td select:focus{border-color:var(--accent)}
 .lens-result td{padding:6px 12px;white-space:nowrap}
 .lens-result .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
 .lens-loading{color:var(--text-dim);font-size:11px;font-family:var(--font-mono);padding:8px 0}
+.lens-chart-wrap{margin-top:12px;height:280px;position:relative}
+.lens-chart-wrap canvas{width:100%!important;height:100%!important}
+.lens-time{border-color:#1a3d2e!important}
+.lens-time.active{background:var(--green-bg)!important;border-color:var(--green)!important;color:var(--green)!important}
+.lens-dim{border-color:#2d1f5e!important}
+.lens-dim.active{background:#1a0f2e!important;border-color:#a78bfa!important;color:#a78bfa!important}
 
 /* New Metric Wizard */
 .wizard-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
@@ -746,7 +753,6 @@ function renderTransformsSection(m) {
   if (!m.view_name) return '';
 
   const metricId = m.id;
-  const active = activeLenses[metricId] || new Set();
 
   // Saved transforms from Supabase
   const savedTransforms = allMetrics.filter(t =>
@@ -763,17 +769,16 @@ function renderTransformsSection(m) {
         </div>
       </div>
     ` : ''}
-    <div style="margin-bottom:6px">
-      <span style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono)">AVAILABLE LENSES</span>
-      <span style="font-size:9px;color:var(--text-dim);margin-left:8px">(multi-select to combine)</span>
-    </div>
     <div class="lens-bar" id="lens-bar-${metricId}">
-      <span class="lens-loading" id="lens-loading-${metricId}">${bqToken ? 'Detecting columns...' : 'Connect BQ to use lenses'}</span>
+      <span class="lens-loading">${bqToken ? 'Detecting columns...' : 'Connect BQ to use transforms'}</span>
     </div>
-    <div style="margin-top:8px;display:flex;gap:6px" id="lens-actions-${metricId}" style="display:none"></div>
+    <div class="lens-chart-wrap" id="lens-chart-${metricId}" style="display:none"><canvas id="canvas-${metricId}"></canvas></div>
     <div class="lens-result" id="lens-result-${metricId}"></div>
   </div>`;
 }
+
+// Track active chart instances
+const lensCharts = {};
 
 async function loadLenses(metricId) {
   const m = allMetrics.find(x => x.id === metricId);
@@ -786,124 +791,180 @@ async function loadLenses(metricId) {
   const bar = document.getElementById(`lens-bar-${metricId}`);
   if (!bar) return;
 
-  if (!activeLenses[metricId]) activeLenses[metricId] = new Set();
-  const active = activeLenses[metricId];
+  if (!activeLenses[metricId]) activeLenses[metricId] = { time: null, dims: new Set() };
 
-  bar.innerHTML = lenses.map(l =>
-    `<button class="lens-btn ${active.has(l.key)?'active':''}" onclick="event.stopPropagation();toggleLensSelection(${metricId},'${l.key}')">${l.label}</button>`
-  ).join('');
+  const state = activeLenses[metricId];
 
-  updateLensActions(metricId);
-}
+  // Time lenses (radio — one at a time)
+  const timeLenses = lenses.filter(l => l.type === 'time');
+  const dimLenses = lenses.filter(l => l.type === 'dim');
 
-function toggleLensSelection(metricId, key) {
-  if (!activeLenses[metricId]) activeLenses[metricId] = new Set();
-  const active = activeLenses[metricId];
-  if (active.has(key)) active.delete(key); else active.add(key);
-
-  // Update button styles
-  const bar = document.getElementById(`lens-bar-${metricId}`);
-  if (bar) {
-    bar.querySelectorAll('.lens-btn').forEach(btn => {
-      const btnKey = btn.onclick.toString().match(/'([^']+)'\)/)?.[1];
-      if (btnKey) btn.classList.toggle('active', active.has(btnKey));
-    });
-  }
-  updateLensActions(metricId);
-}
-
-function updateLensActions(metricId) {
-  const actions = document.getElementById(`lens-actions-${metricId}`);
-  if (!actions) return;
-  const active = activeLenses[metricId] || new Set();
-
-  if (active.size === 0) {
-    actions.innerHTML = '';
-    actions.style.display = 'none';
-    return;
-  }
-
-  actions.style.display = 'flex';
-  const labels = [...active].map(k => k.startsWith('dim_') ? k.replace('dim_','') : k).join(' + ');
-  actions.innerHTML = `
-    <button class="wiz-btn" onclick="event.stopPropagation();runCombinedLens(${metricId})">Run: ${labels}</button>
-    <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();activeLenses[${metricId}].clear();loadLenses(${metricId});document.getElementById('lens-result-${metricId}').innerHTML=''">Clear</button>
+  bar.innerHTML = `
+    ${timeLenses.length ? `<span style="font-size:9px;color:var(--text-dim);font-family:var(--font-mono);margin-right:4px">TIME</span>` : ''}
+    ${timeLenses.map(l =>
+      `<button class="lens-btn lens-time ${state.time===l.key?'active':''}" onclick="event.stopPropagation();selectTimeLens(${metricId},'${l.key}')">${l.label}</button>`
+    ).join('')}
+    ${dimLenses.length ? `<span style="font-size:9px;color:var(--text-dim);font-family:var(--font-mono);margin:0 4px 0 12px">DIMENSIONS</span>` : ''}
+    ${dimLenses.map(l =>
+      `<button class="lens-btn lens-dim ${state.dims.has(l.key)?'active':''}" onclick="event.stopPropagation();toggleDimLens(${metricId},'${l.key}')">${l.label}</button>`
+    ).join('')}
+    ${(state.time || state.dims.size > 0) ? `<button class="lens-btn" style="margin-left:8px;color:var(--text-dim);font-size:10px" onclick="event.stopPropagation();clearLenses(${metricId})">Clear</button>` : ''}
   `;
 }
 
-async function runCombinedLens(metricId) {
+function selectTimeLens(metricId, key) {
+  if (!activeLenses[metricId]) activeLenses[metricId] = { time: null, dims: new Set() };
+  const state = activeLenses[metricId];
+  state.time = state.time === key ? null : key; // toggle
+  loadLenses(metricId); // re-render buttons
+  runTransformChart(metricId);
+}
+
+function toggleDimLens(metricId, key) {
+  if (!activeLenses[metricId]) activeLenses[metricId] = { time: null, dims: new Set() };
+  const state = activeLenses[metricId];
+  if (state.dims.has(key)) state.dims.delete(key); else state.dims.add(key);
+  loadLenses(metricId);
+  runTransformChart(metricId);
+}
+
+function clearLenses(metricId) {
+  activeLenses[metricId] = { time: null, dims: new Set() };
+  loadLenses(metricId);
+  // Hide chart and table
+  const chartWrap = document.getElementById(`lens-chart-${metricId}`);
+  const resultEl = document.getElementById(`lens-result-${metricId}`);
+  if (chartWrap) chartWrap.style.display = 'none';
+  if (resultEl) resultEl.innerHTML = '';
+  if (lensCharts[metricId]) { lensCharts[metricId].destroy(); delete lensCharts[metricId]; }
+}
+
+async function runTransformChart(metricId) {
   const m = allMetrics.find(x => x.id === metricId);
   if (!m?.view_name || !bqToken) return;
 
+  const state = activeLenses[metricId];
+  if (!state || (!state.time && state.dims.size === 0)) return;
+
+  const chartWrap = document.getElementById(`lens-chart-${metricId}`);
   const resultEl = document.getElementById(`lens-result-${metricId}`);
-  if (!resultEl) return;
-  resultEl.innerHTML = '<div class="lens-loading">Running query...</div>';
+  if (!chartWrap || !resultEl) return;
+
+  resultEl.innerHTML = '<div class="lens-loading">Loading...</div>';
+  chartWrap.style.display = 'none';
 
   const cols = await getViewColumns(m.view_name);
-  if (!cols) { resultEl.innerHTML = '<div class="lens-loading">Could not detect columns</div>'; return; }
+  if (!cols) return;
 
-  const active = activeLenses[metricId] || new Set();
-  const sql = buildCombinedSql(m.view_name, cols, active);
-  if (!sql) { resultEl.innerHTML = ''; return; }
+  // Build selected keys
+  const selectedKeys = new Set();
+  if (state.time) selectedKeys.add(state.time);
+  state.dims.forEach(d => selectedKeys.add(d));
+
+  const sql = buildCombinedSql(m.view_name, cols, selectedKeys);
+  if (!sql) return;
 
   try {
     const rows = await queryBq(sql);
     if (!rows || rows.length === 0) {
-      resultEl.innerHTML = '<div class="lens-loading">No data returned</div>';
+      resultEl.innerHTML = '<div class="lens-loading">No data</div>';
       return;
     }
-    const rcols = Object.keys(rows[0]);
-    const labels = [...active].map(k => k.startsWith('dim_') ? k.replace('dim_','') : k).join('_');
 
+    // Render chart
+    chartWrap.style.display = '';
+    if (lensCharts[metricId]) { lensCharts[metricId].destroy(); }
+
+    const canvas = document.getElementById(`canvas-${metricId}`);
+    const rcols = Object.keys(rows[0]);
+    const valueCol = rcols.find(c => c === 'value') || rcols[rcols.length - 1];
+    const labelCols = rcols.filter(c => c !== valueCol);
+
+    const hasDim = state.dims.size > 0;
+    const hasTime = !!state.time;
+
+    if (hasTime && hasDim && labelCols.length >= 2) {
+      // Grouped bar: x = time, groups = dimension
+      const timeCol = labelCols[0];
+      const dimCol = labelCols.find(c => c !== timeCol) || labelCols[1];
+      const timeLabels = [...new Set(rows.map(r => r[timeCol]))];
+      const dimValues = [...new Set(rows.map(r => r[dimCol]))];
+      const palette = ['#34d399','#60a5fa','#fbbf24','#f87171','#a78bfa','#38bdf8','#fb923c','#e879f9','#4ade80','#f472b6'];
+
+      const datasets = dimValues.map((dv, i) => ({
+        label: dv || '(none)',
+        data: timeLabels.map(tl => {
+          const row = rows.find(r => r[timeCol] === tl && r[dimCol] === dv);
+          return row ? Number(row[valueCol]) : 0;
+        }),
+        backgroundColor: palette[i % palette.length] + 'cc',
+        borderColor: palette[i % palette.length],
+        borderWidth: 1,
+      }));
+
+      lensCharts[metricId] = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: timeLabels, datasets },
+        options: chartOptions('Grouped: ' + dimCol),
+      });
+    } else if (hasTime) {
+      // Line chart
+      const labels = rows.map(r => r[labelCols[0]]);
+      const data = rows.map(r => Number(r[valueCol]));
+
+      lensCharts[metricId] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{ label: 'Value', data, borderColor: '#34d399', backgroundColor: '#34d39920', tension: 0.3, fill: true, pointRadius: 3 }],
+        },
+        options: chartOptions(),
+      });
+    } else {
+      // Horizontal bar for dimensions
+      const labels = rows.map(r => labelCols.map(c => r[c]).join(' — ')).slice(0, 20);
+      const data = rows.map(r => Number(r[valueCol])).slice(0, 20);
+
+      lensCharts[metricId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{ label: 'Value', data, backgroundColor: '#a78bfacc', borderColor: '#a78bfa', borderWidth: 1 }],
+        },
+        options: { ...chartOptions(), indexAxis: 'y' },
+      });
+    }
+
+    // Data table
     resultEl.innerHTML = `
-      <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+      <div style="overflow-x:auto;max-height:250px;overflow-y:auto;margin-top:8px">
         <table><thead><tr>${rcols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(r => `<tr>${rcols.map(c => {
+        <tbody>${rows.slice(0, 50).map(r => `<tr>${rcols.map(c => {
           const v = r[c];
           const isNum = !isNaN(v) && v !== null && v !== '';
           return `<td class="${isNum ? 'num' : ''}">${isNum ? Number(v).toLocaleString() : (v || '—')}</td>`;
         }).join('')}</tr>`).join('')}</tbody></table>
       </div>
-      <div style="margin-top:8px;display:flex;gap:6px">
-        <button class="wiz-btn wiz-btn-secondary" onclick="event.stopPropagation();saveAsTransform(${metricId},'${labels}')">Save as Transform</button>
-      </div>
       <div style="margin-top:4px"><code style="font-size:10px;color:var(--text-dim)">${esc(sql)}</code></div>
     `;
   } catch (e) {
-    resultEl.innerHTML = `<div class="lens-loading" style="color:var(--red)">Query failed: ${e.message}</div>`;
+    resultEl.innerHTML = `<div class="lens-loading" style="color:var(--red)">${e.message}</div>`;
+    chartWrap.style.display = 'none';
   }
 }
 
-async function saveAsTransform(metricId, labels) {
-  const m = allMetrics.find(x => x.id === metricId);
-  if (!m?.view_name || !bqToken) return;
-
-  const cols = await getViewColumns(m.view_name);
-  const active = activeLenses[metricId] || new Set();
-  const sql = buildCombinedSql(m.view_name, cols, active);
-  if (!sql) return;
-
-  const viewName = `${m.view_name}_${labels}`;
-  const name = `${m.name} — ${labels.replace(/_/g, ' + ')}`;
-
-  try {
-    await queryBq(`CREATE OR REPLACE VIEW \`project-for-method-dw.revenue.${viewName}\` AS ${sql}`);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        name, stage: m.stage, status: 'review', metric_type: 'transform',
-        view_name: viewName, view_definition: sql, primitive_metric_id: metricId, source: 'bigquery',
-      }),
-    });
-    const created = await res.json();
-    if (created?.[0]) allMetrics.push(created[0]);
-    alert(`Transform saved: ${name}`);
-    // Refresh the transforms section
-    loadLenses(metricId);
-  } catch (e) {
-    alert('Failed: ' + e.message);
-  }
+function chartOptions(title) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#c8cdd3', font: { size: 11 } } },
+      title: title ? { display: true, text: title, color: '#888', font: { size: 11 } } : { display: false },
+    },
+    scales: {
+      x: { ticks: { color: '#5a6370', font: { size: 10 } }, grid: { color: '#1a1e24' } },
+      y: { ticks: { color: '#5a6370', font: { size: 10 } }, grid: { color: '#1a1e24' }, beginAtZero: true },
+    },
+  };
 }
 
 // Fetch live SQL definition from BQ INFORMATION_SCHEMA
