@@ -222,7 +222,7 @@ export function applyLastNMonths(labels, datasets, lastNMonths, timeBucket) {
 }
 
 /** Build a full ECharts option from chart type + aggregated data */
-export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
+export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { showLabels = false } = {}) {
   const displayLabels = formatDateLabels(labels);
   const isDateAxis = labels.length > 0 && /^\d{4}-\d{2}/.test(String(labels[0]));
   const showLegend = datasets.length > 1;
@@ -268,6 +268,8 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
     splitLine: { lineStyle: { color: '#1a1e24', type: 'dashed' } },
   };
 
+  const labelStyle = { color: '#c8cdd3', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" };
+
   // --- Line ---
   if (echartsType === 'line') {
     return {
@@ -279,11 +281,17 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
       series: datasets.map((ds, i) => ({
         name: ds.label,
         type: 'line',
-        data: ds.data,
+        data: ds.data.map((v, idx) => showLabels && idx === ds.data.length - 1
+          ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
+          : v
+        ),
         smooth: true,
-        symbol: 'none',
+        symbol: showLabels ? 'circle' : 'none',
+        showSymbol: showLabels ? false : false,
+        symbolSize: showLabels ? 4 : 0,
         lineStyle: { width: 2 },
         itemStyle: { color: COLORS[i % COLORS.length] },
+        label: { show: false },
       })),
     };
   }
@@ -299,12 +307,18 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
       series: datasets.map((ds, i) => ({
         name: ds.label,
         type: 'line',
-        data: ds.data,
+        data: ds.data.map((v, idx) => showLabels && idx === ds.data.length - 1
+          ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
+          : v
+        ),
         smooth: true,
-        symbol: 'none',
+        symbol: showLabels ? 'circle' : 'none',
+        showSymbol: showLabels ? false : false,
+        symbolSize: showLabels ? 4 : 0,
         lineStyle: { width: 2 },
         areaStyle: { opacity: 0.15 },
         itemStyle: { color: COLORS[i % COLORS.length] },
+        label: { show: false },
       })),
     };
   }
@@ -322,6 +336,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
         type: 'bar',
         data: ds.data,
         itemStyle: { color: COLORS[i % COLORS.length], borderRadius: [3, 3, 0, 0] },
+        ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
       })),
     };
   }
@@ -340,6 +355,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
         stack: 'total',
         data: ds.data,
         itemStyle: { color: COLORS[i % COLORS.length] },
+        ...(showLabels ? { label: { show: true, ...labelStyle } } : {}),
       })),
     };
   }
@@ -357,6 +373,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
         type: 'bar',
         data: ds.data,
         itemStyle: { color: COLORS[i % COLORS.length], borderRadius: [0, 3, 3, 0] },
+        ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
       })),
     };
   }
@@ -423,6 +440,14 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
           symbol: isLast ? 'none' : undefined,
           lineStyle: isLast ? { width: 2 } : undefined,
           itemStyle: { color: COLORS[i % COLORS.length], ...(isLast ? {} : { borderRadius: [3, 3, 0, 0] }) },
+          ...(showLabels && !isLast ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
+          ...(showLabels && isLast ? {
+            data: ds.data.map((v, idx) => idx === ds.data.length - 1
+              ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
+              : v
+            ),
+            label: { show: false },
+          } : {}),
         };
       }),
     };
@@ -461,6 +486,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
       type: 'bar',
       data: ds.data,
       itemStyle: { color: COLORS[i % COLORS.length], borderRadius: [3, 3, 0, 0] },
+      ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
     })),
   };
 }

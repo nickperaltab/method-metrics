@@ -161,6 +161,16 @@ export async function loadConversation(id) {
   return data[0] || null;
 }
 
+export async function loadChartsByIds(ids) {
+  if (!ids || ids.length === 0) return [];
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/saved_charts?id=in.(${ids.join(',')})`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load charts failed: ${res.status}`);
+  return res.json();
+}
+
 export async function invokeAiChart(body) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',

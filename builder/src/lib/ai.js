@@ -18,6 +18,10 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
     currentChartSpec: currentChartSpec || null,
   });
 
+  if (result.type === 'text') {
+    return { type: 'text', content: result.content, suggestion: result.suggestion || null };
+  }
+
   if (result.error) {
     return { error: result.error, suggestion: result.suggestion };
   }
@@ -49,6 +53,7 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
       labels: dc.labels || resolvedMetrics.map(m => m.name),
     },
     echartsType,
+    showLabels: !!result.show_labels,
     explanation: result.explanation || '',
   };
 }
