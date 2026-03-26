@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import EChart from './EChart';
+import ChartDetails from './ChartDetails';
 
 const styles = {
   container: {
@@ -146,6 +147,9 @@ export default function ChatInterface({ messages, onSend, loading, onNewThread }
                 <div style={styles.chartWrap}>
                   <EChart option={msg.chartOption} />
                 </div>
+              )}
+              {msg.queryDetails && msg.queryDetails.length > 0 && (
+                <ChartDetails queryDetails={msg.queryDetails} />
               )}
             </div>
           );

@@ -6,6 +6,7 @@ import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
+import ChartDetails from './ChartDetails';
 import {
   castRow,
   aggregateRows,
@@ -34,6 +35,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [schemasLoaded, setSchemasLoaded] = useState(false);
   const [lastSpec, setLastSpec] = useState(null);
+  const [queryDetails, setQueryDetails] = useState([]);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   // Pre-load schemas for all primitive/foundational metrics on BQ connect
@@ -78,6 +80,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
     setAiError(null);
     setAiExplanation(null);
     setChartOption(null);
+    setQueryDetails([]);
     try {
       const result = await generateChartSpec(prompt, metrics, schemaCache);
       if (result.error) {
@@ -93,6 +96,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
 
       // Build datasets: one per metric
       const rawDatasets = [];
+      const collectedDetails = [];
 
       for (let i = 0; i < result.metrics.length; i++) {
         const metric = result.metrics[i];
@@ -147,6 +151,19 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
             computedData.push(Math.round(value * 100) / 100);
           }
           rawDatasets.push({ label, labels: computedLabels, data: computedData });
+          const depNames = metric.depends_on.map(id => {
+            const dm = metrics.find(m => m.id === id);
+            return dm ? `${dm.name} (${id})` : String(id);
+          });
+          collectedDetails.push({
+            metricName: label,
+            metricId: metric.id,
+            sql: `Derived: ${metric.formula}`,
+            dateColumn: 'N/A (computed from dependencies)',
+            labels: computedLabels,
+            data: computedData,
+            dependsOn: depNames,
+          });
         } else {
           // Use the correct date column for this specific view (may differ from AI's xField)
           const viewSchema = schemaCache[metric.view_name] || [];
@@ -156,6 +173,14 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
               metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
             );
             rawDatasets.push({ label, ...agg });
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: agg.sql,
+              dateColumn: dateCol,
+              labels: agg.labels,
+              data: agg.data,
+            });
           } catch (e) {
             // Fallback to client-side aggregation if SQL fails
             const loaded = await loadMetricData(metric);
@@ -163,6 +188,14 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
               const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
               const agg = aggregateRows(filteredRows, dateCol, yField, timeBucket);
               rawDatasets.push({ label, ...agg });
+              collectedDetails.push({
+                metricName: label,
+                metricId: metric.id,
+                sql: '(client-side fallback — server query failed)',
+                dateColumn: dateCol,
+                labels: agg.labels,
+                data: agg.data,
+              });
             }
           }
         }
@@ -203,6 +236,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
       // Build ECharts option
       const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
       setChartOption(option);
+      setQueryDetails(collectedDetails);
       setSelectedMetric(result.metrics[0]);
       setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig });
     } catch (e) {
@@ -256,6 +290,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
           <div style={styles.chartContainer}>
             <EChart option={chartOption} />
           </div>
+          <ChartDetails queryDetails={queryDetails} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
             {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}
             <button onClick={handleSave} disabled={saving} style={{

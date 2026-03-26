@@ -167,6 +167,7 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
   const output = {
     labels: result.rows.map(r => r.period),
     data: result.rows.map(r => Number(r.value) || 0),
+    sql,
   };
   aggCache[cacheKey] = output;
   return output;
