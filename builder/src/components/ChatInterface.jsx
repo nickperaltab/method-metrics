@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
+import KpiCard from './KpiCard';
 import ChartDetails from './ChartDetails';
 
 const styles = {
@@ -271,6 +272,11 @@ export default function ChatInterface({
                     </div>
                   )}
                 </>
+              )}
+              {msg.kpiData && (
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {msg.kpiData.map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
+                </div>
               )}
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
