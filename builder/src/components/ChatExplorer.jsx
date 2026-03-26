@@ -77,7 +77,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
   // Build a chart from a spec (shared by editChart, time range change, and conversation restore)
   const buildChartFromSpec = useCallback(async (spec, overrideLastNMonths) => {
-    const { metricIds, echartsType, dataConfig, showLabels } = spec;
+    const { metricIds, echartsType, dataConfig, showLabels, colors } = spec;
     const effectiveLastNMonths = overrideLastNMonths !== undefined ? overrideLastNMonths : dataConfig.lastNMonths;
     const channelFilter = dataConfig.channelFilter;
     const xField = dataConfig.xField;
@@ -174,7 +174,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       ));
     }
 
-    return buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels });
+    return buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels, colors });
   }, [metrics]);
 
   // Handle editChart query param — load saved chart and render it
@@ -474,9 +474,9 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
       );
 
-      const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels });
+      const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
 
-      const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels };
+      const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors };
       setLastSpec(newSpec);
       setCurrentTimeRange(dataConfig.lastNMonths || null);
 
