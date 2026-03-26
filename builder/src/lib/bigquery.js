@@ -90,6 +90,13 @@ export async function queryBq(sql) {
   return { rows, schema: fields };
 }
 
+export const ATT_COL_MAP = {
+  SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
+  Social: 'Att_Social', Email: 'Att_Email', Referral: 'Att_Referral_Link',
+  Direct: 'Att_Direct', Partners: 'Att_Partners', Content: 'Att_Content',
+  Remarketing: 'Att_Remarketing', Other: 'Att_Other', None: 'Att_None',
+};
+
 const viewCache = {};
 
 export async function fetchViewData(viewName) {
@@ -128,6 +135,37 @@ export function clearAllCaches() {
   clearAggCache();
 }
 
+export async function fetchYoYData(viewName, dateCol, yField, channelFilter) {
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+  const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
+
+  const wheres = [];
+  if (channelFilter) {
+    const col = ATT_COL_MAP[channelFilter];
+    if (col) wheres.push(`${col} > 0`);
+  }
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+
+  const sql = `SELECT FORMAT_DATE('%Y', ${dateCol}) AS year, FORMAT_DATE('%m', ${dateCol}) AS month_num, FORMAT_DATE('%b', ${dateCol}) AS month_name, ${valueExpr} AS value FROM ${table} ${whereClause} GROUP BY 1, 2, 3 ORDER BY 1, 2`;
+
+  const result = await queryBq(sql);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const years = [...new Set(result.rows.map(r => r.year))].sort();
+  const seriesMap = {};
+  for (const year of years) {
+    seriesMap[year] = new Array(12).fill(0);
+  }
+  for (const row of result.rows) {
+    const monthIdx = parseInt(row.month_num, 10) - 1;
+    if (seriesMap[row.year]) {
+      seriesMap[row.year][monthIdx] = Number(row.value) || 0;
+    }
+  }
+
+  return { years, months: MONTHS, seriesMap, sql };
+}
+
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
   const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
@@ -153,12 +191,6 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
 
   // Channel filter
   if (channelFilter) {
-    const ATT_COL_MAP = {
-      SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
-      Social: 'Att_Social', Email: 'Att_Email', Referral: 'Att_Referral_Link',
-      Direct: 'Att_Direct', Partners: 'Att_Partners', Content: 'Att_Content',
-      Remarketing: 'Att_Remarketing', Other: 'Att_Other', None: 'Att_None',
-    };
     const col = ATT_COL_MAP[channelFilter];
     if (col) wheres.push(`${col} > 0`);
   }
@@ -180,4 +212,42 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
   };
   aggCache[cacheKey] = output;
   return output;
+}
+
+/**
+ * Fetch KPI data: current month value + prior month value with delta.
+ *
+ * @param {string} viewName - BQ view name
+ * @param {string} dateCol - Date column name
+ * @param {string} yField - Column for value, or 'COUNT'
+ * @param {string|null} channelFilter - Channel name or null
+ * @returns {{ current: number, prior: number, delta: number, deltaPercent: number, sql: string }}
+ */
+export async function fetchKpiData(viewName, dateCol, yField, channelFilter) {
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+  const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
+
+  const wheres = [`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)`];
+  if (channelFilter) {
+    const col = ATT_COL_MAP[channelFilter];
+    if (col) wheres.push(`${col} > 0`);
+  }
+
+  const sql = `SELECT
+    CASE WHEN ${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH) THEN 'current'
+         WHEN ${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)
+              AND ${dateCol} < DATE_TRUNC(CURRENT_DATE(), MONTH) THEN 'prior'
+    END AS period,
+    ${valueExpr} AS value
+  FROM ${table}
+  WHERE ${wheres.join(' AND ')}
+  GROUP BY 1`;
+
+  const result = await queryBq(sql);
+  const current = Number(result.rows.find(r => r.period === 'current')?.value) || 0;
+  const prior = Number(result.rows.find(r => r.period === 'prior')?.value) || 0;
+  const delta = current - prior;
+  const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+
+  return { current, prior, delta, deltaPercent, sql };
 }

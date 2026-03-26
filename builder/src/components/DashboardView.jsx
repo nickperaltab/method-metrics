@@ -5,8 +5,9 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
+import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
-import { fetchAggregatedData, clearAllCaches } from '../lib/bigquery';
+import { fetchAggregatedData, fetchKpiData, fetchYoYData, clearAllCaches } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -88,6 +89,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [showChatModal, setShowChatModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
+  const [kpiDataMap, setKpiDataMap] = useState({});
   const [chartLoading, setChartLoading] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
@@ -162,6 +164,32 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         const channelFilter = dataConfig.channelFilter;
         const xField = dataConfig.xField;
         const rawDatasets = [];
+
+        // Year-over-Year branch
+        if (echartsType === 'yoy') {
+          const yoyDatasets = [];
+          for (let i = 0; i < metricIds.length; i++) {
+            const metricId = metricIds[i];
+            const metric = metrics.find(m => m.id === metricId);
+            if (!metric || !metric.view_name) continue;
+            const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+            const viewSchema = schemaCache[metric.view_name] || [];
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
+              for (const year of yoyResult.years) {
+                const lbl = metricIds.length === 1 ? year : `${metric.name} ${year}`;
+                yoyDatasets.push({ label: lbl, data: yoyResult.seriesMap[year] });
+              }
+            } catch { /* skip */ }
+          }
+          if (yoyDatasets.length > 0) {
+            const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig);
+            setChartOptions(prev => ({ ...prev, [chartId]: option }));
+          }
+          return;
+        }
 
         for (let i = 0; i < metricIds.length; i++) {
           const metricId = metricIds[i];
