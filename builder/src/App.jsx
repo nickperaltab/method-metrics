@@ -1,6 +1,7 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import TopBar from './components/TopBar';
+import Home from './components/Home';
 import Explorer from './components/Explorer';
 import DashboardList from './components/DashboardList';
 import DashboardView from './components/DashboardView';
@@ -17,7 +18,7 @@ export default function App() {
       <div style={{ background: '#06080a', color: '#c8cdd3', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
         <TopBar connected={connected} userEmail={userEmail} onConnect={connect} />
         <Routes>
-          <Route path="/" element={<Navigate to="/explorer" replace />} />
+          <Route path="/" element={<Home />} />
           <Route
             path="/explorer"
             element={

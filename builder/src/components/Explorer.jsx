@@ -4,8 +4,9 @@ import EChart from './EChart';
 import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
-import { saveChart } from '../lib/supabase';
+import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
+import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
 import {
   castRow,
@@ -35,6 +36,8 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
   const [schemasLoaded, setSchemasLoaded] = useState(false);
   const [lastSpec, setLastSpec] = useState(null);
   const [queryDetails, setQueryDetails] = useState([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [dashboards, setDashboards] = useState([]);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   // Pre-load schemas for all primitive/foundational metrics on BQ connect
@@ -63,6 +66,11 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
 
     loadSchemas();
   }, [bqConnected, metrics, schemasLoaded]);
+
+  // Load dashboards for save modal
+  useEffect(() => {
+    fetchDashboards().then(setDashboards).catch(() => {});
+  }, []);
 
   const loadMetricData = useCallback(async (metric) => {
     if (!metric.view_name) return null;
@@ -245,19 +253,38 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
     }
   }, [metrics, loadMetricData]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async ({ name, dashboardId, newDashboardName }) => {
     if (!selectedMetric || !lastSpec) return;
-    const name = window.prompt('Name this chart:');
-    if (!name) return;
     setSaving(true);
     setSaveSuccess(false);
+    setShowSaveModal(false);
     try {
-      await saveChart({
+      const saved = await saveChart({
         name,
         createdBy: userEmail || 'anonymous',
         metricIds: lastSpec.metricIds,
         gwSpec: { ...lastSpec },
       });
+
+      // If user selected a dashboard or created a new one, add chart to it
+      let targetDashboardId = dashboardId;
+      if (newDashboardName) {
+        const created = await createDashboard({ name: newDashboardName, createdBy: userEmail || 'anonymous' });
+        if (created && created.length > 0) {
+          targetDashboardId = created[0].id;
+          setDashboards(prev => [created[0], ...prev]);
+        }
+      }
+      if (targetDashboardId && saved && saved.length > 0) {
+        const chartId = String(saved[0].id);
+        const db = dashboards.find(d => String(d.id) === String(targetDashboardId));
+        const existingLayout = db?.layout || [];
+        const maxY = existingLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+        await updateDashboard(targetDashboardId, {
+          layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
+        });
+      }
+
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
@@ -265,7 +292,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
     } finally {
       setSaving(false);
     }
-  }, [selectedMetric, lastSpec, userEmail]);
+  }, [selectedMetric, lastSpec, userEmail, dashboards]);
 
   const loading = dataLoading || aiLoading;
   const hasChart = chartOption && !loading;
@@ -289,10 +316,10 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
           <div style={styles.chartContainer}>
             <EChart option={chartOption} />
           </div>
-          <ChartDetails queryDetails={queryDetails} />
+          <ChartDetails queryDetails={queryDetails} metrics={metrics} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
             {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}
-            <button onClick={handleSave} disabled={saving} style={{
+            <button onClick={() => setShowSaveModal(true)} disabled={saving} style={{
               background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
               padding: '8px 20px', borderRadius: 6, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
@@ -302,6 +329,13 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
             </button>
           </div>
         </>
+      )}
+      {showSaveModal && (
+        <SaveChartModal
+          onSave={handleSave}
+          onClose={() => setShowSaveModal(false)}
+          dashboards={dashboards}
+        />
       )}
     </div>
   );

@@ -283,6 +283,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
       onSend={handleSend}
       loading={loading}
       onNewThread={handleNewThread}
+      metrics={metrics}
     />
   );
 }

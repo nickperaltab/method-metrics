@@ -348,14 +348,12 @@ function getDependents(id) {
 
 // --- Filters & Sort ---
 function applyFilters() {
-  const stage = document.getElementById('f-stage')?.value || '';
   const status = document.getElementById('f-status')?.value || '';
   const assigned = document.getElementById('f-assigned')?.value || '';
   const type = document.getElementById('f-type')?.value || '';
   const search = (document.getElementById('f-search')?.value || '').toLowerCase();
 
   filteredMetrics = allMetrics.filter(m => {
-    if (stage && m.stage !== stage) return false;
     if (status && m.status !== status) return false;
     if (assigned === '__unassigned' && m.assigned_to) return false;
     if (assigned && assigned !== '__unassigned' && m.assigned_to !== assigned) return false;
@@ -389,7 +387,6 @@ function setSort(col) {
 
 // --- Render ---
 function renderApp() {
-  const stages = [...new Set(allMetrics.map(m => m.stage))].sort();
   const statuses = [...new Set(allMetrics.map(m => m.status))].sort();
 
   const counts = {
@@ -420,13 +417,6 @@ function renderApp() {
     </div>
 
     <div class="filters">
-      <div class="filter-group">
-        <span class="filter-label">Stage</span>
-        <select id="f-stage" onchange="applyFilters()">
-          <option value="">All</option>
-          ${stages.map(s => `<option value="${s}">${s}</option>`).join('')}
-        </select>
-      </div>
       <div class="filter-group">
         <span class="filter-label">Status</span>
         <select id="f-status" onchange="applyFilters()">
@@ -494,7 +484,7 @@ function renderThead() {
     { key: 'id', label: 'ID', width: '50px' },
     { key: 'name', label: 'Name' },
     { key: 'type', label: 'Type', width: '100px' },
-    { key: 'stage', label: 'Stage', width: '100px' },
+    { key: 'description', label: 'Description' },
     { key: 'source', label: 'Source' },
     { key: 'priority', label: 'Priority', width: '90px' },
     { key: 'assigned_to', label: 'Assigned', width: '100px' },
@@ -576,7 +566,7 @@ function renderMetricRow(m) {
         ).join('')}
       </select>
     </td>
-    <td>${m.stage || '—'}</td>
+    <td><input class="editable-text" value="${esc(m.description || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'description',this.value,this)" style="color:var(--text-dim);font-size:11px"></td>
     <td><input class="editable-text" value="${esc(m.source || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'source',this.value,this)"></td>
     <td>
       <select onclick="event.stopPropagation()" onchange="saveField(${m.id},'priority',this.value,this)">
@@ -1156,7 +1146,6 @@ async function saveField(id, field, value, el) {
 }
 
 function resetFilters() {
-  document.getElementById('f-stage').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-assigned').value = '';
   document.getElementById('f-type').value = '';
@@ -1363,13 +1352,6 @@ function renderWizard() {
         <div class="wiz-step-label"><span class="wiz-step-num">1</span> Define</div>
         <div class="wiz-row">
           <div class="wiz-field"><label>Name</label><input class="wiz-input" id="wiz-name" placeholder="e.g. US Trials" value="${esc(wizardState.name)}" oninput="wizardState.name=this.value"></div>
-          <div class="wiz-field"><label>Stage</label>
-            <select class="wiz-input" id="wiz-stage" onchange="wizardState.stage=this.value">
-              ${['trials','sync','conversion','cancellation','revenue','kpi','financial','forecast','attribution','underlying'].map(s =>
-                `<option value="${s}"${wizardState.stage===s?' selected':''}>${s}</option>`
-              ).join('')}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -1753,7 +1735,20 @@ async function createMetricFromWizard() {
 
 // --- Init ---
 initBqAuth();
-loadMetrics().then(renderApp).catch(e => {
+loadMetrics().then(() => {
+  renderApp();
+  // Support direct linking: tracker.html?expand=54
+  const urlParams = new URLSearchParams(window.location.search);
+  const expandParam = urlParams.get('expand');
+  if (expandParam) {
+    const metricId = parseInt(expandParam, 10);
+    if (metricId) {
+      expandedId = metricId;
+      renderTable();
+      setTimeout(() => scrollToMetric(metricId), 300);
+    }
+  }
+}).catch(e => {
   document.getElementById('app').innerHTML = `<div class="loading"><div style="color:var(--red)">Failed to load: ${e.message}</div></div>`;
 });
 </script>
