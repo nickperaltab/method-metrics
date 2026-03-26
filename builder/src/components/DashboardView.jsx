@@ -414,9 +414,26 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
         <div style={styles.modal} onClick={() => setShowAddModal(false)}>
           <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <div style={styles.modalTitle}>Add Chart</div>
+            <div style={{ marginBottom: 16 }}>
+              <button
+                style={{
+                  ...styles.btn,
+                  width: '100%',
+                  padding: '10px 16px',
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}
+                onClick={() => {
+                  setShowAddModal(false);
+                  navigate(`/chat?addToDashboard=${id}`);
+                }}
+              >
+                Create New Chart
+              </button>
+            </div>
             {availableCharts.length === 0 ? (
               <div style={{ ...styles.empty, padding: 20 }}>
-                No charts available. Save charts from the Explorer first.
+                No saved charts available. Create a new chart or save charts from the Explorer first.
               </div>
             ) : (
               availableCharts.map(chart => (
