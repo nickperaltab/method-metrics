@@ -5,6 +5,9 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import { fetchDashboard, updateDashboard, loadCharts } from '../lib/supabase';
+import { fetchAggregatedData } from '../lib/bigquery';
+import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
+import schemaCache from '../lib/schemaCache';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1400, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
@@ -69,7 +72,7 @@ const styles = {
 const ROW_HEIGHT = 80;
 const COLS = 12;
 
-export default function DashboardView({ userEmail }) {
+export default function DashboardView({ userEmail, metrics = [], bqConnected }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const containerRef = useRef(null);
@@ -83,6 +86,8 @@ export default function DashboardView({ userEmail }) {
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1352);
+  const [chartOptions, setChartOptions] = useState({});
+  const [chartLoading, setChartLoading] = useState({});
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -133,6 +138,136 @@ export default function DashboardView({ userEmail }) {
     }
     load();
   }, [id, userEmail]);
+
+  // Fetch live BQ data for each chart in the layout
+  useEffect(() => {
+    if (!bqConnected || !metrics.length || !gridLayout.length || !Object.keys(chartMap).length) return;
+
+    async function buildChartOption(chartId) {
+      const chart = chartMap[chartId];
+      if (!chart?.gw_spec) return;
+      const { metricIds, echartsType, dataConfig } = chart.gw_spec;
+      if (!metricIds || !echartsType || !dataConfig) return;
+
+      setChartLoading(prev => ({ ...prev, [chartId]: true }));
+      try {
+        const timeBucket = dataConfig.timeBucket;
+        const channelFilter = dataConfig.channelFilter;
+        const xField = dataConfig.xField;
+        const rawDatasets = [];
+
+        for (let i = 0; i < metricIds.length; i++) {
+          const metricId = metricIds[i];
+          const metric = metrics.find(m => m.id === metricId);
+          if (!metric) continue;
+
+          const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+          const label = dataConfig.labels?.[i] || metric.name;
+
+          if (metric.formula && metric.depends_on && !metric.view_name) {
+            // Derived metric — aggregate each dependency, then apply formula
+            const depAggregated = {};
+            for (const depId of metric.depends_on) {
+              const depMetric = metrics.find(dm => dm.id === depId);
+              if (depMetric && depMetric.view_name) {
+                const depSchema = schemaCache[depMetric.view_name] || [];
+                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+                try {
+                  const depAgg = await fetchAggregatedData(
+                    depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, dataConfig.lastNMonths
+                  );
+                  const counts = {};
+                  depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
+                  depAggregated[depId] = counts;
+                } catch {
+                  depAggregated[depId] = {};
+                }
+              }
+            }
+            const allDepLabels = new Set();
+            for (const counts of Object.values(depAggregated)) {
+              Object.keys(counts).forEach(k => allDepLabels.add(k));
+            }
+            const sortedDepLabels = [...allDepLabels].sort();
+            const computedLabels = [];
+            const computedData = [];
+            for (const lbl of sortedDepLabels) {
+              let formula = metric.formula;
+              for (const depId of metric.depends_on) {
+                const val = depAggregated[depId]?.[lbl] || 0;
+                formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+              }
+              formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+                const numA = Number(a) || 0;
+                const numB = Number(b) || 0;
+                return String(numB === 0 ? 0 : numA / numB);
+              });
+              let value;
+              try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
+              if (!isFinite(value)) value = 0;
+              computedLabels.push(lbl);
+              computedData.push(Math.round(value * 100) / 100);
+            }
+            rawDatasets.push({ label, labels: computedLabels, data: computedData });
+          } else if (metric.view_name) {
+            // Primitive metric — fetch aggregated data from BQ
+            const viewSchema = schemaCache[metric.view_name] || [];
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const agg = await fetchAggregatedData(
+                metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+              );
+              rawDatasets.push({ label, ...agg });
+            } catch {
+              // skip failed metrics
+            }
+          }
+        }
+
+        if (rawDatasets.length === 0) return;
+
+        // Merge all labels (union) and align datasets
+        const allLabelsSet = new Set();
+        for (const ds of rawDatasets) {
+          ds.labels.forEach(l => allLabelsSet.add(l));
+        }
+        const allLabels = [...allLabelsSet].sort();
+
+        const alignedDatasets = rawDatasets.map(ds => {
+          const labelMap = {};
+          ds.labels.forEach((l, idx) => { labelMap[l] = ds.data[idx]; });
+          return {
+            label: ds.label,
+            data: allLabels.map(l => labelMap[l] || 0),
+          };
+        });
+
+        // Apply lastNMonths for derived metrics
+        const hasDerived = metricIds.some(mid => {
+          const m = metrics.find(mm => mm.id === mid);
+          return m && m.formula && m.depends_on && !m.view_name;
+        });
+        let finalLabels = allLabels;
+        let finalDatasets = alignedDatasets;
+        if (hasDerived && dataConfig.lastNMonths) {
+          ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
+            allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
+          ));
+        }
+
+        const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+        setChartOptions(prev => ({ ...prev, [chartId]: option }));
+      } catch {
+        // leave chartOptions[chartId] unset
+      } finally {
+        setChartLoading(prev => ({ ...prev, [chartId]: false }));
+      }
+    }
+
+    for (const item of gridLayout) {
+      buildChartOption(item.i);
+    }
+  }, [bqConnected, metrics, gridLayout, chartMap]);
 
   const handleLayoutChange = useCallback((newLayout) => {
     if (!editing) return;
@@ -257,11 +392,15 @@ export default function DashboardView({ userEmail }) {
                   )}
                 </div>
                 <div style={styles.chartBody}>
-                  {chart?.gw_spec?.echartsOption ? (
-                    <EChart option={chart.gw_spec.echartsOption} />
+                  {chartLoading[item.i] ? (
+                    <div style={{ ...styles.empty, padding: 20, fontSize: 11 }}>
+                      Loading chart data...
+                    </div>
+                  ) : chartOptions[item.i] ? (
+                    <EChart option={chartOptions[item.i]} />
                   ) : (
                     <div style={{ ...styles.empty, padding: 20, fontSize: 11 }}>
-                      No chart data available
+                      {bqConnected ? 'No chart data available' : 'Connect BigQuery to load charts'}
                     </div>
                   )}
                 </div>
