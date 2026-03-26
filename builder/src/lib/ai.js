@@ -54,6 +54,7 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
     },
     echartsType,
     showLabels: !!result.show_labels,
+    colors: result.colors || null,
     explanation: result.explanation || '',
   };
 }
@@ -126,6 +127,7 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
     },
     echartsType,
     showLabels: !!result.show_labels,
+    colors: result.colors || null,
     explanation: result.explanation || '',
   };
 }

@@ -88,6 +88,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [chartLoading, setChartLoading] = useState({});
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editChartId, setEditChartId] = useState(null);
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     async function load() {
       setLoading(true);
       setError(null);
+      setChartOptions({});
       try {
         const dbVal = await fetchDashboard(id);
 
@@ -138,7 +141,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       }
     }
     load();
-  }, [id, userEmail]);
+  }, [id, userEmail, refreshKey]);
 
   // Fetch live BQ data for each chart in the layout
   useEffect(() => {
@@ -287,6 +290,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       updateDashboard(id, { layout: updated }).catch(() => {});
       return updated;
     });
+    setRefreshKey(prev => prev + 1);
   }, [id]);
 
   const handleAddChart = useCallback((chart) => {
@@ -307,12 +311,23 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
   const handleChatChartSaved = useCallback((chartId) => {
     const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
-    setGridLayout(prev => [
-      ...prev,
-      { i: chartId, x: 0, y: maxY, w: 6, h: 4 },
-    ]);
+    // Only add to layout if it's a new chart (not already in layout)
+    if (!gridLayout.some(item => item.i === chartId)) {
+      setGridLayout(prev => [
+        ...prev,
+        { i: chartId, x: 0, y: maxY, w: 6, h: 4 },
+      ]);
+    }
     setShowChatModal(false);
+    setEditChartId(null);
+    setRefreshKey(prev => prev + 1);
   }, [gridLayout]);
+
+  const handleModalClose = useCallback(() => {
+    setShowChatModal(false);
+    setEditChartId(null);
+    setRefreshKey(prev => prev + 1);
+  }, []);
 
   if (loading) {
     return <div style={styles.layout}><div style={styles.empty}>Loading dashboard...</div></div>;
@@ -381,7 +396,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
                       style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
-                      onClick={() => navigate(`/chat?editChart=${item.i}`)}
+                      onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
                       title="Edit chart"
                     >
                       &#9998;
@@ -458,12 +473,13 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
       {showChatModal && (
         <ChatModal
-          onClose={() => setShowChatModal(false)}
+          onClose={handleModalClose}
           onChartSaved={handleChatChartSaved}
           metrics={metrics}
           bqConnected={bqConnected}
           userEmail={userEmail}
           userAvatar={userAvatar}
+          editChartId={editChartId}
         />
       )}
     </div>

@@ -22,6 +22,7 @@ Return ONLY valid JSON in this exact format:
   },
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
+  "colors": ["#hex1", "#hex2", ...] or null,
   "explanation": "<one sentence>"
 }
 
@@ -46,6 +47,7 @@ Rules:
 - channel_filter: one of "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". null = no filter.
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
+- colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
 
 IMPORTANT — Attribution channels:
 - There is NO "Channel" column in any view. Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.
@@ -152,15 +154,35 @@ Deno.serve(async (req) => {
   // Strip markdown code fences if present
   text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
-  try {
-    const parsed = JSON.parse(text);
-    return new Response(JSON.stringify(parsed), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
-  } catch {
-    return new Response(JSON.stringify({ error: 'Failed to parse AI response', raw: text }), {
-      status: 500,
+  if (!text) {
+    return new Response(JSON.stringify({ type: "text", content: "No response generated. Try rephrasing." }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // Try to extract JSON object with a targeted regex
+    const jsonMatch = text.match(/\{[\s\S]*?\}(?=[^}]*$)/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        // still failed
+      }
+    }
+  }
+
+  if (parsed) {
+    return new Response(JSON.stringify(parsed), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  console.error('JSON parse failed:', text);
+  return new Response(JSON.stringify({ type: "text", content: text }), {
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
 });

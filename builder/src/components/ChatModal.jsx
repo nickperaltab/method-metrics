@@ -49,11 +49,11 @@ const styles = {
   },
 };
 
-export default function ChatModal({ onClose, onChartSaved, metrics, bqConnected, userEmail, userAvatar }) {
+export default function ChatModal({ onClose, onChartSaved, metrics, bqConnected, userEmail, userAvatar, editChartId }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.header}>
-        <span style={styles.title}>Build a New Chart</span>
+        <span style={styles.title}>{editChartId ? 'Edit Chart' : 'Build a New Chart'}</span>
         <button style={styles.closeBtn} onClick={onClose} title="Close">&#10005;</button>
       </div>
       <div style={styles.body}>
@@ -64,6 +64,7 @@ export default function ChatModal({ onClose, onChartSaved, metrics, bqConnected,
           userAvatar={userAvatar}
           modalMode
           onChartSaved={onChartSaved}
+          editChartId={editChartId}
         />
       </div>
     </div>
