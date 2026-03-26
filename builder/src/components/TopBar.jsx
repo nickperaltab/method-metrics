@@ -22,7 +22,7 @@ export default function TopBar({ connected, userEmail, onConnect }) {
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <a href="../index.html" style={{ ...styles.logo, textDecoration: 'none' }}>Method</a>
+        <a href="/method-metrics/" style={{ ...styles.logo, textDecoration: 'none' }}>Method</a>
         <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
         <a href="../tracker.html" style={styles.navLink}>Metrics</a>
