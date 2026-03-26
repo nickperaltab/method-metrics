@@ -46,6 +46,48 @@ export async function loadCharts(userEmail) {
   return res.json();
 }
 
+export async function fetchDashboards() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/dashboards?order=updated_at.desc`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load dashboards failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchDashboard(id) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${id}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load dashboard failed: ${res.status}`);
+  const data = await res.json();
+  return data[0] || null;
+}
+
+export async function createDashboard({ name, createdBy, layout }) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/dashboards`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ name, created_by: createdBy, layout: layout || [] }),
+  });
+  if (!res.ok) throw new Error(`Create dashboard failed: ${res.status}`);
+  return res.json();
+}
+
+export async function updateDashboard(id, updates) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${id}`,
+    {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ ...updates, updated_at: new Date().toISOString() }),
+    }
+  );
+  if (!res.ok) throw new Error(`Update dashboard failed: ${res.status}`);
+  return res.json();
+}
+
 export async function invokeAiChart(body) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',
