@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import EChart from './EChart';
 import ChartDetails from './ChartDetails';
+import ChartControls from './ChartControls';
 
 const styles = {
   container: {
@@ -14,6 +15,7 @@ const styles = {
     justifyContent: 'flex-end',
     padding: '8px 24px',
     borderBottom: '1px solid #1a1e24',
+    gap: 8,
   },
   newThreadBtn: {
     background: '#0c0f12',
@@ -104,15 +106,64 @@ const styles = {
     fontSize: 12,
     padding: '10px 16px',
   },
+  recentBtnWrap: {
+    position: 'relative',
+  },
+  dropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: 4,
+    background: '#0c0f12',
+    border: '1px solid #1a1e24',
+    borderRadius: 8,
+    width: 280,
+    maxHeight: 260,
+    overflowY: 'auto',
+    zIndex: 100,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+  },
+  dropdownItem: {
+    padding: '10px 14px',
+    cursor: 'pointer',
+    borderBottom: '1px solid #1a1e24',
+  },
+  dropdownTitle: {
+    fontSize: 12,
+    color: '#edf0f3',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  dropdownDate: {
+    fontSize: 10,
+    color: '#5a6370',
+    fontFamily: "'JetBrains Mono', monospace",
+    marginTop: 2,
+  },
 };
 
-export default function ChatInterface({ messages, onSend, loading, onNewThread, metrics, onSaveChart }) {
+export default function ChatInterface({
+  messages, onSend, loading, onNewThread, metrics, onSaveChart,
+  currentTimeRange, onTimeRangeChange,
+  recentConversations, onLoadConversation,
+}) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const [showRecent, setShowRecent] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Find index of the last assistant message with a chart
+  const lastChartIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant' && messages[i].chartOption) return i;
+    }
+    return -1;
+  })();
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -125,6 +176,37 @@ export default function ChatInterface({ messages, onSend, loading, onNewThread, 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
+        {recentConversations && recentConversations.length > 0 && (
+          <div style={styles.recentBtnWrap}>
+            <button
+              style={styles.newThreadBtn}
+              onClick={() => setShowRecent(!showRecent)}
+            >
+              Recent
+            </button>
+            {showRecent && (
+              <div style={styles.dropdown}>
+                {recentConversations.slice(0, 5).map(conv => (
+                  <div
+                    key={conv.id}
+                    style={styles.dropdownItem}
+                    onClick={() => {
+                      setShowRecent(false);
+                      onLoadConversation(conv.id);
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#111518'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={styles.dropdownTitle}>{conv.title || 'Untitled'}</div>
+                    <div style={styles.dropdownDate}>
+                      {conv.updated_at ? new Date(conv.updated_at).toLocaleDateString() : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <button style={styles.newThreadBtn} onClick={onNewThread}>
           New Thread
         </button>
@@ -140,6 +222,7 @@ export default function ChatInterface({ messages, onSend, loading, onNewThread, 
           if (msg.role === 'user') {
             return <div key={i} style={styles.userMsg}>{msg.content}</div>;
           }
+          const isLatestChart = i === lastChartIndex;
           return (
             <div key={i} style={styles.assistantMsg}>
               {msg.content && <div style={styles.assistantText}>{msg.content}</div>}
@@ -148,6 +231,12 @@ export default function ChatInterface({ messages, onSend, loading, onNewThread, 
                   <div style={styles.chartWrap}>
                     <EChart option={msg.chartOption} />
                   </div>
+                  {isLatestChart && onTimeRangeChange && (
+                    <ChartControls
+                      selectedMonths={currentTimeRange}
+                      onTimeRangeChange={onTimeRangeChange}
+                    />
+                  )}
                   {onSaveChart && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <button

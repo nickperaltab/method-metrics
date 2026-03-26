@@ -5,7 +5,7 @@ import SaveChartModal from './SaveChartModal';
 import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
-import { saveConversation, saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
+import { saveConversation, saveChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
@@ -21,6 +21,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const addToDashboardId = searchParams.get('addToDashboard');
+  const editChartId = searchParams.get('editChart');
   const [messages, setMessages] = useState([]);
   const [conversationId, setConversationId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveMessageIndex, setSaveMessageIndex] = useState(null);
   const [dashboards, setDashboards] = useState([]);
+  const [currentTimeRange, setCurrentTimeRange] = useState(null);
+  const [recentConversations, setRecentConversations] = useState([]);
   const { loadView } = useBqData();
 
   // Pre-load schemas (same pattern as Explorer)
@@ -63,6 +66,177 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   useEffect(() => {
     fetchDashboards().then(setDashboards).catch(() => {});
   }, []);
+
+  // Load recent conversations
+  useEffect(() => {
+    if (userEmail) {
+      loadConversations(userEmail).then(setRecentConversations).catch(() => {});
+    }
+  }, [userEmail]);
+
+  // Build a chart from a spec (shared by editChart, time range change, and conversation restore)
+  const buildChartFromSpec = useCallback(async (spec, overrideLastNMonths) => {
+    const { metricIds, echartsType, dataConfig } = spec;
+    const effectiveLastNMonths = overrideLastNMonths !== undefined ? overrideLastNMonths : dataConfig.lastNMonths;
+    const channelFilter = dataConfig.channelFilter;
+    const xField = dataConfig.xField;
+    const timeBucket = dataConfig.timeBucket;
+    const rawDatasets = [];
+
+    for (let i = 0; i < metricIds.length; i++) {
+      const metricId = metricIds[i];
+      const metric = metrics.find(m => m.id === metricId);
+      if (!metric) continue;
+
+      const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+      const label = dataConfig.labels?.[i] || metric.name;
+
+      if (metric.formula && metric.depends_on && !metric.view_name) {
+        const depAggregated = {};
+        for (const depId of metric.depends_on) {
+          const depMetric = metrics.find(dm => dm.id === depId);
+          if (depMetric && depMetric.view_name) {
+            const depSchema = schemaCache[depMetric.view_name] || [];
+            const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const depAgg = await fetchAggregatedData(
+                depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, effectiveLastNMonths
+              );
+              const counts = {};
+              depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
+              depAggregated[depId] = counts;
+            } catch {
+              depAggregated[depId] = {};
+            }
+          }
+        }
+        const allDepLabels = new Set();
+        for (const counts of Object.values(depAggregated)) {
+          Object.keys(counts).forEach(k => allDepLabels.add(k));
+        }
+        const sortedDepLabels = [...allDepLabels].sort();
+        const computedLabels = [];
+        const computedData = [];
+        for (const lbl of sortedDepLabels) {
+          let formula = metric.formula;
+          for (const depId of metric.depends_on) {
+            const val = depAggregated[depId]?.[lbl] || 0;
+            formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+          }
+          formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+            const numA = Number(a) || 0;
+            const numB = Number(b) || 0;
+            return String(numB === 0 ? 0 : numA / numB);
+          });
+          let value;
+          try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
+          if (!isFinite(value)) value = 0;
+          computedLabels.push(lbl);
+          computedData.push(Math.round(value * 100) / 100);
+        }
+        rawDatasets.push({ label, labels: computedLabels, data: computedData });
+      } else if (metric.view_name) {
+        const viewSchema = schemaCache[metric.view_name] || [];
+        const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+        try {
+          const agg = await fetchAggregatedData(
+            metric.view_name, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
+          );
+          rawDatasets.push({ label, ...agg });
+        } catch { /* skip */ }
+      }
+    }
+
+    if (rawDatasets.length === 0) return null;
+
+    const allLabelsSet = new Set();
+    for (const ds of rawDatasets) {
+      ds.labels.forEach(l => allLabelsSet.add(l));
+    }
+    const allLabels = [...allLabelsSet].sort();
+
+    const alignedDatasets = rawDatasets.map(ds => {
+      const labelMap = {};
+      ds.labels.forEach((l, idx) => { labelMap[l] = ds.data[idx]; });
+      return { label: ds.label, data: allLabels.map(l => labelMap[l] || 0) };
+    });
+
+    const hasDerived = metricIds.some(mid => {
+      const m = metrics.find(mm => mm.id === mid);
+      return m && m.formula && m.depends_on && !m.view_name;
+    });
+    let finalLabels = allLabels;
+    let finalDatasets = alignedDatasets;
+    if (hasDerived && effectiveLastNMonths) {
+      ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
+        allLabels, alignedDatasets, effectiveLastNMonths, timeBucket
+      ));
+    }
+
+    return buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+  }, [metrics]);
+
+  // Handle editChart query param — load saved chart and render it
+  useEffect(() => {
+    if (!editChartId || !bqConnected || !metrics.length || !schemasLoaded) return;
+
+    async function loadEditChart() {
+      setLoading(true);
+      try {
+        const chart = await loadChart(editChartId);
+        if (!chart || !chart.gw_spec) {
+          setMessages([{ role: 'assistant', content: 'Could not load chart for editing.' }]);
+          setLoading(false);
+          return;
+        }
+
+        const { metricIds, echartsType, dataConfig } = chart.gw_spec;
+        if (!metricIds || !echartsType || !dataConfig) {
+          setMessages([{ role: 'assistant', content: 'Chart spec is incomplete.' }]);
+          setLoading(false);
+          return;
+        }
+
+        const spec = { metricIds, echartsType, dataConfig };
+        const chartOption = await buildChartFromSpec(spec);
+
+        setLastSpec(spec);
+        setCurrentTimeRange(dataConfig.lastNMonths || null);
+        setMessages([
+          { role: 'assistant', content: `Editing "${chart.name}". You can modify this chart by describing changes.`, chartOption },
+        ]);
+      } catch (e) {
+        setMessages([{ role: 'assistant', content: `Error loading chart: ${e.message}` }]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadEditChart();
+  }, [editChartId, bqConnected, metrics, schemasLoaded, buildChartFromSpec]);
+
+  const handleTimeRangeChange = useCallback(async (months) => {
+    if (!lastSpec) return;
+    setCurrentTimeRange(months);
+    setLoading(true);
+    try {
+      const chartOption = await buildChartFromSpec(lastSpec, months);
+      if (chartOption) {
+        setMessages(prev => {
+          const updated = [...prev];
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'assistant' && updated[i].chartOption) {
+              updated[i] = { ...updated[i], chartOption };
+              break;
+            }
+          }
+          return updated;
+        });
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, [lastSpec, buildChartFromSpec]);
 
   const handleSaveChart = useCallback((messageIndex) => {
     setSaveMessageIndex(messageIndex);
@@ -279,6 +453,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
       const newSpec = { metricIds: result.metricIds, echartsType, dataConfig };
       setLastSpec(newSpec);
+      setCurrentTimeRange(dataConfig.lastNMonths || null);
 
       const assistantMsg = {
         role: 'assistant',
@@ -302,6 +477,10 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         if (!conversationId && saved && saved.length > 0) {
           setConversationId(saved[0].id);
         }
+        // Refresh recent conversations
+        if (userEmail) {
+          loadConversations(userEmail).then(setRecentConversations).catch(() => {});
+        }
       } catch { /* non-critical */ }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e.message}` }]);
@@ -315,7 +494,42 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setConversationId(null);
     setLastSpec(null);
     setError(null);
+    setCurrentTimeRange(null);
   }, []);
+
+  const handleLoadConversation = useCallback(async (convId) => {
+    setLoading(true);
+    try {
+      const conv = await loadConversation(convId);
+      if (!conv) {
+        setLoading(false);
+        return;
+      }
+      setConversationId(conv.id);
+      setMessages(conv.messages || []);
+      if (conv.current_chart_spec) {
+        setLastSpec(conv.current_chart_spec);
+        setCurrentTimeRange(conv.current_chart_spec.dataConfig?.lastNMonths || null);
+
+        // Re-build the chart for the last assistant message
+        const chartOption = await buildChartFromSpec(conv.current_chart_spec);
+        if (chartOption) {
+          setMessages(prev => {
+            const updated = [...prev];
+            for (let i = updated.length - 1; i >= 0; i--) {
+              if (updated[i].role === 'assistant') {
+                updated[i] = { ...updated[i], chartOption };
+                break;
+              }
+            }
+            return updated;
+          });
+        }
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, [buildChartFromSpec]);
 
   if (!bqConnected) {
     return (
@@ -342,6 +556,10 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         onNewThread={handleNewThread}
         metrics={metrics}
         onSaveChart={handleSaveChart}
+        currentTimeRange={currentTimeRange}
+        onTimeRangeChange={handleTimeRangeChange}
+        recentConversations={recentConversations}
+        onLoadConversation={handleLoadConversation}
       />
       {showSaveModal && (
         <SaveChartModal

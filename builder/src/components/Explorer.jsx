@@ -9,6 +9,7 @@ import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '..
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
+import ChartControls from './ChartControls';
 import {
   castRow,
   aggregateRows,
@@ -40,6 +41,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   const [queryDetails, setQueryDetails] = useState([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [dashboards, setDashboards] = useState([]);
+  const [currentTimeRange, setCurrentTimeRange] = useState(null);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   // Pre-load schemas for all primitive/foundational metrics on BQ connect
@@ -248,12 +250,116 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       setQueryDetails(collectedDetails);
       setSelectedMetric(result.metrics[0]);
       setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig });
+      setCurrentTimeRange(dataConfig.lastNMonths || null);
     } catch (e) {
       setAiError(e.message);
     } finally {
       setAiLoading(false);
     }
   }, [metrics, loadMetricData]);
+
+  const handleTimeRangeChange = useCallback(async (months) => {
+    if (!lastSpec) return;
+    setCurrentTimeRange(months);
+    setAiLoading(true);
+    try {
+      const { metricIds, echartsType, dataConfig } = lastSpec;
+      const effectiveLastNMonths = months;
+      const channelFilter = dataConfig.channelFilter;
+      const xField = dataConfig.xField;
+      const timeBucket = dataConfig.timeBucket;
+      const rawDatasets = [];
+
+      for (let i = 0; i < metricIds.length; i++) {
+        const metricId = metricIds[i];
+        const metric = metrics.find(m => m.id === metricId);
+        if (!metric) continue;
+        const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+        const label = dataConfig.labels?.[i] || metric.name;
+
+        if (metric.formula && metric.depends_on && !metric.view_name) {
+          const depAggregated = {};
+          for (const depId of metric.depends_on) {
+            const depMetric = metrics.find(dm => dm.id === depId);
+            if (depMetric && depMetric.view_name) {
+              const depSchema = schemaCache[depMetric.view_name] || [];
+              const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+              try {
+                const depAgg = await fetchAggregatedData(
+                  depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, effectiveLastNMonths
+                );
+                const counts = {};
+                depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
+                depAggregated[depId] = counts;
+              } catch { depAggregated[depId] = {}; }
+            }
+          }
+          const allDepLabels = new Set();
+          for (const counts of Object.values(depAggregated)) {
+            Object.keys(counts).forEach(k => allDepLabels.add(k));
+          }
+          const sortedDepLabels = [...allDepLabels].sort();
+          const computedLabels = [];
+          const computedData = [];
+          for (const lbl of sortedDepLabels) {
+            let formula = metric.formula;
+            for (const depId of metric.depends_on) {
+              const val = depAggregated[depId]?.[lbl] || 0;
+              formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+            }
+            formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+              const numA = Number(a) || 0;
+              const numB = Number(b) || 0;
+              return String(numB === 0 ? 0 : numA / numB);
+            });
+            let value;
+            try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
+            if (!isFinite(value)) value = 0;
+            computedLabels.push(lbl);
+            computedData.push(Math.round(value * 100) / 100);
+          }
+          rawDatasets.push({ label, labels: computedLabels, data: computedData });
+        } else if (metric.view_name) {
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const agg = await fetchAggregatedData(
+              metric.view_name, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
+            );
+            rawDatasets.push({ label, ...agg });
+          } catch { /* skip */ }
+        }
+      }
+
+      if (rawDatasets.length === 0) return;
+
+      const allLabelsSet = new Set();
+      for (const ds of rawDatasets) { ds.labels.forEach(l => allLabelsSet.add(l)); }
+      const allLabels = [...allLabelsSet].sort();
+      const alignedDatasets = rawDatasets.map(ds => {
+        const labelMap = {};
+        ds.labels.forEach((l, idx) => { labelMap[l] = ds.data[idx]; });
+        return { label: ds.label, data: allLabels.map(l => labelMap[l] || 0) };
+      });
+
+      const hasDerived = metricIds.some(mid => {
+        const m = metrics.find(mm => mm.id === mid);
+        return m && m.formula && m.depends_on && !m.view_name;
+      });
+      let finalLabels = allLabels;
+      let finalDatasets = alignedDatasets;
+      if (hasDerived && effectiveLastNMonths) {
+        ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
+          allLabels, alignedDatasets, effectiveLastNMonths, timeBucket
+        ));
+      }
+
+      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+      setChartOption(option);
+    } catch { /* ignore */ } finally {
+      setAiLoading(false);
+    }
+  }, [lastSpec, metrics]);
 
   const handleSave = useCallback(async ({ name, dashboardId, newDashboardName }) => {
     if (!selectedMetric || !lastSpec) return;
@@ -324,6 +430,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           <div style={styles.chartContainer}>
             <EChart option={chartOption} />
           </div>
+          <ChartControls selectedMonths={currentTimeRange} onTimeRangeChange={handleTimeRangeChange} />
           <ChartDetails queryDetails={queryDetails} metrics={metrics} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
             {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}

@@ -395,9 +395,18 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
                   {editing && (
-                    <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
-                      &#10005;
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
+                        onClick={() => navigate(`/chat?editChart=${item.i}`)}
+                        title="Edit chart"
+                      >
+                        &#9998;
+                      </button>
+                      <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
+                        &#10005;
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div style={styles.chartBody}>
