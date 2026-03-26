@@ -15,6 +15,7 @@ import {
   applyLastNMonths,
   buildEChartsOption,
 } from '../lib/chartUtils';
+import schemaCache from '../lib/schemaCache';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 'calc(100vh - 52px)' },
@@ -22,8 +23,6 @@ const styles = {
   chartContainer: { background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8, overflow: 'hidden', height: 500 },
   schemasStatus: { color: '#5a6370', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textAlign: 'center' },
 };
-
-const schemaCache = {};
 
 export default function Explorer({ metrics, bqConnected, userEmail }) {
   const [selectedMetric, setSelectedMetric] = useState(null);

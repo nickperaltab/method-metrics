@@ -1,0 +1,19 @@
+flowchart TB
+    subgraph "What the AI does"
+        A1["Reads a menu of 242 metrics"]
+        A2["Picks which metric matches your question"]
+        A3["Returns a JSON config"]
+    end
+
+    subgraph "What the AI does NOT do"
+        B1["Does NOT write SQL"]
+        B2["Does NOT query BigQuery"]
+        B3["Does NOT see any actual data"]
+    end
+
+    style B1 fill:#ff6b6b,color:#fff
+    style B2 fill:#ff6b6b,color:#fff
+    style B3 fill:#ff6b6b,color:#fff
+    style A1 fill:#51cf66,color:#fff
+    style A2 fill:#51cf66,color:#fff
+    style A3 fill:#51cf66,color:#fff

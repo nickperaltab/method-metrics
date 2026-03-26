@@ -1,0 +1,19 @@
+flowchart TB
+    subgraph auto["Updates Automatically"]
+        C1["Change a BQ view definition\n(e.g., redefine what counts as a Trial)"]
+        C2["Change a metric formula in Supabase\n(e.g., multiply Sync Rate by 100)"]
+        C3["Add a new metric to Supabase"]
+    end
+
+    subgraph manual["Requires Manual Action"]
+        C4["Saved dashboard charts\nshow stale/old data"]
+        Fix["Must re-create and re-save\nthe chart to update"]
+    end
+
+    C1 -->|"Next chart load"| OK1[New definition used]
+    C2 -->|"Next page reload"| OK2[New formula used]
+    C3 -->|"Next page reload"| OK3[AI sees new metric]
+    C4 --> Fix
+
+    style auto fill:#d4edda
+    style manual fill:#fff3cd
