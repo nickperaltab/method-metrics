@@ -100,22 +100,53 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
         const label = dataConfig.labels[i] || metric.name;
 
         if (metric.formula && metric.depends_on && !metric.view_name) {
-          // Derived metric
-          const depResults = {};
+          // Derived metric — aggregate each dependency server-side, then apply formula
+          const depAggregated = {};
           for (const depId of metric.depends_on) {
             const depMetric = metrics.find(dm => dm.id === depId);
-            if (depMetric) {
-              const depData = await loadMetricData(depMetric);
-              if (depData) depResults[depId] = applyChannelFilter(depData.rows, channelFilter);
+            if (depMetric && depMetric.view_name) {
+              // Find the right date column for this view
+              const depSchema = schemaCache[depMetric.view_name] || [];
+              const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+              try {
+                const depAgg = await fetchAggregatedData(
+                  depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, dataConfig.lastNMonths
+                );
+                const counts = {};
+                depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
+                depAggregated[depId] = counts;
+              } catch {
+                depAggregated[depId] = {};
+              }
             }
           }
-          const computed = computeDerived(metric, depResults, xField, timeBucket);
-          // computed is [{xField: label, value: num}, ...]
-          const agg = {
-            labels: computed.map(r => r[xField]),
-            data: computed.map(r => r.value),
-          };
-          rawDatasets.push({ label, ...agg });
+          // Get all time labels (union across deps)
+          const allDepLabels = new Set();
+          for (const counts of Object.values(depAggregated)) {
+            Object.keys(counts).forEach(k => allDepLabels.add(k));
+          }
+          const sortedDepLabels = [...allDepLabels].sort();
+          // Apply formula per time bucket
+          const computedLabels = [];
+          const computedData = [];
+          for (const lbl of sortedDepLabels) {
+            let formula = metric.formula;
+            for (const depId of metric.depends_on) {
+              const val = depAggregated[depId]?.[lbl] || 0;
+              formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+            }
+            formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+              const numA = Number(a) || 0;
+              const numB = Number(b) || 0;
+              return String(numB === 0 ? 0 : numA / numB);
+            });
+            let value;
+            try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
+            if (!isFinite(value)) value = 0;
+            computedLabels.push(lbl);
+            computedData.push(Math.round(value * 100) / 100);
+          }
+          rawDatasets.push({ label, labels: computedLabels, data: computedData });
         } else {
           // Use server-side aggregation via BQ GROUP BY
           try {
