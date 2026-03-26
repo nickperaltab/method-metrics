@@ -48,17 +48,72 @@ export function toBucketKey(val, bucket) {
   return `${d.getUTCFullYear()}-${mm}`;
 }
 
+/**
+ * Format date labels for chart axes.
+ * Monthly: "Jan" (or "Jan 2026" on January / year change)
+ * Daily/Weekly: "Jan 15" (or "Jan 15, 2026" on year change)
+ *
+ * Call formatDateLabels(allLabels) for context-aware formatting (knows when to show year).
+ * Call formatDateLabel(val) for standalone single-value formatting.
+ */
 export function formatDateLabel(val) {
   if (!val || typeof val !== 'string') return val;
   if (/^\d{4}-\d{2}$/.test(val)) {
     const [y, m] = val.split('-');
-    return `${MONTH_NAMES[parseInt(m, 10) - 1]} '${y.slice(2)}`;
+    const monthIdx = parseInt(m, 10) - 1;
+    // Always include year for standalone calls
+    return `${MONTH_NAMES[monthIdx]} ${y}`;
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
     const [y, m, d] = val.split('-');
-    return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, '${y.slice(2)}`;
+    return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`;
   }
   return val;
+}
+
+/**
+ * Format an array of date labels with context-aware year display.
+ * For monthly: shows "Jan", "Feb", ... and adds year on January or when year changes.
+ * For daily: shows "Jan 15", "Jan 16", ... and adds year on Jan 1 or year change.
+ */
+export function formatDateLabels(labels) {
+  if (!labels || labels.length === 0) return labels;
+
+  // Detect if these are monthly (YYYY-MM) or daily (YYYY-MM-DD)
+  const isMonthly = /^\d{4}-\d{2}$/.test(labels[0]);
+  const isDaily = /^\d{4}-\d{2}-\d{2}$/.test(labels[0]);
+  if (!isMonthly && !isDaily) return labels.map(formatDateLabel);
+
+  // Check if data spans multiple years
+  const years = new Set(labels.map(l => l.substring(0, 4)));
+  const multiYear = years.size > 1;
+
+  return labels.map((val, i) => {
+    if (isMonthly) {
+      const [y, m] = val.split('-');
+      const monthIdx = parseInt(m, 10) - 1;
+      const monthName = MONTH_NAMES[monthIdx];
+      // Show year on: first label, January, or year change
+      const prevYear = i > 0 ? labels[i - 1].substring(0, 4) : null;
+      const yearChanged = prevYear && prevYear !== y;
+      if (i === 0 || monthIdx === 0 || yearChanged) {
+        return `${monthName} ${y}`;
+      }
+      return monthName;
+    }
+    if (isDaily) {
+      const [y, m, d] = val.split('-');
+      const monthName = MONTH_NAMES[parseInt(m, 10) - 1];
+      const dayNum = parseInt(d, 10);
+      const prevYear = i > 0 ? labels[i - 1].substring(0, 4) : null;
+      const yearChanged = prevYear && prevYear !== y;
+      if (i === 0 || yearChanged || (dayNum === 1 && parseInt(m, 10) === 1)) {
+        return `${monthName} ${dayNum}, ${y}`;
+      }
+      return `${monthName} ${dayNum}`;
+    }
+    return val;
+  });
 }
 
 export function looksLikeDate(val) {
@@ -168,7 +223,7 @@ export function applyLastNMonths(labels, datasets, lastNMonths, timeBucket) {
 
 /** Build a full ECharts option from chart type + aggregated data */
 export function buildEChartsOption(echartsType, labels, datasets, dataConfig) {
-  const displayLabels = labels.map(formatDateLabel);
+  const displayLabels = formatDateLabels(labels);
   const isDateAxis = labels.length > 0 && /^\d{4}-\d{2}/.test(String(labels[0]));
   const showLegend = datasets.length > 1;
 
