@@ -244,11 +244,11 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       }
 
       // Build ECharts option
-      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels });
       setChartOption(option);
       setQueryDetails(collectedDetails);
       setSelectedMetric(result.metrics[0]);
-      setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig });
+      setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels });
       setCurrentTimeRange(dataConfig.lastNMonths || null);
     } catch (e) {
       setAiError(e.message);
@@ -353,7 +353,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         ));
       }
 
-      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: lastSpec.showLabels });
       setChartOption(option);
     } catch { /* ignore */ } finally {
       setAiLoading(false);

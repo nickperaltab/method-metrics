@@ -8,6 +8,7 @@ import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '..
 import { fetchAggregatedData } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
+import ChatModal from './ChatModal';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1400, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
@@ -72,7 +73,7 @@ const styles = {
 const ROW_HEIGHT = 80;
 const COLS = 12;
 
-export default function DashboardView({ userEmail, metrics = [], bqConnected }) {
+export default function DashboardView({ userEmail, userAvatar, metrics = [], bqConnected }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const containerRef = useRef(null);
@@ -83,6 +84,7 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [chartLoading, setChartLoading] = useState({});
@@ -303,6 +305,15 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
     setShowAddModal(false);
   }, [gridLayout]);
 
+  const handleChatChartSaved = useCallback((chartId) => {
+    const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+    setGridLayout(prev => [
+      ...prev,
+      { i: chartId, x: 0, y: maxY, w: 6, h: 4 },
+    ]);
+    setShowChatModal(false);
+  }, [gridLayout]);
+
   if (loading) {
     return <div style={styles.layout}><div style={styles.empty}>Loading dashboard...</div></div>;
   }
@@ -414,7 +425,7 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
                 }}
                 onClick={() => {
                   setShowAddModal(false);
-                  navigate(`/chat?addToDashboard=${id}`);
+                  setShowChatModal(true);
                 }}
               >
                 Create New Chart
@@ -443,6 +454,17 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
             )}
           </div>
         </div>
+      )}
+
+      {showChatModal && (
+        <ChatModal
+          onClose={() => setShowChatModal(false)}
+          onChartSaved={handleChatChartSaved}
+          metrics={metrics}
+          bqConnected={bqConnected}
+          userEmail={userEmail}
+          userAvatar={userAvatar}
+        />
       )}
     </div>
   );

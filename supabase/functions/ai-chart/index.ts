@@ -21,6 +21,7 @@ Return ONLY valid JSON in this exact format:
     "labels": ["<display label for each y_field>", ...]
   },
   "echarts_type": "<chart_type>",
+  "show_labels": true | false,
   "explanation": "<one sentence>"
 }
 
@@ -44,6 +45,7 @@ Rules:
 - last_n_months: integer if user specifies a time range ("last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6). null = all data.
 - channel_filter: one of "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". null = no filter.
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
+- show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 
 IMPORTANT — Attribution channels:
 - There is NO "Channel" column in any view. Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.
@@ -54,7 +56,23 @@ IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.
 - Just return the metric_id — the frontend handles formula evaluation.
 
-If the user asks for something that doesn't match any metric:
+If the user asks a question about data or metrics (not a chart request), respond with:
+{
+  "type": "text",
+  "content": "<helpful answer based on available metrics and context>",
+  "suggestion": "<optional chart suggestion, e.g., 'Try: show me trials by month'>"
+}
+
+Examples of questions (NOT chart requests):
+- "what happened to trials?"
+- "why did syncs drop?"
+- "what metrics do we have?"
+- "what does conversion rate mean?"
+
+For these, provide a text answer. You can reference the available metrics to answer.
+For "what metrics do we have?", list all available metrics by name.
+
+If the user asks for a chart but it doesn't match any metric:
 {
   "error": "No matching metric found",
   "suggestion": "<closest available metric name>"
