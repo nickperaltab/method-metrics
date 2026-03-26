@@ -4,17 +4,13 @@ Seed the `description` column on the Supabase `metrics` table.
 Usage:
   python3 scripts/seed_descriptions.py
 
-What it does:
-  1. Adds a `description` TEXT column to the metrics table (if missing)
-  2. Fetches all metrics that have SQL definitions (view_definition or chart_sql)
-  3. Generates a short human-readable description from the SQL
-  4. Writes descriptions back to Supabase
+Generates meaningful descriptions explaining what each metric measures,
+what data it includes/excludes, and how derived metrics are calculated.
 
 Requires: pip install requests
 """
 
 import requests
-import re
 
 SUPABASE_URL = "https://agkubdpgnpwudzpzcvhs.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY"
@@ -46,120 +42,110 @@ def update_description(metric_id, description):
     res.raise_for_status()
 
 
-def describe_from_sql(metric):
-    """Generate a short description from the metric's SQL and metadata."""
-    name = metric.get("name", "")
-    sql = metric.get("view_definition") or metric.get("chart_sql") or ""
-    formula = metric.get("formula") or ""
-    metric_type = metric.get("metric_type", "")
-    depends_on = metric.get("depends_on") or []
+# Hand-written descriptions for primitives and key metrics.
+# These explain the business logic: what counts, what's excluded, and why.
+PRIMITIVE_DESCRIPTIONS = {
+    54: "Accounts that signed up for Method. Excludes conversion exceptions and Method Integration partners. Since 2024.",
+    55: "Accounts that connected their accounting software (sync event). Excludes pre-2024 syncs.",
+    56: "Accounts that made their first SaaS payment. Excludes conversion exceptions and Method Integration partners. Since 2024.",
+    57: "SaaS revenue from first-time payers in the month. Excludes DEP products (Premium App, Enhancement Plan), conversion exceptions, and Method Integration partners.",
+    58: "Revenue from DEP products (Premium App, Enhancement Plan) by new payers. Since 2024.",
+    59: "Accounts that cancelled after previously converting to paid. Excludes conversion exceptions and Method Integration partners. Since 2024.",
+    60: "Existing paying customers at the start of each month. Excludes new payers, conversion exceptions, and Method Integration partners.",
+    61: "All SaaS revenue across all customers. Includes both new and existing payers. Excludes conversion exceptions and Method Integration partners.",
+    62: "Revenue from DEP products (Premium App, Enhancement Plan) across all customers. Excludes conversion exceptions and Method Integration partners.",
+    243: "US-only trials. Same as Trials but filtered to SignupCountry = United States.",
+}
 
-    if not sql and not formula:
+DERIVED_DESCRIPTIONS = {
+    20: "Percentage of trials that convert to paid. Formula: Conversions / Trials × 100.",
+    25: "Percentage of trials that sync their accounting software. Formula: Syncs / Trials × 100.",
+    29: "Percentage of syncs that convert to paid. Formula: Conversions / Syncs × 100.",
+    30: "Percentage of trials that eventually pay. Formula: Conversions / Trials × 100.",
+    46: "Percentage of beginning-of-month customers that cancel. Formula: Churn / BOM Customers × 100.",
+    48: "Net change in customer count. Formula: Conversions − Churn.",
+    238: "Month-to-date scorecard combining all 9 core metrics: Trials, Syncs, Conversions, New Net SaaS, New DEP Revenue, Churn, BOM Customers, Total Net SaaS, Total DEP Revenue.",
+    239: "MRR from newly converted accounts. Based on first SaaS invoice amount at conversion.",
+    240: "MRR lost from churned accounts. Based on last SaaS amount before cancellation.",
+    241: "Average MRR per converted account. Total converted MRR divided by conversion count.",
+}
+
+OTHER_DESCRIPTIONS = {
+    134: "MRR gained from existing customers upgrading or expanding their plan.",
+    135: "MRR lost from existing customers downgrading their plan.",
+    136: "MRR lost from customers who fully cancelled.",
+    218: "Net Revenue Retention: revenue retained from existing customers including expansion and churn.",
+    224: "Distinct accounts that converted to paid within each month.",
+    225: "Net DEP revenue after accounting for churn and downgrades on Premium App and Enhancement Plan.",
+    226: "Rolling 30-day trailing NRR calculated over a 1-year cohort window.",
+}
+
+# Dimension template descriptions
+DIMENSION_DESCRIPTIONS = {
+    245: "Time dimension: group any metric by calendar month.",
+    246: "Time dimension: group any metric by calendar week.",
+    255: "Time dimension: group any metric by day.",
+    249: "Dimension: break down any metric by marketing attribution channel.",
+    250: "Dimension: break down any metric by signup country.",
+    251: "Dimension: break down any metric by customer industry.",
+    252: "Dimension: break down any metric by sync type (e.g. QuickBooks, Xero).",
+    253: "Dimension: break down any metric by business vertical.",
+    254: "No grouping dimension. Returns the raw aggregate without breakdown.",
+}
+
+
+def describe_breakdown(metric, metrics_map):
+    """Generate description for breakdown/transform metrics based on their parent."""
+    parent_id = metric.get("primitive_metric_id")
+    if not parent_id:
         return None
 
-    sql_upper = sql.upper()
-
-    # Derived metrics with formula
-    if formula and depends_on:
-        return None  # handled separately after we know all metric names
-
-    # Detect source table
-    source = ""
-    table_match = re.search(r'FROM\s+[`]?[\w.-]*\.(Account|Funnel|TransLineFlattened|method_forecast)', sql, re.IGNORECASE)
-    if table_match:
-        table_map = {
-            "account": "Account table",
-            "funnel": "Funnel events",
-            "translineflattened": "Transaction lines",
-            "method_forecast": "Forecast data",
-        }
-        source = table_map.get(table_match.group(1).lower(), table_match.group(1))
-
-    # Detect what it counts/sums
-    agg = "Count"
-    if "SUM(SAASAMOUNT" in sql_upper or "SUM(SAASEXPENSE" in sql_upper:
-        agg = "Revenue"
-    elif "COUNT(DISTINCT" in sql_upper:
-        agg = "Distinct count"
-    elif "COUNT(*)" in sql_upper:
-        agg = "Count"
-
-    # Detect key filters
-    filters = []
-    if "EVENTTYPE = 'SYNC'" in sql_upper:
-        filters.append("sync events")
-    elif "EVENTTYPE = 'TRIAL'" in sql_upper:
-        filters.append("trial events")
-    if "CANCELLATIONDATE" in sql_upper and "!= DATE('0001-01-01')" in sql:
-        filters.append("cancelled accounts")
-    if "FIRSTSAASINVOICETXNDATE" in sql_upper and "!= DATE('0001-01-01')" in sql:
-        filters.append("converted accounts")
-    if "ISNEWPAYERTHISMONTH = TRUE" in sql_upper:
-        filters.append("new payers")
-    if "ISNEWPAYERTHISMONTH = FALSE" in sql_upper:
-        filters.append("existing payers")
-    if "PREMIUM APP" in sql_upper or "ENHANCEMENT PLAN" in sql_upper:
-        filters.append("DEP products")
-    if "BOMCUSTOMERGROUPING = 'CUSTOMER'" in sql_upper:
-        filters.append("active customers")
-    if "ATT_" in sql_upper and "FORMAT_DATE" in sql_upper and "GROUP BY" in sql_upper:
-        filters.append("with channel attribution")
-
-    # Detect grouping
-    group_by = ""
-    if "FORMAT_DATE" in sql_upper and "GROUP BY" in sql_upper:
-        group_by = "monthly"
-    if "SIGNUPCOUNTRY" in sql_upper and "GROUP BY" in sql_upper and "country" in name.lower():
-        group_by = "by country"
-    if "VERTICAL" in sql_upper and "GROUP BY" in sql_upper and "vertical" in name.lower():
-        group_by = "by vertical"
-
-    # Build description
-    parts = []
-    if agg == "Revenue":
-        parts.append(f"Revenue from {source}" if source else "Revenue")
-    elif agg == "Distinct count":
-        parts.append(f"Unique accounts from {source}" if source else "Unique accounts")
-    else:
-        parts.append(f"Count from {source}" if source else "Count")
-
-    if filters:
-        parts[0] += f" — {', '.join(filters)}"
-
-    if group_by:
-        parts.append(group_by)
-
-    desc = ". ".join(parts)
-
-    # Trim and cap
-    if len(desc) > 120:
-        desc = desc[:117] + "..."
-
-    return desc
-
-
-def describe_derived(metric, all_metrics_map):
-    """Generate description for derived/formula metrics."""
-    formula = metric.get("formula", "")
-    depends_on = metric.get("depends_on") or []
-
-    if not formula or not depends_on:
+    parent = metrics_map.get(parent_id)
+    if not parent:
         return None
 
-    dep_names = []
-    for dep_id in depends_on:
-        dep = all_metrics_map.get(dep_id)
-        if dep:
-            dep_names.append(dep["name"])
-        else:
-            dep_names.append(f"metric #{dep_id}")
+    parent_name = parent["name"]
+    name = metric["name"]
 
-    if "SAFE_DIVIDE" in formula:
-        if len(dep_names) >= 2:
-            return f"{dep_names[0]} / {dep_names[1]} as a rate"
-        return f"Ratio based on {', '.join(dep_names)}"
+    # Detect the breakdown type from the name
+    if "Monthly" in name:
+        return f"{parent_name} grouped by month."
+    elif "Weekly" in name:
+        return f"{parent_name} grouped by week."
+    elif "YoY" in name:
+        return f"{parent_name} compared year-over-year."
+    elif "by Channel" in name:
+        return f"{parent_name} broken down by marketing channel."
+    elif "by Country" in name:
+        return f"{parent_name} broken down by signup country."
+    elif "by Sync Type" in name:
+        return f"{parent_name} broken down by sync type (e.g. QuickBooks, Xero)."
+    elif "by Industry" in name:
+        return f"{parent_name} broken down by customer industry."
+    elif "by Attribution" in name:
+        return f"{parent_name} broken down by attribution channel."
+    elif "by Vertical" in name:
+        return f"{parent_name} broken down by business vertical."
+    elif "Daily" in name:
+        return f"{parent_name} grouped by day."
 
-    return f"Calculated from {', '.join(dep_names)}"
+    return f"{parent_name} — {name.replace(parent_name, '').strip()} view."
+
+
+def get_description(metric, metrics_map):
+    """Get the best description for a metric."""
+    mid = metric["id"]
+
+    # Check all manual description dicts
+    for desc_dict in [PRIMITIVE_DESCRIPTIONS, DERIVED_DESCRIPTIONS, OTHER_DESCRIPTIONS, DIMENSION_DESCRIPTIONS]:
+        if mid in desc_dict:
+            return desc_dict[mid]
+
+    # Try generating for breakdowns/transforms
+    if metric.get("primitive_metric_id"):
+        return describe_breakdown(metric, metrics_map)
+
+    return None
 
 
 def main():
@@ -173,22 +159,16 @@ def main():
     skipped = 0
 
     for m in metrics:
-        # Skip if already has a description
-        if m.get("description"):
-            skipped += 1
-            continue
-
-        # Try derived first, then SQL-based
-        desc = None
-        if m.get("formula") and m.get("depends_on"):
-            desc = describe_derived(m, metrics_map)
-        else:
-            desc = describe_from_sql(m)
+        desc = get_description(m, metrics_map)
 
         if desc:
-            print(f"  [{m['id']}] {m['name']}: {desc}")
-            update_description(m["id"], desc)
-            updated += 1
+            old_desc = m.get("description") or ""
+            if desc != old_desc:
+                print(f"  [{m['id']}] {m['name']}: {desc}")
+                update_description(m["id"], desc)
+                updated += 1
+            else:
+                skipped += 1
         else:
             skipped += 1
 
