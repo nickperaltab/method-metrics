@@ -154,9 +154,9 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
     if (col) wheres.push(`${col} > 0`);
   }
 
-  // Time range filter
+  // Time range filter — snap to 1st of month so we always get full calendar months
   if (lastNMonths) {
-    wheres.push(`${xField} >= DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH)`);
+    wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
   }
 
   const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
