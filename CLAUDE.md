@@ -48,7 +48,51 @@ Key columns:
 
 Change a primitive (`CREATE OR REPLACE VIEW v_trials AS ...`) → all breakdowns and derived rates update automatically.
 
-## Deploy
+## AI Chart Builder (builder/)
+
+React app deployed to Vercel. Users type natural language prompts ("show me trials by month") and get interactive charts.
+
+### How It Works
+
+1. **Supabase `metrics` table** — the AI's "menu." On page load, all metric definitions are fetched and formatted into a text catalog the AI can read.
+2. **AI (Claude Haiku 4.5)** — receives the metric catalog + BQ column schemas + user prompt. Returns a JSON config (metric IDs, chart type, time bucket, filters). **Does NOT write SQL or touch data.**
+3. **Frontend JS** — takes the AI's JSON config, builds a SQL query, and runs it directly against BigQuery via OAuth.
+4. **ECharts** — renders the query results as an interactive chart in the browser.
+
+### Key Files
+
+```
+builder/src/lib/ai.js            — buildMetricContext(), generateChartSpec()
+builder/src/lib/bigquery.js      — fetchAggregatedData(), builds SQL from AI config
+builder/src/lib/supabase.js      — fetchMetrics(), saveChart()
+builder/src/components/Explorer.jsx      — main chart page, orchestrates the flow
+builder/src/components/ChatExplorer.jsx  — chat-style variant
+builder/src/components/ChartRenderer.jsx — ECharts rendering
+builder/src/lib/chartUtils.js    — buildEChartsOption(), computeDerived()
+supabase/functions/ai-chart/     — Edge Function that calls Anthropic API
+```
+
+### Derived Metrics
+
+Metrics like "Sync Rate" have `formula: SAFE_DIVIDE({2},{1})` and `depends_on: [2,1]` in Supabase. The frontend fetches each dependency from BQ, then evaluates the formula client-side per time bucket. No BQ view needed.
+
+### What Updates Automatically
+
+- Change a BQ view definition → charts reflect it on next load (live query)
+- Change a metric formula in Supabase → reflected on page reload
+- Add a new metric to Supabase → AI sees it on next page load
+
+### Known Gap: Saved Dashboards
+
+Saved charts store baked-in data snapshots. Dashboards do NOT re-query BQ — they show stale data. Fix is planned but not built.
+
+### Deploy
+
+```
+cd builder && vercel --prod
+```
+
+## Deploy (Tracker)
 
 Push to `main` → GitHub Pages auto-deploys to `https://nickperaltab.github.io/method-metrics/`
 
