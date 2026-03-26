@@ -454,6 +454,35 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     };
   }
 
+  // --- Year-over-Year (grouped bar, months on X, one series per year) ---
+  if (echartsType === 'yoy') {
+    const yoyMonthAxis = {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: '#1a1e24' } },
+      axisTick: { lineStyle: { color: '#1a1e24' } },
+      axisLabel: {
+        color: '#5a6370',
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11,
+      },
+    };
+    return {
+      tooltip: baseTooltip,
+      legend: { show: true, textStyle: { color: '#c8cdd3' }, top: 0 },
+      grid: baseGrid,
+      xAxis: yoyMonthAxis,
+      yAxis: valueAxis,
+      series: datasets.map((ds, i) => ({
+        name: ds.label,
+        type: 'bar',
+        data: ds.data,
+        itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
+        ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
+      })),
+    };
+  }
+
   // --- Heatmap ---
   if (echartsType === 'heatmap') {
     // For heatmap, use first dataset only; labels on x, dataset labels on y

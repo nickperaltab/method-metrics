@@ -6,10 +6,11 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
 import DataTableView from './DataTableView';
+import KpiCard from './KpiCard';
 import {
   castRow,
   aggregateRows,
@@ -43,6 +44,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   const [dashboards, setDashboards] = useState([]);
   const [currentTimeRange, setCurrentTimeRange] = useState(null);
   const [tableData, setTableData] = useState(null);
+  const [kpiData, setKpiData] = useState(null);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   // Pre-load schemas for all primitive/foundational metrics on BQ connect
@@ -93,6 +95,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
     setAiExplanation(null);
     setChartOption(null);
     setTableData(null);
+    setKpiData(null);
     setQueryDetails([]);
     try {
       const result = await generateChartSpec(prompt, metrics, schemaCache);
@@ -106,6 +109,97 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       const channelFilter = dataConfig.channelFilter;
       const xField = dataConfig.xField;
       const timeBucket = dataConfig.timeBucket;
+
+      // Year-over-Year branch
+      if (echartsType === 'yoy') {
+        const yoyDatasets = [];
+        const yoyDetails = [];
+        for (let i = 0; i < result.metrics.length; i++) {
+          const metric = result.metrics[i];
+          if (!metric.view_name) continue;
+          const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
+            for (const year of yoyResult.years) {
+              const lbl = result.metrics.length === 1 ? year : `${metric.name} ${year}`;
+              yoyDatasets.push({ label: lbl, data: yoyResult.seriesMap[year] });
+            }
+            yoyDetails.push({ metricName: metric.name, metricId: metric.id, sql: yoyResult.sql, dateColumn: dateCol, labels: yoyResult.months, data: [] });
+          } catch { /* skip */ }
+        }
+        if (yoyDatasets.length > 0) {
+          const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
+          setChartOption(option);
+          setQueryDetails(yoyDetails);
+          setSelectedMetric(result.metrics[0]);
+          setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors });
+          setCurrentTimeRange(null);
+        } else {
+          setAiError('No data loaded for year-over-year comparison');
+        }
+        return;
+      }
+
+      // KPI tile branch
+      if (echartsType === 'kpi') {
+        const kpis = [];
+        for (let i = 0; i < result.metrics.length; i++) {
+          const metric = result.metrics[i];
+          const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
+          const label = dataConfig.labels[i] || metric.name;
+          const isRate = !!(metric.formula && metric.depends_on && !metric.view_name);
+
+          if (isRate) {
+            const depKpis = {};
+            for (const depId of metric.depends_on) {
+              const depMetric = metrics.find(dm => dm.id === depId);
+              if (depMetric && depMetric.view_name) {
+                const depSchema = schemaCache[depMetric.view_name] || [];
+                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+                try {
+                  depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                } catch {
+                  depKpis[depId] = { current: 0, prior: 0 };
+                }
+              }
+            }
+            const evalFormula = (period) => {
+              let f = metric.formula;
+              for (const depId of metric.depends_on) {
+                const val = depKpis[depId]?.[period] || 0;
+                f = f.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+              }
+              f = f.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+                const numA = Number(a) || 0;
+                const numB = Number(b) || 0;
+                return String(numB === 0 ? 0 : numA / numB);
+              });
+              try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
+            };
+            const current = evalFormula('current');
+            const prior = evalFormula('prior');
+            const delta = current - prior;
+            const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+            kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+          } else if (metric.view_name) {
+            const viewSchema = schemaCache[metric.view_name] || [];
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
+              kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+            } catch {
+              kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+            }
+          }
+        }
+        setKpiData(kpis);
+        setSelectedMetric(result.metrics[0]);
+        setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors });
+        return;
+      }
 
       // Build datasets: one per metric
       const rawDatasets = [];
@@ -415,7 +509,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   }, [selectedMetric, lastSpec, userEmail, userAvatar, dashboards, navigate]);
 
   const loading = dataLoading || aiLoading;
-  const hasChart = (chartOption || tableData) && !loading;
+  const hasChart = (chartOption || tableData || kpiData) && !loading;
 
   return (
     <div style={styles.layout}>
@@ -433,7 +527,11 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       {dataError && <div style={{ color: '#f87171', fontSize: 12, padding: '8px 0' }}>{dataError}</div>}
       {hasChart && (
         <>
-          {tableData ? (
+          {kpiData ? (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {kpiData.map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
+            </div>
+          ) : tableData ? (
             <DataTableView labels={tableData.labels} datasets={tableData.datasets} />
           ) : (
             <div style={styles.chartContainer}>

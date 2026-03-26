@@ -84,6 +84,29 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     const timeBucket = dataConfig.timeBucket;
     const rawDatasets = [];
 
+    // Year-over-Year: fetch YoY data and return early
+    if (echartsType === 'yoy') {
+      for (let i = 0; i < metricIds.length; i++) {
+        const metricId = metricIds[i];
+        const metric = metrics.find(m => m.id === metricId);
+        if (!metric || !metric.view_name) continue;
+        const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+        const viewSchema = schemaCache[metric.view_name] || [];
+        const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+        try {
+          const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
+          for (const year of yoyResult.years) {
+            const lbl = metricIds.length === 1 ? year : `${metric.name} ${year}`;
+            rawDatasets.push({ label: lbl, labels: yoyResult.months, data: yoyResult.seriesMap[year] });
+          }
+        } catch { /* skip */ }
+      }
+      if (rawDatasets.length === 0) return null;
+      const monthLabels = rawDatasets[0].labels;
+      const yoyDatasets = rawDatasets.map(ds => ({ label: ds.label, data: ds.data }));
+      return buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { showLabels, colors });
+    }
+
     for (let i = 0; i < metricIds.length; i++) {
       const metricId = metricIds[i];
       const metric = metrics.find(m => m.id === metricId);
@@ -342,6 +365,135 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       const channelFilter = dataConfig.channelFilter;
       const xField = dataConfig.xField;
       const timeBucket = dataConfig.timeBucket;
+
+      // KPI tile branch
+      if (echartsType === 'kpi') {
+        const kpiData = [];
+        for (let i = 0; i < result.metrics.length; i++) {
+          const metric = result.metrics[i];
+          const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
+          const label = dataConfig.labels[i] || metric.name;
+          const isRate = !!(metric.formula && metric.depends_on && !metric.view_name);
+
+          if (isRate) {
+            // Derived metric: fetch KPI for each dependency, apply formula for current + prior
+            const depKpis = {};
+            for (const depId of metric.depends_on) {
+              const depMetric = metrics.find(dm => dm.id === depId);
+              if (depMetric && depMetric.view_name) {
+                const depSchema = schemaCache[depMetric.view_name] || [];
+                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+                try {
+                  depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                } catch {
+                  depKpis[depId] = { current: 0, prior: 0 };
+                }
+              }
+            }
+            const evalFormula = (period) => {
+              let f = metric.formula;
+              for (const depId of metric.depends_on) {
+                const val = depKpis[depId]?.[period] || 0;
+                f = f.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+              }
+              f = f.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+                const numA = Number(a) || 0;
+                const numB = Number(b) || 0;
+                return String(numB === 0 ? 0 : numA / numB);
+              });
+              try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
+            };
+            const current = evalFormula('current');
+            const prior = evalFormula('prior');
+            const delta = current - prior;
+            const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+          } else if (metric.view_name) {
+            const viewSchema = schemaCache[metric.view_name] || [];
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
+              kpiData.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+            } catch {
+              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+            }
+          }
+        }
+
+        const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors };
+        setLastSpec(newSpec);
+
+        const assistantMsg = {
+          role: 'assistant',
+          content: result.explanation || '',
+          kpiData,
+        };
+        const allMessages = [...updatedMessages, assistantMsg];
+        setMessages(allMessages);
+
+        try {
+          const title = updatedMessages[0]?.content?.slice(0, 80) || 'Untitled';
+          const saved = await saveConversation({
+            id: conversationId,
+            userEmail: userEmail || 'anonymous',
+            title,
+            messages: allMessages.map(m => ({ role: m.role, content: m.content })),
+            currentChartSpec: newSpec,
+          });
+          if (!conversationId && saved && saved.length > 0) {
+            setConversationId(saved[0].id);
+          }
+          if (userEmail) {
+            loadConversations(userEmail).then(setRecentConversations).catch(() => {});
+          }
+        } catch { /* non-critical */ }
+
+        setLoading(false);
+        return;
+      }
+
+      // Year-over-Year branch
+      if (echartsType === 'yoy') {
+        const yoyDatasets = [];
+        const yoyDetails = [];
+        for (let i = 0; i < result.metrics.length; i++) {
+          const metric = result.metrics[i];
+          if (!metric.view_name) continue;
+          const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
+            for (const year of yoyResult.years) {
+              const lbl = result.metrics.length === 1 ? year : `${metric.name} ${year}`;
+              yoyDatasets.push({ label: lbl, labels: yoyResult.months, data: yoyResult.seriesMap[year] });
+            }
+            yoyDetails.push({ metricName: metric.name, metricId: metric.id, sql: yoyResult.sql, dateColumn: dateCol, labels: yoyResult.months, data: [] });
+          } catch { /* skip */ }
+        }
+        if (yoyDatasets.length === 0) {
+          setMessages(prev => [...prev, { role: 'assistant', content: 'No data loaded for year-over-year comparison.' }]);
+          setLoading(false);
+          return;
+        }
+        const monthLabels = yoyDatasets[0].labels;
+        const alignedYoy = yoyDatasets.map(ds => ({ label: ds.label, data: ds.data }));
+        const chartOption = buildEChartsOption('yoy', monthLabels, alignedYoy, dataConfig, { showLabels: result.showLabels, colors: result.colors });
+        const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors };
+        setLastSpec(newSpec);
+        setCurrentTimeRange(null);
+        const assistantMsg = { role: 'assistant', content: result.explanation || '', chartOption, queryDetails: yoyDetails };
+        const allMessages = [...updatedMessages, assistantMsg];
+        setMessages(allMessages);
+        try {
+          const title = updatedMessages[0]?.content?.slice(0, 80) || 'Untitled';
+          const saved = await saveConversation({ id: conversationId, userEmail: userEmail || 'anonymous', title, messages: allMessages.map(m => ({ role: m.role, content: m.content })), currentChartSpec: newSpec });
+          if (!conversationId && saved && saved.length > 0) setConversationId(saved[0].id);
+          if (userEmail) loadConversations(userEmail).then(setRecentConversations).catch(() => {});
+        } catch { /* non-critical */ }
+        setLoading(false);
+        return;
+      }
 
       // Build datasets (same logic as Explorer)
       const rawDatasets = [];
