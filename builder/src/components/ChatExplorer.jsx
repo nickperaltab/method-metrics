@@ -5,7 +5,7 @@ import SaveChartModal from './SaveChartModal';
 import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
-import { saveConversation, saveChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
+import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
@@ -33,6 +33,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   const [dashboards, setDashboards] = useState([]);
   const [currentTimeRange, setCurrentTimeRange] = useState(null);
   const [recentConversations, setRecentConversations] = useState([]);
+  const [editingChartInfo, setEditingChartInfo] = useState(null);
   const { loadView } = useBqData();
 
   // Pre-load schemas (same pattern as Explorer)
@@ -202,6 +203,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
         setLastSpec(spec);
         setCurrentTimeRange(dataConfig.lastNMonths || null);
+        setEditingChartInfo({ id: chart.id, name: chart.name });
         setMessages([
           { role: 'assistant', content: `Editing "${chart.name}". You can modify this chart by describing changes.`, chartOption },
         ]);
@@ -242,6 +244,14 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setSaveMessageIndex(messageIndex);
     setShowSaveModal(true);
   }, []);
+
+  const handleUpdateChart = useCallback(async () => {
+    if (!editingChartInfo || !lastSpec) return;
+    setShowSaveModal(false);
+    try {
+      await updateChart(editingChartInfo.id, { gwSpec: { ...lastSpec }, updatedBy: userEmail || 'anonymous' });
+    } catch { /* non-critical */ }
+  }, [editingChartInfo, lastSpec, userEmail]);
 
   const handleSaveConfirm = useCallback(async ({ name, dashboardId, newDashboardName }) => {
     setShowSaveModal(false);
@@ -556,8 +566,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         onNewThread={handleNewThread}
         metrics={metrics}
         onSaveChart={handleSaveChart}
-        currentTimeRange={currentTimeRange}
-        onTimeRangeChange={handleTimeRangeChange}
         recentConversations={recentConversations}
         onLoadConversation={handleLoadConversation}
       />
@@ -567,6 +575,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           onClose={() => setShowSaveModal(false)}
           dashboards={dashboards}
           defaultName={addToDashboardId ? '' : ''}
+          editingChart={editingChartInfo}
+          onUpdate={handleUpdateChart}
         />
       )}
     </>

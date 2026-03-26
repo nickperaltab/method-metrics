@@ -171,9 +171,9 @@ function MetricNameWithTooltip({ detail, metrics }) {
       {detail.metricName}
       {hovered && metricInfo && (
         <div style={styles.tooltip}>
-          {metricInfo.notes && (
+          {(metricInfo.description || metricInfo.notes) && (
             <div style={styles.tooltipRow}>
-              <span style={styles.tooltipLabel}>Notes: </span>{metricInfo.notes}
+              <span style={styles.tooltipLabel}>{metricInfo.description ? 'Description' : 'Notes'}: </span>{metricInfo.description || metricInfo.notes}
             </div>
           )}
           {metricInfo.view_name && (

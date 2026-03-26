@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 
+
 const styles = {
   bar: { padding: '12px 24px', borderBottom: '1px solid #1a1e24', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0c0f12' },
   left: { display: 'flex', alignItems: 'center', gap: 16 },
@@ -21,7 +22,7 @@ export default function TopBar({ connected, userEmail, onConnect }) {
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <NavLink to="/" style={({ isActive }) => ({ ...styles.logo, textDecoration: 'none' })}>Method</NavLink>
+        <a href="../index.html" style={{ ...styles.logo, textDecoration: 'none' }}>Method</a>
         <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
         <a href="../tracker.html" style={styles.navLink}>Metrics</a>

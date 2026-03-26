@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import EChart from './EChart';
 import ChartDetails from './ChartDetails';
-import ChartControls from './ChartControls';
 
 const styles = {
   container: {
@@ -146,7 +145,6 @@ const styles = {
 
 export default function ChatInterface({
   messages, onSend, loading, onNewThread, metrics, onSaveChart,
-  currentTimeRange, onTimeRangeChange,
   recentConversations, onLoadConversation,
 }) {
   const messagesEndRef = useRef(null);
@@ -231,12 +229,6 @@ export default function ChatInterface({
                   <div style={styles.chartWrap}>
                     <EChart option={msg.chartOption} />
                   </div>
-                  {isLatestChart && onTimeRangeChange && (
-                    <ChartControls
-                      selectedMonths={currentTimeRange}
-                      onTimeRangeChange={onTimeRangeChange}
-                    />
-                  )}
                   {onSaveChart && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <button

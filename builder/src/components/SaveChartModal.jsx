@@ -36,8 +36,8 @@ const styles = {
   },
 };
 
-export default function SaveChartModal({ onSave, onClose, dashboards = [], defaultName = '' }) {
-  const [name, setName] = useState(defaultName);
+export default function SaveChartModal({ onSave, onClose, dashboards = [], defaultName = '', editingChart = null, onUpdate }) {
+  const [name, setName] = useState(editingChart ? editingChart.name : defaultName);
   const [dashboardId, setDashboardId] = useState('');
   const [newDashboardName, setNewDashboardName] = useState('');
 
@@ -61,7 +61,7 @@ export default function SaveChartModal({ onSave, onClose, dashboards = [], defau
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        <div style={styles.title}>Save Chart</div>
+        <div style={styles.title}>{editingChart ? 'Update Chart' : 'Save Chart'}</div>
 
         <div style={styles.fieldGroup}>
           <label style={styles.label}>Name</label>
@@ -101,14 +101,28 @@ export default function SaveChartModal({ onSave, onClose, dashboards = [], defau
           </div>
         )}
 
+        {editingChart && (
+          <div style={{ color: '#8b929b', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>
+            This will update the chart on all dashboards that use it.
+          </div>
+        )}
+
         <div style={styles.actions}>
           <button style={styles.cancelBtn} onClick={onClose}>Cancel</button>
+          {editingChart && (
+            <button
+              style={styles.saveBtn}
+              onClick={() => onUpdate && onUpdate({ gwSpec: null })}
+            >
+              Update "{editingChart.name}"
+            </button>
+          )}
           <button
             style={{ ...styles.saveBtn, opacity: name.trim() ? 1 : 0.5 }}
             onClick={handleSave}
             disabled={!name.trim()}
           >
-            Save
+            {editingChart ? 'Save as New' : 'Save'}
           </button>
         </div>
       </div>
