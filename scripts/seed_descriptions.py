@@ -45,12 +45,12 @@ def update_description(metric_id, description):
 # Hand-written descriptions for primitives and key metrics.
 # These explain the business logic: what counts, what's excluded, and why.
 PRIMITIVE_DESCRIPTIONS = {
-    54: "Accounts that signed up for Method. Excludes conversion exceptions and Method Integration partners. Since 2024.",
-    55: "Accounts that connected their accounting software (sync event). Excludes pre-2024 syncs.",
-    56: "Accounts that made their first SaaS payment. Excludes conversion exceptions and Method Integration partners. Since 2024.",
+    54: "Accounts that signed up for Method. Excludes conversion exceptions and Method Integration partners.",
+    55: "Accounts that connected their accounting software (sync event).",
+    56: "Accounts that made their first SaaS payment. Excludes conversion exceptions and Method Integration partners.",
     57: "SaaS revenue from first-time payers in the month. Excludes DEP products (Premium App, Enhancement Plan), conversion exceptions, and Method Integration partners.",
-    58: "Revenue from DEP products (Premium App, Enhancement Plan) by new payers. Since 2024.",
-    59: "Accounts that cancelled after previously converting to paid. Excludes conversion exceptions and Method Integration partners. Since 2024.",
+    58: "Revenue from DEP products (Premium App, Enhancement Plan) by new payers.",
+    59: "Accounts that cancelled after previously converting to paid. Excludes conversion exceptions and Method Integration partners.",
     60: "Existing paying customers at the start of each month. Excludes new payers, conversion exceptions, and Method Integration partners.",
     61: "All SaaS revenue across all customers. Includes both new and existing payers. Excludes conversion exceptions and Method Integration partners.",
     62: "Revenue from DEP products (Premium App, Enhancement Plan) across all customers. Excludes conversion exceptions and Method Integration partners.",
