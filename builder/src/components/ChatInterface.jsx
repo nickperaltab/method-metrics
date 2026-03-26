@@ -46,7 +46,7 @@ const styles = {
   },
   assistantMsg: {
     alignSelf: 'flex-start',
-    maxWidth: '85%',
+    maxWidth: '100%',
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
@@ -65,7 +65,7 @@ const styles = {
     background: '#0c0f12',
     border: '1px solid #1a1e24',
     borderRadius: 8,
-    height: 350,
+    height: 450,
     overflow: 'hidden',
   },
   inputRow: {

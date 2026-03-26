@@ -22,16 +22,18 @@ export function groupMetrics(metrics) {
   };
 }
 
-export async function saveChart({ name, createdBy, metricIds, gwSpec }) {
+export async function saveChart({ name, createdBy, createdByAvatar, metricIds, gwSpec }) {
+  const body = {
+    name,
+    created_by: createdBy,
+    metric_ids: metricIds,
+    gw_spec: gwSpec,
+  };
+  if (createdByAvatar) body.created_by_avatar = createdByAvatar;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/saved_charts`, {
     method: 'POST',
     headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify({
-      name,
-      created_by: createdBy,
-      metric_ids: metricIds,
-      gw_spec: gwSpec,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Save failed: ${res.status}`);
   return res.json();
@@ -44,6 +46,16 @@ export async function loadCharts(userEmail) {
   );
   if (!res.ok) throw new Error(`Load failed: ${res.status}`);
   return res.json();
+}
+
+export async function loadChart(id) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${id}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load chart failed: ${res.status}`);
+  const data = await res.json();
+  return data[0] || null;
 }
 
 export async function fetchDashboards() {

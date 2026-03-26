@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AiPrompt from './AiPrompt';
 import EChart from './EChart';
 import { useBqData } from '../hooks/useBqData';
@@ -25,7 +26,8 @@ const styles = {
   schemasStatus: { color: '#5a6370', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textAlign: 'center' },
 };
 
-export default function Explorer({ metrics, bqConnected, userEmail }) {
+export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }) {
+  const navigate = useNavigate();
   const [selectedMetric, setSelectedMetric] = useState(null);
   const [chartOption, setChartOption] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -262,6 +264,7 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
       const saved = await saveChart({
         name,
         createdBy: userEmail || 'anonymous',
+        createdByAvatar: userAvatar,
         metricIds: lastSpec.metricIds,
         gwSpec: { ...lastSpec },
       });
@@ -282,17 +285,22 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
         const maxY = existingLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
         await updateDashboard(targetDashboardId, {
           layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
+          updated_by: userEmail,
         });
       }
 
       setSaveSuccess(true);
+      if (targetDashboardId) {
+        navigate(`/dashboards/${targetDashboardId}`);
+        return;
+      }
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
       setAiError(`Save failed: ${e.message}`);
     } finally {
       setSaving(false);
     }
-  }, [selectedMetric, lastSpec, userEmail, dashboards]);
+  }, [selectedMetric, lastSpec, userEmail, userAvatar, dashboards, navigate]);
 
   const loading = dataLoading || aiLoading;
   const hasChart = chartOption && !loading;
