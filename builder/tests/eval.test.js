@@ -190,3 +190,86 @@ describe('AI Chart Builder Evals', () => {
     assert.strictEqual(result.data_config.last_n_months, 3, 'should be last 3 months');
   });
 });
+
+// --- Conversational AI Tests ---
+
+async function callAiConversational(messages, currentChartSpec) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'apikey': SUPABASE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages,
+      metricContext: METRIC_CONTEXT,
+      schemaContext: SCHEMA_CONTEXT,
+      currentChartSpec,
+    }),
+  });
+  if (!res.ok) throw new Error(`AI function failed: ${res.status}`);
+  return res.json();
+}
+
+describe('Conversational AI Evals', () => {
+  it('follow-up: add metric to existing chart', async () => {
+    const r1 = await callAi('show me trials by month');
+    assertValidSpec(r1, 'initial trials');
+
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'add syncs too' },
+    ], r1);
+    assertValidSpec(r2, 'add syncs');
+    assert(r2.metric_ids.length >= 2, 'should have at least 2 metrics');
+    assert(r2.metric_ids.includes(54), 'should keep Trials');
+    assert(r2.metric_ids.includes(55), 'should add Syncs');
+  });
+
+  it('follow-up: change chart type', async () => {
+    const r1 = await callAi('show me trials by month');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'make it a bar chart' },
+    ], r1);
+    assertValidSpec(r2, 'change to bar');
+    assert.strictEqual(r2.echarts_type, 'bar', 'should be bar');
+    assert(r2.metric_ids.includes(54), 'should still have Trials');
+  });
+
+  it('follow-up: change time range', async () => {
+    const r1 = await callAi('show me trials by month');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'just the last 6 months' },
+    ], r1);
+    assertValidSpec(r2, 'last 6 months follow-up');
+    assert.strictEqual(r2.data_config.last_n_months, 6, 'should filter to 6 months');
+  });
+
+  it('follow-up: add channel filter', async () => {
+    const r1 = await callAi('show me trials by month');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'only SEO' },
+    ], r1);
+    assertValidSpec(r2, 'SEO filter follow-up');
+    assert.strictEqual(r2.data_config.channel_filter, 'SEO', 'should filter by SEO');
+  });
+
+  it('follow-up: completely different topic resets', async () => {
+    const r1 = await callAi('show me trials by month');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'show me churn rate by month' },
+    ], r1);
+    assertValidSpec(r2, 'topic change');
+    assert(r2.metric_ids.includes(46), 'should pick Churn Rate');
+  });
+});
