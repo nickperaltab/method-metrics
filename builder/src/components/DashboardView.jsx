@@ -4,7 +4,7 @@ import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import EChart from './EChart';
-import { fetchDashboard, updateDashboard, loadCharts } from '../lib/supabase';
+import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
 import { fetchAggregatedData } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
@@ -80,8 +80,6 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
   const [charts, setCharts] = useState([]);
   const [chartMap, setChartMap] = useState({});
   const [gridLayout, setGridLayout] = useState([]);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -106,13 +104,7 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
       setLoading(true);
       setError(null);
       try {
-        const [db, savedCharts] = await Promise.allSettled([
-          fetchDashboard(id),
-          userEmail ? loadCharts(userEmail) : Promise.resolve([]),
-        ]);
-
-        const dbVal = db.status === 'fulfilled' ? db.value : null;
-        const chartsVal = savedCharts.status === 'fulfilled' ? savedCharts.value : [];
+        const dbVal = await fetchDashboard(id);
 
         if (!dbVal) {
           setError('Dashboard not found');
@@ -121,10 +113,17 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
         }
 
         setDashboard(dbVal);
-        setCharts(chartsVal);
         setGridLayout(dbVal.layout || []);
 
-        // Build chart lookup map
+        // Load charts by IDs from the dashboard layout (not filtered by user)
+        const chartIds = (dbVal.layout || []).map(item => item.i);
+        const chartsVal = await loadChartsByIds(chartIds);
+
+        // Also load user's charts for the Add modal
+        const userCharts = userEmail ? await loadCharts(userEmail) : [];
+        setCharts(userCharts);
+
+        // Build chart lookup map from dashboard charts
         const map = {};
         for (const c of chartsVal) {
           map[String(c.id)] = c;
@@ -270,34 +269,23 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
   }, [bqConnected, metrics, gridLayout, chartMap]);
 
   const handleLayoutChange = useCallback((newLayout) => {
-    if (!editing) return;
-    setGridLayout(prev => {
-      // Preserve chart IDs from previous layout items, merge with new positions
-      return newLayout.map(item => ({
-        i: item.i,
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      }));
-    });
-  }, [editing]);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      await updateDashboard(id, { layout: gridLayout });
-      setEditing(false);
-    } catch (e) {
-      setError(`Save failed: ${e.message}`);
-    } finally {
-      setSaving(false);
-    }
-  }, [id, gridLayout]);
+    setGridLayout(newLayout.map(item => ({
+      i: item.i,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    })));
+  }, []);
 
   const handleRemoveChart = useCallback((chartId) => {
-    setGridLayout(prev => prev.filter(item => item.i !== chartId));
-  }, []);
+    setGridLayout(prev => {
+      const updated = prev.filter(item => item.i !== chartId);
+      // Auto-save layout after removal
+      updateDashboard(id, { layout: updated }).catch(() => {});
+      return updated;
+    });
+  }, [id]);
 
   const handleAddChart = useCallback((chart) => {
     const chartId = String(chart.id);
@@ -340,20 +328,7 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
           <span style={styles.title}>{dashboard?.name || 'Dashboard'}</span>
         </div>
         <div style={styles.actions}>
-          {editing && (
-            <>
-              <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
-              <button style={styles.btn} onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Layout'}
-              </button>
-            </>
-          )}
-          <button
-            style={{ ...styles.btnSecondary, ...(editing ? styles.btnActive : {}) }}
-            onClick={() => setEditing(!editing)}
-          >
-            {editing ? 'Done' : 'Edit Layout'}
-          </button>
+          <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
         </div>
       </div>
 
@@ -361,9 +336,7 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
 
       {gridLayout.length === 0 ? (
         <div style={styles.empty}>
-          {editing
-            ? 'Click "+ Add Chart" to add charts from your library.'
-            : 'This dashboard is empty. Click "Edit Layout" to start adding charts.'}
+          This dashboard is empty. Click "+ Add Chart" to add charts.
         </div>
       ) : (
         <GridLayout
@@ -372,8 +345,8 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
           cols={COLS}
           rowHeight={ROW_HEIGHT}
           width={containerWidth}
-          isDraggable={editing}
-          isResizable={editing}
+          isDraggable={false}
+          isResizable={false}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".drag-handle"
           compactType="vertical"
@@ -382,8 +355,8 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
           {gridLayout.map(item => {
             const chart = chartMap[item.i];
             return (
-              <div key={item.i} style={{ ...styles.gridItem, ...(editing ? styles.gridItemEditing : {}) }}>
-                <div style={styles.chartHeader} className="drag-handle">
+              <div key={item.i} style={styles.gridItem}>
+                <div style={styles.chartHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     {chart?.created_by_avatar && (
                       <img
@@ -394,20 +367,18 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
                     )}
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
-                  {editing && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button
-                        style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
-                        onClick={() => navigate(`/chat?editChart=${item.i}`)}
-                        title="Edit chart"
-                      >
-                        &#9998;
-                      </button>
-                      <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
-                        &#10005;
-                      </button>
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
+                      onClick={() => navigate(`/chat?editChart=${item.i}`)}
+                      title="Edit chart"
+                    >
+                      &#9998;
+                    </button>
+                    <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
+                      &#10005;
+                    </button>
+                  </div>
                 </div>
                 <div style={styles.chartBody}>
                   {chartLoading[item.i] ? (

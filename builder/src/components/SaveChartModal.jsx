@@ -112,7 +112,7 @@ export default function SaveChartModal({ onSave, onClose, dashboards = [], defau
           {editingChart && (
             <button
               style={styles.saveBtn}
-              onClick={() => onUpdate && onUpdate({ gwSpec: null })}
+              onClick={() => onUpdate && onUpdate()}
             >
               Update "{editingChart.name}"
             </button>

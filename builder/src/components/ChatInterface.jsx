@@ -169,6 +169,7 @@ export default function ChatInterface({
     if (!val || loading) return;
     inputRef.current.value = '';
     onSend(val);
+    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   return (
@@ -212,8 +213,33 @@ export default function ChatInterface({
 
       <div style={styles.messages}>
         {messages.length === 0 && (
-          <div style={{ color: '#5a6370', textAlign: 'center', marginTop: 80, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-            Describe the chart you want to build.
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+            <div style={{ color: '#8b929b', fontSize: 15, fontFamily: "'DM Sans', sans-serif" }}>
+              What chart would you like to build?
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {['Trials by month', 'Sync rate trend', 'Trials vs Syncs', 'Conversion rate'].map(chip => (
+                <button
+                  key={chip}
+                  onClick={() => onSend(chip)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #34d399',
+                    color: '#34d399',
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    cursor: 'pointer',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11,
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#0a1f17'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((msg, i) => {
