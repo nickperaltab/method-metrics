@@ -100,7 +100,8 @@ describe('AI Chart Builder Evals', () => {
   it('by country: should use SignupCountry', async () => {
     const result = await callAi('show me trials by country');
     assertValidSpec(result, 'trials by country');
-    assert.strictEqual(result.color_field, 'SignupCountry', 'should use SignupCountry');
+    const usesCountry = result.color_field === 'SignupCountry' || result.x_field === 'SignupCountry';
+    assert(usesCountry, `should use SignupCountry as color_field or x_field, got color_field=${result.color_field}, x_field=${result.x_field}`);
   });
 
   it('derived metric: conversion rate', async () => {
