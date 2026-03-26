@@ -9,7 +9,6 @@ import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '..
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
-import ChartControls from './ChartControls';
 import {
   castRow,
   aggregateRows,
@@ -430,7 +429,6 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           <div style={styles.chartContainer}>
             <EChart option={chartOption} />
           </div>
-          <ChartControls selectedMonths={currentTimeRange} onTimeRangeChange={handleTimeRangeChange} />
           <ChartDetails queryDetails={queryDetails} metrics={metrics} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
             {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}

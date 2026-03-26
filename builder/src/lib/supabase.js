@@ -39,6 +39,19 @@ export async function saveChart({ name, createdBy, createdByAvatar, metricIds, g
   return res.json();
 }
 
+export async function updateChart(id, { gwSpec, updatedBy }) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${id}`,
+    {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ gw_spec: gwSpec, updated_by: updatedBy, updated_at: new Date().toISOString() }),
+    }
+  );
+  if (!res.ok) throw new Error(`Update chart failed: ${res.status}`);
+  return res.json();
+}
+
 export async function loadCharts(userEmail) {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/saved_charts?created_by=eq.${encodeURIComponent(userEmail)}&order=created_at.desc`,
