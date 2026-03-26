@@ -56,6 +56,7 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
 export function buildMetricContext(metrics) {
   const chartable = metrics.filter(m =>
     ['primitive', 'foundational', 'derived'].includes(m.metric_type)
+    && m.status === 'live'
   );
   return chartable.map(m => {
     let line = `- id:${m.id} name:"${m.name}" type:${m.metric_type} view:${m.view_name || 'none'}`;

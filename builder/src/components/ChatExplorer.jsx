@@ -30,7 +30,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
 
     async function loadSchemas() {
       const viewMetrics = metrics.filter(m =>
-        ['primitive', 'foundational'].includes(m.metric_type) && m.view_name
+        ['primitive', 'foundational'].includes(m.metric_type) && m.view_name && m.status === 'live'
       );
       const uniqueViews = [...new Set(viewMetrics.map(m => m.view_name))];
 
