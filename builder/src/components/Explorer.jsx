@@ -68,30 +68,54 @@ function safeDivide(a, b) {
 }
 
 function computeDerived(derived, depResults, xField, timeBucket) {
-  // depResults: { [metricId]: rows[] }
-  // Get time labels from first dependency
-  const firstDepId = derived.depends_on[0];
-  const firstRows = depResults[firstDepId] || [];
-  const labels = [...new Set(firstRows.map(r => r[xField]))];
+  const bucket = timeBucket || 'month';
 
+  // Step 1: Aggregate each dependency into time buckets
+  const depAggregated = {};
+  for (const depId of derived.depends_on) {
+    const rows = depResults[depId] || [];
+    const counts = {};
+    for (const row of rows) {
+      // Truncate date to bucket
+      let key = row[xField];
+      if (key && typeof key === 'string') {
+        if (bucket === 'month' && /^\d{4}-\d{2}/.test(key)) {
+          key = key.substring(0, 7);
+        } else if (bucket === 'day') {
+          key = key.substring(0, 10);
+        }
+        // week: for simplicity just use month
+      }
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    depAggregated[depId] = counts;
+  }
+
+  // Step 2: Get all time labels (union across deps)
+  const allLabels = new Set();
+  for (const counts of Object.values(depAggregated)) {
+    Object.keys(counts).forEach(k => allLabels.add(k));
+  }
+  const sortedLabels = [...allLabels].sort();
+
+  // Step 3: Apply formula per time bucket
   const computed = [];
-  for (const label of labels) {
+  for (const label of sortedLabels) {
     let formula = derived.formula;
     for (const depId of derived.depends_on) {
-      const depRows = depResults[depId] || [];
-      const matching = depRows.filter(r => r[xField] === label);
-      const val = matching.length;
+      const val = depAggregated[depId]?.[label] || 0;
       formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
     }
-    // Replace SAFE_DIVIDE function
-    formula = formula.replace(/SAFE_DIVIDE\(([^,]+),([^)]+)\)/g, (_, a, b) => {
+    // Replace SAFE_DIVIDE
+    formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
       const numA = Number(a) || 0;
       const numB = Number(b) || 0;
-      return String(safeDivide(numA, numB));
+      return String(numB === 0 ? 0 : numA / numB);
     });
     let value;
     try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
-    computed.push({ [xField]: label, value: Number(value) || 0 });
+    if (!isFinite(value)) value = 0;
+    computed.push({ [xField]: label, value: Math.round(value * 100) / 100 });
   }
   return computed;
 }

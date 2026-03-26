@@ -45,7 +45,10 @@ Guidelines:
 - If there is a numeric/quantitative column available, use it for y_field
 - If no numeric column exists (only dates and strings), set y_field to "COUNT" — the frontend will aggregate row counts automatically
 - When y_field is "COUNT", the chart will show the count of rows grouped by x_field
-- If the user mentions a time range ("last 3 months", "last year", "recent", "last few months"), set last_n_months to the appropriate integer (e.g., 3, 6, 12). "Last few" = 6. "Recent" = 3. "This year" = 12. If no time range mentioned, set to null (show all data)`;
+- If the user mentions a time range ("last 3 months", "last year", "recent", "last few months"), set last_n_months to the appropriate integer (e.g., 3, 6, 12). "Last few" = 6. "Recent" = 3. "This year" = 12. If no time range mentioned, set to null (show all data)
+- IMPORTANT: There is NO "Channel" column in any view. Attribution channels are encoded as separate integer columns named Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None. Each column contains 0 or 1.
+- When the user asks for data "by channel", you should NOT use color_field. Instead, return a horizontal_bar chart where you pick the metric and use channel_filter to let the frontend handle the channel breakdown. Or return multiple metrics entries with different channel_filter values for each channel.
+- For "by country" requests, use color_field with the actual column name (e.g., "SignupCountry").`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

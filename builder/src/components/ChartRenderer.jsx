@@ -245,9 +245,19 @@ export default function ChartRenderer({ data, datasets, xField, yField, colorFie
 
   const multiSeries = seriesKeys.length > 0;
 
-  // --- Apply lastNMonths ---
-  if (lastNMonths && chartData.length > lastNMonths) {
-    chartData = chartData.slice(-lastNMonths);
+  // --- Apply lastNMonths (filter by date cutoff, not count) ---
+  if (lastNMonths) {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
+    const bucket = timeBucket || 'month';
+    let cutoffKey;
+    if (bucket === 'month') {
+      cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+    } else {
+      // day or week: use YYYY-MM-DD
+      cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+    }
+    chartData = chartData.filter(row => String(row[xField]) >= cutoffKey);
   }
 
   // --- Detect date axis ---
