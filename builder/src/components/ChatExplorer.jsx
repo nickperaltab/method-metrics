@@ -382,7 +382,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               const depMetric = metrics.find(dm => dm.id === depId);
               if (depMetric && depMetric.view_name) {
                 const depSchema = schemaCache[depMetric.view_name] || [];
-                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
+                if (!dateCol) { depKpis[depId] = { current: 0, prior: 0 }; continue; }
                 try {
                   depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
                 } catch {
@@ -410,7 +411,11 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
           } else if (metric.view_name) {
             const viewSchema = schemaCache[metric.view_name] || [];
-            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
+            if (!dateCol) {
+              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+              continue;
+            }
             try {
               const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
               kpiData.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
