@@ -485,11 +485,9 @@ function renderThead() {
     { key: 'name', label: 'Name' },
     { key: 'type', label: 'Type', width: '100px' },
     { key: 'description', label: 'Description' },
-    { key: 'source', label: 'Source' },
     { key: 'priority', label: 'Priority', width: '90px' },
     { key: 'assigned_to', label: 'Assigned', width: '100px' },
     { key: 'status', label: 'Status', width: '110px' },
-    { key: 'verified_at', label: 'Verified', width: '90px' },
   ];
 
   document.getElementById('thead-row').innerHTML = cols.map(c =>
@@ -504,7 +502,7 @@ function renderTable() {
   if (!tbody) return;
 
   if (filteredMetrics.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No metrics match your filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No metrics match your filters.</td></tr>';
     return;
   }
 
@@ -532,7 +530,7 @@ function renderTable() {
     const items = grouped[group.key];
     if (!items || items.length === 0) continue;
 
-    html += `<tr><td colspan="9" style="padding:0">
+    html += `<tr><td colspan="7" style="padding:0">
       <div class="group-header ${group.cls}">
         <span class="group-title">${group.label}</span>
         <span class="group-count">${items.length}</span>
@@ -553,7 +551,6 @@ function renderMetricRow(m) {
   const type = getType(m);
   const typeCls = `type-${type.toLowerCase()}`;
   const dotCls = `dot-${(m.status || 'unknown').replace(' ', '-')}`;
-  const verified = m.verified_at ? new Date(m.verified_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
   const isExpanded = expandedId === m.id;
 
   return `<tr class="data-row ${isExpanded ? 'expanded' : ''}" data-id="${m.id}" onclick="toggleExpand(${m.id}, event)">
@@ -567,7 +564,6 @@ function renderMetricRow(m) {
       </select>
     </td>
     <td><input class="editable-text" value="${esc(m.description || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'description',this.value,this)" style="color:var(--text-dim);font-size:11px"></td>
-    <td><input class="editable-text" value="${esc(m.source || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'source',this.value,this)"></td>
     <td>
       <select onclick="event.stopPropagation()" onchange="saveField(${m.id},'priority',this.value,this)">
         <option value="high"${m.priority==='high'?' selected':''}>High</option>
@@ -592,7 +588,6 @@ function renderMetricRow(m) {
         </select>
       </div>
     </td>
-    <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim)">${verified}</td>
   </tr>`;
 }
 
@@ -626,7 +621,7 @@ function renderExpandPanel(m) {
 
   const sqlText = m.view_definition || m.chart_sql || '';
 
-  return `<tr class="expand-row"><td colspan="9"><div class="expand-panel" id="${panelId}">
+  return `<tr class="expand-row"><td colspan="7"><div class="expand-panel" id="${panelId}">
     ${viewInfo}
     ${parentHtml}
     <div class="expand-section">
