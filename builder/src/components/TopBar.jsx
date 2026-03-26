@@ -1,4 +1,5 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 
 const styles = {
   bar: { padding: '12px 24px', borderBottom: '1px solid #1a1e24', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0c0f12' },
@@ -10,6 +11,12 @@ const styles = {
   connectBtn: { background: '#0a1f17', border: '1px solid #34d399', color: '#34d399', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
 };
 
+function routerNavStyle({ isActive }) {
+  return isActive
+    ? { ...styles.navLink, ...styles.activeLink }
+    : styles.navLink;
+}
+
 export default function TopBar({ connected, userEmail, onConnect }) {
   return (
     <div style={styles.bar}>
@@ -18,7 +25,8 @@ export default function TopBar({ connected, userEmail, onConnect }) {
         <a href="../index.html" style={styles.navLink}>Home</a>
         <a href="../tracker.html" style={styles.navLink}>Tracker</a>
         <a href="../charts.html" style={styles.navLink}>Charts</a>
-        <span style={{ ...styles.navLink, ...styles.activeLink }}>Explorer</span>
+        <NavLink to="/explorer" style={routerNavStyle}>Explorer</NavLink>
+        <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
       </div>
       <div>
         {connected
