@@ -13,8 +13,7 @@ import {
   applyLastNMonths,
   buildEChartsOption,
 } from '../lib/chartUtils';
-
-const schemaCache = {};
+import schemaCache from '../lib/schemaCache';
 
 export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
   const [messages, setMessages] = useState([]);
@@ -168,21 +167,28 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
               labels: agg.labels,
               data: agg.data,
             });
-          } catch {
-            const loaded = await loadMetricData(metric);
-            if (loaded) {
-              const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
-              const agg = aggregateRows(filteredRows, dateCol, yField, timeBucket);
-              rawDatasets.push({ label, ...agg });
-              collectedDetails.push({
-                metricName: label,
-                metricId: metric.id,
-                sql: '(client-side fallback — server query failed)',
-                dateColumn: dateCol,
-                labels: agg.labels,
-                data: agg.data,
-              });
-            }
+          } catch (err) {
+            // Always log the error for debugging
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: `ERROR: ${err.message || 'Query failed'}`,
+              dateColumn: dateCol,
+              labels: [],
+              data: [],
+            });
+            // Try client-side fallback
+            try {
+              const loaded = await loadMetricData(metric);
+              if (loaded) {
+                const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
+                const agg = aggregateRows(filteredRows, dateCol, yField, timeBucket);
+                rawDatasets.push({ label, ...agg });
+                collectedDetails[collectedDetails.length - 1].sql += ' → client-side fallback succeeded';
+                collectedDetails[collectedDetails.length - 1].labels = agg.labels;
+                collectedDetails[collectedDetails.length - 1].data = agg.data;
+              }
+            } catch { /* both paths failed */ }
           }
         }
       }

@@ -1,0 +1,24 @@
+flowchart LR
+    subgraph Supabase
+        M[metrics table]
+    end
+
+    subgraph AI["AI (Claude)"]
+        LLM["Reads metric menu\n+ user prompt\n→ Returns JSON config"]
+    end
+
+    subgraph BQ[BigQuery]
+        V["47 SQL views\n(v_trials, v_syncs, etc.)"]
+    end
+
+    subgraph Browser
+        JS[Frontend JS]
+        Chart[ECharts renderer]
+    end
+
+    M -->|"Metric catalog\n(on page load)"| JS
+    JS -->|"Prompt + catalog"| LLM
+    LLM -->|"JSON config\n(metric_id, chart_type)"| JS
+    JS -->|"SQL query\n(built from config)"| V
+    V -->|"Row data"| JS
+    JS -->|"Formatted data"| Chart

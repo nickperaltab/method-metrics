@@ -1,0 +1,22 @@
+flowchart TB
+    User["User asks: 'show me sync rate by month'"]
+    AI["AI returns: metric_id=5 (Sync Rate)"]
+    Check{"Does this metric\nhave a formula?"}
+
+    subgraph "Derived Metric Path"
+        Dep1["Fetch Trials data from BQ\n(dependency #1)"]
+        Dep2["Fetch Syncs data from BQ\n(dependency #2)"]
+        Calc["For each month:\nSAFE_DIVIDE(syncs, trials)\n\nJan: 45/80 = 56.2%\nFeb: 52/92 = 56.5%"]
+    end
+
+    subgraph "Normal Metric Path"
+        Direct["Fetch data directly from BQ view"]
+    end
+
+    User --> AI --> Check
+    Check -->|"Yes (has formula)"| Dep1
+    Check -->|"No (has view_name)"| Direct
+    Dep1 --> Calc
+    Dep2 --> Calc
+    Calc --> Chart[Draw chart with computed values]
+    Direct --> Chart

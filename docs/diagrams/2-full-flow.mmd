@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant User
+    participant Browser as Browser (React App)
+    participant Supabase
+    participant AI as AI (Claude Haiku)
+    participant BQ as BigQuery
+
+    Note over Browser,Supabase: Page Load
+    Browser->>Supabase: Fetch all metric definitions
+    Supabase-->>Browser: 242 metrics (name, type, view, formula)
+    Browser->>BQ: Fetch column schemas (INFORMATION_SCHEMA)
+    BQ-->>Browser: Column names + types for each view
+
+    Note over User,BQ: User Asks a Question
+    User->>Browser: "show me trials by month"
+    Browser->>Browser: Build AI prompt with metric catalog + schemas
+    Browser->>AI: Send prompt + context
+    AI-->>Browser: JSON config: metric_id=1, chart=bar, bucket=month
+
+    Note over Browser,BQ: Data Fetch
+    Browser->>Browser: Build SQL from AI config
+    Note right of Browser: SELECT FORMAT_DATE('%Y-%m', SignupDate)<br/>AS period, COUNT(*) AS value<br/>FROM v_trials GROUP BY 1
+    Browser->>BQ: Run SQL query (via OAuth)
+    BQ-->>Browser: [{period: "2026-01", value: 80}, ...]
+
+    Note over Browser: Render
+    Browser->>Browser: Draw chart with ECharts
+    Browser->>User: Interactive bar chart appears

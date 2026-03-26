@@ -1,0 +1,36 @@
+flowchart TB
+    subgraph "Supabase (Metric Registry)"
+        MT["metrics table\n242 rows"]
+        SC["saved_charts table"]
+        EF["ai-chart Edge Function\n(calls Claude API)"]
+    end
+
+    subgraph "BigQuery (Data Warehouse)"
+        P["Primitive views\nv_trials, v_syncs, v_mrr..."]
+        B["Breakdown views\nv_trials_by_channel..."]
+        D["Derived views\nv_sync_rate..."]
+        P --> B
+        P --> D
+    end
+
+    subgraph "Vercel (Chart Builder App)"
+        AI["ai.js\n(builds prompt, calls Edge Function)"]
+        BQjs["bigquery.js\n(builds SQL, queries BQ)"]
+        Exp["Explorer.jsx\n(orchestrates everything)"]
+        CR["ChartRenderer.jsx\n(ECharts)"]
+
+        Exp --> AI
+        AI --> EF
+        Exp --> BQjs
+        BQjs --> P
+        BQjs --> B
+        Exp --> CR
+    end
+
+    subgraph "GitHub Pages (Tracker)"
+        TR["tracker.html\n(metric table editor)"]
+    end
+
+    MT --> AI
+    MT --> TR
+    Exp --> SC

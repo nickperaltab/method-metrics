@@ -1,0 +1,9 @@
+flowchart LR
+    User["'show me SEO trials'"]
+    AI["AI returns:\nchannel_filter: 'SEO'"]
+    Map["Frontend maps:\nSEO → Att_SEO column"]
+    SQL["SQL adds:\nWHERE Att_SEO > 0"]
+    BQ["BigQuery returns\nonly SEO-attributed rows"]
+    Chart["Chart shows\nSEO trials only"]
+
+    User --> AI --> Map --> SQL --> BQ --> Chart
