@@ -17,7 +17,7 @@ import {
 } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 
-export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar }) {
+export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar, modalMode, onChartSaved }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const addToDashboardId = searchParams.get('addToDashboard');
@@ -77,7 +77,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
   // Build a chart from a spec (shared by editChart, time range change, and conversation restore)
   const buildChartFromSpec = useCallback(async (spec, overrideLastNMonths) => {
-    const { metricIds, echartsType, dataConfig } = spec;
+    const { metricIds, echartsType, dataConfig, showLabels } = spec;
     const effectiveLastNMonths = overrideLastNMonths !== undefined ? overrideLastNMonths : dataConfig.lastNMonths;
     const channelFilter = dataConfig.channelFilter;
     const xField = dataConfig.xField;
@@ -174,7 +174,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       ));
     }
 
-    return buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+    return buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels });
   }, [metrics]);
 
   // Handle editChart query param — load saved chart and render it
@@ -282,12 +282,20 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
           updated_by: userEmail,
         });
+        if (modalMode && onChartSaved) {
+          onChartSaved(chartId);
+          return;
+        }
         // Navigate to the dashboard after saving
         navigate(`/dashboards/${targetDashboardId}`);
         return;
       }
+      if (modalMode && onChartSaved && saved && saved.length > 0) {
+        onChartSaved(String(saved[0].id));
+        return;
+      }
     } catch { /* non-critical */ }
-  }, [lastSpec, userEmail, userAvatar, dashboards, addToDashboardId, navigate]);
+  }, [lastSpec, userEmail, userAvatar, dashboards, addToDashboardId, navigate, modalMode, onChartSaved]);
 
   const loadMetricData = useCallback(async (metric) => {
     if (!metric.view_name) return null;
@@ -308,6 +316,15 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
     try {
       const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec);
+
+      if (result.type === 'text') {
+        const content = result.suggestion
+          ? `${result.content}\n\n${result.suggestion}`
+          : result.content;
+        setMessages(prev => [...prev, { role: 'assistant', content }]);
+        setLoading(false);
+        return;
+      }
 
       if (result.error) {
         const errText = result.suggestion ? `${result.error}. ${result.suggestion}` : result.error;
@@ -457,9 +474,9 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
       );
 
-      const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+      const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels });
 
-      const newSpec = { metricIds: result.metricIds, echartsType, dataConfig };
+      const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels };
       setLastSpec(newSpec);
       setCurrentTimeRange(dataConfig.lastNMonths || null);
 

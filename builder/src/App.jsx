@@ -35,7 +35,7 @@ export default function App() {
             }
           />
           <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
-          <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} metrics={metrics} bqConnected={connected} />} />
+          <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
         </Routes>
       </div>
     </HashRouter>
