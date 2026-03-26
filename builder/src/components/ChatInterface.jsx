@@ -253,25 +253,9 @@ export default function ChatInterface({
             <div key={i} style={styles.assistantMsg}>
               {msg.content && <div style={styles.assistantText}>{msg.content}</div>}
               {msg.chartOption && (
-                <>
-                  <div style={styles.chartWrap}>
-                    <EChart option={msg.chartOption} />
-                  </div>
-                  {onSaveChart && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => onSaveChart(i)}
-                        style={{
-                          background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
-                          padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
-                        }}
-                      >
-                        Save Chart
-                      </button>
-                    </div>
-                  )}
-                </>
+                <div style={styles.chartWrap}>
+                  <EChart option={msg.chartOption} />
+                </div>
               )}
               {msg.kpiData && (
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -280,6 +264,20 @@ export default function ChatInterface({
               )}
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
+              )}
+              {(msg.chartOption || msg.kpiData || msg.tableData) && onSaveChart && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => onSaveChart(i)}
+                    style={{
+                      background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+                      padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+                    }}
+                  >
+                    Save Chart
+                  </button>
+                </div>
               )}
               {msg.queryDetails && msg.queryDetails.length > 0 && (
                 <ChartDetails queryDetails={msg.queryDetails} metrics={metrics} />
