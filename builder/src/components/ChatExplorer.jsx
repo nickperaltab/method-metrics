@@ -86,6 +86,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
 
       // Build datasets (same logic as Explorer)
       const rawDatasets = [];
+      const collectedDetails = [];
 
       for (let i = 0; i < result.metrics.length; i++) {
         const metric = result.metrics[i];
@@ -137,6 +138,19 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
             computedData.push(Math.round(value * 100) / 100);
           }
           rawDatasets.push({ label, labels: computedLabels, data: computedData });
+          const depNames = metric.depends_on.map(id => {
+            const dm = metrics.find(m => m.id === id);
+            return dm ? `${dm.name} (${id})` : String(id);
+          });
+          collectedDetails.push({
+            metricName: label,
+            metricId: metric.id,
+            sql: `Derived: ${metric.formula}`,
+            dateColumn: 'N/A (computed from dependencies)',
+            labels: computedLabels,
+            data: computedData,
+            dependsOn: depNames,
+          });
         } else {
           // Use the correct date column for this specific view (may differ from AI's xField)
           const viewSchema = schemaCache[metric.view_name] || [];
@@ -146,12 +160,28 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
               metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
             );
             rawDatasets.push({ label, ...agg });
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: agg.sql,
+              dateColumn: dateCol,
+              labels: agg.labels,
+              data: agg.data,
+            });
           } catch {
             const loaded = await loadMetricData(metric);
             if (loaded) {
               const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
               const agg = aggregateRows(filteredRows, dateCol, yField, timeBucket);
               rawDatasets.push({ label, ...agg });
+              collectedDetails.push({
+                metricName: label,
+                metricId: metric.id,
+                sql: '(client-side fallback — server query failed)',
+                dateColumn: dateCol,
+                labels: agg.labels,
+                data: agg.data,
+              });
             }
           }
         }
@@ -192,6 +222,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
         role: 'assistant',
         content: result.explanation || '',
         chartOption,
+        queryDetails: collectedDetails,
       };
       const allMessages = [...updatedMessages, assistantMsg];
       setMessages(allMessages);
