@@ -18,7 +18,7 @@ describe('formatDateLabel', () => {
     expect(formatDateLabel('2024-03')).toBe("Mar '24");
   });
   it('formats YYYY-MM-DD', () => {
-    expect(formatDateLabel('2024-03-15')).toBe('Mar 15');
+    expect(formatDateLabel('2024-03-15')).toBe("Mar 15, '24");
   });
   it('passes through non-date', () => {
     expect(formatDateLabel('US')).toBe('US');
