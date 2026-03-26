@@ -103,3 +103,71 @@ export async function fetchViewData(viewName) {
 export function clearViewCache() {
   Object.keys(viewCache).forEach(k => delete viewCache[k]);
 }
+
+/**
+ * Fetch pre-aggregated data from a BQ view.
+ * Instead of SELECT * and client-side aggregation, this builds a proper
+ * GROUP BY query so BQ does the aggregation server-side.
+ *
+ * @param {string} viewName - BQ view name (e.g., 'v_trials')
+ * @param {string} xField - Column for X axis (e.g., 'SignupDate')
+ * @param {string} yField - Column for Y axis, or 'COUNT'
+ * @param {string} timeBucket - 'month' | 'week' | 'day' | null
+ * @param {string|null} channelFilter - Channel name (e.g., 'SEO') or null
+ * @param {number|null} lastNMonths - Filter to last N months, or null
+ * @returns {{ labels: string[], data: number[] }}
+ */
+const aggCache = {};
+
+export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
+  const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
+  if (aggCache[cacheKey]) return aggCache[cacheKey];
+
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+  const bucket = timeBucket || 'month';
+
+  // Build the period expression
+  let periodExpr;
+  if (bucket === 'month') {
+    periodExpr = `FORMAT_DATE('%Y-%m', ${xField})`;
+  } else if (bucket === 'week') {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${xField}, WEEK(MONDAY)))`;
+  } else {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', ${xField})`;
+  }
+
+  // Build the value expression
+  const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
+
+  // Build WHERE clauses
+  const wheres = [];
+
+  // Channel filter
+  if (channelFilter) {
+    const ATT_COL_MAP = {
+      SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
+      Social: 'Att_Social', Email: 'Att_Email', Referral: 'Att_Referral_Link',
+      Direct: 'Att_Direct', Partners: 'Att_Partners', Content: 'Att_Content',
+      Remarketing: 'Att_Remarketing', Other: 'Att_Other', None: 'Att_None',
+    };
+    const col = ATT_COL_MAP[channelFilter];
+    if (col) wheres.push(`${col} > 0`);
+  }
+
+  // Time range filter
+  if (lastNMonths) {
+    wheres.push(`${xField} >= DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH)`);
+  }
+
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+
+  const sql = `SELECT ${periodExpr} AS period, ${valueExpr} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 1`;
+
+  const result = await queryBq(sql);
+  const output = {
+    labels: result.rows.map(r => r.period),
+    data: result.rows.map(r => Number(r.value) || 0),
+  };
+  aggCache[cacheKey] = output;
+  return output;
+}

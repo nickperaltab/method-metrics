@@ -4,7 +4,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation } from '../lib/supabase';
-import { queryBq } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
   aggregateRows,
@@ -108,11 +108,18 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
           };
           rawDatasets.push({ label, ...agg });
         } else {
-          const loaded = await loadMetricData(metric);
-          if (loaded) {
-            const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
-            const agg = aggregateRows(filteredRows, xField, yField, timeBucket);
+          try {
+            const agg = await fetchAggregatedData(
+              metric.view_name, xField, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+            );
             rawDatasets.push({ label, ...agg });
+          } catch {
+            const loaded = await loadMetricData(metric);
+            if (loaded) {
+              const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
+              const agg = aggregateRows(filteredRows, xField, yField, timeBucket);
+              rawDatasets.push({ label, ...agg });
+            }
           }
         }
       }
