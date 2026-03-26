@@ -21,13 +21,10 @@ export default function TopBar({ connected, userEmail, onConnect }) {
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <span style={styles.logo}>Method</span>
-        <a href="../index.html" style={styles.navLink}>Home</a>
-        <a href="../tracker.html" style={styles.navLink}>Tracker</a>
-        <a href="../charts.html" style={styles.navLink}>Charts</a>
-        <NavLink to="/explorer" style={routerNavStyle}>Explorer</NavLink>
+        <NavLink to="/" style={({ isActive }) => ({ ...styles.logo, textDecoration: 'none' })}>Method</NavLink>
         <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
+        <a href="../tracker.html" style={styles.navLink}>Metrics</a>
       </div>
       <div>
         {connected
