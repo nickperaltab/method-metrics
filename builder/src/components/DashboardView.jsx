@@ -5,7 +5,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
-import { fetchAggregatedData } from '../lib/bigquery';
+import { fetchAggregatedData, clearAllCaches } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -108,6 +108,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       setLoading(true);
       setError(null);
       setChartOptions({});
+      setChartLoading({});
+      clearAllCaches(); // Clear BQ data + aggregation caches to ensure fresh data
       try {
         const dbVal = await fetchDashboard(id);
 
@@ -320,7 +322,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     }
     setShowChatModal(false);
     setEditChartId(null);
-    setRefreshKey(prev => prev + 1);
+    // Small delay to let Supabase propagate the write before re-fetching
+    setTimeout(() => setRefreshKey(prev => prev + 1), 500);
   }, [gridLayout]);
 
   const handleModalClose = useCallback(() => {

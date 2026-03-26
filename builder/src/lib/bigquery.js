@@ -119,6 +119,15 @@ export function clearViewCache() {
  */
 const aggCache = {};
 
+export function clearAggCache() {
+  Object.keys(aggCache).forEach(k => delete aggCache[k]);
+}
+
+export function clearAllCaches() {
+  clearViewCache();
+  clearAggCache();
+}
+
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
   const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
