@@ -5,7 +5,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart } from '../lib/supabase';
-import { queryBq } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
   aggregateRows,
@@ -117,11 +117,20 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
           };
           rawDatasets.push({ label, ...agg });
         } else {
-          const loaded = await loadMetricData(metric);
-          if (loaded) {
-            const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
-            const agg = aggregateRows(filteredRows, xField, yField, timeBucket);
+          // Use server-side aggregation via BQ GROUP BY
+          try {
+            const agg = await fetchAggregatedData(
+              metric.view_name, xField, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+            );
             rawDatasets.push({ label, ...agg });
+          } catch (e) {
+            // Fallback to client-side aggregation if SQL fails
+            const loaded = await loadMetricData(metric);
+            if (loaded) {
+              const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
+              const agg = aggregateRows(filteredRows, xField, yField, timeBucket);
+              rawDatasets.push({ label, ...agg });
+            }
           }
         }
       }
@@ -147,10 +156,16 @@ export default function Explorer({ metrics, bqConnected, userEmail }) {
         };
       });
 
-      // Apply lastNMonths filter
-      const { labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
-        allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
-      );
+      // Note: lastNMonths is handled server-side in fetchAggregatedData.
+      // For derived metrics (client-side), apply it here.
+      const hasDerived = result.metrics.some(m => m.formula && m.depends_on && !m.view_name);
+      let finalLabels = allLabels;
+      let finalDatasets = alignedDatasets;
+      if (hasDerived && dataConfig.lastNMonths) {
+        ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
+          allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
+        ));
+      }
 
       // Build ECharts option
       const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
