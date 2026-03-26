@@ -135,16 +135,22 @@ export function clearAllCaches() {
   clearAggCache();
 }
 
-export async function fetchYoYData(viewName, dateCol, yField, channelFilter) {
+export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yearFilter) {
   const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
   const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
 
   const wheres = [];
+  // Default: last 3 years. If yearFilter provided (e.g., [2025, 2026]), use that.
+  if (yearFilter && yearFilter.length > 0) {
+    wheres.push(`FORMAT_DATE('%Y', ${dateCol}) IN (${yearFilter.map(y => `'${y}'`).join(',')})`);
+  } else {
+    wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR)`);
+  }
   if (channelFilter) {
     const col = ATT_COL_MAP[channelFilter];
     if (col) wheres.push(`${col} > 0`);
   }
-  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+  const whereClause = `WHERE ${wheres.join(' AND ')}`;
 
   const sql = `SELECT FORMAT_DATE('%Y', ${dateCol}) AS year, FORMAT_DATE('%m', ${dateCol}) AS month_num, FORMAT_DATE('%b', ${dateCol}) AS month_name, ${valueExpr} AS value FROM ${table} ${whereClause} GROUP BY 1, 2, 3 ORDER BY 1, 2`;
 
