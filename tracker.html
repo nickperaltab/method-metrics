@@ -126,6 +126,14 @@ td select:focus{border-color:var(--accent)}
 }
 .editable-text:hover{border-color:var(--border)}
 .editable-text:focus{border-color:var(--accent);background:var(--bg)}
+.desc-area{
+  background:transparent;border:1px solid transparent;color:var(--text-dim);
+  padding:4px 6px;border-radius:3px;font-size:11px;width:100%;
+  font-family:var(--font-sans);outline:none;resize:none;
+  line-height:1.4;min-height:36px;overflow:hidden;
+}
+.desc-area:hover{border-color:var(--border)}
+.desc-area:focus{border-color:var(--accent);background:var(--bg)}
 .save-flash{animation:flash .6s ease}
 @keyframes flash{0%{background:var(--accent-dim)}100%{background:transparent}}
 
@@ -481,13 +489,13 @@ function renderApp() {
 
 function renderThead() {
   const cols = [
-    { key: 'id', label: 'ID', width: '50px' },
-    { key: 'name', label: 'Name' },
-    { key: 'type', label: 'Type', width: '100px' },
+    { key: 'id', label: 'ID', width: '40px' },
+    { key: 'name', label: 'Name', width: '160px' },
+    { key: 'type', label: 'Type', width: '90px' },
     { key: 'description', label: 'Description' },
-    { key: 'priority', label: 'Priority', width: '90px' },
-    { key: 'assigned_to', label: 'Assigned', width: '100px' },
-    { key: 'status', label: 'Status', width: '110px' },
+    { key: 'priority', label: 'Priority', width: '80px' },
+    { key: 'assigned_to', label: 'Assigned', width: '90px' },
+    { key: 'status', label: 'Status', width: '100px' },
   ];
 
   document.getElementById('thead-row').innerHTML = cols.map(c =>
@@ -545,6 +553,11 @@ function renderTable() {
 
   tbody.innerHTML = html;
   renderThead();
+  // Auto-size description textareas to fit content
+  tbody.querySelectorAll('.desc-area').forEach(ta => {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  });
 }
 
 function renderMetricRow(m) {
@@ -563,7 +576,7 @@ function renderMetricRow(m) {
         ).join('')}
       </select>
     </td>
-    <td><input class="editable-text" value="${esc(m.description || '')}" placeholder="—" onclick="event.stopPropagation()" oninput="debounceSave(${m.id},'description',this.value,this)" style="color:var(--text-dim);font-size:11px"></td>
+    <td><textarea class="desc-area" placeholder="—" onclick="event.stopPropagation()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';debounceSave(${m.id},'description',this.value,this)">${esc(m.description || '')}</textarea></td>
     <td>
       <select onclick="event.stopPropagation()" onchange="saveField(${m.id},'priority',this.value,this)">
         <option value="high"${m.priority==='high'?' selected':''}>High</option>
