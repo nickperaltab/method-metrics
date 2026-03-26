@@ -55,8 +55,8 @@ export function formatDateLabel(val) {
     return `${MONTH_NAMES[parseInt(m, 10) - 1]} '${y.slice(2)}`;
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-    const [, m, d] = val.split('-');
-    return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+    const [y, m, d] = val.split('-');
+    return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, '${y.slice(2)}`;
   }
   return val;
 }
