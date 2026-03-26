@@ -9,6 +9,7 @@ import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '..
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
+import DataTableView from './DataTableView';
 import {
   castRow,
   aggregateRows,
@@ -41,6 +42,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [dashboards, setDashboards] = useState([]);
   const [currentTimeRange, setCurrentTimeRange] = useState(null);
+  const [tableData, setTableData] = useState(null);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
   // Pre-load schemas for all primitive/foundational metrics on BQ connect
@@ -90,6 +92,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
     setAiError(null);
     setAiExplanation(null);
     setChartOption(null);
+    setTableData(null);
     setQueryDetails([]);
     try {
       const result = await generateChartSpec(prompt, metrics, schemaCache);
@@ -243,9 +246,13 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         ));
       }
 
-      // Build ECharts option
-      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
-      setChartOption(option);
+      // Build ECharts option or table data
+      if (echartsType === 'table') {
+        setTableData({ labels: finalLabels, datasets: finalDatasets });
+      } else {
+        const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
+        setChartOption(option);
+      }
       setQueryDetails(collectedDetails);
       setSelectedMetric(result.metrics[0]);
       setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors });
@@ -408,7 +415,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   }, [selectedMetric, lastSpec, userEmail, userAvatar, dashboards, navigate]);
 
   const loading = dataLoading || aiLoading;
-  const hasChart = chartOption && !loading;
+  const hasChart = (chartOption || tableData) && !loading;
 
   return (
     <div style={styles.layout}>
@@ -426,9 +433,13 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       {dataError && <div style={{ color: '#f87171', fontSize: 12, padding: '8px 0' }}>{dataError}</div>}
       {hasChart && (
         <>
-          <div style={styles.chartContainer}>
-            <EChart option={chartOption} />
-          </div>
+          {tableData ? (
+            <DataTableView labels={tableData.labels} datasets={tableData.datasets} />
+          ) : (
+            <div style={styles.chartContainer}>
+              <EChart option={chartOption} />
+            </div>
+          )}
           <ChartDetails queryDetails={queryDetails} metrics={metrics} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
             {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}

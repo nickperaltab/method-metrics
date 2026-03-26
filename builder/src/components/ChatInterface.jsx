@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import EChart from './EChart';
+import DataTableView from './DataTableView';
 import ChartDetails from './ChartDetails';
 
 const styles = {
@@ -270,6 +271,9 @@ export default function ChatInterface({
                     </div>
                   )}
                 </>
+              )}
+              {msg.tableData && (
+                <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
               )}
               {msg.queryDetails && msg.queryDetails.length > 0 && (
                 <ChartDetails queryDetails={msg.queryDetails} metrics={metrics} />

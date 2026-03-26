@@ -1,6 +1,6 @@
 import { invokeAiChart } from './supabase';
 
-const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area']);
+const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy']);
 
 export async function generateChartSpecWithHistory(messages, metrics, schemaMap, currentChartSpec) {
   const metricContext = buildMetricContext(metrics);
