@@ -121,4 +121,72 @@ describe('AI Chart Builder Evals', () => {
     assertValidSpec(result, 'last 6 months');
     assert.strictEqual(result.data_config.last_n_months, 6, 'should set last_n_months to 6');
   });
+
+  // --- Looker Dashboard Replication Tests ---
+
+  it('funnel: trials, syncs, conversions together', async () => {
+    const result = await callAi('show me the marketing funnel: trials, syncs, and conversions by month');
+    assertValidSpec(result, 'funnel multi-metric');
+    assert(result.metric_ids.length >= 3, 'should have 3 metric_ids');
+    assert.strictEqual(result.echarts_type, 'line', 'funnel trend should be line');
+  });
+
+  it('rates: conversion rate and sync rate together', async () => {
+    const result = await callAi('show me conversion rate and sync rate by month');
+    assertValidSpec(result, 'rates multi-metric');
+    assert(result.metric_ids.length >= 2, 'should have at least 2 rates');
+  });
+
+  it('pie chart: trial distribution by country', async () => {
+    const result = await callAi('show me trial distribution by country as a pie chart');
+    assertValidSpec(result, 'pie by country');
+    assert.strictEqual(result.echarts_type, 'pie', 'should be pie chart');
+  });
+
+  it('stacked bar: trials by channel over time', async () => {
+    const result = await callAi('show me trials stacked by channel over time');
+    assertValidSpec(result, 'stacked bar');
+    const isStacked = result.echarts_type === 'stacked_bar' || result.echarts_type === 'bar';
+    assert(isStacked, `should be stacked_bar or bar, got ${result.echarts_type}`);
+  });
+
+  it('horizontal bar: trials by country ranked', async () => {
+    const result = await callAi('show me trials by country as a horizontal bar chart');
+    assertValidSpec(result, 'horizontal bar');
+    assert.strictEqual(result.echarts_type, 'horizontal_bar', 'should be horizontal_bar');
+  });
+
+  it('area chart: syncs over time', async () => {
+    const result = await callAi('show me syncs over time as an area chart');
+    assertValidSpec(result, 'area chart');
+    assert.strictEqual(result.echarts_type, 'area', 'should be area chart');
+  });
+
+  it('multiple channel filters: PPC conversions', async () => {
+    const result = await callAi('show me PPC conversions by month');
+    assertValidSpec(result, 'PPC conversions');
+    assert.strictEqual(result.data_config.channel_filter, 'PPC', 'should filter by PPC');
+    assert(result.metric_ids.includes(56), 'should pick Conversions (id 56)');
+  });
+
+  it('combo: trials bar with conversion rate line', async () => {
+    const result = await callAi('show me trials as bars with conversion rate as a line overlay by month');
+    assertValidSpec(result, 'combo chart');
+    assert.strictEqual(result.echarts_type, 'combo', 'should be combo chart');
+    assert(result.metric_ids.length >= 2, 'should have at least 2 metrics for combo');
+  });
+
+  it('this year scope', async () => {
+    const result = await callAi('show me syncs this year');
+    assertValidSpec(result, 'this year');
+    assert.strictEqual(result.data_config.last_n_months, 12, 'this year should be last 12 months');
+  });
+
+  it('weekly time bucket with filter', async () => {
+    const result = await callAi('show me weekly SEO trials for the last 3 months');
+    assertValidSpec(result, 'weekly SEO');
+    assert.strictEqual(result.data_config.time_bucket, 'week', 'should be weekly');
+    assert.strictEqual(result.data_config.channel_filter, 'SEO', 'should filter SEO');
+    assert.strictEqual(result.data_config.last_n_months, 3, 'should be last 3 months');
+  });
 });
