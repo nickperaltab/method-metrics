@@ -282,11 +282,9 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
           updated_by: userEmail,
         });
-        // If came from dashboard, navigate back
-        if (addToDashboardId) {
-          navigate(`/dashboards/${addToDashboardId}`);
-          return;
-        }
+        // Navigate to the dashboard after saving
+        navigate(`/dashboards/${targetDashboardId}`);
+        return;
       }
     } catch { /* non-critical */ }
   }, [lastSpec, userEmail, userAvatar, dashboards, addToDashboardId, navigate]);
