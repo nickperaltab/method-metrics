@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
   aggregateRows,
@@ -479,18 +479,27 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
       );
 
-      const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
-
       const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors };
       setLastSpec(newSpec);
       setCurrentTimeRange(dataConfig.lastNMonths || null);
 
-      const assistantMsg = {
-        role: 'assistant',
-        content: result.explanation || '',
-        chartOption,
-        queryDetails: collectedDetails,
-      };
+      let assistantMsg;
+      if (echartsType === 'table') {
+        assistantMsg = {
+          role: 'assistant',
+          content: result.explanation || '',
+          tableData: { labels: finalLabels, datasets: finalDatasets },
+          queryDetails: collectedDetails,
+        };
+      } else {
+        const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
+        assistantMsg = {
+          role: 'assistant',
+          content: result.explanation || '',
+          chartOption,
+          queryDetails: collectedDetails,
+        };
+      }
       const allMessages = [...updatedMessages, assistantMsg];
       setMessages(allMessages);
 

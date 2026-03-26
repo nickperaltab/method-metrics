@@ -4,6 +4,7 @@ import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import EChart from './EChart';
+import DataTableView from './DataTableView';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
 import { fetchAggregatedData, clearAllCaches } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
@@ -261,8 +262,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           ));
         }
 
-        const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
-        setChartOptions(prev => ({ ...prev, [chartId]: option }));
+        if (echartsType === 'table') {
+          setChartOptions(prev => ({ ...prev, [chartId]: { _tableData: true, labels: finalLabels, datasets: finalDatasets } }));
+        } else {
+          const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig);
+          setChartOptions(prev => ({ ...prev, [chartId]: option }));
+        }
       } catch {
         // leave chartOptions[chartId] unset
       } finally {
@@ -414,6 +419,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     <div style={{ ...styles.empty, padding: 20, fontSize: 11 }}>
                       Loading chart data...
                     </div>
+                  ) : chartOptions[item.i]?._tableData ? (
+                    <DataTableView labels={chartOptions[item.i].labels} datasets={chartOptions[item.i].datasets} />
                   ) : chartOptions[item.i] ? (
                     <EChart option={chartOptions[item.i]} />
                   ) : (
