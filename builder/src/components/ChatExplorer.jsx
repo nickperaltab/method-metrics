@@ -17,11 +17,11 @@ import {
 } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 
-export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar, modalMode, onChartSaved }) {
+export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar, modalMode, onChartSaved, editChartId: editChartIdProp }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const addToDashboardId = searchParams.get('addToDashboard');
-  const editChartId = searchParams.get('editChart');
+  const editChartId = editChartIdProp || searchParams.get('editChart');
   const [messages, setMessages] = useState([]);
   const [conversationId, setConversationId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -250,8 +250,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setShowSaveModal(false);
     try {
       await updateChart(editingChartInfo.id, { gwSpec: { ...lastSpec }, updatedBy: userEmail || 'anonymous' });
+      if (modalMode && onChartSaved) {
+        onChartSaved(editingChartInfo.id);
+      } else {
+        navigate(-1);
+      }
     } catch { /* non-critical */ }
-  }, [editingChartInfo, lastSpec, userEmail]);
+  }, [editingChartInfo, lastSpec, userEmail, modalMode, onChartSaved, navigate]);
 
   const handleSaveConfirm = useCallback(async ({ name, dashboardId, newDashboardName }) => {
     setShowSaveModal(false);
