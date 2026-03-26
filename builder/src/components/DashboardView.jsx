@@ -191,6 +191,64 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           return;
         }
 
+        // KPI tile branch
+        if (echartsType === 'kpi') {
+          const kpis = [];
+          for (let i = 0; i < metricIds.length; i++) {
+            const metricId = metricIds[i];
+            const metric = metrics.find(m => m.id === metricId);
+            if (!metric) continue;
+            const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
+            const label = dataConfig.labels?.[i] || metric.name;
+            const isRate = !!(metric.formula && metric.depends_on && !metric.view_name);
+
+            if (isRate) {
+              const depKpis = {};
+              for (const depId of metric.depends_on) {
+                const depMetric = metrics.find(dm => dm.id === depId);
+                if (depMetric && depMetric.view_name) {
+                  const depSchema = schemaCache[depMetric.view_name] || [];
+                  const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+                  try {
+                    depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                  } catch {
+                    depKpis[depId] = { current: 0, prior: 0 };
+                  }
+                }
+              }
+              const evalFormula = (period) => {
+                let f = metric.formula;
+                for (const depId of metric.depends_on) {
+                  const val = depKpis[depId]?.[period] || 0;
+                  f = f.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+                }
+                f = f.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
+                  const numA = Number(a) || 0;
+                  const numB = Number(b) || 0;
+                  return String(numB === 0 ? 0 : numA / numB);
+                });
+                try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
+              };
+              const current = evalFormula('current');
+              const prior = evalFormula('prior');
+              const delta = current - prior;
+              const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+              kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+            } else if (metric.view_name) {
+              const viewSchema = schemaCache[metric.view_name] || [];
+              const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+              try {
+                const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
+                kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+              } catch {
+                kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+              }
+            }
+          }
+          setKpiDataMap(prev => ({ ...prev, [chartId]: kpis }));
+          return;
+        }
+
         for (let i = 0; i < metricIds.length; i++) {
           const metricId = metricIds[i];
           const metric = metrics.find(m => m.id === metricId);
@@ -446,6 +504,10 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   {chartLoading[item.i] ? (
                     <div style={{ ...styles.empty, padding: 20, fontSize: 11 }}>
                       Loading chart data...
+                    </div>
+                  ) : kpiDataMap[item.i] ? (
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: 16, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                      {kpiDataMap[item.i].map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
                     </div>
                   ) : chartOptions[item.i]?._tableData ? (
                     <DataTableView labels={chartOptions[item.i].labels} datasets={chartOptions[item.i].datasets} />
