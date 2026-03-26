@@ -26,6 +26,7 @@ export default function TopBar({ connected, userEmail, onConnect }) {
         <a href="../tracker.html" style={styles.navLink}>Tracker</a>
         <a href="../charts.html" style={styles.navLink}>Charts</a>
         <NavLink to="/explorer" style={routerNavStyle}>Explorer</NavLink>
+        <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
       </div>
       <div>

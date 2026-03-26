@@ -4,6 +4,7 @@ import TopBar from './components/TopBar';
 import Explorer from './components/Explorer';
 import DashboardList from './components/DashboardList';
 import DashboardView from './components/DashboardView';
+import ChatExplorer from './components/ChatExplorer';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
 
@@ -23,6 +24,14 @@ export default function App() {
               metricsLoading
                 ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
                 : <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} />
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              metricsLoading
+                ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
+                : <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} />
             }
           />
           <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
