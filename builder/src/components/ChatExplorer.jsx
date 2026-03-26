@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
+import SaveChartModal from './SaveChartModal';
 import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
-import { saveConversation } from '../lib/supabase';
+import { saveConversation, saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
@@ -16,12 +18,18 @@ import {
 import schemaCache from '../lib/schemaCache';
 
 export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const addToDashboardId = searchParams.get('addToDashboard');
   const [messages, setMessages] = useState([]);
   const [conversationId, setConversationId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastSpec, setLastSpec] = useState(null);
   const [schemasLoaded, setSchemasLoaded] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveMessageIndex, setSaveMessageIndex] = useState(null);
+  const [dashboards, setDashboards] = useState([]);
   const { loadView } = useBqData();
 
   // Pre-load schemas (same pattern as Explorer)
@@ -50,6 +58,52 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
 
     loadSchemas();
   }, [bqConnected, metrics, schemasLoaded]);
+
+  // Load dashboards for save modal
+  useEffect(() => {
+    fetchDashboards().then(setDashboards).catch(() => {});
+  }, []);
+
+  const handleSaveChart = useCallback((messageIndex) => {
+    setSaveMessageIndex(messageIndex);
+    setShowSaveModal(true);
+  }, []);
+
+  const handleSaveConfirm = useCallback(async ({ name, dashboardId, newDashboardName }) => {
+    setShowSaveModal(false);
+    if (!lastSpec) return;
+    try {
+      const saved = await saveChart({
+        name,
+        createdBy: userEmail || 'anonymous',
+        metricIds: lastSpec.metricIds,
+        gwSpec: { ...lastSpec },
+      });
+
+      let targetDashboardId = dashboardId || addToDashboardId;
+      if (newDashboardName) {
+        const created = await createDashboard({ name: newDashboardName, createdBy: userEmail || 'anonymous' });
+        if (created && created.length > 0) {
+          targetDashboardId = created[0].id;
+          setDashboards(prev => [created[0], ...prev]);
+        }
+      }
+      if (targetDashboardId && saved && saved.length > 0) {
+        const chartId = String(saved[0].id);
+        const db = dashboards.find(d => String(d.id) === String(targetDashboardId));
+        const existingLayout = db?.layout || [];
+        const maxY = existingLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+        await updateDashboard(targetDashboardId, {
+          layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
+        });
+        // If came from dashboard, navigate back
+        if (addToDashboardId) {
+          navigate(`/dashboards/${addToDashboardId}`);
+          return;
+        }
+      }
+    } catch { /* non-critical */ }
+  }, [lastSpec, userEmail, dashboards, addToDashboardId, navigate]);
 
   const loadMetricData = useCallback(async (metric) => {
     if (!metric.view_name) return null;
@@ -278,12 +332,23 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
   }
 
   return (
-    <ChatInterface
-      messages={messages}
-      onSend={handleSend}
-      loading={loading}
-      onNewThread={handleNewThread}
-      metrics={metrics}
-    />
+    <>
+      <ChatInterface
+        messages={messages}
+        onSend={handleSend}
+        loading={loading}
+        onNewThread={handleNewThread}
+        metrics={metrics}
+        onSaveChart={handleSaveChart}
+      />
+      {showSaveModal && (
+        <SaveChartModal
+          onSave={handleSaveConfirm}
+          onClose={() => setShowSaveModal(false)}
+          dashboards={dashboards}
+          defaultName={addToDashboardId ? '' : ''}
+        />
+      )}
+    </>
   );
 }
