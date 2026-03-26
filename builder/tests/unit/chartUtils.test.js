@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toBucketKey, formatDateLabel, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption } from '../../src/lib/chartUtils.js';
+import { toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption } from '../../src/lib/chartUtils.js';
 
 describe('toBucketKey', () => {
   it('truncates to month', () => {
@@ -13,15 +13,40 @@ describe('toBucketKey', () => {
   });
 });
 
-describe('formatDateLabel', () => {
-  it('formats YYYY-MM', () => {
-    expect(formatDateLabel('2024-03')).toBe("Mar '24");
+describe('formatDateLabel (standalone)', () => {
+  it('formats YYYY-MM with year', () => {
+    expect(formatDateLabel('2024-03')).toBe('Mar 2024');
   });
-  it('formats YYYY-MM-DD', () => {
-    expect(formatDateLabel('2024-03-15')).toBe("Mar 15, '24");
+  it('formats YYYY-MM-DD with year', () => {
+    expect(formatDateLabel('2024-03-15')).toBe('Mar 15, 2024');
   });
   it('passes through non-date', () => {
     expect(formatDateLabel('US')).toBe('US');
+  });
+});
+
+describe('formatDateLabels (context-aware)', () => {
+  it('monthly: shows just month name, year on first and January', () => {
+    const labels = ['2024-10', '2024-11', '2024-12', '2025-01', '2025-02'];
+    const result = formatDateLabels(labels);
+    expect(result).toEqual(['Oct 2024', 'Nov', 'Dec', 'Jan 2025', 'Feb']);
+  });
+  it('monthly: single year shows year on first label only', () => {
+    const labels = ['2026-01', '2026-02', '2026-03'];
+    const result = formatDateLabels(labels);
+    expect(result).toEqual(['Jan 2026', 'Feb', 'Mar']);
+  });
+  it('daily: shows month+day, year on first', () => {
+    const labels = ['2024-03-13', '2024-03-14', '2024-03-15'];
+    const result = formatDateLabels(labels);
+    expect(result[0]).toBe('Mar 13, 2024');
+    expect(result[1]).toBe('Mar 14');
+    expect(result[2]).toBe('Mar 15');
+  });
+  it('passes through non-date labels', () => {
+    const labels = ['US', 'CA', 'UK'];
+    const result = formatDateLabels(labels);
+    expect(result).toEqual(['US', 'CA', 'UK']);
   });
 });
 
