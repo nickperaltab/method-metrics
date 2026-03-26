@@ -17,7 +17,7 @@ import {
 } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 
-export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
+export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const addToDashboardId = searchParams.get('addToDashboard');
@@ -76,6 +76,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
       const saved = await saveChart({
         name,
         createdBy: userEmail || 'anonymous',
+        createdByAvatar: userAvatar,
         metricIds: lastSpec.metricIds,
         gwSpec: { ...lastSpec },
       });
@@ -95,6 +96,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
         const maxY = existingLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
         await updateDashboard(targetDashboardId, {
           layout: [...existingLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }],
+          updated_by: userEmail,
         });
         // If came from dashboard, navigate back
         if (addToDashboardId) {
@@ -103,7 +105,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail }) {
         }
       }
     } catch { /* non-critical */ }
-  }, [lastSpec, userEmail, dashboards, addToDashboardId, navigate]);
+  }, [lastSpec, userEmail, userAvatar, dashboards, addToDashboardId, navigate]);
 
   const loadMetricData = useCallback(async (metric) => {
     if (!metric.view_name) return null;

@@ -384,7 +384,16 @@ export default function DashboardView({ userEmail, metrics = [], bqConnected }) 
             return (
               <div key={item.i} style={{ ...styles.gridItem, ...(editing ? styles.gridItemEditing : {}) }}>
                 <div style={styles.chartHeader} className="drag-handle">
-                  <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    {chart?.created_by_avatar && (
+                      <img
+                        src={chart.created_by_avatar}
+                        alt=""
+                        style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0 }}
+                      />
+                    )}
+                    <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
+                  </div>
                   {editing && (
                     <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
                       &#10005;

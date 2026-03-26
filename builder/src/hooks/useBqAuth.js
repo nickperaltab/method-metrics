@@ -4,6 +4,7 @@ import { initBqAuth, connectBq, disconnectBq } from '../lib/bigquery';
 export function useBqAuth() {
   const [connected, setConnected] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
+  const [userAvatar, setUserAvatar] = useState(null);
 
   useEffect(() => {
     initBqAuth(
@@ -25,6 +26,7 @@ export function useBqAuth() {
       if (res.ok) {
         const data = await res.json();
         setUserEmail(data.email);
+        setUserAvatar(data.picture);
       }
     } catch { /* ignore */ }
   }
@@ -42,5 +44,5 @@ export function useBqAuth() {
     setUserEmail(null);
   }, []);
 
-  return { connected, userEmail, connect, disconnect };
+  return { connected, userEmail, userAvatar, connect, disconnect };
 }

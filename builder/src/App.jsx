@@ -11,7 +11,7 @@ import { useBqAuth } from './hooks/useBqAuth';
 
 export default function App() {
   const { metrics, loading: metricsLoading } = useMetrics();
-  const { connected, userEmail, connect } = useBqAuth();
+  const { connected, userEmail, userAvatar, connect } = useBqAuth();
 
   return (
     <HashRouter>
@@ -24,7 +24,7 @@ export default function App() {
             element={
               metricsLoading
                 ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-                : <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} />
+                : <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
             }
           />
           <Route
@@ -32,7 +32,7 @@ export default function App() {
             element={
               metricsLoading
                 ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-                : <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} />
+                : <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
             }
           />
           <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
