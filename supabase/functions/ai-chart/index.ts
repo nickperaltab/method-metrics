@@ -78,9 +78,32 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { prompt, metricContext, schemaContext } = await req.json();
+  const { prompt, messages, metricContext, schemaContext, currentChartSpec } = await req.json();
 
-  const userMessage = `Available metrics:\n${metricContext}\n\nAvailable columns per view:\n${schemaContext}\n\nUser request: ${prompt}`;
+  let systemPrompt = SYSTEM_PROMPT;
+  let claudeMessages;
+
+  if (messages && Array.isArray(messages) && messages.length > 0) {
+    // Conversational mode
+    if (currentChartSpec) {
+      systemPrompt += `\n\nCurrent chart state: ${JSON.stringify(currentChartSpec)}\n\nIMPORTANT: If the user asks to modify the current chart (add metrics, change type, filter, etc.), return an UPDATED spec that preserves existing settings and applies the modification. Only start from scratch if the user asks for something completely different.`;
+    }
+
+    const recent = messages.slice(-10);
+    claudeMessages = recent.map((m, i) => {
+      if (i === 0 && m.role === 'user') {
+        return {
+          role: 'user',
+          content: `Available metrics:\n${metricContext}\n\nAvailable columns per view:\n${schemaContext}\n\nUser request: ${m.content}`,
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
+  } else {
+    // Single-shot mode (backward compat)
+    const userMessage = `Available metrics:\n${metricContext}\n\nAvailable columns per view:\n${schemaContext}\n\nUser request: ${prompt}`;
+    claudeMessages = [{ role: 'user', content: userMessage }];
+  }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -92,8 +115,8 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 600,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
+      system: systemPrompt,
+      messages: claudeMessages,
     }),
   });
 

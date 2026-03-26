@@ -88,6 +88,54 @@ export async function updateDashboard(id, updates) {
   return res.json();
 }
 
+export async function saveConversation({ id, userEmail, title, messages, currentChartSpec }) {
+  const body = {
+    user_email: userEmail,
+    title,
+    messages,
+    current_chart_spec: currentChartSpec,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (id) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Save conversation failed: ${res.status}`);
+    return res.json();
+  } else {
+    body.id = crypto.randomUUID();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/conversations`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Create conversation failed: ${res.status}`);
+    return res.json();
+  }
+}
+
+export async function loadConversations(userEmail) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/conversations?user_email=eq.${encodeURIComponent(userEmail)}&order=updated_at.desc&limit=20`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load conversations failed: ${res.status}`);
+  return res.json();
+}
+
+export async function loadConversation(id) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/conversations?id=eq.${id}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Load conversation failed: ${res.status}`);
+  const data = await res.json();
+  return data[0] || null;
+}
+
 export async function invokeAiChart(body) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',
