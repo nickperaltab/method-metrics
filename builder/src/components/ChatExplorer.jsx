@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
   aggregateRows,
@@ -174,8 +174,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         const viewSchema = schemaCache[metric.view_name] || [];
         const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
         try {
-          const agg = await fetchAggregatedData(
-            metric.view_name, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
+          const agg = await fetchChartData(
+            metric, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
           );
           rawDatasets.push({ label, ...agg });
         } catch { /* skip */ }
@@ -627,8 +627,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           const viewSchema = schemaCache[metric.view_name] || [];
           const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
           try {
-            const agg = await fetchAggregatedData(
-              metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+            const agg = await fetchChartData(
+              metric, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
             );
             rawDatasets.push({ label, ...agg });
             collectedDetails.push({

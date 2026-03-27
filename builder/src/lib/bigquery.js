@@ -183,6 +183,30 @@ export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yea
   return { years, months: MONTHS, seriesMap, sql };
 }
 
+export async function fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths) {
+  // If metric has a pre-written chart_sql query, use it directly
+  if (metric.chart_sql) {
+    const cacheKey = `chart_sql|${metric.id}|${lastNMonths}`;
+    if (aggCache[cacheKey]) return aggCache[cacheKey];
+
+    let sql = metric.chart_sql;
+    // Apply time filter by wrapping the query
+    if (lastNMonths) {
+      sql = `SELECT * FROM (${sql}) sub WHERE period >= FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH))`;
+    }
+    const result = await queryBq(sql);
+    const output = {
+      labels: result.rows.map(r => r.period),
+      data: result.rows.map(r => Number(r.value) || 0),
+      sql,
+    };
+    aggCache[cacheKey] = output;
+    return output;
+  }
+  // Otherwise use the standard aggregation query
+  return fetchAggregatedData(metric.view_name, dateCol, yField, timeBucket, channelFilter, lastNMonths);
+}
+
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
   const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
