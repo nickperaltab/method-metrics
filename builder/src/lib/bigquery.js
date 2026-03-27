@@ -64,14 +64,25 @@ function cleanSql(sql) {
 
 export async function queryBq(sql) {
   if (!bqToken) throw new Error('Not connected to BigQuery');
-  const res = await fetch(
-    `https://bigquery.googleapis.com/bigquery/v2/projects/${BQ_PROJECT}/queries`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: cleanSql(sql), useLegacySql: false, maxResults: 10000 }),
-    }
-  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  let res;
+  try {
+    res = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${BQ_PROJECT}/queries`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: cleanSql(sql), useLegacySql: false, maxResults: 10000 }),
+        signal: controller.signal,
+      }
+    );
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') throw new Error('BigQuery query timed out (30s). Try a narrower time range.');
+    throw e;
+  }
+  clearTimeout(timeoutId);
   if (!res.ok) {
     if (res.status === 401) {
       disconnectBq();

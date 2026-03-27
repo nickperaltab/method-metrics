@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, Component } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart } from 'echarts/charts';
@@ -7,7 +7,23 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, CanvasRenderer]);
 
-// Register custom dark theme
+// Error boundary prevents a single broken chart from crashing the entire page
+class ChartErrorBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error, info) { console.error('Chart render error:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5a6370', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
+          Chart failed to render. Try editing the chart or refreshing.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const METHOD_THEME = {
   color: ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8', '#fb923c', '#e879f9', '#4ade80', '#f472b6'],
   backgroundColor: 'transparent',
@@ -45,12 +61,14 @@ export default function EChart({ option, style }) {
   if (!option) return null;
 
   return (
-    <ReactECharts
-      option={option}
-      theme="method"
-      style={mergedStyle}
-      opts={{ renderer: 'canvas' }}
-      notMerge={true}
-    />
+    <ChartErrorBoundary>
+      <ReactECharts
+        option={option}
+        theme="method"
+        style={mergedStyle}
+        opts={{ renderer: 'canvas' }}
+        notMerge={true}
+      />
+    </ChartErrorBoundary>
   );
 }
