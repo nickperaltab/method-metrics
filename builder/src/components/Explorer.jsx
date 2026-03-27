@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
 import DataTableView from './DataTableView';
@@ -275,6 +275,31 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
             data: computedData,
             dependsOn: depNames,
           });
+        } else if (dataConfig.groupByDimension && metric.view_name) {
+          // Dimension breakdown — one series per dimension value (for heatmaps, stacked bars, etc.)
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const grouped = await fetchGroupedData(
+              metric.view_name, dateCol, yField, timeBucket,
+              dataConfig.groupByDimension, channelFilter, dataConfig.lastNMonths
+            );
+            Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
+              rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
+            });
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: grouped.sql,
+              dateColumn: dateCol,
+              labels: grouped.labels,
+              data: Object.values(grouped.seriesMap).flat(),
+              groupedBy: dataConfig.groupByDimension,
+            });
+          } catch (e) {
+            console.error('Grouped query failed:', e);
+            setAiError(`Grouped query failed for ${metric.name}: ${e.message}`);
+          }
         } else {
           // Use the correct date column for this specific view (may differ from AI's xField)
           const viewSchema = schemaCache[metric.view_name] || [];
@@ -423,6 +448,18 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
             computedData.push(Math.round(value * 100) / 100);
           }
           rawDatasets.push({ label, labels: computedLabels, data: computedData });
+        } else if (dataConfig.groupByDimension && metric.view_name) {
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const grouped = await fetchGroupedData(
+              metric.view_name, dateCol, yField, timeBucket,
+              dataConfig.groupByDimension, channelFilter, effectiveLastNMonths
+            );
+            Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
+              rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
+            });
+          } catch { /* skip */ }
         } else if (metric.view_name) {
           const viewSchema = schemaCache[metric.view_name] || [];
           const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
