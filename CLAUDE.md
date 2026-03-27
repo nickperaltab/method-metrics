@@ -10,15 +10,45 @@ A single-page metric tracker that loads all 242+ metrics from Supabase and displ
 
 ## Architecture
 
-- **BigQuery** — source of truth for metric SQL. 47 BQ views in `revenue` dataset (primitives → breakdowns → derived).
-- **Supabase** — metric registry/catalog. Stores metadata: name, view_name, depends_on, status, priority, assigned_to, notes. Also caches `view_definition` from BQ for offline viewing.
+- **BigQuery** — source of truth for metric SQL. ~24 BQ views in `revenue` dataset (primitives → breakdowns → derived + Justin's revenue views).
+- **Supabase** — metric registry/catalog. Stores metadata: name, view_name, chart_sql, depends_on, status, priority, assigned_to, notes. Also caches `view_definition` from BQ for offline viewing.
 - **Frontend** — vanilla HTML/JS. Calls Supabase REST API (anon key) for catalog, Google OAuth + BQ REST API for live data.
 
 ## Files
 
 ```
-index.html       — Landing page
-tracker.html     — Metric tracker (main app)
+index.html               — Landing page
+tracker.html             — Metric tracker (main app)
+builder/                 — AI Chart Builder (React + Vite)
+  src/
+    lib/
+      ai.js              — buildMetricContext(), generateChartSpec(), response validation
+      bigquery.js        — BQ OAuth, fetchAggregatedData(), fetchChartData(), fetchYoYData(), fetchKpiData()
+      chartUtils.js      — buildEChartsOption(), computeDerived(), formatDateLabels()
+      schemaCache.js     — shared BQ schema cache (singleton)
+      supabase.js        — fetchMetrics(), saveChart()
+      fieldMapper.js     — maps view columns to canonical field names
+    components/
+      ChatExplorer.jsx   — conversational chart builder (main entry point)
+      Explorer.jsx       — single-shot chart builder
+      DashboardView.jsx  — dashboard with live-loading charts
+      EChart.jsx         — ECharts wrapper with Method dark theme
+      ChatInterface.jsx  — chat panel component
+      ChatModal.jsx      — modal wrapper for chat
+      DashboardList.jsx  — dashboard list/selector
+      KpiCard.jsx        — KPI tile component
+      SaveChartModal.jsx — save/name chart modal
+      TopBar.jsx         — app top navigation
+      ChartControls.jsx  — chart type/bucket controls
+      ChartDetails.jsx   — chart metadata panel
+      DataTableView.jsx  — tabular data view
+      AiPrompt.jsx       — prompt input component
+  supabase/
+    functions/
+      ai-chart/
+        index.ts         — Edge Function (Claude Haiku proxy)
+docs/
+  ai-chart-builder-architecture.md  — comprehensive developer/AI-session reference
 ```
 
 ## Key Patterns
@@ -35,62 +65,54 @@ tracker.html     — Metric tracker (main app)
 Key columns:
 - `view_name` — which BQ view this metric queries
 - `view_definition` — cached SQL from BQ INFORMATION_SCHEMA
+- `chart_sql` — pre-written query for pre-aggregated views (returns `{period, value}` pairs); used for revenue/MRR metrics that can't use generic GROUP BY
 - `depends_on` — integer[] of metric IDs this depends on
 - `primitive_metric_id` — FK to parent metric (for breakdowns)
-- `status` — live / have-data / review / missing / broken
+- `status` — live / ready / review / catalog (see graduated metrics system below)
 - `priority` — high / medium / low
 - `assigned_to` — Nic / Justin / null
 - `verified_at` — timestamp of last verification
 
+### Graduated Metrics Status
+
+- `live` — visible to AI, queryable in chart builder
+- `ready` — audited and waiting for approval, not yet visible to AI
+- `review` — registered but not verified, invisible to AI
+- `catalog` — placeholder name only, no SQL defined
+
 ## BQ Views
 
-9 primitives, 28 breakdowns, 5 derived rates, 4 MRR views, 1 scorecard MTD composite. All in `project-for-method-dw.revenue.*`.
+~24 views total across primitives, breakdowns, derived rates, and Justin's revenue/MRR views. All in `project-for-method-dw.revenue.*`.
 
 Change a primitive (`CREATE OR REPLACE VIEW v_trials AS ...`) → all breakdowns and derived rates update automatically.
 
 ## AI Chart Builder (builder/)
 
-React app deployed to Vercel. Users type natural language prompts ("show me trials by month") and get interactive charts.
+React app deployed to **GitHub Pages** (same repo, `dist/` output). Users type natural language prompts ("show me trials by month") and get interactive charts backed by live BigQuery queries.
+
+For detailed architecture, see `docs/ai-chart-builder-architecture.md`.
 
 ### How It Works
 
-1. **Supabase `metrics` table** — the AI's "menu." On page load, all metric definitions are fetched and formatted into a text catalog the AI can read.
-2. **AI (Claude Haiku 4.5)** — receives the metric catalog + BQ column schemas + user prompt. Returns a JSON config (metric IDs, chart type, time bucket, filters). **Does NOT write SQL or touch data.**
+1. **Supabase `metrics` table** — the AI's "menu." On page load, all `live` metric definitions are fetched and formatted into a text catalog the AI can read.
+2. **AI (Claude Haiku 4.5)** — receives the metric catalog + BQ column schemas + user prompt. Returns a JSON config (metric IDs, chart type, time bucket, filters, colors, labels). **Does NOT write SQL or touch data.**
 3. **Frontend JS** — takes the AI's JSON config, builds a SQL query, and runs it directly against BigQuery via OAuth.
 4. **ECharts** — renders the query results as an interactive chart in the browser.
-
-### Key Files
-
-```
-builder/src/lib/ai.js            — buildMetricContext(), generateChartSpec()
-builder/src/lib/bigquery.js      — fetchAggregatedData(), builds SQL from AI config
-builder/src/lib/supabase.js      — fetchMetrics(), saveChart()
-builder/src/components/Explorer.jsx      — main chart page, orchestrates the flow
-builder/src/components/ChatExplorer.jsx  — chat-style variant
-builder/src/components/ChartRenderer.jsx — ECharts rendering
-builder/src/lib/chartUtils.js    — buildEChartsOption(), computeDerived()
-supabase/functions/ai-chart/     — Edge Function that calls Anthropic API
-```
-
-### Derived Metrics
-
-Metrics like "Sync Rate" have `formula: SAFE_DIVIDE({2},{1})` and `depends_on: [2,1]` in Supabase. The frontend fetches each dependency from BQ, then evaluates the formula client-side per time bucket. No BQ view needed.
 
 ### What Updates Automatically
 
 - Change a BQ view definition → charts reflect it on next load (live query)
 - Change a metric formula in Supabase → reflected on page reload
 - Add a new metric to Supabase → AI sees it on next page load
-
-### Known Gap: Saved Dashboards
-
-Saved charts store baked-in data snapshots. Dashboards do NOT re-query BQ — they show stale data. Fix is planned but not built.
+- Dashboard charts re-query BigQuery on load — data is always current
 
 ### Deploy
 
 ```
-cd builder && vercel --prod
+cd builder && npm run build && vercel --prod
 ```
+
+(Vercel deploys from `dist/`; the output is also what GitHub Pages serves.)
 
 ## Deploy (Tracker)
 
