@@ -58,9 +58,9 @@ IMPORTANT — Attribution channels:
 - channel_filter filters TO one channel (e.g., "show me SEO trials" → channel_filter: "SEO").
 
 IMPORTANT — Dimension breakdowns (group_by_dimension):
-- When user asks "by channel", "by country", "by industry", "by sync type", or any categorical breakdown, set group_by_dimension to the actual column name.
-- Column mapping: "by channel" → "Channel" (for trials/conversions), "by country" → "SignupCountry", "by industry" → "CustDatIndustry", "by sync type" → "SyncType", "by vertical" → "Vertical".
-- For syncs "by channel", use group_by_dimension: "SyncType" (syncs don't have a Channel column).
+- When user asks "by channel", "by country", "by industry", etc., check the metric's dimensions field for the correct column name. Each metric lists its available dimensions (e.g., dimensions:{"Channel":"Channel","Country":"SignupCountry"}).
+- Set group_by_dimension to the COLUMN NAME from the dimensions mapping (the value, not the key).
+- If the metric has no dimensions field, do not set group_by_dimension.
 - Best chart types for dimension breakdowns: heatmap, stacked_bar, pie, horizontal_bar.
 - Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
 - channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.

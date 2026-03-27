@@ -7,6 +7,7 @@ import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
 import DataTableView from './DataTableView';
@@ -206,171 +207,15 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         return;
       }
 
-      // Build datasets: one per metric
-      const rawDatasets = [];
-      const collectedDetails = [];
-
-      for (let i = 0; i < result.metrics.length; i++) {
-        const metric = result.metrics[i];
-        const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
-        const label = dataConfig.labels[i] || metric.name;
-
-        if (metric.formula && metric.depends_on && !metric.view_name) {
-          // Derived metric — aggregate each dependency server-side, then apply formula
-          const depAggregated = {};
-          for (const depId of metric.depends_on) {
-            const depMetric = metrics.find(dm => dm.id === depId);
-            if (depMetric && depMetric.view_name) {
-              // Find the right date column for this view
-              const depSchema = schemaCache[depMetric.view_name] || [];
-              const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-              try {
-                const depAgg = await fetchAggregatedData(
-                  depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, dataConfig.lastNMonths
-                );
-                const counts = {};
-                depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
-                depAggregated[depId] = counts;
-              } catch {
-                depAggregated[depId] = {};
-              }
-            }
-          }
-          // Get all time labels (union across deps)
-          const allDepLabels = new Set();
-          for (const counts of Object.values(depAggregated)) {
-            Object.keys(counts).forEach(k => allDepLabels.add(k));
-          }
-          const sortedDepLabels = [...allDepLabels].sort();
-          // Apply formula per time bucket
-          const computedLabels = [];
-          const computedData = [];
-          for (const lbl of sortedDepLabels) {
-            let formula = metric.formula;
-            for (const depId of metric.depends_on) {
-              const val = depAggregated[depId]?.[lbl] || 0;
-              formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
-            }
-            formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
-              const numA = Number(a) || 0;
-              const numB = Number(b) || 0;
-              return String(numB === 0 ? 0 : numA / numB);
-            });
-            let value;
-            try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
-            if (!isFinite(value)) value = 0;
-            computedLabels.push(lbl);
-            computedData.push(Math.round(value * 100) / 100);
-          }
-          rawDatasets.push({ label, labels: computedLabels, data: computedData });
-          const depNames = metric.depends_on.map(id => {
-            const dm = metrics.find(m => m.id === id);
-            return dm ? `${dm.name} (${id})` : String(id);
-          });
-          collectedDetails.push({
-            metricName: label,
-            metricId: metric.id,
-            sql: `Derived: ${metric.formula}`,
-            dateColumn: 'N/A (computed from dependencies)',
-            labels: computedLabels,
-            data: computedData,
-            dependsOn: depNames,
-          });
-        } else if (dataConfig.groupByDimension && metric.view_name) {
-          // Dimension breakdown — one series per dimension value (for heatmaps, stacked bars, etc.)
-          const viewSchema = schemaCache[metric.view_name] || [];
-          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-          try {
-            const grouped = await fetchGroupedData(
-              metric.view_name, dateCol, yField, timeBucket,
-              dataConfig.groupByDimension, channelFilter, dataConfig.lastNMonths
-            );
-            Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
-              rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
-            });
-            collectedDetails.push({
-              metricName: label,
-              metricId: metric.id,
-              sql: grouped.sql,
-              dateColumn: dateCol,
-              labels: grouped.labels,
-              data: [],
-              groupedBy: dataConfig.groupByDimension,
-            });
-          } catch (e) {
-            console.error('Grouped query failed:', e);
-            setAiError(`Grouped query failed for ${metric.name}: ${e.message}`);
-          }
-        } else {
-          // Use the correct date column for this specific view (may differ from AI's xField)
-          const viewSchema = schemaCache[metric.view_name] || [];
-          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-          try {
-            const agg = await fetchChartData(
-              metric, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
-            );
-            rawDatasets.push({ label, ...agg });
-            collectedDetails.push({
-              metricName: label,
-              metricId: metric.id,
-              sql: agg.sql,
-              dateColumn: dateCol,
-              labels: agg.labels,
-              data: agg.data,
-            });
-          } catch (e) {
-            // Fallback to client-side aggregation if SQL fails
-            const loaded = await loadMetricData(metric);
-            if (loaded) {
-              const filteredRows = applyChannelFilter(loaded.rows, channelFilter);
-              const agg = aggregateRows(filteredRows, dateCol, yField, timeBucket);
-              rawDatasets.push({ label, ...agg });
-              collectedDetails.push({
-                metricName: label,
-                metricId: metric.id,
-                sql: '(client-side fallback — server query failed)',
-                dateColumn: dateCol,
-                labels: agg.labels,
-                data: agg.data,
-              });
-            }
-          }
-        }
-      }
-
-      if (rawDatasets.length === 0) {
+      // Fetch and align chart data using shared utility
+      const chartData = await fetchChartDatasets({ metricIds: result.metricIds, metrics, dataConfig });
+      if (!chartData) {
         setAiError('No data loaded for the requested metrics');
         return;
       }
 
-      // Merge all labels (union) and align datasets
-      const allLabelsSet = new Set();
-      for (const ds of rawDatasets) {
-        ds.labels.forEach(l => allLabelsSet.add(l));
-      }
-      const allLabels = [...allLabelsSet].sort();
+      const { labels: finalLabels, datasets: finalDatasets, queryDetails: collectedDetails } = chartData;
 
-      const alignedDatasets = rawDatasets.map(ds => {
-        const labelMap = {};
-        ds.labels.forEach((l, i) => { labelMap[l] = ds.data[i]; });
-        return {
-          label: ds.label,
-          data: allLabels.map(l => labelMap[l] || 0),
-        };
-      });
-
-      // Note: lastNMonths is handled server-side in fetchAggregatedData.
-      // For derived metrics (client-side), apply it here.
-      const hasDerived = result.metrics.some(m => m.formula && m.depends_on && !m.view_name);
-      let finalLabels = allLabels;
-      let finalDatasets = alignedDatasets;
-      if (hasDerived && dataConfig.lastNMonths) {
-        ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
-          allLabels, alignedDatasets, dataConfig.lastNMonths, timeBucket
-        ));
-      }
-
-      // Build ECharts option or table data
       if (echartsType === 'table') {
         setTableData({ labels: finalLabels, datasets: finalDatasets });
       } else {
@@ -380,7 +225,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       setQueryDetails(collectedDetails);
       setSelectedMetric(result.metrics[0]);
       setLastSpec({ metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors });
-      setCurrentTimeRange(dataConfig.lastNMonths || null);
+      setCurrentTimeRange(dataConfig.lastNMonths != null ? dataConfig.lastNMonths : null);
     } catch (e) {
       setAiError(e.message);
     } finally {
@@ -394,109 +239,9 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
     setAiLoading(true);
     try {
       const { metricIds, echartsType, dataConfig } = lastSpec;
-      const effectiveLastNMonths = months;
-      const channelFilter = dataConfig.channelFilter;
-      const xField = dataConfig.xField;
-      const timeBucket = dataConfig.timeBucket;
-      const rawDatasets = [];
-
-      for (let i = 0; i < metricIds.length; i++) {
-        const metricId = metricIds[i];
-        const metric = metrics.find(m => m.id === metricId);
-        if (!metric) continue;
-        const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
-        const label = dataConfig.labels?.[i] || metric.name;
-
-        if (metric.formula && metric.depends_on && !metric.view_name) {
-          const depAggregated = {};
-          for (const depId of metric.depends_on) {
-            const depMetric = metrics.find(dm => dm.id === depId);
-            if (depMetric && depMetric.view_name) {
-              const depSchema = schemaCache[depMetric.view_name] || [];
-              const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-              try {
-                const depAgg = await fetchAggregatedData(
-                  depMetric.view_name, dateCol, 'COUNT', timeBucket, channelFilter, effectiveLastNMonths
-                );
-                const counts = {};
-                depAgg.labels.forEach((l, idx) => { counts[l] = depAgg.data[idx]; });
-                depAggregated[depId] = counts;
-              } catch { depAggregated[depId] = {}; }
-            }
-          }
-          const allDepLabels = new Set();
-          for (const counts of Object.values(depAggregated)) {
-            Object.keys(counts).forEach(k => allDepLabels.add(k));
-          }
-          const sortedDepLabels = [...allDepLabels].sort();
-          const computedLabels = [];
-          const computedData = [];
-          for (const lbl of sortedDepLabels) {
-            let formula = metric.formula;
-            for (const depId of metric.depends_on) {
-              const val = depAggregated[depId]?.[lbl] || 0;
-              formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
-            }
-            formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
-              const numA = Number(a) || 0;
-              const numB = Number(b) || 0;
-              return String(numB === 0 ? 0 : numA / numB);
-            });
-            let value;
-            try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
-            if (!isFinite(value)) value = 0;
-            computedLabels.push(lbl);
-            computedData.push(Math.round(value * 100) / 100);
-          }
-          rawDatasets.push({ label, labels: computedLabels, data: computedData });
-        } else if (dataConfig.groupByDimension && metric.view_name) {
-          const viewSchema = schemaCache[metric.view_name] || [];
-          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-          try {
-            const grouped = await fetchGroupedData(
-              metric.view_name, dateCol, yField, timeBucket,
-              dataConfig.groupByDimension, channelFilter, effectiveLastNMonths
-            );
-            Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
-              rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
-            });
-          } catch { /* skip */ }
-        } else if (metric.view_name) {
-          const viewSchema = schemaCache[metric.view_name] || [];
-          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
-          try {
-            const agg = await fetchChartData(
-              metric, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
-            );
-            rawDatasets.push({ label, ...agg });
-          } catch { /* skip */ }
-        }
-      }
-
-      if (rawDatasets.length === 0) return;
-
-      const allLabelsSet = new Set();
-      for (const ds of rawDatasets) { ds.labels.forEach(l => allLabelsSet.add(l)); }
-      const allLabels = [...allLabelsSet].sort();
-      const alignedDatasets = rawDatasets.map(ds => {
-        const labelMap = {};
-        ds.labels.forEach((l, idx) => { labelMap[l] = ds.data[idx]; });
-        return { label: ds.label, data: allLabels.map(l => labelMap[l] || 0) };
-      });
-
-      const hasDerived = metricIds.some(mid => {
-        const m = metrics.find(mm => mm.id === mid);
-        return m && m.formula && m.depends_on && !m.view_name;
-      });
-      let finalLabels = allLabels;
-      let finalDatasets = alignedDatasets;
-      if (hasDerived && effectiveLastNMonths) {
-        ({ labels: finalLabels, datasets: finalDatasets } = applyLastNMonths(
-          allLabels, alignedDatasets, effectiveLastNMonths, timeBucket
-        ));
-      }
-
-      const option = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: lastSpec.showLabels, colors: lastSpec.colors });
+      const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig, lastNMonthsOverride: months });
+      if (!chartData) return;
+      const option = buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels: lastSpec.showLabels, colors: lastSpec.colors });
       setChartOption(option);
     } catch { /* ignore */ } finally {
       setAiLoading(false);
