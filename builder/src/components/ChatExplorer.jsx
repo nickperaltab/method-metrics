@@ -607,7 +607,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               sql: grouped.sql,
               dateColumn: dateCol,
               labels: grouped.labels,
-              data: Object.values(grouped.seriesMap).flat(),
+              data: [],
               groupedBy: dataConfig.groupByDimension,
             });
           } catch (err) {
