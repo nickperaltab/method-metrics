@@ -9,6 +9,7 @@ import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
+import FeedbackButtons from './FeedbackButtons';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -459,6 +460,14 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                       {bqConnected ? 'No chart data available' : 'Connect BigQuery to load charts'}
                     </div>
                   )}
+                </div>
+                <div style={{ padding: '0 12px 8px', display: 'flex' }}>
+                  <FeedbackButtons
+                    userEmail={userEmail}
+                    source="dashboard"
+                    chartId={item.i}
+                    chartSpec={chart?.gw_spec}
+                  />
                 </div>
               </div>
             );

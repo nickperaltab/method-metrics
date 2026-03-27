@@ -3,6 +3,7 @@ import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import ChartDetails from './ChartDetails';
+import FeedbackButtons from './FeedbackButtons';
 
 const styles = {
   container: {
@@ -147,7 +148,7 @@ const styles = {
 
 export default function ChatInterface({
   messages, onSend, loading, onNewThread, metrics, onSaveChart,
-  recentConversations, onLoadConversation,
+  recentConversations, onLoadConversation, userEmail,
 }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -265,18 +266,26 @@ export default function ChatInterface({
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
               )}
-              {(msg.chartOption || msg.kpiData || msg.tableData) && onSaveChart && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => onSaveChart(i)}
-                    style={{
-                      background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
-                      padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
-                    }}
-                  >
-                    Save Chart
-                  </button>
+              {(msg.chartOption || msg.kpiData || msg.tableData) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <FeedbackButtons
+                    userEmail={userEmail}
+                    source="chat"
+                    messageIndex={i}
+                    chartSpec={msg.chartOption ? { chartOption: true } : msg.kpiData ? { kpiData: true } : { tableData: true }}
+                  />
+                  {onSaveChart && (
+                    <button
+                      onClick={() => onSaveChart(i)}
+                      style={{
+                        background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+                        padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+                      }}
+                    >
+                      Save Chart
+                    </button>
+                  )}
                 </div>
               )}
               {msg.queryDetails && msg.queryDetails.length > 0 && (
