@@ -272,4 +272,30 @@ describe('Conversational AI Evals', () => {
     assertValidSpec(r2, 'topic change');
     assert(r2.metric_ids.includes(46), 'should pick Churn Rate');
   });
+
+  it('follow-up: "just do march" should preserve time_bucket and not return null lastNMonths', async () => {
+    const r1 = await callAi('conversion rate this month');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'conversion rate this month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'just do march please' },
+    ], r1);
+    assertValidSpec(r2, 'just do march');
+    // Should still have conversion rate metric
+    assert(r2.metric_ids.includes(20), 'should keep Conversion Rate');
+    // time_bucket should not be null
+    assert(r2.data_config.time_bucket, 'time_bucket should be set');
+  });
+
+  it('follow-up: "make it monthly" should change time_bucket but keep metric', async () => {
+    const r1 = await callAi('show me daily trials for the last 2 months');
+    const r2 = await callAiConversational([
+      { role: 'user', content: 'show me daily trials for the last 2 months' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'make it monthly' },
+    ], r1);
+    assertValidSpec(r2, 'make it monthly');
+    assert(r2.metric_ids.includes(54), 'should keep Trials');
+    assert.strictEqual(r2.data_config.time_bucket, 'month', 'should change to monthly');
+  });
 });
