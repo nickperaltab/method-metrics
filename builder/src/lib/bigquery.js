@@ -235,6 +235,11 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
  * @returns {{ labels: string[], seriesMap: Object<string, number[]>, sql: string }}
  */
 export async function fetchGroupedData(viewName, xField, yField, timeBucket, groupByField, channelFilter, lastNMonths, topN = 10) {
+  // Validate groupByField is alphanumeric/underscore only (defense against SQL injection from AI responses)
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(groupByField)) {
+    throw new Error(`Invalid groupByField: ${groupByField}`);
+  }
+
   const cacheKey = `grouped|${viewName}|${xField}|${yField}|${timeBucket}|${groupByField}|${channelFilter}|${lastNMonths}|${topN}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
 
@@ -248,20 +253,19 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
 
   const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
 
-  const wheres = [];
+  const baseWheres = [];
   if (channelFilter) {
     const col = ATT_COL_MAP[channelFilter];
-    if (col) wheres.push(`${col} > 0`);
+    if (col) baseWheres.push(`${col} > 0`);
   }
   if (lastNMonths) {
-    wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+    baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
   }
-  wheres.push(`${groupByField} IS NOT NULL AND TRIM(CAST(${groupByField} AS STRING)) != ''`);
-
-  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
 
   // First pass: find top N dimension values by total volume
-  const topSql = `SELECT ${groupByField} AS dimension, ${valueExpr} AS total FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${topN}`;
+  const topWheres = [...baseWheres, `${groupByField} IS NOT NULL AND TRIM(CAST(${groupByField} AS STRING)) != ''`];
+  const topWhereClause = `WHERE ${topWheres.join(' AND ')}`;
+  const topSql = `SELECT ${groupByField} AS dimension, ${valueExpr} AS total FROM ${table} ${topWhereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${topN}`;
   const topResult = await queryBq(topSql);
   const topDimensions = topResult.rows.map(r => r.dimension);
 
@@ -273,14 +277,12 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
 
   // Second pass: get full time series for top dimensions only
   const inList = topDimensions.map(d => `'${String(d).replace(/'/g, "\\'")}'`).join(',');
-  const fullWheres = wheres.filter(w => !w.startsWith(`${groupByField} IS NOT NULL`));
-  fullWheres.push(`${groupByField} IN (${inList})`);
+  const fullWheres = [...baseWheres, `${groupByField} IN (${inList})`];
   const fullWhereClause = `WHERE ${fullWheres.join(' AND ')}`;
 
   const sql = `SELECT ${periodExpr} AS period, ${groupByField} AS dimension, ${valueExpr} AS value FROM ${table} ${fullWhereClause} GROUP BY 1, 2 ORDER BY 1, 2`;
   const result = await queryBq(sql);
 
-  // Build seriesMap keyed by dimension value
   const labelsSet = new Set();
   const tempMap = {};
   for (const row of result.rows) {

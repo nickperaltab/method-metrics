@@ -293,7 +293,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
               sql: grouped.sql,
               dateColumn: dateCol,
               labels: grouped.labels,
-              data: Object.values(grouped.seriesMap).flat(),
+              data: [],
               groupedBy: dataConfig.groupByDimension,
             });
           } catch (e) {
