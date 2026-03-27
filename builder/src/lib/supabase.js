@@ -198,3 +198,20 @@ export async function invokeAiChart(body) {
   if (!res.ok) throw new Error(`AI function failed: ${res.status}`);
   return res.json();
 }
+
+export async function saveFeedback({ userEmail, source, messageIndex, chartId, sentiment, notes, chartSpec }) {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/feedback`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      user_email: userEmail || 'anonymous',
+      source,
+      message_index: messageIndex || null,
+      chart_id: chartId || null,
+      sentiment,
+      notes: notes || null,
+      chart_spec: chartSpec || null,
+    }),
+  });
+  if (!res.ok) throw new Error(`Save feedback failed: ${res.status}`);
+}

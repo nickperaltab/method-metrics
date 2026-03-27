@@ -560,6 +560,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         onSaveChart={handleSaveChart}
         recentConversations={recentConversations}
         onLoadConversation={handleLoadConversation}
+        userEmail={userEmail}
       />
       {showSaveModal && (
         <SaveChartModal
