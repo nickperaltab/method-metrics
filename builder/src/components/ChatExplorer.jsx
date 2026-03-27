@@ -400,13 +400,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               if (depMetric && depMetric.view_name) {
                 const depSchema = schemaCache[depMetric.view_name] || [];
                 const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
-                if (!dateCol) { depKpis[depId] = { current: 0, prior: 0 }; continue; }
+                if (!dateCol) { depKpis[depId] = { current: 0, prior: 0, error: true }; continue; }
                 try {
                   const kpiResult = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
                   depKpis[depId] = kpiResult;
                   depDetails.push({ metricName: depMetric.name, metricId: depId, sql: kpiResult.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpiResult.current, kpiResult.prior] });
                 } catch {
-                  depKpis[depId] = { current: 0, prior: 0 };
+                  depKpis[depId] = { current: 0, prior: 0, error: true };
                 }
               }
             }
@@ -423,18 +423,19 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               });
               try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
             };
+            const hasError = metric.depends_on.some(depId => depKpis[depId]?.error);
             const current = Math.round(evalFormula('current') * 100) / 100;
             const prior = Math.round(evalFormula('prior') * 100) / 100;
             const delta = Math.round((current - prior) * 100) / 100;
             const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true, hasError });
             collectedDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A (computed)', labels: ['current', 'prior'], data: [current, prior], dependsOn: metric.depends_on });
             depDetails.forEach(d => collectedDetails.push(d));
           } else if (metric.view_name) {
             const viewSchema = schemaCache[metric.view_name] || [];
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
             if (!dateCol) {
-              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               continue;
             }
             try {
@@ -442,7 +443,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               kpiData.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: kpi.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpi.current, kpi.prior] });
             } catch (err) {
-              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: dateCol, labels: [], data: [] });
             }
           }

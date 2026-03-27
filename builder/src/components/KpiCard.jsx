@@ -33,7 +33,17 @@ const styles = {
   },
 };
 
-export default function KpiCard({ metricName, value, delta, deltaPercent, isRate }) {
+export default function KpiCard({ metricName, value, delta, deltaPercent, isRate, hasError }) {
+  if (hasError) {
+    return (
+      <div style={{ ...styles.card, borderColor: '#7f1d1d' }}>
+        <div style={styles.label}>{metricName}</div>
+        <div style={{ ...styles.value, fontSize: 16, color: '#f87171' }}>Data unavailable</div>
+        <div style={{ ...styles.delta, color: '#5a6370' }}>Unable to load — try refreshing</div>
+      </div>
+    );
+  }
+
   const formattedValue = isRate
     ? `${(value * 100).toFixed(1)}%`
     : Number(value).toLocaleString();
