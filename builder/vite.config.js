@@ -9,5 +9,6 @@ export default defineConfig({
   },
   test: {
     include: ['tests/unit/**/*.test.js'],
+    setupFiles: ['tests/unit/setup-browser.js'],
   },
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption } from '../../src/lib/chartUtils.js';
+import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption } from '../../src/lib/chartUtils.js';
 
 describe('toBucketKey', () => {
   it('truncates to month', () => {
@@ -366,5 +366,213 @@ describe('buildEChartsOption', () => {
   it('hides legend for single series', () => {
     const opt = buildEChartsOption('line', ['x'], [{ label: 'A', data: [1] }], {});
     expect(opt.legend.show).toBe(false);
+  });
+});
+
+// --- NEW TESTS: parseDate ---
+
+describe('parseDate', () => {
+  it('parses YYYY-MM-DD', () => {
+    const d = parseDate('2024-03-15');
+    expect(d).toBeInstanceOf(Date);
+    expect(d.getFullYear()).toBe(2024);
+  });
+
+  it('parses YYYY-MM-DD with UTC suffix', () => {
+    const d = parseDate('2024-03-15 UTC');
+    expect(d).toBeInstanceOf(Date);
+    expect(d.getFullYear()).toBe(2024);
+  });
+
+  it('returns null for null/undefined/empty', () => {
+    expect(parseDate(null)).toBeNull();
+    expect(parseDate(undefined)).toBeNull();
+    expect(parseDate('')).toBeNull();
+  });
+
+  it('returns null for invalid date strings', () => {
+    expect(parseDate('not-a-date')).toBeNull();
+    expect(parseDate('abc123')).toBeNull();
+  });
+
+  it('handles ISO timestamp format', () => {
+    const d = parseDate('2024-03-15T10:30:00Z');
+    expect(d).toBeInstanceOf(Date);
+  });
+});
+
+// --- NEW TESTS: applyLastNMonths ---
+
+describe('applyLastNMonths', () => {
+  it('returns all data when lastNMonths is null', () => {
+    const labels = ['2020-01', '2024-01', '2026-01'];
+    const datasets = [{ label: 'A', data: [1, 2, 3] }];
+    const result = applyLastNMonths(labels, datasets, null, 'month');
+    expect(result.labels).toEqual(labels);
+    expect(result.datasets[0].data).toEqual([1, 2, 3]);
+  });
+
+  it('filters to recent months only', () => {
+    const now = new Date();
+    const recent = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const old = '2020-01';
+    const labels = [old, recent];
+    const datasets = [{ label: 'A', data: [100, 200] }];
+    const result = applyLastNMonths(labels, datasets, 3, 'month');
+    expect(result.labels).toContain(recent);
+    expect(result.labels).not.toContain(old);
+  });
+
+  it('keeps datasets aligned with filtered labels', () => {
+    const now = new Date();
+    const m1 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const m2 = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0') || '12'}`;
+    const labels = ['2020-01', m2, m1];
+    const ds1 = { label: 'Trials', data: [10, 20, 30] };
+    const ds2 = { label: 'Syncs', data: [5, 10, 15] };
+    const result = applyLastNMonths(labels, [ds1, ds2], 3, 'month');
+    expect(result.datasets.length).toBe(2);
+    expect(result.labels.length).toBe(result.datasets[0].data.length);
+    expect(result.labels.length).toBe(result.datasets[1].data.length);
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — heatmap ---
+
+describe('buildEChartsOption — heatmap', () => {
+  it('produces [x, y, value] data format', () => {
+    const labels = ['2025-01', '2025-02'];
+    const datasets = [
+      { label: 'SEO', data: [100, 150] },
+      { label: 'PPC', data: [50, 60] },
+    ];
+    const opt = buildEChartsOption('heatmap', labels, datasets, {});
+    expect(opt.series[0].type).toBe('heatmap');
+    const heatData = opt.series[0].data;
+    // Should have 4 data points (2 labels × 2 series)
+    expect(heatData.length).toBe(4);
+    // Each data point should be [xIndex, yIndex, value]
+    heatData.forEach(point => {
+      expect(point.length).toBe(3);
+      expect(typeof point[0]).toBe('number');
+      expect(typeof point[1]).toBe('number');
+      expect(typeof point[2]).toBe('number');
+    });
+  });
+
+  it('y-axis contains dimension labels', () => {
+    const labels = ['2025-01'];
+    const datasets = [
+      { label: 'US', data: [100] },
+      { label: 'CA', data: [50] },
+      { label: 'UK', data: [25] },
+    ];
+    const opt = buildEChartsOption('heatmap', labels, datasets, {});
+    expect(opt.yAxis.data).toEqual(['US', 'CA', 'UK']);
+  });
+
+  it('handles single dimension (1 row)', () => {
+    const labels = ['2025-01', '2025-02', '2025-03'];
+    const datasets = [{ label: 'Trials', data: [10, 20, 30] }];
+    const opt = buildEChartsOption('heatmap', labels, datasets, {});
+    expect(opt.series[0].data.length).toBe(3);
+    expect(opt.yAxis.data).toEqual(['Trials']);
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — stacked_bar ---
+
+describe('buildEChartsOption — stacked_bar', () => {
+  it('all series share same stack', () => {
+    const labels = ['Jan', 'Feb'];
+    const datasets = [
+      { label: 'SEO', data: [100, 150] },
+      { label: 'PPC', data: [50, 60] },
+      { label: 'Direct', data: [30, 40] },
+    ];
+    const opt = buildEChartsOption('stacked_bar', labels, datasets, {});
+    expect(opt.series.length).toBe(3);
+    opt.series.forEach(s => {
+      expect(s.type).toBe('bar');
+      expect(s.stack).toBe('total');
+    });
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — horizontal_bar ---
+
+describe('buildEChartsOption — horizontal_bar', () => {
+  it('swaps x and y axes', () => {
+    const labels = ['US', 'CA', 'UK'];
+    const datasets = [{ label: 'Trials', data: [500, 200, 100] }];
+    const opt = buildEChartsOption('horizontal_bar', labels, datasets, {});
+    expect(opt.yAxis.type).toBe('category');
+    expect(opt.xAxis.type).toBe('value');
+    expect(opt.yAxis.data).toEqual(['US', 'CA', 'UK']);
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — funnel ---
+
+describe('buildEChartsOption — funnel', () => {
+  it('sums data points per series', () => {
+    const labels = ['Jan', 'Feb', 'Mar'];
+    const datasets = [
+      { label: 'Trials', data: [100, 200, 150] },
+      { label: 'Syncs', data: [50, 100, 80] },
+      { label: 'Conversions', data: [10, 20, 15] },
+    ];
+    const opt = buildEChartsOption('funnel', labels, datasets, {});
+    expect(opt.series[0].type).toBe('funnel');
+    expect(opt.series[0].data.length).toBe(3);
+    // Trials total = 450, Syncs = 230, Conversions = 45
+    const funnelData = opt.series[0].data;
+    expect(funnelData.find(d => d.name === 'Trials').value).toBe(450);
+    expect(funnelData.find(d => d.name === 'Syncs').value).toBe(230);
+    expect(funnelData.find(d => d.name === 'Conversions').value).toBe(45);
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — custom colors ---
+
+describe('buildEChartsOption — custom colors', () => {
+  it('uses custom colors when provided', () => {
+    const labels = ['Jan'];
+    const datasets = [{ label: 'A', data: [1] }, { label: 'B', data: [2] }];
+    const opt = buildEChartsOption('bar', labels, datasets, {}, { colors: ['#ff0000', '#00ff00'] });
+    // Colors applied per-series via itemStyle.color
+    expect(opt.series[0].itemStyle.color).toBe('#ff0000');
+    expect(opt.series[1].itemStyle.color).toBe('#00ff00');
+  });
+
+  it('falls back to default palette when colors is null', () => {
+    const labels = ['Jan'];
+    const datasets = [{ label: 'A', data: [1] }];
+    const opt = buildEChartsOption('bar', labels, datasets, {}, {});
+    // Default palette: first color is #34d399
+    expect(opt.series[0].itemStyle.color).toBe('#34d399');
+  });
+});
+
+// --- NEW TESTS: buildEChartsOption — edge cases ---
+
+describe('buildEChartsOption — edge cases', () => {
+  it('handles empty datasets gracefully', () => {
+    const opt = buildEChartsOption('bar', [], [], {});
+    expect(opt.series).toEqual([]);
+  });
+
+  it('rotates x-axis labels when > 12 items', () => {
+    const labels = Array.from({ length: 15 }, (_, i) => `2024-${String(i + 1).padStart(2, '0')}`);
+    const datasets = [{ label: 'A', data: Array(15).fill(100) }];
+    const opt = buildEChartsOption('bar', labels, datasets, {});
+    expect(opt.xAxis.axisLabel.rotate).toBe(45);
+  });
+
+  it('does not rotate x-axis labels when <= 12 items', () => {
+    const labels = ['Jan', 'Feb', 'Mar'];
+    const datasets = [{ label: 'A', data: [1, 2, 3] }];
+    const opt = buildEChartsOption('bar', labels, datasets, {});
+    expect(opt.xAxis.axisLabel.rotate).toBe(0);
   });
 });
