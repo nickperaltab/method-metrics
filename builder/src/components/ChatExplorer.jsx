@@ -372,7 +372,20 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         return;
       }
 
-      const { dataConfig } = result;
+      // Merge AI response with previous spec — preserve fields the AI didn't explicitly change
+      // This ensures follow-ups like "just do march" keep chart type, time bucket, etc. from before
+      const dataConfig = result.dataConfig;
+      if (lastSpec && lastSpec.dataConfig) {
+        const prevDC = lastSpec.dataConfig;
+        if (dataConfig.timeBucket == null && prevDC.timeBucket) dataConfig.timeBucket = prevDC.timeBucket;
+        if (dataConfig.lastNMonths == null && prevDC.lastNMonths != null) dataConfig.lastNMonths = prevDC.lastNMonths;
+        if (dataConfig.channelFilter == null && prevDC.channelFilter) dataConfig.channelFilter = prevDC.channelFilter;
+        if (dataConfig.groupByDimension == null && prevDC.groupByDimension) dataConfig.groupByDimension = prevDC.groupByDimension;
+        if (!result.echartsType && lastSpec.echartsType) result.echartsType = lastSpec.echartsType;
+        if (!result.colors && lastSpec.colors) result.colors = lastSpec.colors;
+        if (result.showLabels == null && lastSpec.showLabels != null) result.showLabels = lastSpec.showLabels;
+      }
+
       let { echartsType } = result;
       const channelFilter = dataConfig.channelFilter;
       const xField = dataConfig.xField;
