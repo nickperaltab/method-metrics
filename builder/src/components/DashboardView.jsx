@@ -212,7 +212,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   try {
                     depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
                   } catch {
-                    depKpis[depId] = { current: 0, prior: 0 };
+                    depKpis[depId] = { current: 0, prior: 0, error: true };
                   }
                 }
               }
@@ -229,11 +229,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 });
                 try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
               };
+              const hasError = metric.depends_on.some(depId => depKpis[depId]?.error);
               const current = evalFormula('current');
               const prior = evalFormula('prior');
               const delta = current - prior;
               const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-              kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+              kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: true, hasError });
             } else if (metric.view_name) {
               const viewSchema = schemaCache[metric.view_name] || [];
               const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
@@ -241,7 +242,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
                 kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
               } catch {
-                kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+                kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               }
             }
           }
