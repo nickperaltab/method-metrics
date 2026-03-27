@@ -46,17 +46,16 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       );
       const uniqueViews = [...new Set(viewMetrics.map(m => m.view_name))];
 
-      for (const viewName of uniqueViews) {
-        if (schemaCache[viewName]) continue;
-        try {
+      await Promise.allSettled(
+        uniqueViews.filter(v => !schemaCache[v]).map(async (viewName) => {
           const result = await queryBq(
             `SELECT column_name AS name, data_type AS type FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name='${viewName}'`
           );
           if (result.rows) {
             schemaCache[viewName] = result.rows.map(r => ({ name: r.name, type: r.type }));
           }
-        } catch { /* skip failed schemas */ }
-      }
+        })
+      );
       setSchemasLoaded(true);
     }
 
@@ -385,6 +384,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       }
       if (echartsType === 'kpi') {
         const kpiData = [];
+        const collectedDetails = [];
         for (let i = 0; i < result.metrics.length; i++) {
           const metric = result.metrics[i];
           const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
