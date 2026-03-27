@@ -36,7 +36,7 @@ Supported echarts_type values:
 - "funnel" — conversion funnel stages
 - "heatmap" — two-dimensional intensity (e.g., metric by channel × month)
 - "area" — filled line chart
-- "kpi" — single big number card. Use when user asks "how many trials this month?", "what's the sync rate?", "current trial count", "trials today", or any request for a single current value. Shows big number with delta vs prior month.
+- "kpi" — single big number card. ONLY use when user explicitly asks for a count/number using phrases like "how many", "what's the count", "total number of", "give me the number". Do NOT use kpi for rate/percentage metrics (Conversion Rate, Sync Rate) — always use "line" or "bar" for rates. Do NOT use kpi just because the user mentions "this month" — use a chart with last_n_months:1 instead. KPI is ONLY for primitive count metrics (Trials, Syncs, Conversions), never derived.
 - "table" — data table. Use when user says "table", "table view", "show as table", "list the data". Renders a sortable HTML table instead of a chart.
 - "yoy" — year-over-year comparison. Use when user says "year over year", "YoY", "compare years", "annual comparison". Shows grouped bars with months on X axis, one series per year. Only works with primitive metrics (not derived rates).
 

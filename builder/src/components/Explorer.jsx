@@ -143,7 +143,11 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         return;
       }
 
-      // KPI tile branch
+      // KPI tile branch — block derived/rate metrics
+      if (echartsType === 'kpi' && result.metrics.some(m => m.formula && m.depends_on && !m.view_name)) {
+        echartsType = 'bar';
+        dataConfig.lastNMonths = dataConfig.lastNMonths || 1;
+      }
       if (echartsType === 'kpi') {
         const kpis = [];
         for (let i = 0; i < result.metrics.length; i++) {
