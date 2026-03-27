@@ -372,7 +372,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         return;
       }
 
-      const { dataConfig, echartsType } = result;
+      const { dataConfig } = result;
+      let { echartsType } = result;
       const channelFilter = dataConfig.channelFilter;
       const xField = dataConfig.xField;
       const timeBucket = dataConfig.timeBucket;

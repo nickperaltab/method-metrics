@@ -104,7 +104,8 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       }
       setAiExplanation(result.explanation);
 
-      const { dataConfig, echartsType } = result;
+      const { dataConfig } = result;
+      let { echartsType } = result;
       const channelFilter = dataConfig.channelFilter;
       const xField = dataConfig.xField;
       const timeBucket = dataConfig.timeBucket;
