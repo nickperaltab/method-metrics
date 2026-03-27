@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpec } from '../lib/ai';
 import { saveChart, fetchDashboards, createDashboard, updateDashboard } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import SaveChartModal from './SaveChartModal';
 import ChartDetails from './ChartDetails';
 import DataTableView from './DataTableView';
@@ -306,8 +306,8 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           const viewSchema = schemaCache[metric.view_name] || [];
           const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
           try {
-            const agg = await fetchAggregatedData(
-              metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+            const agg = await fetchChartData(
+              metric, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
             );
             rawDatasets.push({ label, ...agg });
             collectedDetails.push({
@@ -465,8 +465,8 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           const viewSchema = schemaCache[metric.view_name] || [];
           const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
           try {
-            const agg = await fetchAggregatedData(
-              metric.view_name, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
+            const agg = await fetchChartData(
+              metric, dateCol, yField, timeBucket, channelFilter, effectiveLastNMonths
             );
             rawDatasets.push({ label, ...agg });
           } catch { /* skip */ }

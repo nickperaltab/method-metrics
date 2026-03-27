@@ -7,7 +7,7 @@ import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
-import { fetchAggregatedData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches } from '../lib/bigquery';
+import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -321,8 +321,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             const viewSchema = schemaCache[metric.view_name] || [];
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
             try {
-              const agg = await fetchAggregatedData(
-                metric.view_name, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
+              const agg = await fetchChartData(
+                metric, dateCol, yField, timeBucket, channelFilter, dataConfig.lastNMonths
               );
               rawDatasets.push({ label, ...agg });
             } catch {
