@@ -191,8 +191,11 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
 
     let sql = metric.chart_sql;
     // Apply time filter by wrapping the query
-    if (lastNMonths) {
-      sql = `SELECT * FROM (${sql}) sub WHERE period >= FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH))`;
+    if (lastNMonths != null && lastNMonths >= 0) {
+      const dateExpr = lastNMonths === 0
+        ? `FORMAT_DATE('%Y-%m', DATE_TRUNC(CURRENT_DATE(), MONTH))`
+        : `FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH))`;
+      sql = `SELECT * FROM (${sql}) sub WHERE period >= ${dateExpr}`;
     }
     const result = await queryBq(sql);
     const output = {
@@ -237,8 +240,12 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
   }
 
   // Time range filter — snap to 1st of month so we always get full calendar months
-  if (lastNMonths) {
-    wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+  if (lastNMonths != null && lastNMonths >= 0) {
+    if (lastNMonths === 0) {
+      wheres.push(`${xField} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    } else {
+      wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+    }
   }
 
   const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
@@ -293,8 +300,12 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
     const col = ATT_COL_MAP[channelFilter];
     if (col) baseWheres.push(`${col} > 0`);
   }
-  if (lastNMonths) {
-    baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+  if (lastNMonths != null && lastNMonths >= 0) {
+    if (lastNMonths === 0) {
+      baseWheres.push(`${xField} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    } else {
+      baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+    }
   }
 
   // First pass: find top N dimension values by total volume

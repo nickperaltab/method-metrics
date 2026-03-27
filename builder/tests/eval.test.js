@@ -299,3 +299,37 @@ describe('Conversational AI Evals', () => {
     assert.strictEqual(r2.data_config.time_bucket, 'month', 'should change to monthly');
   });
 });
+
+// --- Time Range Precision Tests ---
+
+describe('Time Range Precision', () => {
+  it('"this month" should return last_n_months: 0', async () => {
+    const r = await callAi('show me trials this month');
+    assertValidSpec(r, 'this month');
+    assert.strictEqual(r.data_config.last_n_months, 0, '"this month" should be 0 (current month only)');
+  });
+
+  it('"last month" should return last_n_months: 1', async () => {
+    const r = await callAi('show me trials last month');
+    assertValidSpec(r, 'last month');
+    assert.strictEqual(r.data_config.last_n_months, 1, '"last month" should be 1');
+  });
+
+  it('"just march" should have a time filter set', async () => {
+    const r = await callAi('show me trials for march');
+    assertValidSpec(r, 'just march');
+    assert(r.data_config.last_n_months != null, 'should have a time filter for a specific month');
+  });
+
+  it('"this month" with derived metric should use monthly bucket', async () => {
+    const r = await callAi('conversion rate this month');
+    assertValidSpec(r, 'conversion rate this month');
+    assert.strictEqual(r.data_config.time_bucket, 'month', 'derived rates should use monthly bucket');
+  });
+
+  it('"last 3 months" should return 3', async () => {
+    const r = await callAi('show me syncs for the last 3 months');
+    assertValidSpec(r, 'last 3 months');
+    assert.strictEqual(r.data_config.last_n_months, 3, 'last 3 months = 3');
+  });
+});

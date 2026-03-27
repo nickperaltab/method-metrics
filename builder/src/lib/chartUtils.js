@@ -196,9 +196,11 @@ export function applyChannelFilter(rows, channelFilter) {
 }
 
 export function applyLastNMonths(labels, datasets, lastNMonths, timeBucket) {
-  if (!lastNMonths) return { labels, datasets };
+  if (lastNMonths == null || lastNMonths < 0) return { labels, datasets };
   const now = new Date();
-  const cutoff = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
+  const cutoff = lastNMonths === 0
+    ? new Date(now.getFullYear(), now.getMonth(), 1)
+    : new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
   const bucket = timeBucket || 'month';
   let cutoffKey;
   if (bucket === 'month') {

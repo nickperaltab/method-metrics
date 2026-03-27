@@ -47,7 +47,7 @@ Rules:
 - x_field: the column to use for the x-axis (usually a date column for time charts, or a category column for bar charts)
 - y_fields: array. Use "COUNT" when the metric has no numeric column and you need row counts. Otherwise use the actual column name.
 - time_bucket: "month" (default), "week", or "day". Only relevant for time-series charts.
-- last_n_months: integer. Default to 12 (last year) unless user specifies otherwise. "last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6, "last 2 years" = 24. Only use null when user explicitly asks for "all time" or "since inception". Always set a value.
+- last_n_months: integer. Default to 12 (last year) unless user specifies otherwise. "this month" = 0 (current month only), "last month" = 1, "last 3 months" = 3, "last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6, "last 2 years" = 24, "just march" or "just [month]" = 0. Only use null when user explicitly asks for "all time" or "since inception". Always set a value.
 - channel_filter: one of "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". null = no filter.
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
