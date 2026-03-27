@@ -18,7 +18,7 @@ const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), Chan
 v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
 v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)`;
 
-const VALID_ECHARTS_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area']);
+const VALID_ECHARTS_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy']);
 
 async function callAi(prompt) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
@@ -331,5 +331,206 @@ describe('Time Range Precision', () => {
     const r = await callAi('show me syncs for the last 3 months');
     assertValidSpec(r, 'last 3 months');
     assert.strictEqual(r.data_config.last_n_months, 3, 'last 3 months = 3');
+  });
+});
+
+// --- Multi-Step Conversation Chain Tests ---
+// These simulate real user sessions: 3-5 follow-ups building on previous context.
+
+async function runChain(steps, initialSpec = null) {
+  const messages = [];
+  let currentSpec = initialSpec;
+  const results = [];
+
+  for (const step of steps) {
+    messages.push({ role: 'user', content: step.prompt });
+    const result = await callAiConversational(messages, currentSpec);
+    assertValidSpec(result, step.label);
+    step.validate(result, results);
+    messages.push({ role: 'assistant', content: JSON.stringify(result) });
+    currentSpec = result;
+    results.push(result);
+  }
+  return results;
+}
+
+function assertHasMetrics(result, ids, label) {
+  for (const id of ids) {
+    assert(result.metric_ids.includes(id), `${label}: should include metric ${id}`);
+  }
+}
+
+describe('Multi-Step Conversation Chains', () => {
+  it('chain: trials → add syncs → stacked bars → SEO filter → last 3 months', async () => {
+    await runChain([
+      {
+        prompt: 'show me trials by month',
+        label: 'step 1: initial trials',
+        validate: (r) => {
+          assertHasMetrics(r, [54], 'step 1');
+          assert.strictEqual(r.data_config.time_bucket, 'month');
+        },
+      },
+      {
+        prompt: 'add syncs too',
+        label: 'step 2: add syncs',
+        validate: (r) => {
+          assertHasMetrics(r, [54, 55], 'step 2');
+          assert.strictEqual(r.data_config.time_bucket, 'month', 'bucket should stay month');
+        },
+      },
+      {
+        prompt: 'make it stacked bars',
+        label: 'step 3: stacked bars',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'stacked_bar', 'should be stacked_bar');
+          assert(r.metric_ids.length >= 2, 'should keep both metrics');
+        },
+      },
+      {
+        prompt: 'only SEO',
+        label: 'step 4: SEO filter',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.channel_filter, 'SEO', 'should filter by SEO');
+          assert(r.metric_ids.length >= 2, 'should keep both metrics');
+        },
+      },
+      {
+        prompt: 'just last 3 months',
+        label: 'step 5: last 3 months',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.last_n_months, 3, 'should be 3 months');
+          assert.strictEqual(r.data_config.time_bucket, 'month', 'bucket should still be month');
+        },
+      },
+    ]);
+  });
+
+  it('chain: conversion rate → add sync rate → weekly → table', async () => {
+    await runChain([
+      {
+        prompt: 'show me conversion rate by month',
+        label: 'step 1: conversion rate',
+        validate: (r) => {
+          assertHasMetrics(r, [20], 'step 1');
+        },
+      },
+      {
+        prompt: 'compare to sync rate',
+        label: 'step 2: add sync rate',
+        validate: (r) => {
+          assertHasMetrics(r, [20, 25], 'step 2');
+        },
+      },
+      {
+        prompt: 'make it weekly',
+        label: 'step 3: weekly',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.time_bucket, 'week', 'should be weekly');
+          assert(r.metric_ids.length >= 2, 'should keep both rates');
+        },
+      },
+      {
+        prompt: 'show as table',
+        label: 'step 4: table view',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'table', 'should be table');
+          assert(r.metric_ids.length >= 2, 'should keep both rates');
+        },
+      },
+    ]);
+  });
+
+  it('chain: edit saved chart — change range, add metric, change type', async () => {
+    const savedSpec = {
+      metric_ids: [54, 55],
+      echarts_type: 'line',
+      data_config: {
+        x_field: 'SignupDate',
+        y_fields: ['COUNT', 'COUNT'],
+        time_bucket: 'month',
+        last_n_months: 12,
+        channel_filter: null,
+        labels: ['Trials', 'Syncs'],
+      },
+      show_labels: false,
+      explanation: 'Trials and Syncs by month',
+    };
+
+    await runChain([
+      {
+        prompt: 'show last 6 months instead',
+        label: 'edit step 1: change range',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.last_n_months, 6, 'should be 6 months');
+          assertHasMetrics(r, [54, 55], 'edit step 1');
+          assert.strictEqual(r.echarts_type, 'line', 'type should stay line');
+        },
+      },
+      {
+        prompt: 'add conversion rate',
+        label: 'edit step 2: add derived metric',
+        validate: (r) => {
+          assertHasMetrics(r, [54, 55, 20], 'edit step 2');
+        },
+      },
+      {
+        prompt: 'make it a combo chart',
+        label: 'edit step 3: combo',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'combo', 'should be combo');
+          assert(r.metric_ids.length >= 3, 'should keep all 3 metrics');
+        },
+      },
+    ], savedSpec);
+  });
+
+  it('chain: multi-metric chart → complete topic reset', async () => {
+    const savedSpec = {
+      metric_ids: [54, 55],
+      echarts_type: 'line',
+      data_config: {
+        x_field: 'SignupDate',
+        y_fields: ['COUNT', 'COUNT'],
+        time_bucket: 'month',
+        last_n_months: 12,
+        channel_filter: null,
+        labels: ['Trials', 'Syncs'],
+      },
+      explanation: 'Trials and Syncs',
+    };
+
+    await runChain([
+      {
+        prompt: 'now show me churn rate by month',
+        label: 'reset: churn rate',
+        validate: (r) => {
+          assertHasMetrics(r, [46], 'reset');
+          assert(!r.metric_ids.includes(54), 'should NOT include Trials');
+          assert(!r.metric_ids.includes(55), 'should NOT include Syncs');
+        },
+      },
+    ], savedSpec);
+  });
+
+  it('chain: data labels persist across chart type change', async () => {
+    await runChain([
+      {
+        prompt: 'show me trials by month with data labels',
+        label: 'step 1: with labels',
+        validate: (r) => {
+          assertHasMetrics(r, [54], 'step 1');
+          assert.strictEqual(r.show_labels, true, 'show_labels should be true');
+        },
+      },
+      {
+        prompt: 'make it a bar chart',
+        label: 'step 2: bar with labels preserved',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'bar', 'should be bar');
+          assert.strictEqual(r.show_labels, true, 'show_labels should still be true');
+        },
+      },
+    ]);
   });
 });
