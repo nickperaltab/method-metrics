@@ -221,6 +221,86 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
 }
 
 /**
+ * Fetch data grouped by a dimension column (e.g., Channel, SignupCountry).
+ * Returns one series per dimension value — used for heatmaps, stacked bars, pies by category.
+ *
+ * @param {string} viewName - BQ view name
+ * @param {string} xField - Date column for time axis
+ * @param {string} yField - Column for value, or 'COUNT'
+ * @param {string} timeBucket - 'month' | 'week' | 'day'
+ * @param {string} groupByField - Column to group by (e.g., 'Channel', 'SignupCountry')
+ * @param {string|null} channelFilter - Channel name or null
+ * @param {number|null} lastNMonths - Time range filter
+ * @param {number} topN - Max dimension values to include (default 10)
+ * @returns {{ labels: string[], seriesMap: Object<string, number[]>, sql: string }}
+ */
+export async function fetchGroupedData(viewName, xField, yField, timeBucket, groupByField, channelFilter, lastNMonths, topN = 10) {
+  const cacheKey = `grouped|${viewName}|${xField}|${yField}|${timeBucket}|${groupByField}|${channelFilter}|${lastNMonths}|${topN}`;
+  if (aggCache[cacheKey]) return aggCache[cacheKey];
+
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+  const bucket = timeBucket || 'month';
+
+  let periodExpr;
+  if (bucket === 'month') periodExpr = `FORMAT_DATE('%Y-%m', ${xField})`;
+  else if (bucket === 'week') periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${xField}, WEEK(MONDAY)))`;
+  else periodExpr = `FORMAT_DATE('%Y-%m-%d', ${xField})`;
+
+  const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
+
+  const wheres = [];
+  if (channelFilter) {
+    const col = ATT_COL_MAP[channelFilter];
+    if (col) wheres.push(`${col} > 0`);
+  }
+  if (lastNMonths) {
+    wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+  }
+  wheres.push(`${groupByField} IS NOT NULL AND TRIM(CAST(${groupByField} AS STRING)) != ''`);
+
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+
+  // First pass: find top N dimension values by total volume
+  const topSql = `SELECT ${groupByField} AS dimension, ${valueExpr} AS total FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${topN}`;
+  const topResult = await queryBq(topSql);
+  const topDimensions = topResult.rows.map(r => r.dimension);
+
+  if (topDimensions.length === 0) {
+    const output = { labels: [], seriesMap: {}, sql: topSql };
+    aggCache[cacheKey] = output;
+    return output;
+  }
+
+  // Second pass: get full time series for top dimensions only
+  const inList = topDimensions.map(d => `'${String(d).replace(/'/g, "\\'")}'`).join(',');
+  const fullWheres = wheres.filter(w => !w.startsWith(`${groupByField} IS NOT NULL`));
+  fullWheres.push(`${groupByField} IN (${inList})`);
+  const fullWhereClause = `WHERE ${fullWheres.join(' AND ')}`;
+
+  const sql = `SELECT ${periodExpr} AS period, ${groupByField} AS dimension, ${valueExpr} AS value FROM ${table} ${fullWhereClause} GROUP BY 1, 2 ORDER BY 1, 2`;
+  const result = await queryBq(sql);
+
+  // Build seriesMap keyed by dimension value
+  const labelsSet = new Set();
+  const tempMap = {};
+  for (const row of result.rows) {
+    labelsSet.add(row.period);
+    if (!tempMap[row.dimension]) tempMap[row.dimension] = {};
+    tempMap[row.dimension][row.period] = Number(row.value) || 0;
+  }
+
+  const labels = [...labelsSet].sort();
+  const seriesMap = {};
+  for (const dim of Object.keys(tempMap)) {
+    seriesMap[dim] = labels.map(l => tempMap[dim][l] || 0);
+  }
+
+  const output = { labels, seriesMap, sql };
+  aggCache[cacheKey] = output;
+  return output;
+}
+
+/**
  * Fetch KPI data: current month value + prior month value with delta.
  *
  * @param {string} viewName - BQ view name

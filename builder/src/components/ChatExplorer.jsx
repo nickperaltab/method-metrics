@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import {
   castRow,
   aggregateRows,
@@ -159,6 +159,18 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           computedData.push(Math.round(value * 100) / 100);
         }
         rawDatasets.push({ label, labels: computedLabels, data: computedData });
+      } else if (dataConfig.groupByDimension && metric.view_name) {
+        const viewSchema = schemaCache[metric.view_name] || [];
+        const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+        try {
+          const grouped = await fetchGroupedData(
+            metric.view_name, dateCol, yField, timeBucket,
+            dataConfig.groupByDimension, channelFilter, effectiveLastNMonths
+          );
+          Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
+            rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
+          });
+        } catch { /* skip */ }
       } else if (metric.view_name) {
         const viewSchema = schemaCache[metric.view_name] || [];
         const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
@@ -578,6 +590,36 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             data: computedData,
             dependsOn: depNames,
           });
+        } else if (dataConfig.groupByDimension && metric.view_name) {
+          const viewSchema = schemaCache[metric.view_name] || [];
+          const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+          try {
+            const grouped = await fetchGroupedData(
+              metric.view_name, dateCol, yField, timeBucket,
+              dataConfig.groupByDimension, channelFilter, dataConfig.lastNMonths
+            );
+            Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
+              rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
+            });
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: grouped.sql,
+              dateColumn: dateCol,
+              labels: grouped.labels,
+              data: Object.values(grouped.seriesMap).flat(),
+              groupedBy: dataConfig.groupByDimension,
+            });
+          } catch (err) {
+            collectedDetails.push({
+              metricName: label,
+              metricId: metric.id,
+              sql: `ERROR: ${err.message || 'Grouped query failed'}`,
+              dateColumn: dateCol,
+              labels: [],
+              data: [],
+            });
+          }
         } else {
           // Use the correct date column for this specific view (may differ from AI's xField)
           const viewSchema = schemaCache[metric.view_name] || [];
@@ -596,7 +638,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               data: agg.data,
             });
           } catch (err) {
-            // Always log the error for debugging
             collectedDetails.push({
               metricName: label,
               metricId: metric.id,
@@ -605,7 +646,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               labels: [],
               data: [],
             });
-            // Try client-side fallback
             try {
               const loaded = await loadMetricData(metric);
               if (loaded) {

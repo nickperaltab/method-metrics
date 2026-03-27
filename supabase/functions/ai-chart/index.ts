@@ -18,6 +18,7 @@ Return ONLY valid JSON in this exact format:
     "time_bucket": "month" | "week" | "day",
     "last_n_months": <integer or null>,
     "channel_filter": "<channel_name or null>",
+    "group_by_dimension": "<column_name or null>",
     "labels": ["<display label for each y_field>", ...]
   },
   "echarts_type": "<chart_type>",
@@ -46,16 +47,23 @@ Rules:
 - x_field: the column to use for the x-axis (usually a date column for time charts, or a category column for bar charts)
 - y_fields: array. Use "COUNT" when the metric has no numeric column and you need row counts. Otherwise use the actual column name.
 - time_bucket: "month" (default), "week", or "day". Only relevant for time-series charts.
-- last_n_months: integer if user specifies a time range ("last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6). null = all data.
+- last_n_months: integer. Default to 12 (last year) unless user specifies otherwise. "last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6, "last 2 years" = 24. Only use null when user explicitly asks for "all time" or "since inception". Always set a value.
 - channel_filter: one of "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". null = no filter.
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 - colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
 
 IMPORTANT — Attribution channels:
-- There is NO "Channel" column in any view. Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.
-- When user asks "by channel", use echarts_type "horizontal_bar" with x_field as the date column and return a note in explanation that the frontend handles channel breakdown.
-- For "by country", use x_field or color grouping with the actual column (e.g., "SignupCountry").
+- Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.
+- channel_filter filters TO one channel (e.g., "show me SEO trials" → channel_filter: "SEO").
+
+IMPORTANT — Dimension breakdowns (group_by_dimension):
+- When user asks "by channel", "by country", "by industry", "by sync type", or any categorical breakdown, set group_by_dimension to the actual column name.
+- Column mapping: "by channel" → "Channel" (for trials/conversions), "by country" → "SignupCountry", "by industry" → "CustDatIndustry", "by sync type" → "SyncType", "by vertical" → "Vertical".
+- For syncs "by channel", use group_by_dimension: "SyncType" (syncs don't have a Channel column).
+- Best chart types for dimension breakdowns: heatmap, stacked_bar, pie, horizontal_bar.
+- Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
+- channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.

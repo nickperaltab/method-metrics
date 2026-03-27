@@ -7,7 +7,7 @@ import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
-import { fetchAggregatedData, fetchKpiData, fetchYoYData, clearAllCaches } from '../lib/bigquery';
+import { fetchAggregatedData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches } from '../lib/bigquery';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -302,6 +302,19 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
               computedData.push(Math.round(value * 100) / 100);
             }
             rawDatasets.push({ label, labels: computedLabels, data: computedData });
+          } else if (dataConfig.groupByDimension && metric.view_name) {
+            // Dimension breakdown — one series per dimension value
+            const viewSchema = schemaCache[metric.view_name] || [];
+            const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
+            try {
+              const grouped = await fetchGroupedData(
+                metric.view_name, dateCol, yField, timeBucket,
+                dataConfig.groupByDimension, channelFilter, dataConfig.lastNMonths
+              );
+              Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
+                rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
+              });
+            } catch { /* skip */ }
           } else if (metric.view_name) {
             // Primitive metric — fetch aggregated data from BQ
             const viewSchema = schemaCache[metric.view_name] || [];
