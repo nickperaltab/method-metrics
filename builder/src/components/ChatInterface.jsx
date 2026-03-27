@@ -272,7 +272,7 @@ export default function ChatInterface({
                     userEmail={userEmail}
                     source="chat"
                     messageIndex={i}
-                    chartSpec={msg.chartOption ? { chartOption: true } : msg.kpiData ? { kpiData: true } : { tableData: true }}
+                    chartSpec={{ queryDetails: msg.queryDetails, prompt: messages[i - 1]?.content }}
                   />
                   {onSaveChart && (
                     <button
