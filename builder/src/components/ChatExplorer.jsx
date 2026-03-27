@@ -378,6 +378,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           if (isRate) {
             // Derived metric: fetch KPI for each dependency, apply formula for current + prior
             const depKpis = {};
+            const depDetails = [];
             for (const depId of metric.depends_on) {
               const depMetric = metrics.find(dm => dm.id === depId);
               if (depMetric && depMetric.view_name) {
@@ -385,7 +386,9 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
                 const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
                 if (!dateCol) { depKpis[depId] = { current: 0, prior: 0 }; continue; }
                 try {
-                  depKpis[depId] = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                  const kpiResult = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                  depKpis[depId] = kpiResult;
+                  depDetails.push({ metricName: depMetric.name, metricId: depId, sql: kpiResult.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpiResult.current, kpiResult.prior] });
                 } catch {
                   depKpis[depId] = { current: 0, prior: 0 };
                 }
@@ -404,11 +407,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               });
               try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
             };
-            const current = evalFormula('current');
-            const prior = evalFormula('prior');
-            const delta = current - prior;
+            const current = Math.round(evalFormula('current') * 100) / 100;
+            const prior = Math.round(evalFormula('prior') * 100) / 100;
+            const delta = Math.round((current - prior) * 100) / 100;
             const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
             kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true });
+            collectedDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A (computed)', labels: ['current', 'prior'], data: [current, prior], dependsOn: metric.depends_on });
+            depDetails.forEach(d => collectedDetails.push(d));
           } else if (metric.view_name) {
             const viewSchema = schemaCache[metric.view_name] || [];
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
@@ -419,8 +424,10 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             try {
               const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
               kpiData.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
-            } catch {
+              collectedDetails.push({ metricName: label, metricId: metric.id, sql: kpi.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpi.current, kpi.prior] });
+            } catch (err) {
               kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false });
+              collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: dateCol, labels: [], data: [] });
             }
           }
         }
