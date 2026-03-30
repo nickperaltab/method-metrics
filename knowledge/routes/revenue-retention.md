@@ -4,7 +4,7 @@
 **Metrics:** NRR, GRR, MRR, Paying Logos, Net New ARR/MRR, Cancellations, Expansions, Downgrades, Other In/Out
 **Catalog entries:** #1-5, #50-52, #53-68, #69-70, #83-112
 **Data sources:** Monthly Excel files → USD Rates KPI Deck Google Sheet → BigQuery SQL replication
-**Verified queries:** `context/verified-queries/` (saas-mrr, cancellation-mrr, expansion-mrr, downgrade-mrr, new-mrr, other-in-mrr, other-out-mrr, net-new-mrr, net-new-arr)
+**Verified queries:** `knowledge/verified-queries/` (saas-mrr, cancellation-mrr, expansion-mrr, downgrade-mrr, new-mrr, other-in-mrr, other-out-mrr, net-new-mrr, net-new-arr)
 
 ## Rules for This Family
 

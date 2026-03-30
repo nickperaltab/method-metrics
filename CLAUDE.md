@@ -135,11 +135,6 @@ The `sources/` directory contains Excel verification files (the spreadsheet sour
 
 Use `/metric-solver` to verify metrics against a source of truth. The skill interviews you, discovers the route, solves the metric, and writes back what it learned. After you approve the result, it publishes the verified SQL to Supabase and flips the metric to live.
 
-## Metric Statuses
-
-- **live** — solved, verified, approved. Visible to the AI chart builder and users.
-- **queued** — not yet solved. Waiting to be worked on.
-
 ## Principles Learned
 
 These apply to ALL metrics. Family-specific rules live in the route files under `knowledge/routes/`.
