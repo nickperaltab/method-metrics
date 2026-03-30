@@ -3,6 +3,13 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=agkubdpgnpwudzpzcvhs"
+    },
+    "google": {
+      "command": "node",
+      "args": ["/Users/jpmethod/.claude/mcp-servers/google-work/workspace-server/dist/index.js"],
+      "env": {
+        "GEMINI_CLI_WORKSPACE_FORCE_FILE_STORAGE": "true"
+      }
     }
   }
 }

@@ -118,6 +118,43 @@ cd builder && npm run build && vercel --prod
 
 Push to `main` → GitHub Pages auto-deploys to `https://nickperaltab.github.io/method-metrics/`
 
+## Knowledge Base
+
+The `knowledge/` directory is the accumulated learning from solving metrics. It grows every time a metric is verified.
+
+- `knowledge/schema.md` — BigQuery schema and field reference for TransLineFlattened
+- `knowledge/account-mapping.md` — entity whitelist and account type logic
+- `knowledge/glossary.md` — terminology reference
+- `knowledge/metrics-catalog.md` — business definitions, families, and dependencies for 155 metrics (reference doc — Supabase is the source of truth for metric IDs)
+- `knowledge/routes/` — route files documenting how to solve each metric family
+- `knowledge/verified-queries/` — SQL files for metrics verified to exact match against Excel
+
+The `sources/` directory contains Excel verification files (the spreadsheet source of truth for revenue metrics).
+
+## Metric Solver
+
+Use `/metric-solver` to verify metrics against a source of truth. The skill interviews you, discovers the route, solves the metric, and writes back what it learned. After you approve the result, it publishes the verified SQL to Supabase and flips the metric to live.
+
+## Principles Learned
+
+These apply to ALL metrics. Family-specific rules live in the route files under `knowledge/routes/`.
+
+- **Always check the metrics catalog first.** `knowledge/metrics-catalog.md` has family assignments and dependencies. Load the right route file before solving.
+- **Scan related families.** A metric might depend on metrics from a different family. Check the catalog's dependency chain and scan those route files too.
+- **Retention grouping: join by EntityRecordID, classify at CompanyAccount.** CompanyAccount is the correct level (customer). But CompanyAccount strings change when companies are renamed, so use EntityRecordID (stable numeric ID) for the temporal join, then aggregate to CompanyAccount before classifying. This produces EXACT match with Excel output.
+- **Exclude the current incomplete month** in BQ queries. Mid-month data shows false cancellations.
+- **Trace down to the cell formula** when working with spreadsheets. Don't trust summary tabs — trace to the source.
+
+## Self-Improvement Rules
+
+After solving or attempting to solve any metric, update the relevant files:
+
+1. **New route discovered** — create a new file in `knowledge/routes/` documenting the pattern
+2. **New gotcha discovered** — add to the relevant route file or this CLAUDE.md
+3. **Existing knowledge refined** — update the relevant knowledge file
+4. **General principle learned** — add to this CLAUDE.md
+5. **Verified query created** — save to `knowledge/verified-queries/`
+
 ## Collaborators
 
 - Nic (nickperaltab) — funnel/marketing metrics, dashboard pages
