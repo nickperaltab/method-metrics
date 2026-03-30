@@ -10,7 +10,7 @@ Populated nightly by the SaaS Analytics Engine API (`/api/revtobigquery`). Sourc
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `CompanyAccount` | STRING | Customer/company name. **This is the correct grouping level for retention** (customer level, matches Excel Customers tab). However, CompanyAccount strings change when companies are renamed, so you must join by `EntityRecordID` first (stable numeric ID), then aggregate to CompanyAccount for classification. See the proven approach in `context/routes/revenue-retention.md`. |
+| `CompanyAccount` | STRING | Customer/company name. **This is the correct grouping level for retention** (customer level, matches Excel Customers tab). However, CompanyAccount strings change when companies are renamed, so you must join by `EntityRecordID` first (stable numeric ID), then aggregate to CompanyAccount for classification. See the proven approach in `knowledge/routes/revenue-retention.md`. |
 | `EntityRecordID` | INT64 | Stable numeric identifier for each billing entity (account level). Use this for **joining** across time periods — it never changes. Then aggregate to CompanyAccount for classification. Do NOT classify at entity level — that gives different (wrong) retention numbers vs the Excel. |
 | `SaaSAmount` | FLOAT | The aggregate revenue field. Includes all SaaS components (MethodNew, Classic, DEP, discounts, portals, emails). Use `SUM(SaaSAmount)` for total revenue. |
 | `AccountFullName` | STRING | Transaction type identifier. Values like `Subscriptions:MethodNew`, `Subscriptions:Classic`, `Subscriptions:Prepay Expiry Income`, etc. Useful for debugging and whitelist filtering, NOT for filtering revenue totals. |

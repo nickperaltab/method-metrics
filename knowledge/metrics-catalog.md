@@ -4,7 +4,7 @@ Every metric Method needs — name, definition, formula, source, and BigQuery st
 
 ## Metric Families
 
-Each metric belongs to a family. Families share data sources, solving routes, and rules. Route files in `context/routes/` document how to solve each family. The skill checks this index to find related families before solving.
+Each metric belongs to a family. Families share data sources, solving routes, and rules. Route files in `knowledge/routes/` document how to solve each family. The skill checks this index to find related families before solving.
 
 | Family | Route File | Metrics | Data Sources |
 |--------|-----------|---------|--------------|
