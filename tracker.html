@@ -106,10 +106,7 @@ tr.data-row.expanded td{background:var(--surface);border-bottom-color:transparen
 .status{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .dot-live{background:var(--green);box-shadow:0 0 6px var(--green)}
-.dot-have-data{background:var(--blue)}
-.dot-review{background:var(--yellow)}
-.dot-broken{background:var(--red)}
-.dot-missing,.dot-unknown{background:var(--gray)}
+.dot-queued{background:var(--gray)}
 
 /* Inline editable cells */
 td select{
@@ -400,8 +397,7 @@ function renderApp() {
   const counts = {
     total: allMetrics.length,
     live: allMetrics.filter(m => m.status === 'live').length,
-    haveData: allMetrics.filter(m => m.status === 'have-data').length,
-    missing: allMetrics.filter(m => m.status === 'missing').length,
+    queued: allMetrics.filter(m => m.status === 'queued').length,
   };
 
   document.getElementById('app').innerHTML = `
@@ -418,8 +414,7 @@ function renderApp() {
       <div id="bq-status" style="margin-right:16px"></div>
       <div class="header-stats">
         <div class="stat"><div class="stat-val" style="color:var(--green)">${counts.live}</div><div class="stat-label">Live</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--blue)">${counts.haveData}</div><div class="stat-label">Have Data</div></div>
-        <div class="stat"><div class="stat-val" style="color:var(--gray)">${counts.missing}</div><div class="stat-label">Missing</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--gray)">${counts.queued}</div><div class="stat-label">Queued</div></div>
         <div class="stat"><div class="stat-val">${counts.total}</div><div class="stat-label">Total</div></div>
       </div>
     </div>
@@ -563,7 +558,7 @@ function renderTable() {
 function renderMetricRow(m) {
   const type = getType(m);
   const typeCls = `type-${type.toLowerCase()}`;
-  const dotCls = `dot-${(m.status || 'unknown').replace(' ', '-')}`;
+  const dotCls = `dot-${(m.status || 'queued').replace(' ', '-')}`;
   const isExpanded = expandedId === m.id;
 
   return `<tr class="data-row ${isExpanded ? 'expanded' : ''}" data-id="${m.id}" onclick="toggleExpand(${m.id}, event)">
@@ -595,7 +590,7 @@ function renderMetricRow(m) {
       <div class="status">
         <span class="dot ${dotCls}"></span>
         <select onclick="event.stopPropagation()" onchange="saveField(${m.id},'status',this.value,this)" style="flex:1">
-          ${['live','have-data','review','missing','broken','unknown'].map(s =>
+          ${['live','queued'].map(s =>
             `<option value="${s}"${m.status===s?' selected':''}>${s}</option>`
           ).join('')}
         </select>
@@ -1143,12 +1138,10 @@ async function saveField(id, field, value, el) {
   if (field === 'status' || field === 'assigned_to') {
     // Re-render stats
     const liveCount = allMetrics.filter(m => m.status === 'live').length;
-    const haveCount = allMetrics.filter(m => m.status === 'have-data').length;
-    const missCount = allMetrics.filter(m => m.status === 'missing').length;
+    const queuedCount = allMetrics.filter(m => m.status === 'queued').length;
     document.querySelectorAll('.stat-val').forEach((el, i) => {
       if (i === 0) el.textContent = liveCount;
-      if (i === 1) el.textContent = haveCount;
-      if (i === 2) el.textContent = missCount;
+      if (i === 1) el.textContent = queuedCount;
     });
   }
 }
@@ -1641,7 +1634,7 @@ async function createMetricFromWizard() {
   const metric = {
     name: name,
     stage: wizardState.stage || 'trials',
-    status: 'review',
+    status: 'queued',
     metric_type: 'primitive',
     view_name: viewName,
     view_definition: wizardState.sql,
@@ -1691,7 +1684,7 @@ async function createMetricFromWizard() {
           body: JSON.stringify({
             name: breakdownName,
             stage: wizardState.stage,
-            status: 'review',
+            status: 'queued',
             metric_type: 'breakdown',
             view_name: breakdownView,
             view_definition: breakdownSql,
@@ -1721,7 +1714,7 @@ async function createMetricFromWizard() {
         body: JSON.stringify({
           name: derivedName,
           stage: wizardState.stage,
-          status: 'review',
+          status: 'queued',
           metric_type: 'derived',
           view_name: derivedView,
           view_definition: derivedSql,
