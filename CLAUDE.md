@@ -73,12 +73,10 @@ Key columns:
 - `assigned_to` — Nic / Justin / null
 - `verified_at` — timestamp of last verification
 
-### Graduated Metrics Status
+### Metric Statuses
 
-- `live` — visible to AI, queryable in chart builder
-- `ready` — audited and waiting for approval, not yet visible to AI
-- `review` — registered but not verified, invisible to AI
-- `catalog` — placeholder name only, no SQL defined
+- `live` — solved, verified, approved. Visible to AI, queryable in chart builder.
+- `queued` — not yet solved. Invisible to AI.
 
 ## BQ Views
 
