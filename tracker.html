@@ -108,6 +108,15 @@ tr.data-row.expanded td{background:var(--surface);border-bottom-color:transparen
 .dot-live{background:var(--green);box-shadow:0 0 6px var(--green)}
 .dot-queued{background:var(--gray)}
 
+/* Bulk action bar */
+.bulk-bar{display:none;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:12px}
+.bulk-bar.visible{display:flex}
+.bulk-bar .bulk-count{font-size:13px;color:var(--muted)}
+.bulk-bar .btn-danger{background:#ef4444;color:#fff;border:none;padding:5px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-weight:500}
+.bulk-bar .btn-danger:hover{background:#dc2626}
+tr.selected{background:rgba(52,211,153,0.06)}
+th.check-col,td.check-col{width:32px;text-align:center;padding:0 4px}
+
 /* Inline editable cells */
 td select{
   background:transparent;border:1px solid transparent;color:var(--text);
@@ -297,6 +306,7 @@ let filteredMetrics = [];
 let expandedId = null;
 let sortCol = 'id';
 let sortDir = 'asc';
+let selectedIds = new Set();
 
 // --- Data ---
 async function loadMetrics() {
@@ -458,6 +468,10 @@ function renderApp() {
       <div class="filter-count" id="filter-count"></div>
     </div>
 
+    <div id="bulk-bar" class="bulk-bar">
+      <span class="bulk-count" id="bulk-count">0 selected</span>
+      <button class="btn-danger" onclick="bulkDelete()">Delete Selected</button>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr id="thead-row"></tr></thead>
@@ -493,7 +507,8 @@ function renderThead() {
     { key: 'status', label: 'Status', width: '100px' },
   ];
 
-  document.getElementById('thead-row').innerHTML = cols.map(c =>
+  const checkAll = `<th class="check-col"><input type="checkbox" onchange="toggleSelectAll(this.checked)"></th>`;
+  document.getElementById('thead-row').innerHTML = checkAll + cols.map(c =>
     `<th style="${c.width ? 'width:'+c.width : ''}" class="${sortCol === c.key ? 'sorted' : ''}" onclick="setSort('${c.key}')">
       ${c.label}<span class="sort-arrow">${sortCol === c.key ? (sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;'}</span>
     </th>`
@@ -505,7 +520,7 @@ function renderTable() {
   if (!tbody) return;
 
   if (filteredMetrics.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No metrics match your filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No metrics match your filters.</td></tr>';
     return;
   }
 
@@ -533,7 +548,7 @@ function renderTable() {
     const items = grouped[group.key];
     if (!items || items.length === 0) continue;
 
-    html += `<tr><td colspan="7" style="padding:0">
+    html += `<tr><td colspan="8" style="padding:0">
       <div class="group-header ${group.cls}">
         <span class="group-title">${group.label}</span>
         <span class="group-count">${items.length}</span>
@@ -561,7 +576,8 @@ function renderMetricRow(m) {
   const dotCls = `dot-${(m.status || 'queued').replace(' ', '-')}`;
   const isExpanded = expandedId === m.id;
 
-  return `<tr class="data-row ${isExpanded ? 'expanded' : ''}" data-id="${m.id}" onclick="toggleExpand(${m.id}, event)">
+  return `<tr class="data-row ${isExpanded ? 'expanded' : ''} ${selectedIds.has(m.id) ? 'selected' : ''}" data-id="${m.id}" onclick="toggleExpand(${m.id}, event)">
+    <td class="check-col" onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect(${m.id},this.checked)"></td>
     <td style="font-family:var(--font-mono);color:var(--text-dim);font-size:11px">${m.id}</td>
     <td style="font-weight:600;color:var(--text-bright)">${esc(m.name)}</td>
     <td>
@@ -629,7 +645,7 @@ function renderExpandPanel(m) {
 
   const sqlText = m.view_definition || m.chart_sql || '';
 
-  return `<tr class="expand-row"><td colspan="7"><div class="expand-panel" id="${panelId}">
+  return `<tr class="expand-row"><td colspan="8"><div class="expand-panel" id="${panelId}">
     ${viewInfo}
     ${parentHtml}
     <div class="expand-section">
@@ -1283,6 +1299,55 @@ async function deleteMetric(id, name) {
   expandedId = null;
   applyFilters();
   renderTable();
+}
+
+// --- Bulk Selection ---
+
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (row) row.classList.toggle('selected', checked);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked) {
+  if (checked) filteredMetrics.forEach(m => selectedIds.add(m.id));
+  else selectedIds.clear();
+  renderTable();
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  if (!bar) return;
+  const n = selectedIds.size;
+  bar.classList.toggle('visible', n > 0);
+  document.getElementById('bulk-count').textContent = `${n} selected`;
+}
+
+async function bulkDelete() {
+  const count = selectedIds.size;
+  if (!count) return;
+  if (!confirm(`Delete ${count} metric${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
+
+  const deps = allMetrics.filter(m =>
+    m.depends_on?.some(d => selectedIds.has(d)) && !selectedIds.has(m.id)
+  );
+  if (deps.length > 0) {
+    if (!confirm(`${deps.length} other metric(s) depend on these:\n${deps.map(d => '  - ' + d.name).join('\n')}\n\nContinue anyway?`)) return;
+  }
+
+  const ids = [...selectedIds].join(',');
+  await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=in.(${ids})`, {
+    method: 'DELETE',
+    headers: HEADERS,
+  });
+
+  allMetrics = allMetrics.filter(m => !selectedIds.has(m.id));
+  selectedIds.clear();
+  expandedId = null;
+  applyFilters();
 }
 
 // --- New Metric Wizard ---
