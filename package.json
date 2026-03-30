@@ -1,0 +1,30 @@
+{
+  "name": "method-metrics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  },
+  "scripts": {
+    "test": "npx playwright test",
+    "test:tracker": "npx playwright test --project=tracker",
+    "test:builder": "npx playwright test --project=builder",
+    "test:dashboards": "npx playwright test --project=dashboards"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickperaltab/method-metrics.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/nickperaltab/method-metrics/issues"
+  },
+  "homepage": "https://github.com/nickperaltab/method-metrics#readme"
+}
