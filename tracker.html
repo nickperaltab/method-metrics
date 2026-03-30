@@ -470,6 +470,7 @@ function renderApp() {
 
     <div id="bulk-bar" class="bulk-bar">
       <span class="bulk-count" id="bulk-count">0 selected</span>
+      <button style="background:var(--surface-hover);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:4px;font-size:12px;cursor:pointer" onclick="deselectAll()">Deselect All</button>
       <button class="btn-danger" onclick="bulkDelete()">Delete Selected</button>
     </div>
     <div class="table-wrap">
@@ -1306,14 +1307,24 @@ async function deleteMetric(id, name) {
 function toggleSelect(id, checked) {
   if (checked) selectedIds.add(id);
   else selectedIds.delete(id);
+  // Update row highlight without full re-render
   const row = document.querySelector(`tr[data-id="${id}"]`);
   if (row) row.classList.toggle('selected', checked);
+  // Keep select-all checkbox in sync
+  const selectAllCb = document.querySelector('#thead-row input[type="checkbox"]');
+  if (selectAllCb) selectAllCb.checked = filteredMetrics.length > 0 && filteredMetrics.every(m => selectedIds.has(m.id));
   updateBulkBar();
 }
 
 function toggleSelectAll(checked) {
   if (checked) filteredMetrics.forEach(m => selectedIds.add(m.id));
-  else selectedIds.clear();
+  else filteredMetrics.forEach(m => selectedIds.delete(m.id));
+  renderTable();
+  updateBulkBar();
+}
+
+function deselectAll() {
+  selectedIds.clear();
   renderTable();
   updateBulkBar();
 }
@@ -1324,6 +1335,9 @@ function updateBulkBar() {
   const n = selectedIds.size;
   bar.classList.toggle('visible', n > 0);
   document.getElementById('bulk-count').textContent = `${n} selected`;
+  // Keep select-all checkbox in sync after any update
+  const selectAllCb = document.querySelector('#thead-row input[type="checkbox"]');
+  if (selectAllCb) selectAllCb.checked = filteredMetrics.length > 0 && filteredMetrics.every(m => selectedIds.has(m.id));
 }
 
 async function bulkDelete() {
