@@ -32,7 +32,7 @@ The AI layer is a Supabase Edge Function at `supabase/functions/ai-chart/index.t
 
 The AI **does not write SQL** and **does not see raw data**. It only picks from a known catalog of metric IDs.
 
-**Only `live` metrics are shown to the AI.** The graduated status system gates what the AI can access — see the Graduated Metrics System section below.
+**Only `live` metrics are shown to the AI.** Metrics are either `live` (verified, visible to AI) or `queued` (unsolved, invisible to AI) — see the Metric Statuses section below.
 
 **Conversational mode:** `ChatExplorer.jsx` sends the full message history plus the current chart state (metric IDs, config, echarts_type) with each follow-up. This allows the AI to modify existing charts (e.g., "make it a bar chart", "add data labels", "use green").
 
@@ -125,16 +125,14 @@ No code changes are needed for adding a metric. All configuration lives in Supab
 
 ---
 
-## Graduated Metrics System
+## Metric Statuses
 
 Controls what the AI can access. Maps to the `status` column in Supabase.
 
 | Status | Visible to AI | Queryable | Description |
 |--------|:---:|:---:|---|
-| `live` | Yes | Yes | Verified, production-ready metric |
-| `ready` | No | Yes | Audited, pending approval |
-| `review` | No | Yes | Registered but unverified |
-| `catalog` | No | No | Placeholder name only, no SQL |
+| `live` | Yes | Yes | Solved, verified, approved |
+| `queued` | No | No | Not yet solved |
 
 The AI context builder (`buildMetricContext()` in `ai.js`) filters to `status = 'live'` before constructing the system prompt.
 
