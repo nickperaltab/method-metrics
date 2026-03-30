@@ -116,9 +116,9 @@ test.describe('Dashboards: Detail View', () => {
 test.describe('Dashboards: Navigation', () => {
   test('nav bar is present', async ({ page }) => {
     await page.goto(DASHBOARDS_URL);
-    await expect(page.locator('text=METHOD')).toBeVisible();
-    await expect(page.locator('text=Chat')).toBeVisible();
-    await expect(page.locator('text=Dashboards')).toBeVisible();
-    await expect(page.locator('text=Metrics')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'METHOD' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Chat' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dashboards' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Metrics' })).toBeVisible();
   });
 });
