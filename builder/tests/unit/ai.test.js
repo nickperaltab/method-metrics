@@ -10,7 +10,7 @@ describe('buildMetricContext', () => {
     { id: 99, name: 'Draft Metric', metric_type: 'primitive', view_name: 'v_draft', status: 'review' },
   ];
 
-  it('only includes primitive, foundational, and derived types', () => {
+  it('only includes primitive and derived types', () => {
     const ctx = buildMetricContext(metrics);
     expect(ctx).toContain('Trials');
     expect(ctx).toContain('Syncs');
