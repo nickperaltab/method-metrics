@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/method-metrics/builder/',
+  base: process.env.VITE_BASE || '/',
   build: {
     outDir: 'dist',
   },
