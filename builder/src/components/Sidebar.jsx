@@ -32,8 +32,8 @@ export default function Sidebar({ collapsed, onToggle }) {
     alignItems: 'center',
     gap: 10,
     padding: '8px 16px',
-    color: isActive ? '#34d399' : '#8b929a',
-    background: isActive ? '#0a1f17' : 'transparent',
+    color: isActive ? '#059669' : '#6b7280',
+    background: isActive ? '#ecfdf5' : 'transparent',
     textDecoration: 'none',
     fontSize: 13,
     borderRadius: 6,
@@ -52,7 +52,7 @@ export default function Sidebar({ collapsed, onToggle }) {
             display: 'none',
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.3)',
             zIndex: 98,
           }}
         />
@@ -64,8 +64,8 @@ export default function Sidebar({ collapsed, onToggle }) {
           width: collapsed ? 0 : 240,
           minWidth: collapsed ? 0 : 240,
           height: '100vh',
-          background: '#0a0d10',
-          borderRight: collapsed ? 'none' : '1px solid #1a1e24',
+          background: '#f1f3f5',
+          borderRight: collapsed ? 'none' : '1px solid #e2e5e9',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -84,11 +84,11 @@ export default function Sidebar({ collapsed, onToggle }) {
               fontWeight: 700,
               letterSpacing: '.12em',
               textTransform: 'uppercase',
-              color: '#34d399',
-              background: '#0a1f17',
+              color: '#059669',
+              background: '#ecfdf5',
               padding: '5px 10px',
               borderRadius: 4,
-              border: '1px solid #1a3d2e',
+              border: '1px solid #a7f3d0',
             }}>
               Method
             </span>
@@ -117,13 +117,13 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* Favorites */}
           {stars.length > 0 && (
             <>
-              <div style={{ height: 1, background: '#1a1e24', margin: '12px 16px' }} />
-              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#5a6370' }}>
+              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
                 {'\u2605'} Favorites
               </div>
               {dashboards.filter(d => stars.includes(d.id)).map(d => (
                 <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle}>
-                  <span style={{ fontSize: 12, color: '#fbbf24' }}>{'\u2605'}</span>
+                  <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                 </NavLink>
               ))}
@@ -131,10 +131,10 @@ export default function Sidebar({ collapsed, onToggle }) {
           )}
 
           {/* Divider */}
-          <div style={{ height: 1, background: '#1a1e24', margin: '12px 16px' }} />
+          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
           {/* My Dashboards */}
-          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#5a6370' }}>
+          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
             My Dashboards
           </div>
           {dashboards.slice(0, 8).map(d => (
@@ -149,10 +149,10 @@ export default function Sidebar({ collapsed, onToggle }) {
           </NavLink>
 
           {/* Divider */}
-          <div style={{ height: 1, background: '#1a1e24', margin: '12px 16px' }} />
+          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
           {/* Admin */}
-          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#5a6370' }}>
+          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
             Admin
           </div>
           {ADMIN_ITEMS.map(item => (
@@ -167,18 +167,18 @@ export default function Sidebar({ collapsed, onToggle }) {
         {currentUser && (
           <div style={{
             padding: '12px 16px',
-            borderTop: '1px solid #1a1e24',
+            borderTop: '1px solid #e2e5e9',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: 13, color: '#c8cdd3' }}>{currentUser.name}</span>
+            <span style={{ fontSize: 13, color: '#374151' }}>{currentUser.name}</span>
             <button
               onClick={switchUser}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#5a6370',
+                color: '#6b7280',
                 cursor: 'pointer',
                 fontSize: 11,
                 fontFamily: "'JetBrains Mono', monospace",

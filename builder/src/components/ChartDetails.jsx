@@ -4,7 +4,7 @@ const styles = {
   toggle: {
     background: 'none',
     border: 'none',
-    color: '#5a6370',
+    color: '#6b7280',
     cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 11,
@@ -12,8 +12,8 @@ const styles = {
     textAlign: 'left',
   },
   panel: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
     borderRadius: 8,
     padding: 16,
     display: 'flex',
@@ -21,7 +21,7 @@ const styles = {
     gap: 16,
   },
   metricHeader: {
-    color: '#edf0f3',
+    color: '#1a1a1a',
     fontSize: 13,
     fontFamily: "'DM Sans', sans-serif",
     fontWeight: 600,
@@ -31,22 +31,22 @@ const styles = {
     cursor: 'pointer',
     position: 'relative',
     display: 'inline-block',
-    borderBottom: '1px dashed #5a6370',
+    borderBottom: '1px dashed #6b7280',
   },
   metricId: {
-    color: '#5a6370',
+    color: '#6b7280',
     fontSize: 11,
     fontFamily: "'JetBrains Mono', monospace",
     fontWeight: 400,
   },
   dependsOn: {
-    color: '#5a6370',
+    color: '#6b7280',
     fontSize: 11,
     fontFamily: "'JetBrains Mono', monospace",
     margin: '4px 0 0 0',
   },
   label: {
-    color: '#5a6370',
+    color: '#6b7280',
     fontSize: 10,
     fontFamily: "'JetBrains Mono', monospace",
     textTransform: 'uppercase',
@@ -54,8 +54,8 @@ const styles = {
     margin: '8px 0 4px 0',
   },
   codeBlock: {
-    background: '#111518',
-    color: '#c8cdd3',
+    background: '#ffffff',
+    color: '#374151',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 11,
     padding: 12,
@@ -73,36 +73,36 @@ const styles = {
     fontFamily: "'JetBrains Mono', monospace",
   },
   th: {
-    background: '#0c0f12',
-    color: '#5a6370',
+    background: '#f8f9fa',
+    color: '#6b7280',
     padding: '6px 10px',
     textAlign: 'left',
-    borderBottom: '1px solid #1a1e24',
+    borderBottom: '1px solid #e2e5e9',
     fontWeight: 600,
   },
   td: {
-    background: '#0c0f12',
-    color: '#c8cdd3',
+    background: '#f8f9fa',
+    color: '#374151',
     padding: '5px 10px',
-    borderBottom: '1px solid #1a1e24',
+    borderBottom: '1px solid #e2e5e9',
   },
   tableWrap: {
     maxHeight: 240,
     overflowY: 'auto',
     borderRadius: 6,
-    border: '1px solid #1a1e24',
+    border: '1px solid #e2e5e9',
   },
   showMore: {
     background: 'none',
     border: 'none',
-    color: '#5a6370',
+    color: '#6b7280',
     cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 10,
     padding: '4px 0',
   },
   separator: {
-    borderTop: '1px solid #1a1e24',
+    borderTop: '1px solid #e2e5e9',
     margin: 0,
     padding: 0,
   },
@@ -111,7 +111,7 @@ const styles = {
     bottom: '100%',
     left: 0,
     marginBottom: 8,
-    background: '#1a1e24',
+    background: '#e2e5e9',
     border: '1px solid #2a2e34',
     borderRadius: 6,
     padding: '10px 14px',
@@ -121,14 +121,14 @@ const styles = {
     pointerEvents: 'none',
   },
   tooltipRow: {
-    color: '#c8cdd3',
+    color: '#374151',
     fontSize: 11,
     fontFamily: "'JetBrains Mono', monospace",
     margin: '3px 0',
     lineHeight: 1.4,
   },
   tooltipLabel: {
-    color: '#5a6370',
+    color: '#6b7280',
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
@@ -146,9 +146,9 @@ const styles = {
 };
 
 function statusColor(status) {
-  if (status === 'live') return { background: '#0a1f17', color: '#34d399', border: '1px solid #1a3d2e' };
+  if (status === 'live') return { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' };
   if (status === 'review') return { background: '#1f1a0a', color: '#d3a634', border: '1px solid #3d351a' };
-  return { background: '#1a1e24', color: '#5a6370', border: '1px solid #2a2e34' };
+  return { background: '#e2e5e9', color: '#6b7280', border: '1px solid #2a2e34' };
 }
 
 function MetricNameWithTooltip({ detail, metrics }) {
@@ -254,7 +254,7 @@ export default function ChartDetails({ queryDetails, metrics }) {
               )}
               <div style={styles.label}>SQL Query</div>
               <pre style={styles.codeBlock}>{detail.sql}</pre>
-              <div style={styles.label}>Date Column: <span style={{ color: '#c8cdd3' }}>{detail.dateColumn}</span></div>
+              <div style={styles.label}>Date Column: <span style={{ color: '#374151' }}>{detail.dateColumn}</span></div>
               {detail.labels && detail.labels.length > 0 && (
                 <>
                   <div style={styles.label}>Data ({detail.labels.length} rows)</div>

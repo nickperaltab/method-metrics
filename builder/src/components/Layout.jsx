@@ -6,18 +6,18 @@ export default function Layout({ children, bqConnected, userEmail, onConnect }) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#06080a', color: '#c8cdd3', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#ffffff', color: '#374151', fontFamily: "'DM Sans', sans-serif" }}>
       <UserPicker />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Compact top bar — just BQ status */}
         <div style={{
           padding: '8px 24px',
-          borderBottom: '1px solid #1a1e24',
+          borderBottom: '1px solid #e2e5e9',
           display: 'flex',
           justifyContent: 'flex-end',
           alignItems: 'center',
-          background: '#0c0f12',
+          background: '#ffffff',
           gap: 12,
         }}>
           {/* Mobile menu toggle */}
@@ -27,8 +27,8 @@ export default function Layout({ children, bqConnected, userEmail, onConnect }) 
             style={{
               display: 'none',
               background: 'none',
-              border: '1px solid #1a1e24',
-              color: '#c8cdd3',
+              border: '1px solid #e2e5e9',
+              color: '#374151',
               padding: '4px 8px',
               borderRadius: 4,
               cursor: 'pointer',
@@ -40,15 +40,15 @@ export default function Layout({ children, bqConnected, userEmail, onConnect }) 
           </button>
 
           {bqConnected
-            ? <span style={{ color: '#34d399', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+            ? <span style={{ color: '#059669', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
                 &#9679; BQ Connected{userEmail ? ` (${userEmail})` : ''}
               </span>
             : <button
                 onClick={onConnect}
                 style={{
-                  background: '#0a1f17',
-                  border: '1px solid #34d399',
-                  color: '#34d399',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  color: '#059669',
                   padding: '4px 12px',
                   borderRadius: 4,
                   cursor: 'pointer',

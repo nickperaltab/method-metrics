@@ -5,18 +5,18 @@ import { fetchDashboards, fetchStars, fetchRecentViews } from '../lib/supabase';
 
 const styles = {
   layout: { padding: '32px 24px', maxWidth: 1200, margin: '0 auto' },
-  greeting: { fontSize: 22, fontWeight: 700, color: '#edf0f3', marginBottom: 4 },
-  subtitle: { color: '#5a6370', fontSize: 14, marginBottom: 32 },
+  greeting: { fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 4 },
+  subtitle: { color: '#6b7280', fontSize: 14, marginBottom: 32 },
   section: { marginBottom: 32 },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#8b929a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
+  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 },
   card: {
-    background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8,
+    background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 8,
     padding: 16, cursor: 'pointer', transition: 'border-color 0.15s',
   },
-  cardName: { fontSize: 14, fontWeight: 600, color: '#edf0f3', marginBottom: 4 },
-  cardMeta: { fontSize: 11, color: '#5a6370', fontFamily: "'JetBrains Mono', monospace" },
-  empty: { color: '#5a6370', fontSize: 13, fontFamily: "'JetBrains Mono', monospace" },
+  cardName: { fontSize: 14, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 },
+  cardMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" },
+  empty: { color: '#6b7280', fontSize: 13, fontFamily: "'JetBrains Mono', monospace" },
 };
 
 export default function Home() {
@@ -73,11 +73,11 @@ export default function Home() {
         key={db.id}
         style={styles.card}
         onClick={() => navigate(`/dashboards/${db.id}`)}
-        onMouseEnter={e => e.currentTarget.style.borderColor = '#34d399'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1e24'}
+        onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e5e9'}
       >
         <div style={styles.cardName}>
-          {stars.includes(db.id) && <span style={{ color: '#fbbf24', marginRight: 6 }}>{'\u2605'}</span>}
+          {stars.includes(db.id) && <span style={{ color: '#f59e0b', marginRight: 6 }}>{'\u2605'}</span>}
           {db.name}
         </div>
         <div style={styles.cardMeta}>
