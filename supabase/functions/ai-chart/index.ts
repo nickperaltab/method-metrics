@@ -24,6 +24,7 @@ Return ONLY valid JSON in this exact format:
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
   "colors": ["#hex1", "#hex2", ...] or null,
+  "style_rules": [{"target": "<label>", "compareTo": "<label>" | null, "threshold": <number> | null, "operator": "<|<=|>|>=|==|!=", "color": "#hex"}] or null,
   "explanation": "<one sentence>"
 }
 
@@ -52,6 +53,17 @@ Rules:
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 - colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
+- style_rules: optional array of conditional coloring rules. Each rule colors individual data points in a series when a condition is met. Fields:
+  - target: the label name of the series to style (must match a label in labels[])
+  - compareTo: label of another series to compare against (for actual vs forecast). null if using threshold.
+  - threshold: a fixed numeric value to compare against. null if using compareTo.
+  - operator: one of "<", "<=", ">", ">=", "==", "!="
+  - color: hex color to apply when condition is true
+  Use style_rules when:
+  - Comparing actual vs forecast: color actual bars red when below forecast, green when above. Example: {"target": "Trials", "compareTo": "Trials Forecast", "operator": "<", "color": "#ef4444"}
+  - Threshold alerts: color a rate metric red when below target. Example: {"target": "Conversion Rate", "threshold": 0.15, "operator": "<", "color": "#ef4444"}
+  - Do NOT use style_rules for simple color preferences — use the colors field instead.
+  - Default: null (no conditional styling).
 
 IMPORTANT — Attribution channels:
 - Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.

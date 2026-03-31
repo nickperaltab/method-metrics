@@ -597,3 +597,28 @@ describe('applyStyleRulesToDatasets', () => {
     expect(result[0].pointStyles[1]).toBeUndefined();
   });
 });
+
+describe('buildEChartsOption style_rules coloring', () => {
+  it('bar chart: omits series-level color when pointStyles exist so per-item colors render', () => {
+    const datasets = [
+      { label: 'Trials', data: [700, 600] },
+      { label: 'Trials Forecast', data: [800, 800] },
+    ];
+    const dataConfig = {
+      styleRules: [{ target: 'Trials', compareTo: 'Trials Forecast', operator: '<', color: '#ef4444' }],
+    };
+    const option = buildEChartsOption('bar', ['2026-02', '2026-03'], datasets, dataConfig);
+    const trialsSeries = option.series.find(s => s.name === 'Trials');
+    // Series-level color must be absent when pointStyles exist — otherwise ECharts overrides per-item colors
+    expect(trialsSeries.itemStyle.color).toBeUndefined();
+    // Per-item data should be wrapped with red itemStyle for both points (both below forecast)
+    expect(trialsSeries.data[0]).toMatchObject({ value: 700, itemStyle: { color: '#ef4444' } });
+    expect(trialsSeries.data[1]).toMatchObject({ value: 600, itemStyle: { color: '#ef4444' } });
+  });
+
+  it('bar chart: keeps series-level color when no pointStyles', () => {
+    const datasets = [{ label: 'Trials', data: [700, 600] }];
+    const option = buildEChartsOption('bar', ['2026-02', '2026-03'], datasets, {});
+    expect(option.series[0].itemStyle.color).toBeDefined();
+  });
+});

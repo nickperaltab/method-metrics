@@ -12,7 +12,12 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials
 - id:46 name:"Churn Rate" type:derived view:none
 - id:57 name:"New Net SaaS" type:primitive view:v_new_net_saas
 - id:58 name:"Churn" type:primitive view:v_churn
-- id:59 name:"BOM Customers" type:primitive view:v_bom_customers`;
+- id:59 name:"BOM Customers" type:primitive view:v_bom_customers
+- id:271 name:"Trials Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for trials. Pair with Trials (id:54) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:272 name:"Syncs Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for syncs. Pair with Syncs (id:55) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:273 name:"Conversions Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for conversions. Pair with Conversions (id:56) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:274 name:"Cancellations Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for cancellations/churn. Pair with Churn (id:59) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:275 name:"New Net SaaS Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for new net SaaS revenue. Use same chart type (bar or line), never combo."`;
 
 const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), Channel(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
 v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
@@ -188,6 +193,61 @@ describe('AI Chart Builder Evals', () => {
     assert.strictEqual(result.data_config.time_bucket, 'week', 'should be weekly');
     assert.strictEqual(result.data_config.channel_filter, 'SEO', 'should filter SEO');
     assert.strictEqual(result.data_config.last_n_months, 3, 'should be last 3 months');
+  });
+});
+
+// --- Forecast / Actual vs Budget Tests ---
+
+describe('Forecast Comparison Evals', () => {
+  it('trials vs forecast: should pick Trials + Trials Forecast, not combo', async () => {
+    const result = await callAi('trials vs forecast');
+    assertValidSpec(result, 'trials vs forecast');
+    assert(result.metric_ids.includes(54), 'should pick Trials (id 54)');
+    assert(result.metric_ids.includes(271), 'should pick Trials Forecast (id 271)');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo chart');
+  });
+
+  it('trials vs forecast this month: should use bar for single month', async () => {
+    const result = await callAi('trials vs forecast this month');
+    assertValidSpec(result, 'trials vs forecast this month');
+    assert(result.metric_ids.includes(54), 'should pick Trials');
+    assert(result.metric_ids.includes(271), 'should pick Trials Forecast');
+    assert.strictEqual(result.echarts_type, 'bar', 'single month comparison should be bar');
+    assert.strictEqual(result.data_config.last_n_months, 0, 'this month = 0');
+  });
+
+  it('syncs actual vs budget: should pair Syncs + Syncs Forecast', async () => {
+    const result = await callAi('show me syncs actual vs budget');
+    assertValidSpec(result, 'syncs vs budget');
+    assert(result.metric_ids.includes(55), 'should pick Syncs (id 55)');
+    assert(result.metric_ids.includes(272), 'should pick Syncs Forecast (id 272)');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
+  });
+
+  it('conversions vs forecast over time: should be line or bar, not combo', async () => {
+    const result = await callAi('conversions vs forecast over time');
+    assertValidSpec(result, 'conversions vs forecast');
+    assert(result.metric_ids.includes(56), 'should pick Conversions');
+    assert(result.metric_ids.includes(273), 'should pick Conversions Forecast');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
+    const validType = ['line', 'bar'].includes(result.echarts_type);
+    assert(validType, `should be line or bar, got ${result.echarts_type}`);
+  });
+
+  it('trials vs forecast with styling: should include style_rules', async () => {
+    const result = await callAi('trials vs forecast, highlight red when below');
+    assertValidSpec(result, 'trials vs forecast styled');
+    assert(result.data_config.style_rules?.length > 0, 'should have style_rules');
+    const rule = result.data_config.style_rules[0];
+    assert.strictEqual(rule.operator, '<', 'should use < operator');
+    assert(rule.color, 'should have a color');
+  });
+
+  it('churn vs forecast: should pair Churn + Cancellations Forecast', async () => {
+    const result = await callAi('churn vs forecast');
+    assertValidSpec(result, 'churn vs forecast');
+    assert(result.metric_ids.includes(59), 'should pick Churn (id 59)');
+    assert(result.metric_ids.includes(274), 'should pick Cancellations Forecast (id 274)');
   });
 });
 

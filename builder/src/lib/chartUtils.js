@@ -400,13 +400,18 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: dsList.map((ds, i) => ({
-        name: ds.label,
-        type: 'bar',
-        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
-        itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
-        ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
-      })),
+      series: dsList.map((ds, i) => {
+        const hasPointStyles = ds.pointStyles?.some(Boolean);
+        return {
+          name: ds.label,
+          type: 'bar',
+          data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
+          itemStyle: hasPointStyles
+            ? { borderRadius: [3, 3, 0, 0] }
+            : { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
+          ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
+        };
+      }),
     };
   }
 
@@ -422,7 +427,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         name: ds.label,
         type: 'bar',
         stack: 'total',
-        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
+        data: ds.data.map((v, idx) => wrapValue(ds, idx, Math.max(0, v))),
         itemStyle: { color: palette[i % palette.length] },
         ...(showLabels ? { label: { show: true, ...labelStyle } } : {}),
       })),

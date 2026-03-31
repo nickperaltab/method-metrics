@@ -31,7 +31,12 @@ export async function fetchChartDatasets({
   for (let i = 0; i < metricIds.length; i++) {
     const metric = metrics.find(m => m.id === metricIds[i]);
     if (!metric) continue;
-    const yField = yFields?.[i] || yFields?.[0] || 'COUNT';
+    let yField = yFields?.[i] || yFields?.[0] || 'COUNT';
+    // For regular view metrics (no chart_sql), validate yField against schema — fall back to COUNT
+    if (!metric.chart_sql && yField !== 'COUNT') {
+      const schema = schemaCache[metric.view_name] || [];
+      if (!schema.some(c => c.name === yField)) yField = 'COUNT';
+    }
     const label = dataConfig.labels?.[i] || metric.name;
 
     if (metric.formula && metric.depends_on && !metric.view_name) {
