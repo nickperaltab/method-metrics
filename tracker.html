@@ -332,10 +332,8 @@ async function updateMetric(id, fields) {
 
 // --- Classification ---
 function getType(m) {
-  if (m.metric_type) return m.metric_type.charAt(0).toUpperCase() + m.metric_type.slice(1);
-  if (m.primitive_metric_id) return 'Breakdown';
-  if (m.depends_on && m.depends_on.length > 0) return 'Derived';
-  if (!m.chart_sql && !m.view_name) return 'Catalog';
+  const t = (m.metric_type || 'primitive').toLowerCase();
+  if (t === 'derived') return 'Derived';
   return 'Primitive';
 }
 
@@ -451,13 +449,7 @@ function renderApp() {
         <select id="f-type" onchange="applyFilters()">
           <option value="">All</option>
           <option value="Primitive">Primitive</option>
-          <option value="Foundational">Foundational</option>
-          <option value="Transform">Transform</option>
           <option value="Derived">Derived</option>
-          <option value="Composite">Composite</option>
-          <option value="Dimension">Dimension</option>
-          <option value="Breakdown">Breakdown</option>
-          <option value="Catalog">Catalog</option>
         </select>
       </div>
       <div class="filter-group">
@@ -528,13 +520,7 @@ function renderTable() {
   // Group by type
   const groups = [
     { key: 'Primitive', label: 'Primitives', cls: 'group-primitive' },
-    { key: 'Foundational', label: 'Foundational', cls: 'group-foundational' },
-    { key: 'Transform', label: 'Transforms', cls: 'group-transform' },
     { key: 'Derived', label: 'Derived', cls: 'group-derived' },
-    { key: 'Composite', label: 'Composite', cls: 'group-composite' },
-    { key: 'Dimension', label: 'Dimensions', cls: 'group-dimension' },
-    { key: 'Breakdown', label: 'Breakdowns', cls: 'group-breakdown' },
-    { key: 'Catalog', label: 'Catalog', cls: 'group-catalog' },
   ];
 
   const grouped = {};
@@ -582,9 +568,9 @@ function renderMetricRow(m) {
     <td style="font-family:var(--font-mono);color:var(--text-dim);font-size:11px">${m.id}</td>
     <td style="font-weight:600;color:var(--text-bright)">${esc(m.name)}</td>
     <td>
-      <select class="type-select type-select-${(m.metric_type||'catalog')}" onclick="event.stopPropagation()" onchange="saveType(${m.id},this.value,this)">
-        ${['primitive','foundational','transform','derived','composite','dimension','breakdown','catalog'].map(t =>
-          `<option value="${t}"${(m.metric_type||'catalog')===t?' selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`
+      <select class="type-select type-select-${(m.metric_type||'primitive')}" onclick="event.stopPropagation()" onchange="saveType(${m.id},this.value,this)">
+        ${['primitive','derived'].map(t =>
+          `<option value="${t}"${(m.metric_type||'primitive')===t?' selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`
         ).join('')}
       </select>
     </td>
@@ -1766,7 +1752,7 @@ async function createMetricFromWizard() {
             name: breakdownName,
             stage: wizardState.stage,
             status: 'queued',
-            metric_type: 'breakdown',
+            metric_type: 'primitive',
             view_name: breakdownView,
             view_definition: breakdownSql,
             primitive_metric_id: newId,

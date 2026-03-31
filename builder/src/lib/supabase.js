@@ -37,10 +37,26 @@ export async function fetchMetrics() {
 export function groupMetrics(metrics) {
   return {
     primitives: metrics.filter(m => m.metric_type === 'primitive'),
-    foundational: metrics.filter(m => m.metric_type === 'foundational'),
-    derived: metrics.filter(m => m.metric_type === 'derived' && m.formula),
-    dimensions: metrics.filter(m => m.metric_type === 'dimension'),
+    derived: metrics.filter(m => m.metric_type === 'derived'),
   };
+}
+
+export async function fetchApprovedDimensions(metricId) {
+  const url = metricId
+    ? `${SUPABASE_URL}/rest/v1/approved_dimensions?metric_id=eq.${metricId}&order=dimension_name`
+    : `${SUPABASE_URL}/rest/v1/approved_dimensions?order=metric_id,dimension_name`;
+  const res = await fetchWithTimeout(url, { headers });
+  if (!res.ok) throw new Error(`Failed to load dimensions (${res.status})`);
+  return res.json();
+}
+
+export async function fetchAllApprovedDimensions() {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/approved_dimensions?order=metric_id,dimension_name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load dimensions (${res.status})`);
+  return res.json();
 }
 
 export async function saveChart({ name, createdBy, createdByAvatar, metricIds, gwSpec }) {
