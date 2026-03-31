@@ -168,7 +168,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     const viewsToLoad = [];
     neededMetricIds.forEach(id => {
       const metric = metrics.find(m => m.id === id);
-      if (metric && metric.view_name && ['primitive', 'foundational'].includes(metric.metric_type) && metric.status === 'live') {
+      if (metric && metric.view_name && ['primitive', 'derived'].includes(metric.metric_type) && metric.status === 'live') {
         if (!schemaCache[metric.view_name]) viewsToLoad.push(metric.view_name);
       }
     });
