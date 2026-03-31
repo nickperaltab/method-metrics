@@ -6,39 +6,39 @@ import { useUser } from '../contexts/UserContext';
 const styles = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title: { fontSize: 20, fontWeight: 600, color: '#edf0f3' },
+  title: { fontSize: 20, fontWeight: 600, color: '#1a1a1a' },
   controls: { display: 'flex', gap: 8 },
   newBtn: {
-    background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+    background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '8px 20px', borderRadius: 6, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
   },
   folderBtn: {
-    background: '#0c0f12', border: '1px solid #1a1e24', color: '#8b929a',
+    background: '#f8f9fa', border: '1px solid #e2e5e9', color: '#6b7280',
     padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
   },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 },
   card: {
-    background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8,
+    background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 8,
     padding: 20, cursor: 'pointer', transition: 'border-color 0.15s', position: 'relative',
   },
-  cardName: { fontSize: 15, fontWeight: 600, color: '#edf0f3', marginBottom: 8 },
-  cardMeta: { fontSize: 12, color: '#5a6370', fontFamily: "'JetBrains Mono', monospace" },
+  cardName: { fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 8 },
+  cardMeta: { fontSize: 12, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" },
   starBtn: {
     position: 'absolute', top: 12, right: 12, background: 'none', border: 'none',
     fontSize: 18, cursor: 'pointer', padding: 4, lineHeight: 1,
   },
   section: { marginTop: 32 },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#8b929a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
-  empty: { color: '#5a6370', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
+  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
+  empty: { color: '#6b7280', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
   folderHeader: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '8px 0', marginBottom: 8, borderBottom: '1px solid #1a1e24',
+    padding: '8px 0', marginBottom: 8, borderBottom: '1px solid #e2e5e9',
   },
-  folderName: { fontSize: 13, fontWeight: 600, color: '#c8cdd3' },
+  folderName: { fontSize: 13, fontWeight: 600, color: '#374151' },
   deleteBtn: {
-    background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 11,
+    background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11,
     fontFamily: "'JetBrains Mono', monospace",
   },
 };
@@ -166,11 +166,11 @@ export default function DashboardList({ userEmail }) {
         key={db.id}
         style={styles.card}
         onClick={() => navigate(`/dashboards/${db.id}`)}
-        onMouseEnter={e => e.currentTarget.style.borderColor = '#34d399'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1e24'}
+        onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e5e9'}
       >
         <button
-          style={{ ...styles.starBtn, color: isStarred ? '#fbbf24' : '#5a6370' }}
+          style={{ ...styles.starBtn, color: isStarred ? '#f59e0b' : '#6b7280' }}
           onClick={e => toggleStar(e, db.id)}
           aria-label={isStarred ? 'Unstar' : 'Star'}
         >
@@ -204,7 +204,7 @@ export default function DashboardList({ userEmail }) {
         </div>
       </div>
 
-      {error && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 16 }}>{error}</div>}
+      {error && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
       {dashboards.length === 0 ? (
         <div style={styles.empty}>
@@ -256,9 +256,9 @@ export default function DashboardList({ userEmail }) {
         ) : (
           <div style={styles.grid}>
             {charts.map(chart => (
-              <div key={chart.id} style={{ background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8, padding: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#edf0f3', marginBottom: 4 }}>{chart.name}</div>
-                <div style={{ fontSize: 11, color: '#5a6370', fontFamily: "'JetBrains Mono', monospace" }}>
+              <div key={chart.id} style={{ background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 8, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>{chart.name}</div>
+                <div style={{ fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" }}>
                   {(chart.metric_ids || []).length} metric{(chart.metric_ids || []).length !== 1 ? 's' : ''}
                   {chart.created_at && ` \u00B7 ${new Date(chart.created_at).toLocaleDateString()}`}
                 </div>

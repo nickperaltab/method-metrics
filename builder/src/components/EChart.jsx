@@ -15,7 +15,7 @@ class ChartErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5a6370', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#6b7280', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
           Chart failed to render. Try editing the chart or refreshing.
         </div>
       );
@@ -25,27 +25,27 @@ class ChartErrorBoundary extends Component {
 }
 
 const METHOD_THEME = {
-  color: ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8', '#fb923c', '#e879f9', '#4ade80', '#f472b6'],
+  color: ['#059669', '#2563eb', '#f59e0b', '#dc2626', '#7c3aed', '#0284c7', '#ea580c', '#c026d3', '#16a34a', '#db2777'],
   backgroundColor: 'transparent',
-  textStyle: { color: '#c8cdd3', fontFamily: "'DM Sans', sans-serif" },
-  title: { textStyle: { color: '#edf0f3' }, subtextStyle: { color: '#5a6370' } },
-  legend: { textStyle: { color: '#c8cdd3' } },
+  textStyle: { color: '#374151', fontFamily: "'DM Sans', sans-serif" },
+  title: { textStyle: { color: '#1a1a1a' }, subtextStyle: { color: '#6b7280' } },
+  legend: { textStyle: { color: '#374151' } },
   tooltip: {
-    backgroundColor: '#111518',
-    borderColor: '#1a1e24',
-    textStyle: { color: '#c8cdd3', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e5e9',
+    textStyle: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
   },
   categoryAxis: {
-    axisLine: { lineStyle: { color: '#1a1e24' } },
-    axisTick: { lineStyle: { color: '#1a1e24' } },
-    axisLabel: { color: '#5a6370', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
-    splitLine: { lineStyle: { color: '#1a1e24', type: 'dashed' } },
+    axisLine: { lineStyle: { color: '#e2e5e9' } },
+    axisTick: { lineStyle: { color: '#e2e5e9' } },
+    axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
+    splitLine: { lineStyle: { color: '#f1f3f5', type: 'dashed' } },
   },
   valueAxis: {
-    axisLine: { lineStyle: { color: '#1a1e24' } },
-    axisTick: { lineStyle: { color: '#1a1e24' } },
-    axisLabel: { color: '#5a6370', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
-    splitLine: { lineStyle: { color: '#1a1e24', type: 'dashed' } },
+    axisLine: { lineStyle: { color: '#e2e5e9' } },
+    axisTick: { lineStyle: { color: '#e2e5e9' } },
+    axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
+    splitLine: { lineStyle: { color: '#f1f3f5', type: 'dashed' } },
   },
 };
 

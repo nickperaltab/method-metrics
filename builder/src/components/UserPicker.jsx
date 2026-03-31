@@ -19,12 +19,12 @@ export default function UserPicker() {
               style={styles.userButton}
               onClick={() => selectUser(user)}
               onMouseEnter={e => {
-                e.target.style.borderColor = '#34d399';
-                e.target.style.background = '#0a1210';
+                e.target.style.borderColor = '#059669';
+                e.target.style.background = '#ecfdf5';
               }}
               onMouseLeave={e => {
-                e.target.style.borderColor = '#1a1e24';
-                e.target.style.background = '#0c0f12';
+                e.target.style.borderColor = '#e2e5e9';
+                e.target.style.background = '#ffffff';
               }}
             >
               <span style={styles.userName}>{user.name}</span>
@@ -41,7 +41,7 @@ const styles = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(6, 8, 10, 0.95)',
+    background: 'rgba(255, 255, 255, 0.95)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -59,22 +59,22 @@ const styles = {
     fontWeight: 700,
     letterSpacing: '.12em',
     textTransform: 'uppercase',
-    color: '#34d399',
-    background: '#0a1f17',
+    color: '#059669',
+    background: '#ecfdf5',
     padding: '6px 14px',
     borderRadius: 4,
-    border: '1px solid #1a3d2e',
+    border: '1px solid #a7f3d0',
     display: 'inline-block',
     marginBottom: 24,
   },
   title: {
     fontSize: 24,
     fontWeight: 700,
-    color: '#edf0f3',
+    color: '#1a1a1a',
     margin: '0 0 8px',
   },
   subtitle: {
-    color: '#5a6370',
+    color: '#6b7280',
     fontSize: 14,
     margin: '0 0 32px',
   },
@@ -88,10 +88,10 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '16px 24px',
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
+    background: '#ffffff',
+    border: '1px solid #e2e5e9',
     borderRadius: 8,
-    color: '#edf0f3',
+    color: '#1a1a1a',
     cursor: 'pointer',
     transition: 'all .15s',
     fontFamily: "'DM Sans', sans-serif",
@@ -102,7 +102,7 @@ const styles = {
   },
   userRole: {
     fontSize: 12,
-    color: '#5a6370',
+    color: '#6b7280',
     textTransform: 'capitalize',
   },
 };

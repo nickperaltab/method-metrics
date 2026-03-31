@@ -16,9 +16,9 @@ const styles = {
     padding: '6px 0',
   },
   pill: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
-    color: '#5a6370',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
+    color: '#6b7280',
     padding: '4px 12px',
     borderRadius: 12,
     cursor: 'pointer',
@@ -28,9 +28,9 @@ const styles = {
     lineHeight: '16px',
   },
   pillActive: {
-    background: '#0a1f17',
-    border: '1px solid #34d399',
-    color: '#34d399',
+    background: '#ecfdf5',
+    border: '1px solid #059669',
+    color: '#059669',
   },
 };
 

@@ -530,7 +530,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
   if (!bqConnected) {
     return (
-      <div style={{ color: '#5a6370', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' }}>
+      <div style={{ color: '#6b7280', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' }}>
         Connect BigQuery to start chatting
       </div>
     );
@@ -538,7 +538,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
   if (!schemasLoaded) {
     return (
-      <div style={{ color: '#5a6370', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' }}>
+      <div style={{ color: '#6b7280', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' }}>
         Loading metric schemas...
       </div>
     );
