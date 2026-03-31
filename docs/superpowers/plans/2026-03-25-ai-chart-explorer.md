@@ -47,6 +47,18 @@ supabase/                         # Supabase Edge Function
 
 ---
 
+## 2026-03-31 Investigation Notes
+
+The latest product asks for trajectory projections, YoY growth %, custom date cutoffs, and conditional coloring. The current implementation status:
+
+- `v_scorecard_mtd` in `scripts/bq_views_backup_20260326.sql` already computes MTD actuals, simple trajectory (actual × month_days / days_elapsed), forecast, variance, and attainment, but the React app never queries this view. To chart those projections we need to expose it through Supabase and define per-metric `chart_sql` rows.
+- Forecast metrics (e.g., RevCogs “Trials forecast”) remain `needs_ingestion`, so the derived-engine can’t reference forecast vs. actual today. Supporting “custom math” trajectories requires ingesting those forecasts or introducing a new BigQuery aggregation that mixes current actuals with prior-month growth.
+- YoY charts currently show absolute counts only. `fetchYoYData()` always returns month buckets per year and the renderer hardcodes Jan–Dec, so we can’t compute or display YoY growth % (e.g., Oct–Mar vs. Oct–Mar). We’ll need either a new BigQuery view that emits `value` and `growth_pct` or client-side math that divides the two series.
+- Date cutoffs are limited to `last_n_months >= DATE_TRUNC(...)`. There’s no support for “through EOD yesterday” or “stop at previous Sunday.” Implementing Method Monday would require passing both start/end filters (or a “max_date_offset” rule) through `data_config` down to `fetchAggregatedData()`.
+- Conditional formatting (e.g., bar = red when trajectory < forecast) isn’t implemented. Colors come from a static palette in `chartUtils.js`. We’d need to extend the chart spec to carry per-point/per-series style metadata and map it in `buildEChartsOption()`.
+
+These gaps mean the requested “hard charts” can’t be rendered yet without additional ingestion + frontend work.
+
 ## Task 1: Vite + React scaffold
 
 **Files:**

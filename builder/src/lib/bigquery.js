@@ -150,6 +150,24 @@ export function clearAllCaches() {
   clearAggCache();
 }
 
+export function buildEndDateClause(column, rule) {
+  if (!rule) return null;
+  if (rule === 'yesterday') {
+    return `${column} <= DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)`;
+  }
+  if (rule === 'previous_sunday') {
+    return `${column} <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)`;
+  }
+  const match = /^days_ago_(\d+)$/.exec(rule);
+  if (match) {
+    const days = Number(match[1]);
+    if (!Number.isNaN(days)) {
+      return `${column} <= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)`;
+    }
+  }
+  return null;
+}
+
 export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yearFilter) {
   validateIdentifier(viewName, 'viewName');
   validateIdentifier(dateCol, 'dateCol');
@@ -190,10 +208,10 @@ export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yea
   return { years, months: MONTHS, seriesMap, sql };
 }
 
-export async function fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths) {
+export async function fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule = null) {
   // If metric has a pre-written chart_sql query, use it directly
   if (metric.chart_sql) {
-    const cacheKey = `chart_sql|${metric.id}|${lastNMonths}`;
+    const cacheKey = `chart_sql|${metric.id}|${lastNMonths}|${endDateRule || 'none'}`;
     if (aggCache[cacheKey]) return aggCache[cacheKey];
 
     let sql = metric.chart_sql;
@@ -215,14 +233,14 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
     return output;
   }
   // No chart_sql — fall back to standard aggregation query
-  return fetchAggregatedData(metric.view_name, dateCol, yField, timeBucket, channelFilter, lastNMonths);
+  return fetchAggregatedData(metric.view_name, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule);
 }
 
-export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
+export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths, endDateRule = null) {
   validateIdentifier(viewName, 'viewName');
   validateIdentifier(xField, 'xField');
   if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
-  const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
+  const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}|${endDateRule || 'none'}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
 
   const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
@@ -260,6 +278,11 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
     }
   }
 
+  const endClause = buildEndDateClause(xField, endDateRule);
+  if (endClause) {
+    wheres.push(endClause);
+  }
+
   const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
 
   const sql = `SELECT ${periodExpr} AS period, ${valueExpr} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 1`;
@@ -285,16 +308,17 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
  * @param {string} groupByField - Column to group by (e.g., 'Channel', 'SignupCountry')
  * @param {string|null} channelFilter - Channel name or null
  * @param {number|null} lastNMonths - Time range filter
+ * @param {string|null} endDateRule - Upper bound rule (e.g., 'yesterday', 'previous_sunday')
  * @param {number} topN - Max dimension values to include (default 10)
  * @returns {{ labels: string[], seriesMap: Object<string, number[]>, sql: string }}
  */
-export async function fetchGroupedData(viewName, xField, yField, timeBucket, groupByField, channelFilter, lastNMonths, topN = 10) {
+export async function fetchGroupedData(viewName, xField, yField, timeBucket, groupByField, channelFilter, lastNMonths, endDateRule = null, topN = 10) {
   validateIdentifier(viewName, 'viewName');
   validateIdentifier(xField, 'xField');
   if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
   validateIdentifier(groupByField, 'groupByField');
 
-  const cacheKey = `grouped|${viewName}|${xField}|${yField}|${timeBucket}|${groupByField}|${channelFilter}|${lastNMonths}|${topN}`;
+  const cacheKey = `grouped|${viewName}|${xField}|${yField}|${timeBucket}|${groupByField}|${channelFilter}|${lastNMonths}|${endDateRule || 'none'}|${topN}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
 
   const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
@@ -319,6 +343,10 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
     } else {
       baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
     }
+  }
+  const groupEndClause = buildEndDateClause(xField, endDateRule);
+  if (groupEndClause) {
+    baseWheres.push(groupEndClause);
   }
 
   // First pass: find top N dimension values by total volume

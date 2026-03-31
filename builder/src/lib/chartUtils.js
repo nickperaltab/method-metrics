@@ -217,12 +217,64 @@ export function applyLastNMonths(labels, datasets, lastNMonths, timeBucket) {
   return { labels: filteredLabels, datasets: filteredDatasets };
 }
 
+function evaluateRule(targetVal, comparison, operator) {
+  const a = Number(targetVal);
+  const b = Number(comparison);
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  switch (operator) {
+    case '<': return a < b;
+    case '<=': return a <= b;
+    case '>': return a > b;
+    case '>=': return a >= b;
+    case '==': return a === b;
+    case '!=': return a !== b;
+    default: return false;
+  }
+}
+
+export function applyStyleRulesToDatasets(datasets, styleRules) {
+  if (!Array.isArray(styleRules) || styleRules.length === 0) return datasets;
+  const labelToIndex = new Map();
+  datasets.forEach((ds, idx) => { labelToIndex.set(ds.label, idx); });
+  const clones = datasets.map(ds => ({ ...ds, pointStyles: new Array(ds.data.length) }));
+  const rulesByIdx = {};
+  for (const rule of styleRules) {
+    const targetName = rule.target || rule.target_series;
+    if (!targetName) continue;
+    const idx = labelToIndex.get(targetName);
+    if (idx == null) continue;
+    if (!rulesByIdx[idx]) rulesByIdx[idx] = [];
+    rulesByIdx[idx].push(rule);
+  }
+  for (const [idxKey, rules] of Object.entries(rulesByIdx)) {
+    const idx = Number(idxKey);
+    const ds = clones[idx];
+    if (!ds) continue;
+    for (const rule of rules) {
+      const compareIdx = rule.compareTo ? labelToIndex.get(rule.compareTo) : null;
+      const compareData = compareIdx != null ? datasets[compareIdx]?.data : null;
+      const threshold = rule.threshold != null ? Number(rule.threshold) : null;
+      const operator = rule.operator || '<';
+      const color = rule.color || '#f87171';
+      for (let i = 0; i < ds.data.length; i++) {
+        const comparison = compareData ? compareData[i] : threshold;
+        if (comparison == null) continue;
+        if (evaluateRule(ds.data[i], comparison, operator)) {
+          ds.pointStyles[i] = { color };
+        }
+      }
+    }
+  }
+  return clones;
+}
+
 /** Build a full ECharts option from chart type + aggregated data */
-export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { showLabels = false, colors: customColors = null } = {}) {
+export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { showLabels = false, colors: customColors = null, valueFormat = null } = {}) {
+  const processedDatasets = applyStyleRulesToDatasets(datasets, dataConfig?.styleRules);
   const palette = customColors && customColors.length > 0 ? customColors : COLORS;
   const displayLabels = formatDateLabels(labels);
   const isDateAxis = labels.length > 0 && /^\d{4}-\d{2}/.test(String(labels[0]));
-  const showLegend = datasets.length > 1;
+  const showLegend = processedDatasets.length > 1;
 
   const baseTooltip = {
     trigger: 'axis',
@@ -260,12 +312,28 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       color: '#6b7280',
       fontFamily: "'JetBrains Mono', monospace",
       fontSize: 11,
-      formatter: (v) => typeof v === 'number' && v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v,
+      formatter: (v) => {
+        if (typeof v !== 'number') return v;
+        if (valueFormat === 'percent') return `${v}%`;
+        if (v >= 1000 || v <= -1000) return (v / 1000).toFixed(1) + 'k';
+        return v;
+      },
     },
     splitLine: { lineStyle: { color: '#e2e5e9', type: 'dashed' } },
   };
 
   const labelStyle = { color: '#374151', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" };
+  const wrapValue = (ds, idx, value, extra = null) => {
+    const style = ds.pointStyles?.[idx];
+    if (!style && !extra) return value;
+    const obj = { value };
+    if (style) {
+      obj.itemStyle = { ...(obj.itemStyle || {}), ...style };
+    }
+    if (extra) Object.assign(obj, extra);
+    return obj;
+  };
+  const dsList = processedDatasets;
 
   // --- Line ---
   if (echartsType === 'line') {
@@ -275,13 +343,15 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'line',
-        data: ds.data.map((v, idx) => showLabels && idx === ds.data.length - 1
-          ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
-          : v
-        ),
+        data: ds.data.map((v, idx) => {
+          const extra = showLabels && idx === ds.data.length - 1
+            ? { label: { show: true, ...labelStyle, position: 'top' } }
+            : null;
+          return wrapValue(ds, idx, v, extra);
+        }),
         smooth: true,
         symbol: showLabels ? 'circle' : 'none',
         showSymbol: showLabels ? false : false,
@@ -301,13 +371,15 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'line',
-        data: ds.data.map((v, idx) => showLabels && idx === ds.data.length - 1
-          ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
-          : v
-        ),
+        data: ds.data.map((v, idx) => {
+          const extra = showLabels && idx === ds.data.length - 1
+            ? { label: { show: true, ...labelStyle, position: 'top' } }
+            : null;
+          return wrapValue(ds, idx, v, extra);
+        }),
         smooth: true,
         symbol: showLabels ? 'circle' : 'none',
         showSymbol: showLabels ? false : false,
@@ -328,10 +400,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'bar',
-        data: ds.data,
+        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
         itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
         ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
       })),
@@ -346,11 +418,11 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'bar',
         stack: 'total',
-        data: ds.data,
+        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
         itemStyle: { color: palette[i % palette.length] },
         ...(showLabels ? { label: { show: true, ...labelStyle } } : {}),
       })),
@@ -365,10 +437,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: { ...baseGrid, left: 120 },
       xAxis: valueAxis,
       yAxis: { ...categoryAxis, inverse: true },
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'bar',
-        data: ds.data,
+        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
         itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] },
         ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
       })),
@@ -379,7 +451,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   if (echartsType === 'pie') {
     const pieData = labels.map((l, i) => ({
       name: formatDateLabel(l),
-      value: datasets[0]?.data[i] || 0,
+      value: dsList[0]?.data[i] || 0,
     }));
     return {
       tooltip: { ...baseTooltip, trigger: 'item' },
@@ -397,7 +469,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   // --- Funnel ---
   if (echartsType === 'funnel') {
-    const funnelData = datasets.map((ds, i) => ({
+    const funnelData = dsList.map((ds, i) => ({
       name: ds.label,
       value: ds.data.reduce((a, b) => a + b, 0),
     }));
@@ -426,25 +498,25 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: [valueAxis, { ...valueAxis, splitLine: { show: false } }],
-      series: datasets.map((ds, i) => {
-        const isLast = i === datasets.length - 1 && datasets.length > 1;
+      series: dsList.map((ds, i) => {
+        const isLast = i === dsList.length - 1 && dsList.length > 1;
+        const baseData = ds.data.map((v, idx) => wrapValue(ds, idx, v));
+        const lineData = ds.data.map((v, idx) => {
+          const extra = showLabels && idx === ds.data.length - 1
+            ? { label: { show: true, ...labelStyle, position: 'top' } }
+            : null;
+          return wrapValue(ds, idx, v, extra);
+        });
         return {
           name: ds.label,
           type: isLast ? 'line' : 'bar',
           yAxisIndex: isLast ? 1 : 0,
-          data: ds.data,
+          data: isLast ? lineData : baseData,
           smooth: isLast,
           symbol: isLast ? 'none' : undefined,
           lineStyle: isLast ? { width: 2 } : undefined,
           itemStyle: { color: palette[i % palette.length], ...(isLast ? {} : { borderRadius: [3, 3, 0, 0] }) },
           ...(showLabels && !isLast ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
-          ...(showLabels && isLast ? {
-            data: ds.data.map((v, idx) => idx === ds.data.length - 1
-              ? { value: v, label: { show: true, ...labelStyle, position: 'top' } }
-              : v
-            ),
-            label: { show: false },
-          } : {}),
         };
       }),
     };
@@ -469,10 +541,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: yoyMonthAxis,
       yAxis: valueAxis,
-      series: datasets.map((ds, i) => ({
+      series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'bar',
-        data: ds.data,
+        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
         itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
         ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
       })),
@@ -482,9 +554,9 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   // --- Heatmap ---
   if (echartsType === 'heatmap') {
     // For heatmap, use first dataset only; labels on x, dataset labels on y
-    const yLabels = datasets.map(ds => ds.label);
+    const yLabels = dsList.map(ds => ds.label);
     const heatData = [];
-    datasets.forEach((ds, yi) => {
+    dsList.forEach((ds, yi) => {
       ds.data.forEach((val, xi) => {
         heatData.push([xi, yi, val || 0]);
       });
@@ -507,10 +579,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     grid: baseGrid,
     xAxis: categoryAxis,
     yAxis: valueAxis,
-    series: datasets.map((ds, i) => ({
+    series: dsList.map((ds, i) => ({
       name: ds.label,
       type: 'bar',
-      data: ds.data,
+      data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
       itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
       ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
     })),

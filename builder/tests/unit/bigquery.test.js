@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Since queryBq is called internally (not through module export), we test
 // input validation directly and SQL patterns via the exported cache key format.
 
-import { fetchGroupedData, clearAggCache } from '../../src/lib/bigquery.js';
+import { fetchGroupedData, clearAggCache, buildEndDateClause } from '../../src/lib/bigquery.js';
 
 describe('fetchGroupedData — input validation', () => {
   it('rejects SQL injection in groupByField', async () => {
@@ -44,6 +44,24 @@ describe('fetchGroupedData — input validation', () => {
         expect(e.message).not.toContain('Invalid groupByField');
       }
     }
+  });
+});
+
+describe('buildEndDateClause', () => {
+  it('returns clause for yesterday', () => {
+    expect(buildEndDateClause('SignupDate', 'yesterday')).toContain('DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)');
+  });
+
+  it('returns clause for previous_sunday', () => {
+    expect(buildEndDateClause('SignupDate', 'previous_sunday')).toBe("SignupDate <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)");
+  });
+
+  it('supports days_ago rule', () => {
+    expect(buildEndDateClause('SignupDate', 'days_ago_5')).toBe('SignupDate <= DATE_SUB(CURRENT_DATE(), INTERVAL 5 DAY)');
+  });
+
+  it('falls back to null for unknown rule', () => {
+    expect(buildEndDateClause('SignupDate', 'unknown_rule')).toBeNull();
   });
 });
 
