@@ -125,7 +125,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           </NavLink>
           <NavLink to="/charts" style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u25A3'}</span>
-            My Charts
+            All Charts
           </NavLink>
 
           {/* Favorites */}
@@ -150,7 +150,10 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* Method Approved Dashboards */}
           {approvedDashboards.length > 0 && (
             <>
-              <div style={sectionLabel}>Method Approved</div>
+              <NavLink to="/dashboards" style={linkStyle}>
+                <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{'\u2713'}</span>
+                Method Approved Dashboards
+              </NavLink>
               {approvedDashboards.slice(0, 8).map(d => (
                 <NavLink key={`approved-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
                   <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
@@ -164,7 +167,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* My Dashboards */}
           <NavLink to="/dashboards" end style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u25A0'}</span>
-            My Dashboards
+            All Dashboards
           </NavLink>
           {myDashboards.slice(0, 8).map(d => (
             <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
