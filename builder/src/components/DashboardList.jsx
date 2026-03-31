@@ -4,40 +4,29 @@ import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, delete
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
 
-const styles = {
+const s = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontSize: 20, fontWeight: 600, color: '#1a1a1a' },
-  controls: { display: 'flex', gap: 8 },
   newBtn: {
     background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '8px 20px', borderRadius: 6, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
   },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 },
-  card: {
-    background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 8,
-    padding: 20, cursor: 'pointer', transition: 'border-color 0.15s', position: 'relative',
-  },
-  cardName: { fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 },
-  cardMeta: { fontSize: 12, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" },
-  cardActions: { display: 'flex', gap: 8, marginTop: 8 },
-  starBtn: {
-    position: 'absolute', top: 12, right: 12, background: 'none', border: 'none',
-    fontSize: 18, cursor: 'pointer', padding: 4, lineHeight: 1,
-  },
-  badge: {
-    display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
-    padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 600,
-    fontFamily: "'JetBrains Mono', monospace", marginBottom: 6,
-  },
   section: { marginTop: 32 },
   sectionTitle: { fontSize: 14, fontWeight: 600, color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
   empty: { color: '#6b7280', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
-  smallBtn: {
-    background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11,
-    fontFamily: "'JetBrains Mono', monospace", padding: '2px 0',
+  table: { width: '100%', borderCollapse: 'collapse' },
+  th: { textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '2px solid #e2e5e9' },
+  td: { padding: '10px 12px', borderBottom: '1px solid #f1f3f5', fontSize: 13, color: '#374151' },
+  row: { cursor: 'pointer', transition: 'background .1s' },
+  nameCell: { fontWeight: 600, color: '#1a1a1a' },
+  badge: {
+    display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
   },
+  starBtn: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
+  actionBtn: { background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '2px 6px' },
 };
 
 export default function DashboardList({ userEmail }) {
@@ -111,6 +100,7 @@ export default function DashboardList({ userEmail }) {
     try {
       await deleteDashboard(db.id);
       await load();
+      window.dispatchEvent(new Event('stars-changed'));
     } catch (e) {
       setError(`Delete failed: ${e.message}`);
     }
@@ -127,10 +117,9 @@ export default function DashboardList({ userEmail }) {
   }, [load]);
 
   if (loading) {
-    return <div style={styles.layout}><div style={styles.empty}>Loading...</div></div>;
+    return <div style={s.layout}><div style={s.empty}>Loading...</div></div>;
   }
 
-  // Sort: starred first, then alphabetical
   function sortDashboards(list) {
     return [...list].sort((a, b) => {
       const aStarred = stars.includes(a.id);
@@ -142,73 +131,93 @@ export default function DashboardList({ userEmail }) {
 
   const sortedMine = sortDashboards(myDashboards.filter(d => !d.is_approved));
   const sortedApproved = sortDashboards(approvedDashboards);
+  const admin = isAdmin(currentUser);
 
-  function renderCard(db, showActions = false) {
-    const isStarred = stars.includes(db.id);
-    const isMine = canDelete(currentUser, db);
-    const admin = isAdmin(currentUser);
-
+  function renderTable(list) {
     return (
-      <div
-        key={db.id}
-        style={styles.card}
-        onClick={() => navigate(`/dashboards/${db.id}`)}
-        onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e5e9'}
-      >
-        <button
-          style={{ ...styles.starBtn, color: isStarred ? '#f59e0b' : '#9ca3af' }}
-          onClick={e => toggleStar(e, db.id)}
-          aria-label={isStarred ? 'Unstar' : 'Star'}
-        >
-          {isStarred ? '\u2605' : '\u2606'}
-        </button>
-        {db.is_approved && <div style={styles.badge}>Method Approved</div>}
-        <div style={styles.cardName}>{db.name}</div>
-        <div style={styles.cardMeta}>
-          {(db.layout || []).length} chart{(db.layout || []).length !== 1 ? 's' : ''}
-          {db.updated_at && ` \u00B7 ${new Date(db.updated_at).toLocaleDateString()}`}
-        </div>
-        {(isMine || showActions) && (
-          <div style={styles.cardActions}>
-            {isMine && <button style={styles.smallBtn} onClick={e => handleDelete(e, db)}>delete</button>}
-            {isMine && admin && (
-              <button style={{ ...styles.smallBtn, color: db.is_approved ? '#dc2626' : '#059669' }} onClick={e => handleToggleApproval(e, db)}>
-                {db.is_approved ? 'remove approval' : 'mark approved'}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <table style={s.table}>
+        <thead>
+          <tr>
+            <th style={s.th}>Name</th>
+            <th style={s.th}>Owner</th>
+            <th style={{ ...s.th, width: 70, textAlign: 'center' }}>Charts</th>
+            <th style={{ ...s.th, width: 120 }}>Last Modified</th>
+            <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
+            <th style={{ ...s.th, width: 140, textAlign: 'right' }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(db => {
+            const isStarred = stars.includes(db.id);
+            const isMine = canDelete(currentUser, db);
+
+            return (
+              <tr
+                key={db.id}
+                style={s.row}
+                onClick={() => navigate(`/dashboards/${db.id}`)}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <td style={s.td}>
+                  <span style={s.nameCell}>{db.name}</span>
+                  {db.is_approved && <span style={s.badge}>Method Approved</span>}
+                </td>
+                <td style={s.td}>{db.created_by?.split('@')[0] || '\u2014'}</td>
+                <td style={{ ...s.td, textAlign: 'center' }}>{(db.layout || []).length}</td>
+                <td style={s.td}>{db.updated_at ? new Date(db.updated_at).toLocaleDateString() : '\u2014'}</td>
+                <td style={{ ...s.td, textAlign: 'center' }}>
+                  <button
+                    style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
+                    onClick={e => toggleStar(e, db.id)}
+                    aria-label={isStarred ? 'Unstar' : 'Star'}
+                  >
+                    {isStarred ? '\u2605' : '\u2606'}
+                  </button>
+                </td>
+                <td style={{ ...s.td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                  {isMine && (
+                    <button style={{ ...s.actionBtn, color: '#dc2626' }} onClick={e => handleDelete(e, db)}>delete</button>
+                  )}
+                  {isMine && admin && (
+                    <button
+                      style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669' }}
+                      onClick={e => handleToggleApproval(e, db)}
+                    >
+                      {db.is_approved ? 'remove approval' : 'mark approved'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     );
   }
 
   return (
-    <div style={styles.layout}>
-      <div style={styles.header}>
-        <span style={styles.title}>Dashboards</span>
-        <div style={styles.controls}>
-          <button style={styles.newBtn} onClick={handleNew}>+ New Dashboard</button>
-        </div>
+    <div style={s.layout}>
+      <div style={s.header}>
+        <span style={s.title}>Dashboards</span>
+        <button style={s.newBtn} onClick={handleNew}>+ New Dashboard</button>
       </div>
 
       {error && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
-      {/* Method Approved */}
       {sortedApproved.length > 0 && (
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Method Approved</div>
-          <div style={styles.grid}>{sortedApproved.map(db => renderCard(db, true))}</div>
+        <div style={s.section}>
+          <div style={s.sectionTitle}>Method Approved</div>
+          {renderTable(sortedApproved)}
         </div>
       )}
 
-      {/* My Dashboards */}
-      <div style={styles.section}>
-        <div style={styles.sectionTitle}>My Dashboards</div>
+      <div style={s.section}>
+        <div style={s.sectionTitle}>My Dashboards</div>
         {sortedMine.length === 0 ? (
-          <div style={styles.empty}>No dashboards yet. Create one to get started.</div>
+          <div style={s.empty}>No dashboards yet. Create one to get started.</div>
         ) : (
-          <div style={styles.grid}>{sortedMine.map(db => renderCard(db, true))}</div>
+          renderTable(sortedMine)
         )}
       </div>
     </div>
