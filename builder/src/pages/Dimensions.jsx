@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchMetrics, fetchAllApprovedDimensions } from '../lib/supabase';
-
-const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
-const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  'Content-Type': 'application/json',
-};
+import { fetchMetrics, fetchAllApprovedDimensions, SUPABASE_URL, headers } from '../lib/supabase';
 
 export default function Dimensions() {
   const [metrics, setMetrics] = useState([]);

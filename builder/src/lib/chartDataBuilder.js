@@ -1,5 +1,6 @@
 import { fetchAggregatedData, fetchChartData, fetchGroupedData } from './bigquery';
 import { applyLastNMonths } from './chartUtils';
+import { evaluateFormula } from './sanitize.js';
 import schemaCache from './schemaCache';
 
 /**
@@ -54,19 +55,13 @@ export async function fetchChartDatasets({
       const computedLabels = [], computedData = [];
 
       for (const lbl of sorted) {
-        let f = metric.formula;
+        const depValues = {};
         for (const depId of metric.depends_on) {
-          f = f.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(depAggregated[depId]?.[lbl] || 0));
+          depValues[depId] = depAggregated[depId]?.[lbl] || 0;
         }
-        f = f.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
-          const numA = Number(a) || 0, numB = Number(b) || 0;
-          return String(numB === 0 ? 0 : numA / numB);
-        });
-        let value;
-        try { value = Function('"use strict"; return (' + f + ')')(); } catch { value = 0; }
-        if (!isFinite(value)) value = 0;
+        const value = Math.round(evaluateFormula(metric.formula, depValues) * 100) / 100;
         computedLabels.push(lbl);
-        computedData.push(Math.round(value * 100) / 100);
+        computedData.push(value);
       }
 
       rawDatasets.push({ label, labels: computedLabels, data: computedData });

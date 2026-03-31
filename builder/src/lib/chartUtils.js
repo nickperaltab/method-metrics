@@ -1,3 +1,5 @@
+import { evaluateFormula } from './sanitize.js';
+
 export const COLORS = ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8', '#fb923c', '#e879f9', '#4ade80', '#f472b6'];
 
 export const ATT_COL_MAP = {
@@ -169,20 +171,12 @@ export function computeDerived(derived, depResults, xField, timeBucket) {
 
   const computed = [];
   for (const label of sortedLabels) {
-    let formula = derived.formula;
+    const depValues = {};
     for (const depId of derived.depends_on) {
-      const val = depAggregated[depId]?.[label] || 0;
-      formula = formula.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+      depValues[depId] = depAggregated[depId]?.[label] || 0;
     }
-    formula = formula.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
-      const numA = Number(a) || 0;
-      const numB = Number(b) || 0;
-      return String(numB === 0 ? 0 : numA / numB);
-    });
-    let value;
-    try { value = Function('"use strict"; return (' + formula + ')')(); } catch { value = 0; }
-    if (!isFinite(value)) value = 0;
-    computed.push({ [xField]: label, value: Math.round(value * 100) / 100 });
+    const value = Math.round(evaluateFormula(derived.formula, depValues) * 100) / 100;
+    computed.push({ [xField]: label, value });
   }
   return computed;
 }

@@ -11,6 +11,7 @@ import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fe
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
+import { evaluateFormula } from '../lib/sanitize';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
 
@@ -255,17 +256,11 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 }
               }
               const evalFormula = (period) => {
-                let f = metric.formula;
+                const depValues = {};
                 for (const depId of metric.depends_on) {
-                  const val = depKpis[depId]?.[period] || 0;
-                  f = f.replace(new RegExp(`\\{${depId}\\}`, 'g'), String(val));
+                  depValues[depId] = depKpis[depId]?.[period] || 0;
                 }
-                f = f.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, (_, a, b) => {
-                  const numA = Number(a) || 0;
-                  const numB = Number(b) || 0;
-                  return String(numB === 0 ? 0 : numA / numB);
-                });
-                try { return Function('"use strict"; return (' + f + ')')(); } catch { return 0; }
+                return evaluateFormula(metric.formula, depValues);
               };
               const hasError = metric.depends_on.some(depId => depKpis[depId]?.error);
               const current = evalFormula('current');

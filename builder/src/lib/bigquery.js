@@ -1,3 +1,5 @@
+import { validateIdentifier, validateInt, escapeBqString } from './sanitize.js';
+
 const BQ_CLIENT_ID = '546732685010-nojjfak7esmun2taour8r5pakrsrg3aq.apps.googleusercontent.com';
 const BQ_PROJECT = 'project-for-method-dw';
 const BQ_DATASET = 'revenue';
@@ -113,6 +115,7 @@ export const ATT_COL_MAP = {
 const viewCache = {};
 
 export async function fetchViewData(viewName) {
+  validateIdentifier(viewName, 'viewName');
   if (viewCache[viewName]) return viewCache[viewName];
   const sql = `SELECT * FROM \`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\` LIMIT 10000`;
   const result = await queryBq(sql);
@@ -149,13 +152,16 @@ export function clearAllCaches() {
 }
 
 export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yearFilter) {
+  validateIdentifier(viewName, 'viewName');
+  validateIdentifier(dateCol, 'dateCol');
+  if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
   const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
   const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
 
   const wheres = [];
   // Default: last 3 years. If yearFilter provided (e.g., [2025, 2026]), use that.
   if (yearFilter && yearFilter.length > 0) {
-    wheres.push(`FORMAT_DATE('%Y', ${dateCol}) IN (${yearFilter.map(y => `'${y}'`).join(',')})`);
+    wheres.push(`FORMAT_DATE('%Y', ${dateCol}) IN (${yearFilter.map(y => `'${validateInt(y, 'year')}'`).join(',')})`);
   } else {
     wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 YEAR), YEAR)`);
   }
@@ -194,9 +200,10 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
     let sql = metric.chart_sql;
     // Apply time filter by wrapping the query
     if (lastNMonths != null && lastNMonths >= 0) {
-      const dateExpr = lastNMonths === 0
+      const months = validateInt(lastNMonths, 'lastNMonths');
+      const dateExpr = months === 0
         ? `FORMAT_DATE('%Y-%m', DATE_TRUNC(CURRENT_DATE(), MONTH))`
-        : `FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH))`;
+        : `FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH))`;
       sql = `SELECT * FROM (${sql}) sub WHERE period >= ${dateExpr}`;
     }
     const result = await queryBq(sql);
@@ -214,6 +221,9 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
 }
 
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
+  validateIdentifier(viewName, 'viewName');
+  validateIdentifier(xField, 'xField');
+  if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
   const cacheKey = `${viewName}|${xField}|${yField}|${timeBucket}|${channelFilter}|${lastNMonths}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
 
@@ -244,10 +254,11 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
 
   // Time range filter — snap to 1st of month so we always get full calendar months
   if (lastNMonths != null && lastNMonths >= 0) {
-    if (lastNMonths === 0) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
       wheres.push(`${xField} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
     } else {
-      wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+      wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
     }
   }
 
@@ -280,10 +291,10 @@ export async function fetchAggregatedData(viewName, xField, yField, timeBucket, 
  * @returns {{ labels: string[], seriesMap: Object<string, number[]>, sql: string }}
  */
 export async function fetchGroupedData(viewName, xField, yField, timeBucket, groupByField, channelFilter, lastNMonths, topN = 10) {
-  // Validate groupByField is alphanumeric/underscore only (defense against SQL injection from AI responses)
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(groupByField)) {
-    throw new Error(`Invalid groupByField: ${groupByField}`);
-  }
+  validateIdentifier(viewName, 'viewName');
+  validateIdentifier(xField, 'xField');
+  if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
+  validateIdentifier(groupByField, 'groupByField');
 
   const cacheKey = `grouped|${viewName}|${xField}|${yField}|${timeBucket}|${groupByField}|${channelFilter}|${lastNMonths}|${topN}`;
   if (aggCache[cacheKey]) return aggCache[cacheKey];
@@ -304,17 +315,19 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
     if (col) baseWheres.push(`${col} > 0`);
   }
   if (lastNMonths != null && lastNMonths >= 0) {
-    if (lastNMonths === 0) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
       baseWheres.push(`${xField} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
     } else {
-      baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${lastNMonths} MONTH), MONTH)`);
+      baseWheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
     }
   }
 
   // First pass: find top N dimension values by total volume
+  const safeTopN = validateInt(topN, 'topN');
   const topWheres = [...baseWheres, `${groupByField} IS NOT NULL AND TRIM(CAST(${groupByField} AS STRING)) != ''`];
   const topWhereClause = `WHERE ${topWheres.join(' AND ')}`;
-  const topSql = `SELECT ${groupByField} AS dimension, ${valueExpr} AS total FROM ${table} ${topWhereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${topN}`;
+  const topSql = `SELECT ${groupByField} AS dimension, ${valueExpr} AS total FROM ${table} ${topWhereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${safeTopN}`;
   const topResult = await queryBq(topSql);
   const topDimensions = topResult.rows.map(r => r.dimension);
 
@@ -325,7 +338,7 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
   }
 
   // Second pass: get full time series for top dimensions only
-  const inList = topDimensions.map(d => `'${String(d).replace(/'/g, "\\'")}'`).join(',');
+  const inList = topDimensions.map(d => `'${escapeBqString(d)}'`).join(',');
   const fullWheres = [...baseWheres, `${groupByField} IN (${inList})`];
   const fullWhereClause = `WHERE ${fullWheres.join(' AND ')}`;
 
@@ -361,6 +374,9 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
  * @returns {{ current: number, prior: number, delta: number, deltaPercent: number, sql: string }}
  */
 export async function fetchKpiData(viewName, dateCol, yField, channelFilter) {
+  validateIdentifier(viewName, 'viewName');
+  validateIdentifier(dateCol, 'dateCol');
+  if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
   const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
   const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
 

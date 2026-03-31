@@ -109,7 +109,54 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { prompt, messages, metricContext, schemaContext, currentChartSpec } = await req.json();
+  // Reject non-POST methods
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const { prompt, messages, metricContext, schemaContext, currentChartSpec } = body as {
+    prompt?: string;
+    messages?: Array<{ role: string; content: string }>;
+    metricContext?: string;
+    schemaContext?: string;
+    currentChartSpec?: Record<string, unknown>;
+  };
+
+  // Validate required fields
+  if (!prompt && (!messages || !Array.isArray(messages) || messages.length === 0)) {
+    return new Response(JSON.stringify({ error: 'Either prompt or messages is required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // Enforce size limits to prevent abuse
+  const MAX_CONTEXT_LEN = 50000;
+  if (typeof metricContext === 'string' && metricContext.length > MAX_CONTEXT_LEN) {
+    return new Response(JSON.stringify({ error: 'metricContext too large' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  if (typeof schemaContext === 'string' && schemaContext.length > MAX_CONTEXT_LEN) {
+    return new Response(JSON.stringify({ error: 'schemaContext too large' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
 
   let systemPrompt = SYSTEM_PROMPT;
   let claudeMessages;
@@ -145,14 +192,15 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 1024,
       system: systemPrompt,
       messages: claudeMessages,
     }),
   });
 
   if (!response.ok) {
-    const err = await response.text();
+    const errBody = await response.text();
+    console.error('Anthropic API error:', response.status, errBody);
     return new Response(JSON.stringify({ error: `Claude API error: ${response.status}` }), {
       status: 502,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
@@ -175,21 +223,32 @@ Deno.serve(async (req) => {
   try {
     parsed = JSON.parse(text);
   } catch {
-    // Try to extract JSON object with a targeted regex
-    const jsonMatch = text.match(/\{[\s\S]*?\}(?=[^}]*$)/);
-    if (jsonMatch) {
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        // still failed
+    // Try to extract the outermost JSON object using balanced brace matching
+    const start = text.indexOf('{');
+    if (start !== -1) {
+      let depth = 0;
+      let end = -1;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end !== -1) {
+        try {
+          parsed = JSON.parse(text.slice(start, end + 1));
+        } catch {
+          // still failed
+        }
       }
     }
   }
 
   if (parsed) {
-    return new Response(JSON.stringify(parsed), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    // Basic validation: must be an object with recognized keys
+    if (typeof parsed === 'object' && parsed !== null && (parsed.metric_ids || parsed.type || parsed.error)) {
+      return new Response(JSON.stringify(parsed), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
   }
 
   console.error('JSON parse failed:', text);
