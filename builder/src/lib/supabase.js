@@ -276,6 +276,24 @@ export async function moveDashboardToFolder(dashboardId, folderId) {
   if (!res.ok) throw new Error(`Move failed: ${res.status}`);
 }
 
+// Dashboard views (recently viewed)
+export async function recordDashboardView(dashboardId, userId) {
+  await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/dashboard_views`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=minimal' },
+    body: JSON.stringify({ dashboard_id: dashboardId, user_id: userId }),
+  });
+}
+
+export async function fetchRecentViews(userId, limit = 10) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboard_views?user_id=eq.${userId}&order=viewed_at.desc&limit=${limit}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load recent views (${res.status})`);
+  return res.json();
+}
+
 export async function invokeAiChart(body) {
   const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',
