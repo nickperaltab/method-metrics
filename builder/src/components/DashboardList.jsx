@@ -19,14 +19,14 @@ const s = {
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '2px solid #e2e5e9' },
   td: { padding: '10px 12px', borderBottom: '1px solid #f1f3f5', fontSize: 13, color: '#374151' },
-  row: { cursor: 'pointer', transition: 'background .1s' },
+  row: { cursor: 'pointer' },
   nameCell: { fontWeight: 600, color: '#1a1a1a' },
   badge: {
     display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
   },
   starBtn: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
-  actionBtn: { background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '2px 6px' },
+  actionBtn: { background: 'none', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '3px 8px', borderRadius: 4 },
 };
 
 export default function DashboardList({ userEmail }) {
@@ -156,8 +156,6 @@ export default function DashboardList({ userEmail }) {
                 key={db.id}
                 style={s.row}
                 onClick={() => navigate(`/dashboards/${db.id}`)}
-                onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <td style={s.td}>
                   <span style={s.nameCell}>{db.name}</span>
