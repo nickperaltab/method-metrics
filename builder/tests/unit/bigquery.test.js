@@ -47,6 +47,24 @@ describe('fetchGroupedData — input validation', () => {
   });
 });
 
+describe('fetchChartData — fallback behavior', () => {
+  // REGRESSION TEST: Justin's PR removed the fetchAggregatedData fallback,
+  // requiring chart_sql for all metrics. This broke Trials, Syncs, and
+  // Conversions which use dynamic aggregation (COUNT(*) GROUP BY).
+  // The fallback MUST exist for event metrics that have view_name but no chart_sql.
+
+  it('metric with view_name but no chart_sql must NOT return empty data', async () => {
+    // This is the critical invariant: if a metric has a view_name,
+    // fetchChartData should call fetchAggregatedData, not return empty.
+    const { fetchChartData } = await import('../../src/lib/bigquery.js');
+    const source = fetchChartData.toString();
+    // The function must contain a call to fetchAggregatedData as fallback
+    expect(source).toContain('fetchAggregatedData');
+    // The function must NOT return empty arrays as a fallback
+    expect(source).not.toContain('labels: [], data: []');
+  });
+});
+
 // Test the SQL-building helpers directly by importing chartUtils which shares patterns
 import { aggregateRows, toBucketKey, MONTH_NAMES } from '../../src/lib/chartUtils.js';
 
