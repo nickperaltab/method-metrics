@@ -17,6 +17,7 @@ import ChatModal from './ChatModal';
 import Dialog from './Dialog';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
+import { getMonthIndices, formatMonthLabels, sliceSeries, computeGrowthSeries } from '../lib/yoyUtils';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1400, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
@@ -318,7 +319,11 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
         // Year-over-Year branch
         if (echartsType === 'yoy') {
+          const monthIndices = getMonthIndices(dataConfig.yoyMonths);
+          const monthLabels = formatMonthLabels(monthIndices);
+          const yoyMode = dataConfig.yoyMode || 'value';
           const yoyDatasets = [];
+          let valueFormat = null;
           for (let i = 0; i < metricIds.length; i++) {
             const metricId = metricIds[i];
             const metric = metrics.find(m => m.id === metricId);
@@ -327,16 +332,26 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             const viewSchema = schemaCache[metric.view_name] || [];
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
             try {
-              const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
-              for (const year of yoyResult.years) {
-                const lbl = metricIds.length === 1 ? year : `${metric.name} ${year}`;
-                yoyDatasets.push({ label: lbl, data: yoyResult.seriesMap[year] });
+              const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter, dataConfig.yearFilter);
+              if (yoyMode === 'growth_pct') {
+                const growth = computeGrowthSeries(yoyResult.seriesMap, yoyResult.years, monthIndices);
+                if (growth) {
+                  const lbl = metricIds.length === 1
+                    ? `${growth.latest} vs ${growth.prior}`
+                    : `${metric.name} ${growth.latest} vs ${growth.prior}`;
+                  yoyDatasets.push({ label: lbl, data: growth.data });
+                  valueFormat = 'percent';
+                }
+              } else {
+                for (const year of yoyResult.years) {
+                  const lbl = metricIds.length === 1 ? year : `${metric.name} ${year}`;
+                  yoyDatasets.push({ label: lbl, data: sliceSeries(yoyResult.seriesMap[year], monthIndices) });
+                }
               }
             } catch { /* skip */ }
           }
           if (yoyDatasets.length > 0) {
-            const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig);
+            const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { valueFormat });
             setChartOptions(prev => ({ ...prev, [chartId]: option }));
           }
           return;

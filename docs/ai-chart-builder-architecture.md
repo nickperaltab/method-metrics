@@ -185,6 +185,22 @@ supabase/functions/ai-chart/index.ts     — Edge Function (Claude Haiku 4.5 pro
 - **Revenue metrics require `chart_sql`** — pre-aggregated views cannot use the generic `GROUP BY dateCol` approach in `fetchAggregatedData()`.
 - **Schema detection picks the first DATE column** — if a view has multiple date columns, the wrong one may be selected. Fix by explicitly setting `date_column` on the metric row (if that column is added) or by using `chart_sql` instead.
 - **Data-fetching logic is partially duplicated** across `Explorer.jsx`, `ChatExplorer.jsx`, and `DashboardView.jsx` (~306 lines). A shared `useChartData` hook would consolidate this.
+- **Viewer mode requires personal BigQuery OAuth** — every dashboard/chat request runs in the browser using the viewer's token. Anyone without dataset + `bigquery.jobs.create` access simply sees the "Connect BigQuery" gate, so a public/internal read-only mode will require a backend proxy or service-account query layer before we can share links broadly.
+- **Metric catalog scales linearly with prompt size** — the entire `metrics` table (currently 242 rows) plus every view schema is stuffed into Claude's context on each request. At ~350–400 metrics we start approaching Anthropic's cost/context limits and the initial schema prefetch becomes slow/expensive. Long-term fix is to move to a semantic layer or retrieval-indexed catalog so we fetch only the relevant metric slices per prompt.
+- **One assistant reply can spawn many BigQuery jobs** — grouped charts, derived metrics, and KPI tiles all run separate queries per metric (and per dependency) via the browser. A single prompt with three metrics + a breakdown can issue 6–10 concurrent jobs, quickly hitting per-user concurrency quotas (100 interactive jobs/user by default) and driving on-demand query cost. Back-end batching or cached aggregates are required before rolling out to larger audiences.
+
+---
+
+## Pre-Launch Security / Auth TODOs
+
+1. **Rotate the Supabase anon key or move to user auth before GA.** The builder currently ships an anon key that can create/update charts, dashboards, and conversations client-side. Ensure RLS locks every table to authenticated users or swap to Supabase Auth/SSO before inviting the broader org.
+2. **Require login for editing.** Even if read-only dashboards stay open, the chart builder/editor should sit behind a signed-in session so we can track ownership and enforce per-user permissions. Plan: gate `builder/` routes behind Supabase Auth (or another IdP) once the admin workflow is stable.
+
+---
+
+## Why We’re Not Rebuilding Looker
+
+Looker bundles a much wider surface area (explore UI, governed drill paths, alerting/email delivery, fine-grained permission groups, etc.), but those features come with significant overhead (LookML learning curve, admin + licensing). Our scope is narrower: we need consistent metric definitions, a server-side query broker/caching layer, and a Claude-driven chart UX. By cherry-picking those core ideas (semantic layer + centralized BigQuery orchestration) and leaving the rest for later, we can iterate quickly without inheriting the full weight of a BI platform. If the org eventually needs the broader Looker feature set, we can revisit it, but for now a “Looker-lite” approach meets the revops use case.
 
 ---
 

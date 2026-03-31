@@ -22,7 +22,7 @@ export async function fetchChartDatasets({
   dataConfig,
   lastNMonthsOverride,
 }) {
-  const { xField, yFields, timeBucket, channelFilter, groupByDimension } = dataConfig;
+  const { xField, yFields, timeBucket, channelFilter, groupByDimension, endDateRule } = dataConfig;
   const lastNMonths = lastNMonthsOverride !== undefined ? lastNMonthsOverride : dataConfig.lastNMonths;
 
   const rawDatasets = [];
@@ -42,7 +42,7 @@ export async function fetchChartDatasets({
         if (!dep?.view_name) continue;
         const dateCol = getDateCol(dep.view_name, xField);
         try {
-          const agg = await fetchAggregatedData(dep.view_name, dateCol, 'COUNT', timeBucket, channelFilter, lastNMonths);
+          const agg = await fetchAggregatedData(dep.view_name, dateCol, 'COUNT', timeBucket, channelFilter, lastNMonths, endDateRule);
           const counts = {};
           agg.labels.forEach((l, idx) => { counts[l] = agg.data[idx]; });
           depAggregated[depId] = counts;
@@ -71,7 +71,7 @@ export async function fetchChartDatasets({
       // Grouped dimension — one series per dimension value
       const dateCol = getDateCol(metric.view_name, xField);
       try {
-        const grouped = await fetchGroupedData(metric.view_name, dateCol, yField, timeBucket, groupByDimension, channelFilter, lastNMonths);
+        const grouped = await fetchGroupedData(metric.view_name, dateCol, yField, timeBucket, groupByDimension, channelFilter, lastNMonths, endDateRule);
         Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
           rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
         });
@@ -84,7 +84,7 @@ export async function fetchChartDatasets({
       // Normal metric — primitive view or pre-aggregated chart_sql
       const dateCol = getDateCol(metric.view_name, xField);
       try {
-        const agg = await fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths);
+        const agg = await fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule);
         rawDatasets.push({ label, ...agg });
         queryDetails.push({ metricName: label, metricId: metric.id, sql: agg.sql, dateColumn: dateCol, labels: agg.labels, data: agg.data });
       } catch (e) {

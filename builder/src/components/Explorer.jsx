@@ -20,6 +20,7 @@ import {
   applyLastNMonths,
   buildEChartsOption,
 } from '../lib/chartUtils';
+import { getMonthIndices, formatMonthLabels, sliceSeries, computeGrowthSeries } from '../lib/yoyUtils';
 import schemaCache from '../lib/schemaCache';
 import { evaluateFormula } from '../lib/sanitize';
 
@@ -116,6 +117,10 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
       if (echartsType === 'yoy') {
         const yoyDatasets = [];
         const yoyDetails = [];
+        const monthIndices = getMonthIndices(dataConfig.yoyMonths);
+        const monthLabels = formatMonthLabels(monthIndices);
+        const yoyMode = dataConfig.yoyMode || 'value';
+        let valueFormat = null;
         for (let i = 0; i < result.metrics.length; i++) {
           const metric = result.metrics[i];
           if (!metric.view_name) continue;
@@ -123,17 +128,31 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           const viewSchema = schemaCache[metric.view_name] || [];
           const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
           try {
-            const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter);
-            for (const year of yoyResult.years) {
-              const lbl = result.metrics.length === 1 ? year : `${metric.name} ${year}`;
-              yoyDatasets.push({ label: lbl, data: yoyResult.seriesMap[year] });
+            const yoyResult = await fetchYoYData(metric.view_name, dateCol, yField, channelFilter, dataConfig.yearFilter);
+            if (yoyMode === 'growth_pct') {
+              const growth = computeGrowthSeries(yoyResult.seriesMap, yoyResult.years, monthIndices);
+              if (growth) {
+                const lbl = result.metrics.length === 1
+                  ? `${growth.latest} vs ${growth.prior}`
+                  : `${metric.name} ${growth.latest} vs ${growth.prior}`;
+                yoyDatasets.push({ label: lbl, data: growth.data });
+                valueFormat = 'percent';
+              }
+            } else {
+              for (const year of yoyResult.years) {
+                const lbl = result.metrics.length === 1 ? year : `${metric.name} ${year}`;
+                yoyDatasets.push({ label: lbl, data: sliceSeries(yoyResult.seriesMap[year], monthIndices) });
+              }
             }
-            yoyDetails.push({ metricName: metric.name, metricId: metric.id, sql: yoyResult.sql, dateColumn: dateCol, labels: yoyResult.months, data: [] });
+            yoyDetails.push({ metricName: metric.name, metricId: metric.id, sql: yoyResult.sql, dateColumn: dateCol, labels: monthLabels, data: [] });
           } catch { /* skip */ }
         }
         if (yoyDatasets.length > 0) {
-          const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-          const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
+          const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, {
+            showLabels: result.showLabels,
+            colors: result.colors,
+            valueFormat,
+          });
           setChartOption(option);
           setQueryDetails(yoyDetails);
           setSelectedMetric(result.metrics[0]);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption } from '../../src/lib/chartUtils.js';
+import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption, applyStyleRulesToDatasets } from '../../src/lib/chartUtils.js';
 
 describe('toBucketKey', () => {
   it('truncates to month', () => {
@@ -549,8 +549,8 @@ describe('buildEChartsOption — custom colors', () => {
     const labels = ['Jan'];
     const datasets = [{ label: 'A', data: [1] }];
     const opt = buildEChartsOption('bar', labels, datasets, {}, {});
-    // Default palette: first color is #34d399
-    expect(opt.series[0].itemStyle.color).toBe('#34d399');
+    // Default palette: first color is #059669 (light mode)
+    expect(opt.series[0].itemStyle.color).toBe('#059669');
   });
 });
 
@@ -574,5 +574,26 @@ describe('buildEChartsOption — edge cases', () => {
     const datasets = [{ label: 'A', data: [1, 2, 3] }];
     const opt = buildEChartsOption('bar', labels, datasets, {});
     expect(opt.xAxis.axisLabel.rotate).toBe(0);
+  });
+});
+
+describe('applyStyleRulesToDatasets', () => {
+  it('applies color when target is less than compare series', () => {
+    const datasets = [
+      { label: 'Trajectory', data: [5, 10] },
+      { label: 'Forecast', data: [6, 8] },
+    ];
+    const rules = [{ target: 'Trajectory', compareTo: 'Forecast', operator: '<', color: '#ff0000' }];
+    const result = applyStyleRulesToDatasets(datasets, rules);
+    expect(result[0].pointStyles[0]).toEqual({ color: '#ff0000' });
+    expect(result[0].pointStyles[1]).toBeUndefined();
+  });
+
+  it('supports threshold rules', () => {
+    const datasets = [{ label: 'Trajectory', data: [50, 120] }];
+    const rules = [{ target: 'Trajectory', threshold: 100, operator: '<', color: '#f87171' }];
+    const result = applyStyleRulesToDatasets(datasets, rules);
+    expect(result[0].pointStyles[0]).toEqual({ color: '#f87171' });
+    expect(result[0].pointStyles[1]).toBeUndefined();
   });
 });
