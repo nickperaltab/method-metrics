@@ -81,6 +81,26 @@ const styles = {
   },
   chartBody: { flex: 1, minHeight: 0 },
   empty: { color: '#6b7280', fontSize: 13, padding: 60, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
+  emptyCanvas: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    minHeight: 'calc(100vh - 180px)', textAlign: 'center', padding: '0 40px',
+  },
+  emptyCanvasText: {
+    fontSize: 15, color: '#6b7280', maxWidth: 480, lineHeight: 1.7, marginBottom: 32,
+  },
+  emptyCanvasActions: {
+    display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center',
+  },
+  emptyBtn: {
+    background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151',
+    padding: '10px 24px', borderRadius: 6, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+  },
+  emptyBtnPrimary: {
+    background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '10px 24px', borderRadius: 6, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
+  },
   modal: {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
     background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -510,8 +530,20 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       {error && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
       {gridLayout.length === 0 ? (
-        <div style={styles.empty}>
-          This dashboard is empty. Click "+ Add Chart" to add charts.
+        <div style={styles.emptyCanvas}>
+          <div style={styles.emptyCanvasText}>
+            This is your blank canvas to add charts. Once you add charts, you can drag them around, increase or decrease the size and make it your own.
+          </div>
+          {isMine && (
+            <div style={styles.emptyCanvasActions}>
+              <button style={styles.emptyBtn} onClick={() => setShowAddModal(true)}>
+                Add Existing Charts
+              </button>
+              <button style={styles.emptyBtnPrimary} onClick={() => setShowChatModal(true)}>
+                Create a New Chart from Scratch
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <GridLayout
