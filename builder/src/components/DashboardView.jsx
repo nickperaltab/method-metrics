@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
-import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds } from '../lib/supabase';
+import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
@@ -14,6 +14,9 @@ import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import { evaluateFormula } from '../lib/sanitize';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
+import Dialog from './Dialog';
+import { useUser } from '../contexts/UserContext';
+import { isAdmin, canDelete } from '../lib/permissions';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1400, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
@@ -38,6 +41,25 @@ const styles = {
   },
   btnActive: {
     background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+  },
+  btnDelete: {
+    background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+    padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
+  },
+  btnDanger: {
+    background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+    padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+  },
+  starBtn: {
+    background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
+    padding: '0 4px', lineHeight: 1,
+  },
+  approvedBadge: {
+    display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+    fontFamily: "'JetBrains Mono', monospace",
   },
   gridItem: {
     background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 8,
@@ -81,6 +103,7 @@ const COLS = 12;
 export default function DashboardView({ userEmail, userAvatar, metrics = [], bqConnected }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useUser();
   const containerRef = useRef(null);
   const [dashboard, setDashboard] = useState(null);
   const [charts, setCharts] = useState([]);
@@ -97,6 +120,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [isStarred, setIsStarred] = useState(false);
+  const [dialog, setDialog] = useState(null);
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -136,6 +161,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         // Also load user's charts for the Add modal
         const userCharts = userEmail ? await loadCharts(userEmail) : [];
         setCharts(userCharts);
+
+        // Load star state for this dashboard
+        if (currentUser) {
+          const stars = await fetchStars(currentUser.id).catch(() => []);
+          setIsStarred(stars.includes(dbVal.id));
+        }
 
         // Build chart lookup map from dashboard charts
         const map = {};
@@ -361,6 +392,54 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     setRefreshKey(prev => prev + 1);
   }, []);
 
+  const handleStar = useCallback(async () => {
+    if (!currentUser || !dashboard) return;
+    try {
+      if (isStarred) {
+        await unstarDashboard(dashboard.id, currentUser.id);
+        setIsStarred(false);
+      } else {
+        await starDashboard(dashboard.id, currentUser.id);
+        setIsStarred(true);
+      }
+      window.dispatchEvent(new Event('stars-changed'));
+    } catch (e) {
+      console.error('Star toggle failed:', e);
+    }
+  }, [currentUser, dashboard, isStarred]);
+
+  const handleDelete = useCallback(() => {
+    if (!dashboard) return;
+    setDialog({
+      type: 'confirm',
+      title: `Delete "${dashboard.name}"?`,
+      message: 'This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await deleteDashboard(dashboard.id);
+          window.dispatchEvent(new Event('stars-changed'));
+          navigate('/dashboards');
+        } catch (e) {
+          setError(`Delete failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
+  }, [dashboard, navigate]);
+
+  const handleToggleApproval = useCallback(async () => {
+    if (!dashboard) return;
+    try {
+      await setApproved('dashboards', dashboard.id, !dashboard.is_approved);
+      setDashboard(prev => ({ ...prev, is_approved: !prev.is_approved }));
+    } catch (e) {
+      setError(`Update failed: ${e.message}`);
+    }
+  }, [dashboard]);
+
   if (loading) {
     return <div style={styles.layout}><div style={styles.empty}>Loading dashboard...</div></div>;
   }
@@ -378,29 +457,55 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
   const availableCharts = charts.filter(c => !gridLayout.some(item => item.i === String(c.id)));
 
+  const isMine = canDelete(currentUser, dashboard);
+  const admin = isAdmin(currentUser);
+
   return (
     <div style={styles.layout} ref={containerRef}>
+      {dialog && <Dialog {...dialog} />}
       <div style={styles.header}>
         <div style={styles.titleRow}>
           <button style={styles.backBtn} onClick={() => navigate('/dashboards')}>&#8592;</button>
           <span style={styles.title}>{dashboard?.name || 'Dashboard'}</span>
+          {dashboard?.is_approved && (
+            <span style={styles.approvedBadge}>Method Approved</span>
+          )}
+          <button
+            style={{ ...styles.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
+            onClick={handleStar}
+            title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            {isStarred ? '\u2605' : '\u2606'}
+          </button>
         </div>
         <div style={styles.actions}>
+          {isMine && admin && (
+            <button
+              style={dashboard?.is_approved ? styles.btnDanger : styles.btnSecondary}
+              onClick={handleToggleApproval}
+            >
+              {dashboard?.is_approved ? 'Remove Approval' : 'Mark Approved'}
+            </button>
+          )}
+          {isMine && (
+            <button style={styles.btnDelete} onClick={handleDelete}>Delete</button>
+          )}
           {editMode && (
             <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
           )}
-          <button
-            style={editMode ? { ...styles.btnSecondary, ...styles.btnActive } : styles.btnSecondary}
-            onClick={() => {
-              if (editMode) {
-                // Save layout on exit
-                updateDashboard(id, { layout: gridLayout }).catch(() => {});
-              }
-              setEditMode(!editMode);
-            }}
-          >
-            {editMode ? 'Done Editing' : 'Edit'}
-          </button>
+          {isMine && (
+            <button
+              style={editMode ? { ...styles.btnSecondary, ...styles.btnActive } : styles.btnSecondary}
+              onClick={() => {
+                if (editMode) {
+                  updateDashboard(id, { layout: gridLayout }).catch(() => {});
+                }
+                setEditMode(!editMode);
+              }}
+            >
+              {editMode ? 'Done Editing' : 'Edit'}
+            </button>
+          )}
         </div>
       </div>
 
