@@ -10,8 +10,14 @@ CREATE TABLE IF NOT EXISTS users (
 -- Enable RLS (but allow anon read/write for now — no auth yet)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read" ON users FOR SELECT USING (true);
-CREATE POLICY "Allow public insert" ON users FOR INSERT WITH CHECK (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Allow public read') THEN
+    CREATE POLICY "Allow public read" ON users FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'Allow public insert') THEN
+    CREATE POLICY "Allow public insert" ON users FOR INSERT WITH CHECK (true);
+  END IF;
+END $$;
 
 -- Seed initial users
 INSERT INTO users (name, email, role) VALUES
