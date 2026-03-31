@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
@@ -17,23 +17,29 @@ export default function Sidebar({ collapsed, onToggle }) {
   const [dashboards, setDashboards] = useState([]);
   const [stars, setStars] = useState([]);
 
-  useEffect(() => {
-    if (currentUser) {
-      // Load user's own dashboards + approved dashboards for sidebar
-      Promise.all([
-        fetchMyDashboards(currentUser.id),
-        fetchApprovedDashboardsList(),
-      ]).then(([mine, approved]) => {
-        // Merge and deduplicate (an approved dashboard might also be mine)
-        const all = [...mine];
-        for (const d of approved) {
-          if (!all.some(x => x.id === d.id)) all.push(d);
-        }
-        setDashboards(all);
-      }).catch(() => {});
-      fetchStars(currentUser.id).then(setStars).catch(() => {});
-    }
+  const loadData = useCallback(() => {
+    if (!currentUser) return;
+    Promise.all([
+      fetchMyDashboards(currentUser.id),
+      fetchApprovedDashboardsList(),
+    ]).then(([mine, approved]) => {
+      const all = [...mine];
+      for (const d of approved) {
+        if (!all.some(x => x.id === d.id)) all.push(d);
+      }
+      setDashboards(all);
+    }).catch(() => {});
+    fetchStars(currentUser.id).then(setStars).catch(() => {});
   }, [currentUser]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Refresh when stars change elsewhere in the app
+  useEffect(() => {
+    const handler = () => loadData();
+    window.addEventListener('stars-changed', handler);
+    return () => window.removeEventListener('stars-changed', handler);
+  }, [loadData]);
 
   const linkStyle = ({ isActive }) => ({
     display: 'flex',

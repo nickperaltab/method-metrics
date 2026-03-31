@@ -82,6 +82,7 @@ export default function DashboardList({ userEmail }) {
         await starDashboard(dashboardId, currentUser.id);
         setStars(prev => [...prev, dashboardId]);
       }
+      window.dispatchEvent(new Event('stars-changed'));
     } catch (e) {
       console.error('Star toggle failed:', e);
     }
