@@ -1,43 +1,56 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import TopBar from './components/TopBar';
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
 import Explorer from './components/Explorer';
 import DashboardList from './components/DashboardList';
 import DashboardView from './components/DashboardView';
 import ChatExplorer from './components/ChatExplorer';
+import Home from './pages/Home';
+import Charts from './pages/Charts';
+import Registry from './pages/Registry';
+import Dimensions from './pages/Dimensions';
+import ApprovedDashboards from './pages/ApprovedDashboards';
+import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
+
+const Loading = () => (
+  <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
+);
 
 export default function App() {
   const { metrics, loading: metricsLoading } = useMetrics();
   const { connected, userEmail, userAvatar, connect } = useBqAuth();
 
   return (
-    <HashRouter>
-      <div style={{ background: '#06080a', color: '#c8cdd3', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
-        <TopBar connected={connected} userEmail={userEmail} onConnect={connect} />
-        <Routes>
-          <Route path="/" element={<Navigate to="/chat" replace />} />
-          <Route
-            path="/explorer"
-            element={
-              metricsLoading
-                ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-                : <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
-            }
-          />
-          <Route
-            path="/chat"
-            element={
-              metricsLoading
-                ? <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
-                : <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
-            }
-          />
-          <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
-          <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
-        </Routes>
-      </div>
-    </HashRouter>
+    <UserProvider>
+      <HashRouter>
+        <Layout bqConnected={connected} userEmail={userEmail} onConnect={connect}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route
+              path="/chat"
+              element={
+                metricsLoading ? <Loading /> :
+                <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+              }
+            />
+            <Route
+              path="/explorer"
+              element={
+                metricsLoading ? <Loading /> :
+                <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+              }
+            />
+            <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
+            <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
+            <Route path="/charts" element={<Charts />} />
+            <Route path="/approved" element={<ApprovedDashboards />} />
+            <Route path="/admin/registry" element={<Registry />} />
+            <Route path="/admin/dimensions" element={<Dimensions />} />
+          </Routes>
+        </Layout>
+      </HashRouter>
+    </UserProvider>
   );
 }

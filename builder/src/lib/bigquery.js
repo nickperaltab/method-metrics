@@ -206,8 +206,9 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
     aggCache[cacheKey] = output;
     return output;
   }
-  // Otherwise use the standard aggregation query
-  return fetchAggregatedData(metric.view_name, dateCol, yField, timeBucket, channelFilter, lastNMonths);
+  // No chart_sql — metric must have verified SQL to be chartable
+  console.warn(`Metric ${metric.id} (${metric.name}) has no chart_sql — cannot chart without verified query`);
+  return { labels: [], data: [], sql: null, error: 'No verified query for this metric' };
 }
 
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {

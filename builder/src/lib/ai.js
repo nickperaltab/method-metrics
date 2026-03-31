@@ -2,17 +2,28 @@ import { invokeAiChart } from './supabase';
 
 const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy']);
 
-// Validate AI-returned column names against actual schema. Fixes hallucinated columns.
-function validateColumns(dc, resolvedMetrics, schemaMap) {
+// Validate AI-returned column names against actual schema and approved dimensions.
+function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
   const primaryView = resolvedMetrics.find(m => m.view_name)?.view_name;
   if (!primaryView) return;
   const schema = schemaMap[primaryView] || [];
   const validCols = schema.map(f => f.name);
 
-  // Validate group_by_dimension
-  if (dc.group_by_dimension && !validCols.includes(dc.group_by_dimension)) {
-    const match = validCols.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
-    dc.group_by_dimension = match || null;
+  // Validate group_by_dimension — must be an approved dimension if we have them
+  if (dc.group_by_dimension) {
+    if (approvedDimensions && approvedDimensions.length > 0) {
+      const primaryMetric = resolvedMetrics[0];
+      const approved = approvedDimensions
+        .filter(d => d.metric_id === primaryMetric?.id)
+        .map(d => d.column_name);
+      if (approved.length > 0 && !approved.includes(dc.group_by_dimension)) {
+        const match = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
+        dc.group_by_dimension = match || null;
+      }
+    } else if (!validCols.includes(dc.group_by_dimension)) {
+      const match = validCols.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
+      dc.group_by_dimension = match || null;
+    }
   }
 
   // Validate x_field — fall back to first DATE column if invalid
@@ -81,16 +92,23 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
   };
 }
 
-export function buildMetricContext(metrics) {
+export function buildMetricContext(metrics, approvedDimensions) {
   const chartable = metrics.filter(m =>
-    ['primitive', 'foundational', 'derived'].includes(m.metric_type)
+    ['primitive', 'derived'].includes(m.metric_type)
     && m.status === 'live'
   );
   return chartable.map(m => {
     let line = `- id:${m.id} name:"${m.name}" type:${m.metric_type} view:${m.view_name || 'none'}`;
     if (m.formula) line += ` formula:${m.formula}`;
     if (m.depends_on) line += ` depends_on:[${m.depends_on.join(',')}]`;
-    if (m.dimensions) line += ` dimensions:${JSON.stringify(m.dimensions)}`;
+    if (m.supported_grains) line += ` grains:[${m.supported_grains.join(',')}]`;
+    // Only include approved dimensions, not raw schema columns
+    if (approvedDimensions) {
+      const dims = approvedDimensions.filter(d => d.metric_id === m.id);
+      if (dims.length > 0) {
+        line += ` dimensions:[${dims.map(d => d.column_name).join(',')}]`;
+      }
+    }
     return line;
   }).join('\n');
 }
