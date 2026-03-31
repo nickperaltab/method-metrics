@@ -220,14 +220,14 @@ export default function Home() {
       <div style={s.subtitle}>Single source of truth for Method's revenue and marketing metrics.</div>
 
       <div style={s.section}>
-        <div style={s.sectionTitle}>{'\u2605'} Favorites</div>
+        <div style={s.sectionTitle}>{'\u2605'} Favorite Dashboards</div>
         {starredDashboards.length > 0 ? renderTable(starredDashboards) : (
           <div style={s.empty}>Star a dashboard to see it here.</div>
         )}
       </div>
 
       <div style={s.section}>
-        <div style={s.sectionTitle}>Recently Viewed</div>
+        <div style={s.sectionTitle}>Recently Viewed Dashboards</div>
         {recentDashboards.length > 0 ? renderTable(recentDashboards) : (
           <div style={s.empty}>Dashboards you open will appear here.</div>
         )}
