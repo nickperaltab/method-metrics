@@ -142,19 +142,16 @@ export default function Sidebar({ collapsed, onToggle }) {
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
           {/* My Dashboards */}
-          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
+          <NavLink to="/dashboards" end style={linkStyle}>
+            <span style={{ fontSize: 16 }}>{'\u25A0'}</span>
             My Dashboards
-          </div>
+          </NavLink>
           {dashboards.slice(0, 8).map(d => (
             <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle}>
               <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
             </NavLink>
           ))}
-          <NavLink to="/dashboards" end style={linkStyle}>
-            <span style={{ fontSize: 12 }}>+</span>
-            All Dashboards
-          </NavLink>
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
