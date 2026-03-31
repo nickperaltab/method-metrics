@@ -59,7 +59,7 @@ export async function fetchAllApprovedDimensions() {
   return res.json();
 }
 
-export async function saveChart({ name, createdBy, createdByAvatar, metricIds, gwSpec }) {
+export async function saveChart({ name, createdBy, createdByAvatar, createdByUser, metricIds, gwSpec }) {
   const body = {
     name,
     created_by: createdBy,
@@ -67,6 +67,7 @@ export async function saveChart({ name, createdBy, createdByAvatar, metricIds, g
     gw_spec: gwSpec,
   };
   if (createdByAvatar) body.created_by_avatar = createdByAvatar;
+  if (createdByUser) body.created_by_user = createdByUser;
   const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/saved_charts`, {
     method: 'POST',
     headers: { ...headers, Prefer: 'return=representation' },
@@ -127,11 +128,13 @@ export async function fetchDashboard(id) {
   return data[0] || null;
 }
 
-export async function createDashboard({ name, createdBy, layout }) {
+export async function createDashboard({ name, createdBy, createdByUser, layout }) {
+  const body = { name, created_by: createdBy, layout: layout || [] };
+  if (createdByUser) body.created_by_user = createdByUser;
   const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/dashboards`, {
     method: 'POST',
     headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify({ name, created_by: createdBy, layout: layout || [] }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Create dashboard failed: ${res.status}`);
   return res.json();
@@ -209,6 +212,91 @@ export async function loadChartsByIds(ids) {
 }
 
 // Dashboard stars
+// Ownership-aware queries
+export async function fetchMyDashboards(userId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?created_by_user=eq.${userId}&order=name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load dashboards (${res.status})`);
+  return res.json();
+}
+
+export async function fetchApprovedDashboardsList() {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?is_approved=eq.true&order=name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load approved dashboards (${res.status})`);
+  return res.json();
+}
+
+export async function fetchMyCharts(userId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/saved_charts?created_by_user=eq.${userId}&order=updated_at.desc.nullsfirst,created_at.desc`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load charts (${res.status})`);
+  return res.json();
+}
+
+export async function fetchApprovedCharts() {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/saved_charts?is_approved=eq.true&order=name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load approved charts (${res.status})`);
+  return res.json();
+}
+
+export async function fetchAllCharts() {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/saved_charts?select=*&order=updated_at.desc.nullsfirst,created_at.desc`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load charts (${res.status})`);
+  return res.json();
+}
+
+export async function deleteChart(id) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${id}`,
+    { method: 'DELETE', headers }
+  );
+  if (!res.ok) throw new Error(`Delete chart failed: ${res.status}`);
+}
+
+export async function deleteDashboard(id) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${id}`,
+    { method: 'DELETE', headers }
+  );
+  if (!res.ok) throw new Error(`Delete dashboard failed: ${res.status}`);
+}
+
+export async function setApproved(table, id, approved) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,
+    {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ is_approved: approved }),
+    }
+  );
+  if (!res.ok) throw new Error(`Set approved failed: ${res.status}`);
+}
+
+export function computeChartUsageCounts(dashboards) {
+  const counts = {};
+  for (const db of dashboards) {
+    for (const item of (db.layout || [])) {
+      const chartId = String(item.i);
+      counts[chartId] = (counts[chartId] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
 export async function fetchStars(userId) {
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/dashboard_stars?user_id=eq.${userId}&select=dashboard_id`,
