@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
-import { fetchDashboards, fetchStars, fetchRecentViews } from '../lib/supabase';
+import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars, fetchRecentViews } from '../lib/supabase';
 
 const styles = {
   layout: { padding: '32px 24px', maxWidth: 1200, margin: '0 auto' },
@@ -31,12 +31,20 @@ export default function Home() {
     async function load() {
       setLoading(true);
       try {
-        const [dbs, starIds, views] = await Promise.allSettled([
-          fetchDashboards(),
+        const [dbs, approvedDbs, starIds, views] = await Promise.allSettled([
+          currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
+          fetchApprovedDashboardsList(),
           currentUser ? fetchStars(currentUser.id) : Promise.resolve([]),
           currentUser ? fetchRecentViews(currentUser.id, 10) : Promise.resolve([]),
         ]);
-        setDashboards(dbs.status === 'fulfilled' ? dbs.value : []);
+        const mine = dbs.status === 'fulfilled' ? dbs.value : [];
+        const approved = approvedDbs.status === 'fulfilled' ? approvedDbs.value : [];
+        // Merge and deduplicate
+        const all = [...mine];
+        for (const d of approved) {
+          if (!all.some(x => x.id === d.id)) all.push(d);
+        }
+        setDashboards(all);
         setStars(starIds.status === 'fulfilled' ? starIds.value : []);
         // Deduplicate recent views, keeping most recent per dashboard
         const viewData = views.status === 'fulfilled' ? views.value : [];
