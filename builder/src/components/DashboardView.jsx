@@ -169,6 +169,7 @@ const styles = {
 
 const ROW_HEIGHT = 80;
 const COLS = 12;
+const TYPE_LABELS = { line: 'line chart', bar: 'bar chart', stacked_bar: 'stacked bar chart', pie: 'pie chart', kpi: 'kpi', yoy: 'year over year', table: 'table', area: 'area chart', combo: 'combo chart', funnel: 'funnel', heatmap: 'heatmap', horizontal_bar: 'horizontal bar chart' };
 
 export default function DashboardView({ userEmail, userAvatar, metrics = [], bqConnected }) {
   const { id } = useParams();
@@ -700,7 +701,10 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           if (modalMetricFilter && !(c.metric_ids || []).includes(modalMetricFilter)) return false;
           if (!modalSearch) return true;
           const q = modalSearch.toLowerCase();
+          const chartTypeLabel = TYPE_LABELS[c.gw_spec?.echartsType] || '';
           return c.name?.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q) ||
+            chartTypeLabel.includes(q) ||
             (c.metric_ids || []).some(mid => {
               const m = metrics.find(x => x.id === mid);
               return m?.name?.toLowerCase().includes(q);
