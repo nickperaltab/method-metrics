@@ -22,6 +22,12 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
   }
 }
 
+export async function fetchUsers() {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/users?select=*&order=name`, { headers });
+  if (!res.ok) throw new Error(`Failed to load users (${res.status})`);
+  return res.json();
+}
+
 export async function fetchMetrics() {
   const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/metrics?select=*&order=id`, { headers });
   if (!res.ok) throw new Error(`Failed to load metrics (${res.status})`);
