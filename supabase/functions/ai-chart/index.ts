@@ -19,7 +19,9 @@ Return ONLY valid JSON in this exact format:
     "last_n_months": <integer or null>,
     "channel_filter": "<channel_name or null>",
     "group_by_dimension": "<column_name or null>",
-    "labels": ["<display label for each y_field>", ...]
+    "labels": ["<display label for each y_field>", ...],
+    "style_rules": [{"target": "<series label>", "operator": "<|<=|>|>=|==|!=", "threshold": <number>, "color": "#hex"}] or null,
+    "end_date_rule": "<end date filter or null>"
   },
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
@@ -52,6 +54,7 @@ Rules:
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 - colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
+- style_rules: optional array of conditional color rules. Use when user asks for conditional formatting like "highlight months below 100 in red", "color bars above target green", "show red when trials drop below syncs". Each rule: { "target": "<series label from labels array>", "operator": "<" | "<=" | ">" | ">=" | "==" | "!=", "threshold": <number>, "color": "#hex" }. You can also compare two series: { "target": "<series A>", "compare_to": "<series B>", "operator": "<", "color": "#hex" } — this colors points in A where A < B. Default: null.
 
 IMPORTANT — Attribution channels:
 - Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.

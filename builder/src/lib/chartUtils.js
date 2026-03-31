@@ -257,6 +257,7 @@ export function applyStyleRulesToDatasets(datasets, styleRules) {
       const operator = rule.operator || '<';
       const color = rule.color || '#f87171';
       for (let i = 0; i < ds.data.length; i++) {
+        if (ds.data[i] == null) continue;
         const comparison = compareData ? compareData[i] : threshold;
         if (comparison == null) continue;
         if (evaluateRule(ds.data[i], comparison, operator)) {
@@ -451,8 +452,8 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   if (echartsType === 'pie') {
     const pieData = labels.map((l, i) => ({
       name: formatDateLabel(l),
-      value: dsList[0]?.data[i] || 0,
-    }));
+      value: dsList[0]?.data[i] ?? 0,
+    })).filter(d => d.value > 0);
     return {
       tooltip: { ...baseTooltip, trigger: 'item' },
       legend: { ...baseLegend, show: true, type: 'scroll', bottom: 0 },
@@ -471,7 +472,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   if (echartsType === 'funnel') {
     const funnelData = dsList.map((ds, i) => ({
       name: ds.label,
-      value: ds.data.reduce((a, b) => a + b, 0),
+      value: ds.data.reduce((a, b) => a + (b ?? 0), 0),
     }));
     return {
       tooltip: { ...baseTooltip, trigger: 'item' },
@@ -558,7 +559,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     const heatData = [];
     dsList.forEach((ds, yi) => {
       ds.data.forEach((val, xi) => {
-        heatData.push([xi, yi, val || 0]);
+        heatData.push([xi, yi, val ?? 0]);
       });
     });
     const maxVal = Math.max(...heatData.map(d => d[2]), 1);

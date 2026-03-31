@@ -102,7 +102,7 @@ export async function fetchChartDatasets({
   const alignedDatasets = rawDatasets.map(ds => {
     const map = {};
     ds.labels.forEach((l, idx) => { map[l] = ds.data[idx]; });
-    return { label: ds.label, data: allLabels.map(l => map[l] || 0) };
+    return { label: ds.label, data: allLabels.map(l => map[l] ?? null) };
   });
 
   // Apply lastNMonths for derived metrics only
