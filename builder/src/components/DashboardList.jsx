@@ -174,17 +174,19 @@ export default function DashboardList({ userEmail }) {
                   </button>
                 </td>
                 <td style={{ ...s.td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                  {isMine && (
-                    <button style={{ ...s.actionBtn, color: '#dc2626' }} onClick={e => handleDelete(e, db)}>delete</button>
-                  )}
-                  {isMine && admin && (
-                    <button
-                      style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669' }}
-                      onClick={e => handleToggleApproval(e, db)}
-                    >
-                      {db.is_approved ? 'remove approval' : 'mark approved'}
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    {isMine && (
+                      <button style={{ ...s.actionBtn, color: '#dc2626' }} onClick={e => handleDelete(e, db)}>delete</button>
+                    )}
+                    {isMine && admin && (
+                      <button
+                        style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669' }}
+                        onClick={e => handleToggleApproval(e, db)}
+                      >
+                        {db.is_approved ? 'remove approval' : 'mark approved'}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
