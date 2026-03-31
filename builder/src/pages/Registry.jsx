@@ -99,8 +99,8 @@ export default function Registry() {
           <p style={s.subtitle}>All metrics in the system. Live metrics are verified and available in the chart builder.</p>
         </div>
         <div style={s.stats}>
-          <div style={s.stat}><span style={{ ...s.statVal, color: '#34d399' }}>{counts.livePrim}</span><span style={s.statLabel}>Live Primitives</span></div>
-          <div style={s.stat}><span style={{ ...s.statVal, color: '#60a5fa' }}>{counts.liveDerived}</span><span style={s.statLabel}>Live Derived</span></div>
+          <div style={s.stat}><span style={{ ...s.statVal, color: '#059669' }}>{counts.livePrim}</span><span style={s.statLabel}>Live Primitives</span></div>
+          <div style={s.stat}><span style={{ ...s.statVal, color: '#2563eb' }}>{counts.liveDerived}</span><span style={s.statLabel}>Live Derived</span></div>
           <div style={s.stat}><span style={s.statVal}>{counts.queued}</span><span style={s.statLabel}>Queued</span></div>
         </div>
       </div>
@@ -144,8 +144,8 @@ export default function Registry() {
           </thead>
           <tbody>
             {[
-              { items: primitives, label: 'Primitives', color: '#34d399' },
-              { items: derived, label: 'Derived', color: '#60a5fa' },
+              { items: primitives, label: 'Primitives', color: '#059669' },
+              { items: derived, label: 'Derived', color: '#2563eb' },
             ].map(group => group.items.length > 0 && (
               <React.Fragment key={group.label}>
                 <tr><td colSpan={tab === 'queued' ? 7 : 5} style={s.groupRow}>
@@ -155,16 +155,16 @@ export default function Registry() {
                 {group.items.map(m => (
                   <React.Fragment key={m.id}>
                     <tr
-                      style={{ ...s.row, background: expandedId === m.id ? '#0f1318' : 'transparent' }}
+                      style={{ ...s.row, background: expandedId === m.id ? '#f1f3f5' : 'transparent' }}
                       onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
                     >
                       <td style={s.td} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleSelect(m.id)} />
                       </td>
-                      <td style={{ ...s.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5a6370' }}>{m.id}</td>
-                      <td style={{ ...s.td, fontWeight: 600, color: '#edf0f3' }}>{m.name}</td>
+                      <td style={{ ...s.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6b7280' }}>{m.id}</td>
+                      <td style={{ ...s.td, fontWeight: 600, color: '#1a1a1a' }}>{m.name}</td>
                       <td style={s.td}>
-                        <span style={{ fontSize: 11, color: m.metric_type === 'derived' ? '#60a5fa' : '#34d399' }}>
+                        <span style={{ fontSize: 11, color: m.metric_type === 'derived' ? '#2563eb' : '#059669' }}>
                           {(m.metric_type || 'primitive').charAt(0).toUpperCase() + (m.metric_type || 'primitive').slice(1)}
                         </span>
                       </td>
@@ -232,7 +232,7 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField }) {
       {m.view_name && (
         <div style={s.panelSection}>
           <div style={s.panelLabel}>BQ View</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#34d399' }}>revenue.{m.view_name}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#059669' }}>revenue.{m.view_name}</div>
         </div>
       )}
 
@@ -276,14 +276,14 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField }) {
         )}
         {m.status !== 'live' && (
           <button
-            style={{ ...s.actionBtn, borderColor: '#34d399', color: '#34d399' }}
+            style={{ ...s.actionBtn, borderColor: '#059669', color: '#059669' }}
             onClick={async () => { await onSaveField(m.id, 'status', 'live'); await onUpdate(); }}
           >
             Move to Live
           </button>
         )}
         <button
-          style={{ ...s.actionBtn, borderColor: '#f87171', color: '#f87171', marginLeft: 'auto' }}
+          style={{ ...s.actionBtn, borderColor: '#dc2626', color: '#dc2626', marginLeft: 'auto' }}
           onClick={async () => {
             if (!window.confirm(`Delete "${m.name}"?`)) return;
             await deleteMetrics([m.id]);
@@ -300,34 +300,34 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField }) {
 const s = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 16 },
-  title: { fontSize: 20, fontWeight: 700, color: '#edf0f3', margin: 0 },
-  subtitle: { color: '#5a6370', fontSize: 13, marginTop: 4 },
+  title: { fontSize: 20, fontWeight: 700, color: '#1a1a1a', margin: 0 },
+  subtitle: { color: '#6b7280', fontSize: 13, marginTop: 4 },
   stats: { display: 'flex', gap: 16 },
   stat: { textAlign: 'center' },
-  statVal: { display: 'block', fontSize: 20, fontWeight: 700, color: '#c8cdd3' },
-  statLabel: { fontSize: 10, color: '#5a6370', textTransform: 'uppercase', letterSpacing: '.05em' },
+  statVal: { display: 'block', fontSize: 20, fontWeight: 700, color: '#374151' },
+  statLabel: { fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em' },
   controls: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
   tabs: { display: 'flex', gap: 0 },
-  tab: { background: '#0c0f12', border: '1px solid #1a1e24', color: '#5a6370', padding: '6px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" },
-  tabActive: { background: '#0a1f17', border: '1px solid #34d399', color: '#34d399', padding: '6px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" },
-  search: { background: '#0c0f12', border: '1px solid #1a1e24', color: '#c8cdd3', padding: '6px 12px', borderRadius: 4, fontSize: 12, fontFamily: "'DM Sans', sans-serif", flex: 1, maxWidth: 300 },
-  deleteBtn: { background: 'none', border: '1px solid #f87171', color: '#f87171', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
+  tab: { background: '#f8f9fa', border: '1px solid #e2e5e9', color: '#6b7280', padding: '6px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" },
+  tabActive: { background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', padding: '6px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" },
+  search: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151', padding: '6px 12px', borderRadius: 4, fontSize: 12, fontFamily: "'DM Sans', sans-serif", flex: 1, maxWidth: 300 },
+  deleteBtn: { background: 'none', border: '1px solid #dc2626', color: '#dc2626', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#5a6370', textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '1px solid #1a1e24', cursor: 'pointer', userSelect: 'none' },
-  td: { padding: '10px 12px', borderBottom: '1px solid #0f1318', fontSize: 13, color: '#c8cdd3' },
+  th: { textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '1px solid #e2e5e9', cursor: 'pointer', userSelect: 'none' },
+  td: { padding: '10px 12px', borderBottom: '1px solid #f1f3f5', fontSize: 13, color: '#374151' },
   row: { cursor: 'pointer', transition: 'background .1s' },
-  groupRow: { padding: '12px 12px 4px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #1a1e24' },
-  groupCount: { marginLeft: 8, fontSize: 11, color: '#5a6370', fontWeight: 400 },
-  inlineInput: { background: 'none', border: 'none', color: '#8b929a', fontSize: 12, width: '100%', padding: '2px 0', fontFamily: "'DM Sans', sans-serif" },
-  inlineSelect: { background: '#0c0f12', border: '1px solid #1a1e24', color: '#c8cdd3', fontSize: 11, padding: '2px 6px', borderRadius: 3 },
-  empty: { color: '#5a6370', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
-  panel: { padding: '16px 24px', background: '#0a0d10', borderBottom: '2px solid #1a1e24' },
+  groupRow: { padding: '12px 12px 4px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #e2e5e9' },
+  groupCount: { marginLeft: 8, fontSize: 11, color: '#6b7280', fontWeight: 400 },
+  inlineInput: { background: 'none', border: 'none', color: '#374151', fontSize: 12, width: '100%', padding: '2px 0', fontFamily: "'DM Sans', sans-serif" },
+  inlineSelect: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151', fontSize: 11, padding: '2px 6px', borderRadius: 3 },
+  empty: { color: '#6b7280', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
+  panel: { padding: '16px 24px', background: '#f8f9fa', borderBottom: '2px solid #e2e5e9' },
   panelSection: { marginBottom: 16 },
-  panelLabel: { fontSize: 10, fontWeight: 700, color: '#5a6370', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 },
-  sqlBlock: { background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 4, padding: 12, fontSize: 11, color: '#8b929a', fontFamily: "'JetBrains Mono', monospace", overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap', margin: 0 },
-  pill: { display: 'inline-block', background: '#0a1f17', border: '1px solid #1a3d2e', color: '#34d399', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", marginRight: 6 },
-  dim: { color: '#5a6370', fontSize: 12 },
-  textarea: { width: '100%', background: '#0c0f12', border: '1px solid #1a1e24', color: '#c8cdd3', padding: 10, borderRadius: 4, fontSize: 12, fontFamily: "'DM Sans', sans-serif", resize: 'vertical', minHeight: 60 },
-  actionBtn: { background: 'none', border: '1px solid #5a6370', color: '#5a6370', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
+  panelLabel: { fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 },
+  sqlBlock: { background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 4, padding: 12, fontSize: 11, color: '#374151', fontFamily: "'JetBrains Mono', monospace", overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap', margin: 0 },
+  pill: { display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", marginRight: 6 },
+  dim: { color: '#6b7280', fontSize: 12 },
+  textarea: { width: '100%', background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151', padding: 10, borderRadius: 4, fontSize: 12, fontFamily: "'DM Sans', sans-serif", resize: 'vertical', minHeight: 60 },
+  actionBtn: { background: 'none', border: '1px solid #9ca3af', color: '#6b7280', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
 };
