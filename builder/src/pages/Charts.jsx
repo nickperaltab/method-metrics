@@ -1,15 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loadCharts } from '../lib/supabase';
+import { SUPABASE_URL, SUPABASE_KEY, headers } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
-
-const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
-const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  'Content-Type': 'application/json',
-};
 
 export default function Charts() {
   const navigate = useNavigate();
@@ -19,13 +11,16 @@ export default function Charts() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [sortBy, setSortBy] = useState('updated');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
-        // Load all charts (not filtered by user — admin view)
         const res = await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?select=*&order=updated_at.desc.nullsfirst,created_at.desc`, { headers });
         if (res.ok) setCharts(await res.json());
+        else setError(`Failed to load charts (${res.status})`);
+      } catch (e) {
+        setError(e.message);
       } finally {
         setLoading(false);
       }
@@ -45,21 +40,31 @@ export default function Charts() {
 
   async function handleDelete(ids) {
     if (!window.confirm(`Delete ${ids.length} chart(s)?`)) return;
-    await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=in.(${ids.join(',')})`, { method: 'DELETE', headers });
-    setCharts(prev => prev.filter(c => !ids.includes(c.id)));
-    setSelected(new Set());
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=in.(${ids.map(Number).filter(Number.isFinite).join(',')})`, { method: 'DELETE', headers });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      setCharts(prev => prev.filter(c => !ids.includes(c.id)));
+      setSelected(new Set());
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   async function handleRename(id) {
     const chart = charts.find(c => c.id === id);
     const name = window.prompt('New name:', chart?.name);
     if (!name || name === chart?.name) return;
-    await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { ...headers, Prefer: 'return=minimal' },
-      body: JSON.stringify({ name }),
-    });
-    setCharts(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${Number(id)}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(`Rename failed (${res.status})`);
+      setCharts(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   if (loading) return <div style={s.layout}><div style={s.empty}>Loading...</div></div>;
@@ -72,6 +77,8 @@ export default function Charts() {
           <p style={s.subtitle}>{charts.length} chart{charts.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
+
+      {error && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       <div style={s.controls}>
         <input

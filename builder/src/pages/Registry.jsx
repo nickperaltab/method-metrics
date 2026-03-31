@@ -1,16 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchMetrics } from '../lib/supabase';
-
-const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
-const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  'Content-Type': 'application/json',
-};
+import { fetchMetrics, SUPABASE_URL, headers } from '../lib/supabase';
 
 async function updateMetric(id, updates) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${id}`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${Number(id)}`, {
     method: 'PATCH',
     headers: { ...headers, Prefer: 'return=minimal' },
     body: JSON.stringify(updates),
@@ -19,7 +11,9 @@ async function updateMetric(id, updates) {
 }
 
 async function deleteMetrics(ids) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=in.(${ids.join(',')})`, {
+  const safeIds = ids.map(Number).filter(Number.isFinite);
+  if (safeIds.length === 0) return;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=in.(${safeIds.join(',')})`, {
     method: 'DELETE',
     headers,
   });
