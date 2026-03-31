@@ -180,12 +180,12 @@ export default function DashboardList({ userEmail }) {
       <table style={s.table}>
         <thead>
           <tr>
+            <th style={{ ...s.th, width: 60, textAlign: 'center' }}></th>
             <th style={s.th}>Name</th>
             <th style={s.th}>Owner</th>
             <th style={{ ...s.th, width: 70, textAlign: 'center' }}>Charts</th>
             <th style={{ ...s.th, width: 120 }}>Last Modified</th>
             <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
-            <th style={{ ...s.th, width: 60, textAlign: 'center' }}></th>
             <th style={{ ...s.th, width: 70, textAlign: 'center' }}></th>
             <th style={{ ...s.th, width: 110, textAlign: 'center' }}></th>
           </tr>
@@ -197,6 +197,9 @@ export default function DashboardList({ userEmail }) {
 
             return (
               <tr key={db.id}>
+                <td style={{ ...s.td, textAlign: 'center' }}>
+                  <button style={{ ...s.actionBtn, color: '#059669', borderColor: '#a7f3d0' }} onClick={() => navigate(`/dashboards/${db.id}`)}>view</button>
+                </td>
                 <td style={s.td}>
                   <span
                     style={{ ...s.nameCell, cursor: isMine ? 'pointer' : 'default', textDecoration: isMine ? 'underline dotted #d1d5db' : 'none' }}
@@ -218,9 +221,6 @@ export default function DashboardList({ userEmail }) {
                   >
                     {isStarred ? '\u2605' : '\u2606'}
                   </button>
-                </td>
-                <td style={{ ...s.td, textAlign: 'center' }}>
-                  <button style={{ ...s.actionBtn, color: '#059669', borderColor: '#a7f3d0' }} onClick={() => navigate(`/dashboards/${db.id}`)}>view</button>
                 </td>
                 <td style={{ ...s.td, textAlign: 'center' }}>
                   {isMine && (
