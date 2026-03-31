@@ -38,6 +38,7 @@ export function connectBq(onSuccess) {
   google.accounts.oauth2.initTokenClient({
     client_id: BQ_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/userinfo.email',
+    hint: 'j.porter@method.me',
     callback: (r) => {
       if (r.access_token) {
         bqToken = r.access_token;
