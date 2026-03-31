@@ -40,8 +40,7 @@ export function connectBq(onSuccess) {
   google.accounts.oauth2.initTokenClient({
     client_id: BQ_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/userinfo.email',
-    hint: 'j.porter@method.me',
-    prompt: 'select_account',
+    prompt: '',
     callback: (r) => {
       if (r.access_token) {
         bqToken = r.access_token;
@@ -215,9 +214,8 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
     aggCache[cacheKey] = output;
     return output;
   }
-  // No chart_sql — metric must have verified SQL to be chartable
-  console.warn(`Metric ${metric.id} (${metric.name}) has no chart_sql — cannot chart without verified query`);
-  return { labels: [], data: [], sql: null, error: 'No verified query for this metric' };
+  // No chart_sql — fall back to standard aggregation query
+  return fetchAggregatedData(metric.view_name, dateCol, yField, timeBucket, channelFilter, lastNMonths);
 }
 
 export async function fetchAggregatedData(viewName, xField, yField, timeBucket, channelFilter, lastNMonths) {
