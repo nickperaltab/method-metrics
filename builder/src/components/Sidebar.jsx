@@ -136,7 +136,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                 {'\u2605'} Favorites
               </div>
               {dashboards.filter(d => stars.includes(d.id)).map(d => (
-                <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle}>
+                <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
                   <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                 </NavLink>
@@ -153,7 +153,7 @@ export default function Sidebar({ collapsed, onToggle }) {
             My Dashboards
           </NavLink>
           {dashboards.slice(0, 8).map(d => (
-            <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle}>
+            <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
               <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
             </NavLink>
