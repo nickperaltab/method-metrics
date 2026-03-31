@@ -208,6 +208,74 @@ export async function loadChartsByIds(ids) {
   return res.json();
 }
 
+// Dashboard stars
+export async function fetchStars(userId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboard_stars?user_id=eq.${userId}&select=dashboard_id`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load stars (${res.status})`);
+  const data = await res.json();
+  return data.map(s => s.dashboard_id);
+}
+
+export async function starDashboard(dashboardId, userId) {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/dashboard_stars`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=minimal' },
+    body: JSON.stringify({ dashboard_id: dashboardId, user_id: userId }),
+  });
+  if (!res.ok && res.status !== 409) throw new Error(`Star failed: ${res.status}`);
+}
+
+export async function unstarDashboard(dashboardId, userId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboard_stars?dashboard_id=eq.${dashboardId}&user_id=eq.${userId}`,
+    { method: 'DELETE', headers }
+  );
+  if (!res.ok) throw new Error(`Unstar failed: ${res.status}`);
+}
+
+// Dashboard folders
+export async function fetchFolders(userId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboard_folders?user_id=eq.${userId}&order=sort_order`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load folders (${res.status})`);
+  return res.json();
+}
+
+export async function createFolder(name, userId) {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/dashboard_folders`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ name, user_id: userId }),
+  });
+  if (!res.ok) throw new Error(`Create folder failed: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteFolder(id) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboard_folders?id=eq.${id}`,
+    { method: 'DELETE', headers }
+  );
+  if (!res.ok) throw new Error(`Delete folder failed: ${res.status}`);
+}
+
+export async function moveDashboardToFolder(dashboardId, folderId) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${dashboardId}`,
+    {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({ folder_id: folderId }),
+    }
+  );
+  if (!res.ok) throw new Error(`Move failed: ${res.status}`);
+}
+
 export async function invokeAiChart(body) {
   const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',
