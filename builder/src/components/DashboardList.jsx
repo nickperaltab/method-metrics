@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, deleteDashboard, setApproved, updateDashboard, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
 
@@ -106,6 +106,19 @@ export default function DashboardList({ userEmail }) {
     }
   }, [load]);
 
+  const handleRename = useCallback(async (e, db) => {
+    e.stopPropagation();
+    const name = window.prompt('Rename dashboard:', db.name);
+    if (!name || name === db.name) return;
+    try {
+      await updateDashboard(db.id, { name });
+      await load();
+      window.dispatchEvent(new Event('stars-changed'));
+    } catch (e) {
+      setError(`Rename failed: ${e.message}`);
+    }
+  }, [load]);
+
   const handleToggleApproval = useCallback(async (e, db) => {
     e.stopPropagation();
     try {
@@ -143,6 +156,7 @@ export default function DashboardList({ userEmail }) {
             <th style={{ ...s.th, width: 70, textAlign: 'center' }}>Charts</th>
             <th style={{ ...s.th, width: 120 }}>Last Modified</th>
             <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
+            <th style={{ ...s.th, width: 60, textAlign: 'center' }}></th>
             <th style={{ ...s.th, width: 70, textAlign: 'center' }}></th>
             <th style={{ ...s.th, width: 110, textAlign: 'center' }}></th>
           </tr>
@@ -153,13 +167,15 @@ export default function DashboardList({ userEmail }) {
             const isMine = canDelete(currentUser, db);
 
             return (
-              <tr
-                key={db.id}
-                style={s.row}
-                onClick={() => navigate(`/dashboards/${db.id}`)}
-              >
+              <tr key={db.id}>
                 <td style={s.td}>
-                  <span style={s.nameCell}>{db.name}</span>
+                  <span
+                    style={{ ...s.nameCell, cursor: isMine ? 'pointer' : 'default', textDecoration: isMine ? 'underline dotted #d1d5db' : 'none' }}
+                    onClick={e => isMine ? handleRename(e, db) : null}
+                    title={isMine ? 'Click to rename' : ''}
+                  >
+                    {db.name}
+                  </span>
                   {db.is_approved && <span style={s.badge}>Method Approved</span>}
                 </td>
                 <td style={s.td}>{db.created_by?.split('@')[0] || '\u2014'}</td>
@@ -174,12 +190,15 @@ export default function DashboardList({ userEmail }) {
                     {isStarred ? '\u2605' : '\u2606'}
                   </button>
                 </td>
-                <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                <td style={{ ...s.td, textAlign: 'center' }}>
+                  <button style={{ ...s.actionBtn, color: '#059669', borderColor: '#a7f3d0' }} onClick={() => navigate(`/dashboards/${db.id}`)}>view</button>
+                </td>
+                <td style={{ ...s.td, textAlign: 'center' }}>
                   {isMine && (
                     <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>delete</button>
                   )}
                 </td>
-                <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                <td style={{ ...s.td, textAlign: 'center' }}>
                   {isMine && admin && (
                     <button
                       style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669', borderColor: db.is_approved ? '#fecaca' : '#a7f3d0' }}
