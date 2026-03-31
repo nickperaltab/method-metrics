@@ -26,7 +26,7 @@ const s = {
     padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
   },
   starBtn: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
-  actionBtn: { background: 'none', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '3px 8px', borderRadius: 4 },
+  actionBtn: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '4px 10px', borderRadius: 4 },
 };
 
 export default function DashboardList({ userEmail }) {
@@ -143,7 +143,8 @@ export default function DashboardList({ userEmail }) {
             <th style={{ ...s.th, width: 70, textAlign: 'center' }}>Charts</th>
             <th style={{ ...s.th, width: 120 }}>Last Modified</th>
             <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
-            <th style={{ ...s.th, width: 140, textAlign: 'right' }}></th>
+            <th style={{ ...s.th, width: 70, textAlign: 'center' }}></th>
+            <th style={{ ...s.th, width: 110, textAlign: 'center' }}></th>
           </tr>
         </thead>
         <tbody>
@@ -173,20 +174,20 @@ export default function DashboardList({ userEmail }) {
                     {isStarred ? '\u2605' : '\u2606'}
                   </button>
                 </td>
-                <td style={{ ...s.td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    {isMine && (
-                      <button style={{ ...s.actionBtn, color: '#dc2626' }} onClick={e => handleDelete(e, db)}>delete</button>
-                    )}
-                    {isMine && admin && (
-                      <button
-                        style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669' }}
-                        onClick={e => handleToggleApproval(e, db)}
-                      >
-                        {db.is_approved ? 'remove approval' : 'mark approved'}
-                      </button>
-                    )}
-                  </div>
+                <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                  {isMine && (
+                    <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>delete</button>
+                  )}
+                </td>
+                <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                  {isMine && admin && (
+                    <button
+                      style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669', borderColor: db.is_approved ? '#fecaca' : '#a7f3d0' }}
+                      onClick={e => handleToggleApproval(e, db)}
+                    >
+                      {db.is_approved ? 'remove approval' : 'mark approved'}
+                    </button>
+                  )}
                 </td>
               </tr>
             );
