@@ -6,6 +6,7 @@ import DashboardList from './components/DashboardList';
 import DashboardView from './components/DashboardView';
 import ChatExplorer from './components/ChatExplorer';
 import Home from './pages/Home';
+import Charts from './pages/Charts';
 import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
 import ApprovedDashboards from './pages/ApprovedDashboards';
@@ -43,6 +44,7 @@ export default function App() {
             />
             <Route path="/dashboards" element={<DashboardList userEmail={userEmail} />} />
             <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
+            <Route path="/charts" element={<Charts />} />
             <Route path="/approved" element={<ApprovedDashboards />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />

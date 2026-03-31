@@ -109,6 +109,10 @@ export default function Sidebar({ collapsed, onToggle }) {
             <span style={{ fontSize: 16 }}>{'\u2728'}</span>
             Chart Builder
           </NavLink>
+          <NavLink to="/charts" style={linkStyle}>
+            <span style={{ fontSize: 16 }}>{'\u25A3'}</span>
+            My Charts
+          </NavLink>
 
           {/* Favorites */}
           {stars.length > 0 && (
