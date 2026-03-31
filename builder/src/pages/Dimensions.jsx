@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { fetchMetrics, fetchAllApprovedDimensions, SUPABASE_URL, headers } from '../lib/supabase';
+import Dialog from '../components/Dialog';
 
 export default function Dimensions() {
   const [metrics, setMetrics] = useState([]);
   const [dimensions, setDimensions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dialog, setDialog] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -21,26 +23,50 @@ export default function Dimensions() {
     load();
   }, []);
 
-  async function addDimension(metricId) {
-    const name = window.prompt('Dimension display name (e.g. "Channel"):');
-    if (!name) return;
-    const column = window.prompt('Column name in BQ view (e.g. "Channel"):');
-    if (!column) return;
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/approved_dimensions`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ metric_id: metricId, dimension_name: name, column_name: column, verified_at: new Date().toISOString() }),
+  function addDimension(metricId) {
+    setDialog({
+      type: 'prompt',
+      title: 'Add dimension',
+      label: 'Display name (e.g. "Channel")',
+      defaultValue: '',
+      onConfirm: (name) => {
+        setDialog({
+          type: 'prompt',
+          title: 'Add dimension',
+          label: 'Column name in BQ view (e.g. "Channel")',
+          defaultValue: '',
+          onConfirm: async (column) => {
+            setDialog(null);
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/approved_dimensions`, {
+              method: 'POST',
+              headers: { ...headers, Prefer: 'return=representation' },
+              body: JSON.stringify({ metric_id: metricId, dimension_name: name, column_name: column, verified_at: new Date().toISOString() }),
+            });
+            if (!res.ok) return;
+            const created = await res.json();
+            setDimensions(prev => [...prev, ...(Array.isArray(created) ? created : [created])]);
+          },
+          onCancel: () => setDialog(null),
+        });
+      },
+      onCancel: () => setDialog(null),
     });
-    if (!res.ok) { alert('Failed to add dimension'); return; }
-    const created = await res.json();
-    setDimensions(prev => [...prev, ...(Array.isArray(created) ? created : [created])]);
   }
 
-  async function deleteDimension(id) {
-    if (!window.confirm('Remove this dimension?')) return;
-    await fetch(`${SUPABASE_URL}/rest/v1/approved_dimensions?id=eq.${id}`, { method: 'DELETE', headers });
-    setDimensions(prev => prev.filter(d => d.id !== id));
+  function deleteDimension(id) {
+    setDialog({
+      type: 'confirm',
+      title: 'Remove dimension?',
+      message: 'This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setDialog(null);
+        await fetch(`${SUPABASE_URL}/rest/v1/approved_dimensions?id=eq.${id}`, { method: 'DELETE', headers });
+        setDimensions(prev => prev.filter(d => d.id !== id));
+      },
+      onCancel: () => setDialog(null),
+    });
   }
 
   if (loading) return <div style={s.layout}><div style={s.empty}>Loading...</div></div>;
@@ -54,6 +80,7 @@ export default function Dimensions() {
 
   return (
     <div style={s.layout}>
+      {dialog && <Dialog {...dialog} />}
       <h1 style={s.title}>Approved Dimensions</h1>
       <p style={s.subtitle}>
         Only approved dimensions appear as filter options in the chart builder.

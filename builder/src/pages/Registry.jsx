@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchMetrics, SUPABASE_URL, headers } from '../lib/supabase';
+import Dialog from '../components/Dialog';
 
 async function updateMetric(id, updates) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${Number(id)}`, {
@@ -29,6 +30,7 @@ export default function Registry() {
   const [sortDir, setSortDir] = useState('asc');
   const [expandedId, setExpandedId] = useState(null);
   const [selected, setSelected] = useState(new Set());
+  const [dialog, setDialog] = useState(null);
 
   useEffect(() => {
     fetchMetrics().then(data => {
@@ -75,12 +77,38 @@ export default function Registry() {
     });
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} metric(s)?`)) return;
-    await deleteMetrics([...selected]);
-    setSelected(new Set());
-    await reload();
+    setDialog({
+      type: 'confirm',
+      title: `Delete ${selected.size} metric${selected.size !== 1 ? 's' : ''}?`,
+      message: 'This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        await deleteMetrics([...selected]);
+        setSelected(new Set());
+        await reload();
+      },
+      onCancel: () => setDialog(null),
+    });
+  }
+
+  function handleDeleteMetric(m) {
+    setDialog({
+      type: 'confirm',
+      title: `Delete "${m.name}"?`,
+      message: 'This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        await deleteMetrics([m.id]);
+        await reload();
+      },
+      onCancel: () => setDialog(null),
+    });
   }
 
   async function handleSaveField(id, field, value) {
@@ -92,6 +120,7 @@ export default function Registry() {
 
   return (
     <div style={s.layout}>
+      {dialog && <Dialog {...dialog} />}
       {/* Header */}
       <div style={s.header}>
         <div>
@@ -206,7 +235,7 @@ export default function Registry() {
                     </tr>
                     {expandedId === m.id && (
                       <tr><td colSpan={tab === 'queued' ? 7 : 5} style={{ padding: 0 }}>
-                        <ExpandPanel metric={m} onUpdate={reload} onSaveField={handleSaveField} />
+                        <ExpandPanel metric={m} onUpdate={reload} onSaveField={handleSaveField} onDelete={handleDeleteMetric} />
                       </td></tr>
                     )}
                   </React.Fragment>
@@ -221,7 +250,7 @@ export default function Registry() {
   );
 }
 
-function ExpandPanel({ metric: m, onUpdate, onSaveField }) {
+function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete }) {
   const [notes, setNotes] = useState(m.notes || '');
 
   const deps = (m.depends_on || []);
@@ -284,11 +313,7 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField }) {
         )}
         <button
           style={{ ...s.actionBtn, borderColor: '#dc2626', color: '#dc2626', marginLeft: 'auto' }}
-          onClick={async () => {
-            if (!window.confirm(`Delete "${m.name}"?`)) return;
-            await deleteMetrics([m.id]);
-            await onUpdate();
-          }}
+          onClick={() => onDelete(m)}
         >
           Delete Metric
         </button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { fetchMyCharts, fetchApprovedCharts, fetchDashboards, deleteChart, setApproved, computeChartUsageCounts } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
+import Dialog from '../components/Dialog';
 
 const TYPE_LABELS = { line: 'Line', bar: 'Bar', stacked_bar: 'Stacked Bar', pie: 'Pie', kpi: 'KPI', yoy: 'Year/Year', table: 'Table', area: 'Area', combo: 'Combo', funnel: 'Funnel', heatmap: 'Heatmap', horizontal_bar: 'H. Bar' };
 
@@ -14,6 +15,7 @@ export default function Charts() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [error, setError] = useState(null);
+  const [dialog, setDialog] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,18 +47,28 @@ export default function Charts() {
 
   const sorted = [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-  async function handleDelete(chart) {
+  function handleDelete(chart) {
     const count = usageCounts[String(chart.id)] || 0;
-    const msg = count > 0
-      ? `Delete "${chart.name}"? It's on ${count} dashboard(s) and will be removed from them.`
-      : `Delete "${chart.name}"?`;
-    if (!window.confirm(msg)) return;
-    try {
-      await deleteChart(chart.id);
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
+    const message = count > 0
+      ? `This chart is on ${count} dashboard${count !== 1 ? 's' : ''} and will be removed from them.`
+      : 'This cannot be undone.';
+    setDialog({
+      type: 'confirm',
+      title: `Delete "${chart.name}"?`,
+      message,
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await deleteChart(chart.id);
+          await load();
+        } catch (e) {
+          setError(e.message);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
   }
 
   async function handleToggleApproval(chart) {
@@ -68,26 +80,36 @@ export default function Charts() {
     }
   }
 
-  async function handleRename(chart) {
-    const name = window.prompt('New name:', chart.name);
-    if (!name || name === chart.name) return;
-    try {
-      const { SUPABASE_URL, headers } = await import('../lib/supabase');
-      await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${chart.id}`, {
-        method: 'PATCH',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ name }),
-      });
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
+  function handleRename(chart) {
+    setDialog({
+      type: 'prompt',
+      title: 'Rename chart',
+      label: 'Name',
+      defaultValue: chart.name || '',
+      onConfirm: async (name) => {
+        setDialog(null);
+        if (name === chart.name) return;
+        try {
+          const { SUPABASE_URL, headers } = await import('../lib/supabase');
+          await fetch(`${SUPABASE_URL}/rest/v1/saved_charts?id=eq.${chart.id}`, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify({ name }),
+          });
+          await load();
+        } catch (e) {
+          setError(e.message);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
   }
 
   if (loading) return <div style={s.layout}><div style={s.empty}>Loading...</div></div>;
 
   return (
     <div style={s.layout}>
+      {dialog && <Dialog {...dialog} />}
       <h1 style={s.title}>Charts</h1>
 
       {error && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, deleteDashboard, setApproved, updateDashboard, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
+import Dialog from './Dialog';
 
 const s = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
@@ -37,6 +38,7 @@ export default function DashboardList({ userEmail }) {
   const [stars, setStars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dialog, setDialog] = useState(null); // { type, ...props }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,46 +79,73 @@ export default function DashboardList({ userEmail }) {
     }
   }, [currentUser, stars]);
 
-  const handleNew = useCallback(async () => {
-    const name = window.prompt('Dashboard name:');
-    if (!name) return;
-    try {
-      const result = await createDashboard({
-        name,
-        createdBy: currentUser?.name || userEmail || 'anonymous',
-        createdByUser: currentUser?.id,
-        layout: [],
-      });
-      const created = Array.isArray(result) ? result[0] : result;
-      if (created?.id) navigate(`/dashboards/${created.id}`);
-    } catch (e) {
-      setError(`Create failed: ${e.message}`);
-    }
+  const handleNew = useCallback(() => {
+    setDialog({
+      type: 'prompt',
+      title: 'New dashboard',
+      label: 'Name',
+      defaultValue: '',
+      onConfirm: async (name) => {
+        setDialog(null);
+        try {
+          const result = await createDashboard({
+            name,
+            createdBy: currentUser?.name || userEmail || 'anonymous',
+            createdByUser: currentUser?.id,
+            layout: [],
+          });
+          const created = Array.isArray(result) ? result[0] : result;
+          if (created?.id) navigate(`/dashboards/${created.id}`);
+        } catch (e) {
+          setError(`Create failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
   }, [currentUser, userEmail, navigate]);
 
-  const handleDelete = useCallback(async (e, db) => {
+  const handleDelete = useCallback((e, db) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${db.name}"? This cannot be undone.`)) return;
-    try {
-      await deleteDashboard(db.id);
-      await load();
-      window.dispatchEvent(new Event('stars-changed'));
-    } catch (e) {
-      setError(`Delete failed: ${e.message}`);
-    }
+    setDialog({
+      type: 'confirm',
+      title: `Delete "${db.name}"?`,
+      message: 'This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await deleteDashboard(db.id);
+          await load();
+          window.dispatchEvent(new Event('stars-changed'));
+        } catch (e) {
+          setError(`Delete failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
   }, [load]);
 
-  const handleRename = useCallback(async (e, db) => {
+  const handleRename = useCallback((e, db) => {
     e.stopPropagation();
-    const name = window.prompt('Rename dashboard:', db.name);
-    if (!name || name === db.name) return;
-    try {
-      await updateDashboard(db.id, { name });
-      await load();
-      window.dispatchEvent(new Event('stars-changed'));
-    } catch (e) {
-      setError(`Rename failed: ${e.message}`);
-    }
+    setDialog({
+      type: 'prompt',
+      title: 'Rename dashboard',
+      label: 'Name',
+      defaultValue: db.name,
+      onConfirm: async (name) => {
+        setDialog(null);
+        if (name === db.name) return;
+        try {
+          await updateDashboard(db.id, { name });
+          await load();
+          window.dispatchEvent(new Event('stars-changed'));
+        } catch (e) {
+          setError(`Rename failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
   }, [load]);
 
   const handleToggleApproval = useCallback(async (e, db) => {
@@ -218,6 +247,8 @@ export default function DashboardList({ userEmail }) {
 
   return (
     <div style={s.layout}>
+      {dialog && <Dialog {...dialog} />}
+
       <div style={s.header}>
         <span style={s.title}>Dashboards</span>
         <button style={s.newBtn} onClick={handleNew}>+ New Dashboard</button>
