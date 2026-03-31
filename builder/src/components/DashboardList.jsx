@@ -16,7 +16,7 @@ const s = {
   section: { marginTop: 32 },
   sectionTitle: { fontSize: 14, fontWeight: 600, color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' },
   empty: { color: '#6b7280', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
-  table: { width: '100%', borderCollapse: 'collapse' },
+  table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
   th: { textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '2px solid #e2e5e9' },
   td: { padding: '10px 12px', borderBottom: '1px solid #f1f3f5', fontSize: 13, color: '#374151' },
   row: { cursor: 'pointer' },
@@ -176,7 +176,7 @@ export default function DashboardList({ userEmail }) {
                   >
                     {db.name}
                   </span>
-                  {db.is_approved && <span style={s.badge}>Method Approved</span>}
+                  {db.is_approved && <div style={s.badge}>Method Approved</div>}
                 </td>
                 <td style={s.td}>{db.created_by?.split('@')[0] || '\u2014'}</td>
                 <td style={{ ...s.td, textAlign: 'center' }}>{(db.layout || []).length}</td>
