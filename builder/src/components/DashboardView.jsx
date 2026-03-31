@@ -199,6 +199,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [editChartId, setEditChartId] = useState(null);
   const [isStarred, setIsStarred] = useState(false);
   const [dialog, setDialog] = useState(null);
+  const [titleHovered, setTitleHovered] = useState(false);
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -544,6 +545,28 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     }
   }, [dashboard]);
 
+  const handleRenameTitle = useCallback(() => {
+    if (!dashboard) return;
+    setDialog({
+      type: 'prompt',
+      title: 'Rename dashboard',
+      label: 'Name',
+      defaultValue: dashboard.name,
+      onConfirm: async (name) => {
+        setDialog(null);
+        if (name === dashboard.name) return;
+        try {
+          await updateDashboard(id, { name });
+          setDashboard(prev => ({ ...prev, name }));
+          window.dispatchEvent(new Event('stars-changed'));
+        } catch (e) {
+          setError(`Rename failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
+  }, [dashboard, id]);
+
   if (loading) {
     return <div style={styles.layout}><div style={styles.empty}>Loading dashboard...</div></div>;
   }
@@ -568,7 +591,21 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       <div style={styles.header}>
         <div style={styles.titleRow}>
           <button style={styles.backBtn} onClick={() => navigate('/dashboards')}>&#8592;</button>
-          <span style={styles.title}>{dashboard?.name || 'Dashboard'}</span>
+          <span
+            style={{
+              ...styles.title,
+              cursor: isMine ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+            onClick={isMine ? handleRenameTitle : undefined}
+            onMouseEnter={() => isMine && setTitleHovered(true)}
+            onMouseLeave={() => setTitleHovered(false)}
+          >
+            {dashboard?.name || 'Dashboard'}
+            {isMine && (
+              <span style={{ fontSize: 13, color: titleHovered ? '#6b7280' : 'transparent', transition: 'color .15s' }}>&#9998;</span>
+            )}
+          </span>
           {dashboard?.is_approved && (
             <span style={styles.approvedBadge}>Method Approved</span>
           )}
