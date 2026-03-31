@@ -10,8 +10,7 @@ App is live on GitHub Pages: https://nickperaltab.github.io/method-metrics/build
 
 ## What Nic is doing now
 
-1. **Push to Vercel** — the app needs to be on Vercel (Pro plan) so both Nic and Justin can collaborate. The Vercel domain also needs to be added to the Google OAuth client's authorized JavaScript origins (client ID: `546732685010-nojjfak7esmun2taour8r5pakrsrg3aq`) so BigQuery connect works.
-2. **Get chart builder working** — the AI chat flow, chart rendering, and save-to-dashboard flow need to work within the new app shell.
+1. **Get chart builder working** — the AI chat flow, chart rendering, and save-to-dashboard flow need to work within the new app shell on GitHub Pages.
 
 ## What Justin is doing now
 
@@ -37,11 +36,18 @@ QA on the UX — testing all flows on the live GitHub Pages URL.
 - `dashboard_folders` — name, user_id, sort_order.
 - `dashboard_views` — dashboard_id, user_id, viewed_at. For recently viewed.
 
+## Deployment
+
+**GitHub Pages only.** Static React build, no server needed. Auto-deploys on push to main via GitHub Actions. Vercel evaluated and deferred (#34) — no current need for SSR/API routes.
+
+CI workflow (`.github/workflows/static.yml`) builds with `VITE_BASE=/method-metrics/builder/` and copies output to `_site/builder`.
+
 ## Remaining tickets
 
 - **#24** — Graduate 13 verified metrics. Blocked on Justin's approval.
 - **#27** — Future: Metric solver as in-app feature.
 - **#30** — Future: Retire method-data-modelling repo.
+- **#34** — Future: Evaluate Vercel if SSR/API routes ever needed.
 
 ## File map (new/changed files)
 
