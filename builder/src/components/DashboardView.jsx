@@ -95,6 +95,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [chartLoading, setChartLoading] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -390,7 +391,21 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           <span style={styles.title}>{dashboard?.name || 'Dashboard'}</span>
         </div>
         <div style={styles.actions}>
-          <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
+          {editMode && (
+            <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
+          )}
+          <button
+            style={editMode ? { ...styles.btnSecondary, ...styles.btnActive } : styles.btnSecondary}
+            onClick={() => {
+              if (editMode) {
+                // Save layout on exit
+                updateDashboard(id, { layout: gridLayout }).catch(() => {});
+              }
+              setEditMode(!editMode);
+            }}
+          >
+            {editMode ? 'Done Editing' : 'Edit'}
+          </button>
         </div>
       </div>
 
@@ -407,8 +422,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           cols={COLS}
           rowHeight={ROW_HEIGHT}
           width={containerWidth}
-          isDraggable={false}
-          isResizable={false}
+          isDraggable={editMode}
+          isResizable={editMode}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".drag-handle"
           compactType="vertical"
@@ -417,7 +432,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           {gridLayout.map(item => {
             const chart = chartMap[item.i];
             return (
-              <div key={item.i} style={styles.gridItem}>
+              <div key={item.i} style={{ ...styles.gridItem, ...(editMode ? styles.gridItemEditing : {}) }}>
                 <div style={styles.chartHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     {chart?.created_by_avatar && (
@@ -429,18 +444,21 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     )}
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
-                      onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
-                      title="Edit chart"
-                    >
-                      &#9998;
-                    </button>
-                    <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
-                      &#10005;
-                    </button>
-                  </div>
+                  {editMode && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {editMode && <span className="drag-handle" style={{ cursor: 'grab', color: '#5a6370', fontSize: 14, padding: '0 4px' }}>{'\u2630'}</span>}
+                      <button
+                        style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
+                        onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
+                        title="Edit chart"
+                      >
+                        &#9998;
+                      </button>
+                      <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
+                        &#10005;
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div style={styles.chartBody}>
                   {chartLoading[item.i] ? (

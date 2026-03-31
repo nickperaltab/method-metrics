@@ -34,5 +34,12 @@ export default defineConfig({
         baseURL: BUILDER_URL,
       },
     },
+    {
+      name: 'users',
+      testMatch: /users\.spec\.js/,
+      use: {
+        baseURL: BUILDER_URL,
+      },
+    },
   ],
 });
