@@ -48,13 +48,13 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
   const [kpiData, setKpiData] = useState(null);
   const { loading: dataLoading, error: dataError, loadView } = useBqData();
 
-  // Pre-load schemas for all primitive/foundational metrics on BQ connect
+  // Pre-load schemas for all primitive/derived metrics on BQ connect
   useEffect(() => {
     if (!bqConnected || !metrics.length || schemasLoaded) return;
 
     async function loadSchemas() {
       const viewMetrics = metrics.filter(m =>
-        ['primitive', 'foundational'].includes(m.metric_type) && m.view_name && m.status === 'live'
+        ['primitive', 'derived'].includes(m.metric_type) && m.view_name && m.status === 'live'
       );
       const uniqueViews = [...new Set(viewMetrics.map(m => m.view_name))];
 

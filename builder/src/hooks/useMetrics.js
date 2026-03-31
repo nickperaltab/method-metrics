@@ -3,7 +3,7 @@ import { fetchMetrics, groupMetrics } from '../lib/supabase';
 
 export function useMetrics() {
   const [metrics, setMetrics] = useState([]);
-  const [grouped, setGrouped] = useState({ primitives: [], foundational: [], derived: [], dimensions: [] });
+  const [grouped, setGrouped] = useState({ primitives: [], derived: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
