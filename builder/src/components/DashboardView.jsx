@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
-import { fetchDashboard, updateDashboard, loadCharts, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
+import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
@@ -108,15 +108,49 @@ const styles = {
   },
   modalContent: {
     background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 12,
-    padding: 24, width: 500, maxHeight: '70vh', overflowY: 'auto',
+    width: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
   },
-  modalTitle: { fontSize: 16, fontWeight: 600, color: '#1a1a1a', marginBottom: 16 },
-  chartOption: {
-    padding: 12, border: '1px solid #e2e5e9', borderRadius: 6,
-    cursor: 'pointer', marginBottom: 8, transition: 'border-color 0.15s',
+  modalHeader: {
+    padding: '20px 24px 0', flexShrink: 0,
   },
-  chartOptionName: { fontSize: 13, fontWeight: 600, color: '#1a1a1a' },
-  chartOptionMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 },
+  modalTitle: { fontSize: 16, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 },
+  modalSearch: {
+    width: '100%', background: '#f8f9fa', border: '1px solid #e2e5e9', color: '#1a1a1a',
+    padding: '9px 12px', borderRadius: 6, fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+    outline: 'none', boxSizing: 'border-box', marginBottom: 12,
+  },
+  modalCreateBtn: {
+    width: '100%', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '9px 16px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, marginBottom: 16,
+  },
+  modalTabs: { display: 'flex', gap: 0, borderBottom: '1px solid #e2e5e9', marginBottom: 0 },
+  modalTab: {
+    background: 'none', border: 'none', borderBottom: '2px solid transparent', color: '#6b7280',
+    padding: '8px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
+    marginBottom: -1,
+  },
+  modalTabActive: {
+    background: 'none', border: 'none', borderBottom: '2px solid #059669', color: '#059669',
+    padding: '8px 16px', cursor: 'pointer', fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
+    marginBottom: -1, fontWeight: 600,
+  },
+  modalList: { overflowY: 'auto', flex: 1, padding: '8px 0' },
+  chartRow: {
+    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 24px',
+    cursor: 'pointer', borderBottom: '1px solid #f1f3f5',
+  },
+  chartRowInfo: { flex: 1, minWidth: 0 },
+  chartRowName: { fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 2 },
+  chartRowMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  chartRowCount: { fontSize: 13, fontWeight: 600, color: '#374151', minWidth: 60, textAlign: 'right', flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" },
+  chartRowDate: { fontSize: 11, color: '#6b7280', minWidth: 80, textAlign: 'right', flexShrink: 0 },
+  approvedBadgeSmall: {
+    display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '1px 5px', borderRadius: 8, fontSize: 9, fontWeight: 600,
+    fontFamily: "'JetBrains Mono', monospace", marginLeft: 6, verticalAlign: 'middle',
+  },
 };
 
 const ROW_HEIGHT = 80;
@@ -128,13 +162,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const { currentUser } = useUser();
   const containerRef = useRef(null);
   const [dashboard, setDashboard] = useState(null);
-  const [charts, setCharts] = useState([]);
+  const [myCharts, setMyCharts] = useState([]);
+  const [approvedCharts, setApprovedCharts] = useState([]);
+  const [usageCounts, setUsageCounts] = useState({});
   const [chartMap, setChartMap] = useState({});
   const [gridLayout, setGridLayout] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [modalTab, setModalTab] = useState('mine');
+  const [modalSearch, setModalSearch] = useState('');
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [kpiDataMap, setKpiDataMap] = useState({});
@@ -179,9 +217,15 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         const chartIds = (dbVal.layout || []).map(item => item.i);
         const chartsVal = await loadChartsByIds(chartIds);
 
-        // Also load user's charts for the Add modal
-        const userCharts = userEmail ? await loadCharts(userEmail) : [];
-        setCharts(userCharts);
+        // Load charts for the Add modal (ownership-aware)
+        const [mine, approved, allDashboards] = await Promise.all([
+          currentUser ? fetchMyCharts(currentUser.id) : Promise.resolve([]),
+          fetchApprovedCharts(),
+          fetchDashboards(),
+        ]);
+        setMyCharts(mine);
+        setApprovedCharts(approved);
+        setUsageCounts(computeChartUsageCounts(allDashboards));
 
         // Load star state for this dashboard
         if (currentUser) {
@@ -480,8 +524,6 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     );
   }
 
-  const availableCharts = charts.filter(c => !gridLayout.some(item => item.i === String(c.id)));
-
   const isMine = canDelete(currentUser, dashboard);
   const admin = isAdmin(currentUser);
 
@@ -627,51 +669,99 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         </GridLayout>
       )}
 
-      {showAddModal && (
-        <div style={styles.modal} onClick={() => setShowAddModal(false)}>
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalTitle}>Add Chart</div>
-            <div style={{ marginBottom: 16 }}>
-              <button
-                style={{
-                  ...styles.btn,
-                  width: '100%',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  textAlign: 'center',
-                }}
-                onClick={() => {
-                  setShowAddModal(false);
-                  setShowChatModal(true);
-                }}
-              >
-                Create New Chart
-              </button>
-            </div>
-            {availableCharts.length === 0 ? (
-              <div style={{ ...styles.empty, padding: 20 }}>
-                No saved charts available. Create a new chart or save charts from the Explorer first.
-              </div>
-            ) : (
-              availableCharts.map(chart => (
-                <div
-                  key={chart.id}
-                  style={styles.chartOption}
-                  onClick={() => handleAddChart(chart)}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e5e9'}
+      {showAddModal && (() => {
+        const onDashboard = new Set(gridLayout.map(item => item.i));
+        const sourceList = modalTab === 'mine' ? myCharts : approvedCharts;
+        const filtered = sourceList.filter(c => {
+          if (onDashboard.has(String(c.id))) return false;
+          if (!modalSearch) return true;
+          const q = modalSearch.toLowerCase();
+          return c.name?.toLowerCase().includes(q) ||
+            (c.metric_ids || []).some(mid => {
+              const m = metrics.find(x => x.id === mid);
+              return m?.name?.toLowerCase().includes(q);
+            });
+        });
+
+        return (
+          <div style={styles.modal} onClick={() => { setShowAddModal(false); setModalSearch(''); }}>
+            <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <div style={styles.modalTitle}>Add Chart</div>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search charts..."
+                  value={modalSearch}
+                  onChange={e => setModalSearch(e.target.value)}
+                  style={styles.modalSearch}
+                />
+                <button
+                  style={styles.modalCreateBtn}
+                  onClick={() => { setShowAddModal(false); setModalSearch(''); setShowChatModal(true); }}
                 >
-                  <div style={styles.chartOptionName}>{chart.name}</div>
-                  <div style={styles.chartOptionMeta}>
-                    {(chart.metric_ids || []).length} metric{(chart.metric_ids || []).length !== 1 ? 's' : ''}
-                    {chart.created_at && ` · ${new Date(chart.created_at).toLocaleDateString()}`}
-                  </div>
+                  + Create a New Chart from Scratch
+                </button>
+                <div style={styles.modalTabs}>
+                  <button
+                    style={modalTab === 'mine' ? styles.modalTabActive : styles.modalTab}
+                    onClick={() => setModalTab('mine')}
+                  >
+                    My Charts ({myCharts.filter(c => !onDashboard.has(String(c.id))).length})
+                  </button>
+                  <button
+                    style={modalTab === 'approved' ? styles.modalTabActive : styles.modalTab}
+                    onClick={() => setModalTab('approved')}
+                  >
+                    Method Approved ({approvedCharts.filter(c => !onDashboard.has(String(c.id))).length})
+                  </button>
                 </div>
-              ))
-            )}
+              </div>
+
+              <div style={styles.modalList}>
+                {filtered.length === 0 ? (
+                  <div style={{ ...styles.empty, padding: 32 }}>
+                    {modalSearch ? 'No charts match your search.' : 'No charts available.'}
+                  </div>
+                ) : (
+                  filtered.map(chart => {
+                    const metricNames = (chart.metric_ids || [])
+                      .map(mid => metrics.find(m => m.id === mid)?.name)
+                      .filter(Boolean)
+                      .join(', ');
+                    const count = usageCounts[String(chart.id)] || 0;
+                    return (
+                      <div
+                        key={chart.id}
+                        style={styles.chartRow}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => { handleAddChart(chart); setModalSearch(''); }}
+                      >
+                        <div style={styles.chartRowInfo}>
+                          <div style={styles.chartRowName}>
+                            {chart.name || 'Untitled'}
+                            {chart.is_approved && <span style={styles.approvedBadgeSmall}>Approved</span>}
+                          </div>
+                          <div style={styles.chartRowMeta}>
+                            {metricNames || `${(chart.metric_ids || []).length} metric(s)`}
+                          </div>
+                        </div>
+                        <div style={styles.chartRowDate}>
+                          {chart.created_at ? new Date(chart.created_at).toLocaleDateString() : '—'}
+                        </div>
+                        <div style={styles.chartRowCount} title="Dashboards using this chart">
+                          {count} {count === 1 ? 'dashboard' : 'dashboards'}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {showChatModal && (
         <ChatModal
