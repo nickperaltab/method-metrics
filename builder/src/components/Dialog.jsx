@@ -67,7 +67,11 @@ export default function Dialog({ type = 'confirm', title, message, label, defaul
               type="text"
               value={value}
               onChange={e => setValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleConfirm(); if (e.key === 'Escape') onCancel(); }}
+              onKeyDown={e => {
+                e.stopPropagation();
+                if (e.key === 'Enter') handleConfirm();
+                if (e.key === 'Escape') onCancel();
+              }}
               style={s.input}
             />
           </div>

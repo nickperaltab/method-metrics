@@ -65,8 +65,10 @@ const styles = {
     background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 8,
     overflow: 'hidden', display: 'flex', flexDirection: 'column',
   },
-  gridItemEditing: {
-    border: '1px dashed #059669',
+  ownerBanner: {
+    fontSize: 13, color: '#6b7280', marginBottom: 16,
+    padding: '8px 12px', background: '#f8f9fa', border: '1px solid #e2e5e9',
+    borderRadius: 6, display: 'inline-block',
   },
   chartHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -119,7 +121,6 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [chartLoading, setChartLoading] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
-  const [editMode, setEditMode] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
   const [dialog, setDialog] = useState(null);
 
@@ -337,13 +338,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
   const handleLayoutChange = useCallback((newLayout) => {
     setGridLayout(newLayout.map(item => ({
-      i: item.i,
-      x: item.x,
-      y: item.y,
-      w: item.w,
-      h: item.h,
+      i: item.i, x: item.x, y: item.y, w: item.w, h: item.h,
     })));
   }, []);
+
+  const handleLayoutSave = useCallback((newLayout) => {
+    const cleaned = newLayout.map(item => ({
+      i: item.i, x: item.x, y: item.y, w: item.w, h: item.h,
+    }));
+    setGridLayout(cleaned);
+    updateDashboard(id, { layout: cleaned }).catch(() => {});
+  }, [id]);
 
   const handleRemoveChart = useCallback((chartId) => {
     setGridLayout(prev => {
@@ -490,24 +495,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           {isMine && (
             <button style={styles.btnDelete} onClick={handleDelete}>Delete</button>
           )}
-          {editMode && (
-            <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
-          )}
           {isMine && (
-            <button
-              style={editMode ? { ...styles.btnSecondary, ...styles.btnActive } : styles.btnSecondary}
-              onClick={() => {
-                if (editMode) {
-                  updateDashboard(id, { layout: gridLayout }).catch(() => {});
-                }
-                setEditMode(!editMode);
-              }}
-            >
-              {editMode ? 'Done Editing' : 'Edit'}
-            </button>
+            <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
           )}
         </div>
       </div>
+
+      {!isMine && dashboard?.created_by && (
+        <div style={styles.ownerBanner}>
+          This dashboard is owned by <strong>{dashboard.created_by.split('@')[0]}</strong>
+        </div>
+      )}
 
       {error && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
@@ -522,9 +520,11 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           cols={COLS}
           rowHeight={ROW_HEIGHT}
           width={containerWidth}
-          isDraggable={editMode}
-          isResizable={editMode}
+          isDraggable={isMine}
+          isResizable={isMine}
           onLayoutChange={handleLayoutChange}
+          onDragStop={handleLayoutSave}
+          onResizeStop={handleLayoutSave}
           draggableHandle=".drag-handle"
           compactType="vertical"
           margin={[16, 16]}
@@ -532,9 +532,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           {gridLayout.map(item => {
             const chart = chartMap[item.i];
             return (
-              <div key={item.i} style={{ ...styles.gridItem, ...(editMode ? styles.gridItemEditing : {}) }}>
+              <div key={item.i} style={styles.gridItem}>
                 <div style={styles.chartHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    {isMine && (
+                      <span className="drag-handle" style={{ cursor: 'grab', color: '#d1d5db', fontSize: 14, padding: '0 2px', flexShrink: 0 }}>{'\u2630'}</span>
+                    )}
                     {chart?.created_by_avatar && (
                       <img
                         src={chart.created_by_avatar}
@@ -544,9 +547,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     )}
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
-                  {editMode && (
+                  {isMine && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {editMode && <span className="drag-handle" style={{ cursor: 'grab', color: '#6b7280', fontSize: 14, padding: '0 4px' }}>{'\u2630'}</span>}
                       <button
                         style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
                         onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
