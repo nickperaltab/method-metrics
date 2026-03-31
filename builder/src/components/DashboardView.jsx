@@ -467,14 +467,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       setShowAddModal(false);
       return;
     }
+    // Add chart to the lookup map so it renders immediately
+    setChartMap(prev => ({ ...prev, [chartId]: chart }));
     // Find next available Y position
     const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
-    setGridLayout(prev => [
-      ...prev,
-      { i: chartId, x: 0, y: maxY, w: 6, h: 4 },
-    ]);
+    const newLayout = [...gridLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }];
+    setGridLayout(newLayout);
     setShowAddModal(false);
-  }, [gridLayout]);
+    // Save layout and trigger chart data load
+    updateDashboard(id, { layout: newLayout }).catch(() => {});
+    setRefreshKey(prev => prev + 1);
+  }, [gridLayout, id]);
 
   const handleChatChartSaved = useCallback((chartId) => {
     const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);

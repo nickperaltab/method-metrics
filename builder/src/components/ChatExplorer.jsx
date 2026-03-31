@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
 import SaveChartModal from './SaveChartModal';
 import { useBqData } from '../hooks/useBqData';
+import { useUser } from '../contexts/UserContext';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
@@ -23,6 +24,7 @@ import schemaCache from '../lib/schemaCache';
 export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar, modalMode, onChartSaved, editChartId: editChartIdProp }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { currentUser } = useUser();
   const addToDashboardId = searchParams.get('addToDashboard');
   const editChartId = editChartIdProp || searchParams.get('editChart');
   const [messages, setMessages] = useState([]);
@@ -213,13 +215,14 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         name,
         createdBy: userEmail || 'anonymous',
         createdByAvatar: userAvatar,
+        createdByUser: currentUser?.id,
         metricIds: lastSpec.metricIds,
         gwSpec: { ...lastSpec },
       });
 
       let targetDashboardId = dashboardId || addToDashboardId;
       if (newDashboardName) {
-        const created = await createDashboard({ name: newDashboardName, createdBy: userEmail || 'anonymous' });
+        const created = await createDashboard({ name: newDashboardName, createdBy: userEmail || 'anonymous', createdByUser: currentUser?.id });
         if (created && created.length > 0) {
           targetDashboardId = created[0].id;
           setDashboards(prev => [created[0], ...prev]);

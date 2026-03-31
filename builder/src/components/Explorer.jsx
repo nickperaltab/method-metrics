@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '../contexts/UserContext';
 import AiPrompt from './AiPrompt';
 import EChart from './EChart';
 import { useBqData } from '../hooks/useBqData';
@@ -33,6 +34,7 @@ const styles = {
 
 export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }) {
   const navigate = useNavigate();
+  const { currentUser } = useUser();
   const [selectedMetric, setSelectedMetric] = useState(null);
   const [chartOption, setChartOption] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -272,6 +274,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         name,
         createdBy: userEmail || 'anonymous',
         createdByAvatar: userAvatar,
+        createdByUser: currentUser?.id,
         metricIds: lastSpec.metricIds,
         gwSpec: { ...lastSpec },
       });
