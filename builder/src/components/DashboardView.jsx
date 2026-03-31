@@ -151,6 +151,20 @@ const styles = {
     padding: '1px 5px', borderRadius: 8, fontSize: 9, fontWeight: 600,
     fontFamily: "'JetBrains Mono', monospace", marginLeft: 6, verticalAlign: 'middle',
   },
+  modalHint: {
+    fontSize: 11, color: '#6b7280', marginBottom: 12, lineHeight: 1.5,
+  },
+  metricChips: { display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 24px', borderBottom: '1px solid #f1f3f5' },
+  metricChip: {
+    background: '#f1f3f5', border: '1px solid #e2e5e9', color: '#374151',
+    padding: '3px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  metricChipActive: {
+    background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+    padding: '3px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
+    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+  },
 };
 
 const ROW_HEIGHT = 80;
@@ -173,6 +187,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [showChatModal, setShowChatModal] = useState(false);
   const [modalTab, setModalTab] = useState('mine');
   const [modalSearch, setModalSearch] = useState('');
+  const [modalMetricFilter, setModalMetricFilter] = useState(null); // metric id or null
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [kpiDataMap, setKpiDataMap] = useState({});
@@ -672,8 +687,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       {showAddModal && (() => {
         const onDashboard = new Set(gridLayout.map(item => item.i));
         const sourceList = modalTab === 'mine' ? myCharts : approvedCharts;
-        const filtered = sourceList.filter(c => {
-          if (onDashboard.has(String(c.id))) return false;
+
+        // Collect unique metrics used across charts in this tab (excluding already-on-dashboard)
+        const availableInTab = sourceList.filter(c => !onDashboard.has(String(c.id)));
+        const metricIdsInTab = [...new Set(availableInTab.flatMap(c => c.metric_ids || []))];
+        const metricChipList = metricIdsInTab
+          .map(mid => metrics.find(m => m.id === mid))
+          .filter(Boolean)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        const filtered = availableInTab.filter(c => {
+          if (modalMetricFilter && !(c.metric_ids || []).includes(modalMetricFilter)) return false;
           if (!modalSearch) return true;
           const q = modalSearch.toLowerCase();
           return c.name?.toLowerCase().includes(q) ||
@@ -683,45 +707,64 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             });
         });
 
+        const closeModal = () => { setShowAddModal(false); setModalSearch(''); setModalMetricFilter(null); };
+
         return (
-          <div style={styles.modal} onClick={() => { setShowAddModal(false); setModalSearch(''); }}>
+          <div style={styles.modal} onClick={closeModal}>
             <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
               <div style={styles.modalHeader}>
-                <div style={styles.modalTitle}>Add Chart</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
+                  <div style={styles.modalTitle}>Add Chart</div>
+                  <div style={styles.modalHint}>Managing too many charts gets difficult — where possible, use Method Approved charts and reuse existing charts.</div>
+                </div>
                 <input
                   autoFocus
                   type="text"
-                  placeholder="Search charts..."
+                  placeholder="Search by chart name or metric..."
                   value={modalSearch}
                   onChange={e => setModalSearch(e.target.value)}
                   style={styles.modalSearch}
                 />
                 <button
                   style={styles.modalCreateBtn}
-                  onClick={() => { setShowAddModal(false); setModalSearch(''); setShowChatModal(true); }}
+                  onClick={() => { closeModal(); setShowChatModal(true); }}
                 >
                   + Create a New Chart from Scratch
                 </button>
                 <div style={styles.modalTabs}>
                   <button
                     style={modalTab === 'mine' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => setModalTab('mine')}
+                    onClick={() => { setModalTab('mine'); setModalMetricFilter(null); }}
                   >
                     My Charts ({myCharts.filter(c => !onDashboard.has(String(c.id))).length})
                   </button>
                   <button
                     style={modalTab === 'approved' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => setModalTab('approved')}
+                    onClick={() => { setModalTab('approved'); setModalMetricFilter(null); }}
                   >
                     Method Approved ({approvedCharts.filter(c => !onDashboard.has(String(c.id))).length})
                   </button>
                 </div>
               </div>
 
+              {metricChipList.length > 0 && (
+                <div style={styles.metricChips}>
+                  {metricChipList.map(m => (
+                    <button
+                      key={m.id}
+                      style={modalMetricFilter === m.id ? styles.metricChipActive : styles.metricChip}
+                      onClick={() => setModalMetricFilter(modalMetricFilter === m.id ? null : m.id)}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div style={styles.modalList}>
                 {filtered.length === 0 ? (
                   <div style={{ ...styles.empty, padding: 32 }}>
-                    {modalSearch ? 'No charts match your search.' : 'No charts available.'}
+                    {modalSearch || modalMetricFilter ? 'No charts match your filters.' : 'No charts available.'}
                   </div>
                 ) : (
                   filtered.map(chart => {
@@ -736,7 +779,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                         style={styles.chartRow}
                         onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        onClick={() => { handleAddChart(chart); setModalSearch(''); }}
+                        onClick={() => { handleAddChart(chart); closeModal(); }}
                       >
                         <div style={styles.chartRowInfo}>
                           <div style={styles.chartRowName}>
