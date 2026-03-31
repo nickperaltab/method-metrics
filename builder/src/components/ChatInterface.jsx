@@ -10,19 +10,19 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: 'calc(100vh - 52px)',
-    background: '#06080a',
+    background: '#ffffff',
   },
   header: {
     display: 'flex',
     justifyContent: 'flex-end',
     padding: '8px 24px',
-    borderBottom: '1px solid #1a1e24',
+    borderBottom: '1px solid #e2e5e9',
     gap: 8,
   },
   newThreadBtn: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
-    color: '#5a6370',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
+    color: '#6b7280',
     padding: '6px 14px',
     borderRadius: 6,
     cursor: 'pointer',
@@ -39,8 +39,8 @@ const styles = {
   },
   userMsg: {
     alignSelf: 'flex-end',
-    background: '#1a1e24',
-    color: '#edf0f3',
+    background: '#e2e5e9',
+    color: '#1a1a1a',
     padding: '10px 16px',
     borderRadius: '12px 12px 4px 12px',
     maxWidth: '70%',
@@ -56,9 +56,9 @@ const styles = {
     gap: 8,
   },
   assistantText: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
-    color: '#c8cdd3',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
+    color: '#374151',
     padding: '10px 16px',
     borderRadius: '12px 12px 12px 4px',
     fontSize: 14,
@@ -66,8 +66,8 @@ const styles = {
     whiteSpace: 'pre-wrap',
   },
   chartWrap: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
     borderRadius: 8,
     height: 450,
     overflow: 'hidden',
@@ -76,14 +76,14 @@ const styles = {
     display: 'flex',
     gap: 8,
     padding: '12px 24px',
-    borderTop: '1px solid #1a1e24',
-    background: '#0c0f12',
+    borderTop: '1px solid #e2e5e9',
+    background: '#f8f9fa',
   },
   input: {
     flex: 1,
-    background: '#06080a',
-    border: '1px solid #1a1e24',
-    color: '#edf0f3',
+    background: '#ffffff',
+    border: '1px solid #e2e5e9',
+    color: '#1a1a1a',
     padding: '10px 14px',
     borderRadius: 8,
     fontSize: 14,
@@ -91,9 +91,9 @@ const styles = {
     outline: 'none',
   },
   sendBtn: {
-    background: '#0a1f17',
-    border: '1px solid #34d399',
-    color: '#34d399',
+    background: '#ecfdf5',
+    border: '1px solid #059669',
+    color: '#059669',
     padding: '10px 20px',
     borderRadius: 8,
     cursor: 'pointer',
@@ -103,7 +103,7 @@ const styles = {
   },
   loadingDot: {
     alignSelf: 'flex-start',
-    color: '#5a6370',
+    color: '#6b7280',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 12,
     padding: '10px 16px',
@@ -116,8 +116,8 @@ const styles = {
     top: '100%',
     right: 0,
     marginTop: 4,
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
     borderRadius: 8,
     width: 280,
     maxHeight: 260,
@@ -128,11 +128,11 @@ const styles = {
   dropdownItem: {
     padding: '10px 14px',
     cursor: 'pointer',
-    borderBottom: '1px solid #1a1e24',
+    borderBottom: '1px solid #e2e5e9',
   },
   dropdownTitle: {
     fontSize: 12,
-    color: '#edf0f3',
+    color: '#1a1a1a',
     fontWeight: 500,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -140,7 +140,7 @@ const styles = {
   },
   dropdownDate: {
     fontSize: 10,
-    color: '#5a6370',
+    color: '#6b7280',
     fontFamily: "'JetBrains Mono', monospace",
     marginTop: 2,
   },
@@ -196,7 +196,7 @@ export default function ChatInterface({
                       setShowRecent(false);
                       onLoadConversation(conv.id);
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#111518'}
+                    onMouseEnter={e => e.currentTarget.style.background = '#ffffff'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <div style={styles.dropdownTitle}>{conv.title || 'Untitled'}</div>
@@ -227,8 +227,8 @@ export default function ChatInterface({
                   onClick={() => onSend(chip)}
                   style={{
                     background: 'transparent',
-                    border: '1px solid #34d399',
-                    color: '#34d399',
+                    border: '1px solid #059669',
+                    color: '#059669',
                     padding: '6px 14px',
                     borderRadius: 20,
                     cursor: 'pointer',
@@ -236,7 +236,7 @@ export default function ChatInterface({
                     fontSize: 11,
                     transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#0a1f17'}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ecfdf5'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   {chip}
@@ -278,7 +278,7 @@ export default function ChatInterface({
                     <button
                       onClick={() => onSaveChart(i)}
                       style={{
-                        background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+                        background: '#ecfdf5', border: '1px solid #059669', color: '#059669',
                         padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
                         fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
                       }}

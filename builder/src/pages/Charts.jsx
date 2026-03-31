@@ -131,7 +131,7 @@ export default function Charts() {
               <div style={s.actions}>
                 <button style={s.actionBtn} onClick={() => handleRename(chart.id)}>rename</button>
                 <button style={s.actionBtn} onClick={() => navigate(`/chat?edit=${chart.id}`)}>edit</button>
-                <button style={{ ...s.actionBtn, color: '#f87171' }} onClick={() => handleDelete([chart.id])}>delete</button>
+                <button style={{ ...s.actionBtn, color: '#dc2626' }} onClick={() => handleDelete([chart.id])}>delete</button>
               </div>
             </div>
           ))}
@@ -144,18 +144,18 @@ export default function Charts() {
 const s = {
   layout: { padding: 24, maxWidth: 900, margin: '0 auto' },
   header: { marginBottom: 24 },
-  title: { fontSize: 20, fontWeight: 700, color: '#edf0f3', margin: 0 },
-  subtitle: { color: '#5a6370', fontSize: 13, marginTop: 4 },
+  title: { fontSize: 20, fontWeight: 700, color: '#1a1a1a', margin: 0 },
+  subtitle: { color: '#6b7280', fontSize: 13, marginTop: 4 },
   controls: { display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' },
-  search: { background: '#0c0f12', border: '1px solid #1a1e24', color: '#c8cdd3', padding: '6px 12px', borderRadius: 4, fontSize: 12, flex: 1, maxWidth: 300 },
-  sortSelect: { background: '#0c0f12', border: '1px solid #1a1e24', color: '#c8cdd3', padding: '6px 10px', borderRadius: 4, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
-  deleteBtn: { background: 'none', border: '1px solid #f87171', color: '#f87171', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
+  search: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151', padding: '6px 12px', borderRadius: 4, fontSize: 12, flex: 1, maxWidth: 300 },
+  sortSelect: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151', padding: '6px 10px', borderRadius: 4, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
+  deleteBtn: { background: 'none', border: '1px solid #dc2626', color: '#dc2626', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
   list: { display: 'flex', flexDirection: 'column', gap: 4 },
-  row: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 6 },
+  row: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 6 },
   chartInfo: { flex: 1 },
-  chartName: { fontSize: 14, fontWeight: 600, color: '#edf0f3' },
-  chartMeta: { fontSize: 11, color: '#5a6370', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 },
+  chartName: { fontSize: 14, fontWeight: 600, color: '#1a1a1a' },
+  chartMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 },
   actions: { display: 'flex', gap: 8 },
-  actionBtn: { background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '2px 6px' },
-  empty: { color: '#5a6370', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
+  actionBtn: { background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '2px 6px' },
+  empty: { color: '#6b7280', fontSize: 13, padding: 40, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
 };

@@ -5,9 +5,9 @@ const styles = {
   wrapper: {
     maxHeight: 450,
     overflowY: 'auto',
-    border: '1px solid #1a1e24',
+    border: '1px solid #e2e5e9',
     borderRadius: 8,
-    background: '#0c0f12',
+    background: '#f8f9fa',
   },
   table: {
     width: '100%',
@@ -18,11 +18,11 @@ const styles = {
   th: {
     position: 'sticky',
     top: 0,
-    background: '#111518',
-    color: '#c8cdd3',
+    background: '#ffffff',
+    color: '#374151',
     padding: '10px 14px',
     textAlign: 'right',
-    borderBottom: '1px solid #1a1e24',
+    borderBottom: '1px solid #e2e5e9',
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
@@ -34,8 +34,8 @@ const styles = {
   },
   td: {
     padding: '8px 14px',
-    borderBottom: '1px solid #1a1e24',
-    color: '#c8cdd3',
+    borderBottom: '1px solid #e2e5e9',
+    color: '#374151',
     textAlign: 'right',
     whiteSpace: 'nowrap',
   },
@@ -44,13 +44,13 @@ const styles = {
     color: '#8b929b',
   },
   totalRow: {
-    background: '#111518',
+    background: '#ffffff',
     fontWeight: 600,
   },
   sortArrow: {
     marginLeft: 4,
     fontSize: 10,
-    color: '#5a6370',
+    color: '#6b7280',
   },
 };
 
