@@ -39,6 +39,7 @@ export function connectBq(onSuccess) {
     client_id: BQ_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/userinfo.email',
     hint: 'j.porter@method.me',
+    prompt: 'select_account',
     callback: (r) => {
       if (r.access_token) {
         bqToken = r.access_token;
