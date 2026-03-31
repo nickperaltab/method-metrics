@@ -1,6 +1,24 @@
 import { invokeAiChart } from './supabase';
 
 const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy']);
+const VALID_STYLE_OPERATORS = new Set(['<', '<=', '>', '>=', '==', '!=']);
+
+function normalizeStyleRules(rules) {
+  if (!Array.isArray(rules)) return [];
+  return rules
+    .map((rule) => {
+      const target = rule.target || rule.target_series || rule.series;
+      const compareTo = rule.compare_to || rule.compare_series || rule.compare;
+      const thresholdValue = rule.threshold ?? rule.value ?? null;
+      const parsedThreshold = thresholdValue != null && !Number.isNaN(Number(thresholdValue))
+        ? Number(thresholdValue)
+        : null;
+      const operator = VALID_STYLE_OPERATORS.has(rule.operator) ? rule.operator : '<';
+      const color = typeof rule.color === 'string' ? rule.color : '#f87171';
+      return { target, compareTo, threshold: parsedThreshold, operator, color };
+    })
+    .filter(r => r.target && (r.compareTo || r.threshold != null));
+}
 
 // Validate AI-returned column names against actual schema and approved dimensions.
 function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
@@ -83,6 +101,11 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
       lastNMonths: dc.last_n_months != null ? dc.last_n_months : null,
       channelFilter: dc.channel_filter || null,
       groupByDimension: dc.group_by_dimension || null,
+      yearFilter: Array.isArray(dc.year_filter) ? dc.year_filter : null,
+      yoyMode: dc.yoy_mode || 'value',
+      yoyMonths: Array.isArray(dc.yoy_months) ? dc.yoy_months : null,
+      endDateRule: dc.end_date_rule || null,
+      styleRules: normalizeStyleRules(dc.style_rules),
       labels: dc.labels || resolvedMetrics.map(m => m.name),
     },
     echartsType,
@@ -99,6 +122,8 @@ export function buildMetricContext(metrics, approvedDimensions) {
   );
   return chartable.map(m => {
     let line = `- id:${m.id} name:"${m.name}" type:${m.metric_type} view:${m.view_name || 'none'}`;
+    if (m.notes) line += ` desc:"${m.notes}"`;
+    if (m.chart_sql) line += ` has_chart_sql:true`;
     if (m.formula) line += ` formula:${m.formula}`;
     if (m.depends_on) line += ` depends_on:[${m.depends_on.join(',')}]`;
     if (m.supported_grains) line += ` grains:[${m.supported_grains.join(',')}]`;
@@ -163,6 +188,11 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
       lastNMonths: dc.last_n_months != null ? dc.last_n_months : null,
       channelFilter: dc.channel_filter || null,
       groupByDimension: dc.group_by_dimension || null,
+      yearFilter: Array.isArray(dc.year_filter) ? dc.year_filter : null,
+      yoyMode: dc.yoy_mode || 'value',
+      yoyMonths: Array.isArray(dc.yoy_months) ? dc.yoy_months : null,
+      endDateRule: dc.end_date_rule || null,
+      styleRules: normalizeStyleRules(dc.style_rules),
       labels: dc.labels || resolvedMetrics.map(m => m.name),
     },
     echartsType,
