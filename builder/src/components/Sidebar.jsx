@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
-import { fetchDashboards } from '../lib/supabase';
+import { fetchDashboards, fetchStars } from '../lib/supabase';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
@@ -15,10 +15,17 @@ const ADMIN_ITEMS = [
 export default function Sidebar({ collapsed, onToggle }) {
   const { currentUser, switchUser } = useUser();
   const [dashboards, setDashboards] = useState([]);
+  const [stars, setStars] = useState([]);
 
   useEffect(() => {
     fetchDashboards().then(setDashboards).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchStars(currentUser.id).then(setStars).catch(() => {});
+    }
+  }, [currentUser]);
 
   const linkStyle = ({ isActive }) => ({
     display: 'flex',
@@ -102,6 +109,22 @@ export default function Sidebar({ collapsed, onToggle }) {
             <span style={{ fontSize: 16 }}>{'\u2728'}</span>
             Chart Builder
           </NavLink>
+
+          {/* Favorites */}
+          {stars.length > 0 && (
+            <>
+              <div style={{ height: 1, background: '#1a1e24', margin: '12px 16px' }} />
+              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#5a6370' }}>
+                {'\u2605'} Favorites
+              </div>
+              {dashboards.filter(d => stars.includes(d.id)).map(d => (
+                <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle}>
+                  <span style={{ fontSize: 12, color: '#fbbf24' }}>{'\u2605'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                </NavLink>
+              ))}
+            </>
+          )}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#1a1e24', margin: '12px 16px' }} />
