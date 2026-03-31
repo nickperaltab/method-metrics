@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
-import { fetchDashboards, fetchStars } from '../lib/supabase';
+import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
@@ -18,11 +18,19 @@ export default function Sidebar({ collapsed, onToggle }) {
   const [stars, setStars] = useState([]);
 
   useEffect(() => {
-    fetchDashboards().then(setDashboards).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     if (currentUser) {
+      // Load user's own dashboards + approved dashboards for sidebar
+      Promise.all([
+        fetchMyDashboards(currentUser.id),
+        fetchApprovedDashboardsList(),
+      ]).then(([mine, approved]) => {
+        // Merge and deduplicate (an approved dashboard might also be mine)
+        const all = [...mine];
+        for (const d of approved) {
+          if (!all.some(x => x.id === d.id)) all.push(d);
+        }
+        setDashboards(all);
+      }).catch(() => {});
       fetchStars(currentUser.id).then(setStars).catch(() => {});
     }
   }, [currentUser]);
