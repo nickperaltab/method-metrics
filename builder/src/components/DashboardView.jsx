@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
-import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts } from '../lib/supabase';
+import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
@@ -230,6 +230,9 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
         setDashboard(dbVal);
         setGridLayout(dbVal.layout || []);
+
+        // Record this view for Recently Viewed on Home
+        if (currentUser) recordView(dbVal.id, currentUser.id);
 
         // Load charts by IDs from the dashboard layout (not filtered by user)
         const chartIds = (dbVal.layout || []).map(item => item.i);

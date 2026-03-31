@@ -73,7 +73,6 @@ export default function Home() {
     .map(id => dashboards.find(d => d.id === id))
     .filter(Boolean)
     .filter(d => !stars.includes(d.id)); // Don't repeat starred items
-  const approvedDashboards = dashboards.filter(d => d.is_approved);
 
   function renderCard(db) {
     return (
@@ -125,13 +124,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Recommended */}
-      {approvedDashboards.length > 0 && (
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Recommended</div>
-          <div style={styles.grid}>{approvedDashboards.map(renderCard)}</div>
-        </div>
-      )}
     </div>
   );
 }
