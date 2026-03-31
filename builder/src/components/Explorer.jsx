@@ -25,9 +25,9 @@ import { evaluateFormula } from '../lib/sanitize';
 
 const styles = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 'calc(100vh - 52px)' },
-  status: { color: '#5a6370', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' },
-  chartContainer: { background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8, overflow: 'hidden', height: 500 },
-  schemasStatus: { color: '#5a6370', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textAlign: 'center' },
+  status: { color: '#6b7280', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", padding: 40, textAlign: 'center' },
+  chartContainer: { background: '#f8f9fa', border: '1px solid #e2e5e9', borderRadius: 8, overflow: 'hidden', height: 500 },
+  schemasStatus: { color: '#6b7280', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textAlign: 'center' },
 };
 
 export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }) {
@@ -306,7 +306,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
         <div style={styles.status}>Describe the chart you want above</div>
       )}
       {loading && <div style={styles.status}>Loading...</div>}
-      {dataError && <div style={{ color: '#f87171', fontSize: 12, padding: '8px 0' }}>{dataError}</div>}
+      {dataError && <div style={{ color: '#dc2626', fontSize: 12, padding: '8px 0' }}>{dataError}</div>}
       {hasChart && (
         <>
           {kpiData ? (
@@ -322,9 +322,9 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
           )}
           <ChartDetails queryDetails={queryDetails} metrics={metrics} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-            {saveSuccess && <span style={{ color: '#34d399', fontSize: 12 }}>Saved!</span>}
+            {saveSuccess && <span style={{ color: '#059669', fontSize: 12 }}>Saved!</span>}
             <button onClick={() => setShowSaveModal(true)} disabled={saving} style={{
-              background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+              background: '#ecfdf5', border: '1px solid #059669', color: '#059669',
               padding: '8px 20px', borderRadius: 6, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
               opacity: saving ? 0.5 : 1,

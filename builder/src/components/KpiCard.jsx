@@ -2,8 +2,8 @@ import React from 'react';
 
 const styles = {
   card: {
-    background: '#0c0f12',
-    border: '1px solid #1a1e24',
+    background: '#f8f9fa',
+    border: '1px solid #e2e5e9',
     borderRadius: 12,
     padding: 24,
     minWidth: 200,
@@ -16,7 +16,7 @@ const styles = {
   label: {
     fontSize: 11,
     fontFamily: "'JetBrains Mono', monospace",
-    color: '#5a6370',
+    color: '#6b7280',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
@@ -24,7 +24,7 @@ const styles = {
     fontSize: 42,
     fontWeight: 700,
     fontFamily: "'DM Sans', sans-serif",
-    color: '#edf0f3',
+    color: '#1a1a1a',
     lineHeight: 1.1,
   },
   delta: {
@@ -38,8 +38,8 @@ export default function KpiCard({ metricName, value, delta, deltaPercent, isRate
     return (
       <div style={{ ...styles.card, borderColor: '#7f1d1d' }}>
         <div style={styles.label}>{metricName}</div>
-        <div style={{ ...styles.value, fontSize: 16, color: '#f87171' }}>Data unavailable</div>
-        <div style={{ ...styles.delta, color: '#5a6370' }}>Unable to load — try refreshing</div>
+        <div style={{ ...styles.value, fontSize: 16, color: '#dc2626' }}>Data unavailable</div>
+        <div style={{ ...styles.delta, color: '#6b7280' }}>Unable to load — try refreshing</div>
       </div>
     );
   }
@@ -48,13 +48,13 @@ export default function KpiCard({ metricName, value, delta, deltaPercent, isRate
     ? `${(value * 100).toFixed(1)}%`
     : Number(value).toLocaleString();
 
-  let deltaColor = '#5a6370';
+  let deltaColor = '#6b7280';
   let deltaText = '\u2014 no change';
   if (deltaPercent > 0) {
-    deltaColor = '#34d399';
+    deltaColor = '#059669';
     deltaText = `\u2191 +${deltaPercent}% vs prior month`;
   } else if (deltaPercent < 0) {
-    deltaColor = '#f87171';
+    deltaColor = '#dc2626';
     deltaText = `\u2193 ${deltaPercent}% vs prior month`;
   }
 

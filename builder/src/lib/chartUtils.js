@@ -1,6 +1,6 @@
 import { evaluateFormula } from './sanitize.js';
 
-export const COLORS = ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8', '#fb923c', '#e879f9', '#4ade80', '#f472b6'];
+export const COLORS = ['#059669', '#2563eb', '#f59e0b', '#dc2626', '#a78bfa', '#0284c7', '#ea580c', '#c026d3', '#16a34a', '#db2777'];
 
 export const ATT_COL_MAP = {
   SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
@@ -226,26 +226,26 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   const baseTooltip = {
     trigger: 'axis',
-    backgroundColor: '#111518',
-    borderColor: '#1a1e24',
-    textStyle: { color: '#c8cdd3', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e5e9',
+    textStyle: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
   };
 
   const baseGrid = { left: 60, right: 24, top: showLegend ? 40 : 16, bottom: 60, containLabel: false };
 
   const baseLegend = showLegend ? {
     show: true,
-    textStyle: { color: '#c8cdd3' },
+    textStyle: { color: '#374151' },
     top: 0,
   } : { show: false };
 
   const categoryAxis = {
     type: 'category',
     data: displayLabels,
-    axisLine: { lineStyle: { color: '#1a1e24' } },
-    axisTick: { lineStyle: { color: '#1a1e24' } },
+    axisLine: { lineStyle: { color: '#e2e5e9' } },
+    axisTick: { lineStyle: { color: '#e2e5e9' } },
     axisLabel: {
-      color: '#5a6370',
+      color: '#6b7280',
       fontFamily: "'JetBrains Mono', monospace",
       fontSize: 11,
       rotate: displayLabels.length > 12 ? 45 : 0,
@@ -254,18 +254,18 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   const valueAxis = {
     type: 'value',
-    axisLine: { lineStyle: { color: '#1a1e24' } },
-    axisTick: { lineStyle: { color: '#1a1e24' } },
+    axisLine: { lineStyle: { color: '#e2e5e9' } },
+    axisTick: { lineStyle: { color: '#e2e5e9' } },
     axisLabel: {
-      color: '#5a6370',
+      color: '#6b7280',
       fontFamily: "'JetBrains Mono', monospace",
       fontSize: 11,
       formatter: (v) => typeof v === 'number' && v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v,
     },
-    splitLine: { lineStyle: { color: '#1a1e24', type: 'dashed' } },
+    splitLine: { lineStyle: { color: '#e2e5e9', type: 'dashed' } },
   };
 
-  const labelStyle = { color: '#c8cdd3', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" };
+  const labelStyle = { color: '#374151', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" };
 
   // --- Line ---
   if (echartsType === 'line') {
@@ -389,7 +389,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         radius: ['35%', '65%'],
         center: ['50%', '45%'],
         data: pieData,
-        label: { color: '#c8cdd3', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
+        label: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } },
       }],
     };
@@ -455,17 +455,17 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     const yoyMonthAxis = {
       type: 'category',
       data: labels,
-      axisLine: { lineStyle: { color: '#1a1e24' } },
-      axisTick: { lineStyle: { color: '#1a1e24' } },
+      axisLine: { lineStyle: { color: '#e2e5e9' } },
+      axisTick: { lineStyle: { color: '#e2e5e9' } },
       axisLabel: {
-        color: '#5a6370',
+        color: '#6b7280',
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 11,
       },
     };
     return {
       tooltip: baseTooltip,
-      legend: { show: true, textStyle: { color: '#c8cdd3' }, top: 0 },
+      legend: { show: true, textStyle: { color: '#374151' }, top: 0 },
       grid: baseGrid,
       xAxis: yoyMonthAxis,
       yAxis: valueAxis,
@@ -494,8 +494,8 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       tooltip: { ...baseTooltip, trigger: 'item', formatter: (p) => `${displayLabels[p.data[0]]} / ${yLabels[p.data[1]]}: ${p.data[2]}` },
       grid: { ...baseGrid, left: 120 },
       xAxis: categoryAxis,
-      yAxis: { type: 'category', data: yLabels, axisLine: { lineStyle: { color: '#1a1e24' } }, axisLabel: { color: '#5a6370', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 } },
-      visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#0c0f12', '#34d399'] }, textStyle: { color: '#5a6370' } },
+      yAxis: { type: 'category', data: yLabels, axisLine: { lineStyle: { color: '#e2e5e9' } }, axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 } },
+      visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#f8f9fa', '#059669'] }, textStyle: { color: '#6b7280' } },
       series: [{ type: 'heatmap', data: heatData, label: { show: false }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }],
     };
   }

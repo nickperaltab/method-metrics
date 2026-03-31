@@ -19,60 +19,60 @@ const styles = {
   layout: { padding: 24, maxWidth: 1400, margin: '0 auto', minHeight: 'calc(100vh - 52px)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   titleRow: { display: 'flex', alignItems: 'center', gap: 12 },
-  title: { fontSize: 20, fontWeight: 600, color: '#edf0f3' },
+  title: { fontSize: 20, fontWeight: 600, color: '#1a1a1a' },
   backBtn: {
-    background: 'none', border: '1px solid #1a1e24', color: '#5a6370',
+    background: 'none', border: '1px solid #e2e5e9', color: '#6b7280',
     padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
   },
   actions: { display: 'flex', gap: 8 },
   btn: {
-    background: '#0a1f17', border: '1px solid #34d399', color: '#34d399',
+    background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
   },
   btnSecondary: {
-    background: '#111518', border: '1px solid #1a1e24', color: '#c8cdd3',
+    background: '#f8f9fa', border: '1px solid #e2e5e9', color: '#374151',
     padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
     fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
   },
   btnActive: {
-    background: '#1a3d2e', border: '1px solid #34d399', color: '#34d399',
+    background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
   },
   gridItem: {
-    background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 8,
+    background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 8,
     overflow: 'hidden', display: 'flex', flexDirection: 'column',
   },
   gridItemEditing: {
-    border: '1px dashed #34d399',
+    border: '1px dashed #059669',
   },
   chartHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '8px 12px', borderBottom: '1px solid #1a1e24',
+    padding: '8px 12px', borderBottom: '1px solid #e2e5e9',
   },
-  chartTitle: { fontSize: 12, fontWeight: 600, color: '#edf0f3' },
+  chartTitle: { fontSize: 12, fontWeight: 600, color: '#1a1a1a' },
   removeBtn: {
-    background: 'none', border: 'none', color: '#f87171', cursor: 'pointer',
+    background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer',
     fontSize: 14, padding: '0 4px', lineHeight: 1,
   },
   chartBody: { flex: 1, minHeight: 0 },
-  empty: { color: '#5a6370', fontSize: 13, padding: 60, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
+  empty: { color: '#6b7280', fontSize: 13, padding: 60, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" },
   modal: {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     zIndex: 1000,
   },
   modalContent: {
-    background: '#0c0f12', border: '1px solid #1a1e24', borderRadius: 12,
+    background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 12,
     padding: 24, width: 500, maxHeight: '70vh', overflowY: 'auto',
   },
-  modalTitle: { fontSize: 16, fontWeight: 600, color: '#edf0f3', marginBottom: 16 },
+  modalTitle: { fontSize: 16, fontWeight: 600, color: '#1a1a1a', marginBottom: 16 },
   chartOption: {
-    padding: 12, border: '1px solid #1a1e24', borderRadius: 6,
+    padding: 12, border: '1px solid #e2e5e9', borderRadius: 6,
     cursor: 'pointer', marginBottom: 8, transition: 'border-color 0.15s',
   },
-  chartOptionName: { fontSize: 13, fontWeight: 600, color: '#edf0f3' },
-  chartOptionMeta: { fontSize: 11, color: '#5a6370', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 },
+  chartOptionName: { fontSize: 13, fontWeight: 600, color: '#1a1a1a' },
+  chartOptionMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 },
 };
 
 const ROW_HEIGHT = 80;
@@ -441,9 +441,9 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   </div>
                   {editMode && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {editMode && <span className="drag-handle" style={{ cursor: 'grab', color: '#5a6370', fontSize: 14, padding: '0 4px' }}>{'\u2630'}</span>}
+                      {editMode && <span className="drag-handle" style={{ cursor: 'grab', color: '#6b7280', fontSize: 14, padding: '0 4px' }}>{'\u2630'}</span>}
                       <button
-                        style={{ background: 'none', border: 'none', color: '#5a6370', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
+                        style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
                         onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
                         title="Edit chart"
                       >
@@ -519,8 +519,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   key={chart.id}
                   style={styles.chartOption}
                   onClick={() => handleAddChart(chart)}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = '#34d399'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1e24'}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e5e9'}
                 >
                   <div style={styles.chartOptionName}>{chart.name}</div>
                   <div style={styles.chartOptionMeta}>
