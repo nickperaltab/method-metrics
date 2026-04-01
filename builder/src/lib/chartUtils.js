@@ -287,6 +287,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   const baseLegend = showLegend ? {
     show: true,
+    type: 'scroll',
     textStyle: { color: '#374151' },
     top: 0,
   } : { show: false };
@@ -475,10 +476,17 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   // --- Pie ---
   if (echartsType === 'pie') {
-    const pieData = labels.map((l, i) => ({
-      name: formatDateLabel(l),
-      value: dsList[0]?.data[i] || 0,
-    }));
+    // When multiple datasets are present (dimension breakdown), sum each series into one slice.
+    // When single dataset, use labels as slice names (time-bucketed or category data).
+    const pieData = dsList.length > 1
+      ? dsList.map(ds => ({
+          name: ds.label,
+          value: ds.data.reduce((sum, v) => sum + (v || 0), 0),
+        }))
+      : labels.map((l, i) => ({
+          name: formatDateLabel(l),
+          value: dsList[0]?.data[i] || 0,
+        }));
     return {
       tooltip: { ...baseTooltip, trigger: 'item' },
       legend: { ...baseLegend, show: true, type: 'scroll', bottom: 0 },

@@ -71,6 +71,7 @@ const styles = {
     borderRadius: 8,
     height: 450,
     overflow: 'hidden',
+    width: '100%',
   },
   inputRow: {
     display: 'flex',
@@ -251,7 +252,7 @@ export default function ChatInterface({
           }
           const isLatestChart = i === lastChartIndex;
           return (
-            <div key={i} style={styles.assistantMsg}>
+            <div key={i} style={{ ...styles.assistantMsg, ...(msg.chartOption ? { alignSelf: 'stretch' } : {}) }}>
               {msg.content && <div style={styles.assistantText}>{msg.content}</div>}
               {msg.chartOption && (
                 <div style={styles.chartWrap}>
