@@ -273,6 +273,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
     try {
       const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec, approvedDimensions);
+      console.log('[DEBUG] AI result:', JSON.stringify(result?.dataConfig || result));
 
       if (result.type === 'text') {
         const content = result.suggestion
