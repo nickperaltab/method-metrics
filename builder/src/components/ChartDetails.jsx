@@ -242,8 +242,22 @@ export default function ChartDetails({ queryDetails, styleRules, metrics, aiSpec
         <div style={styles.panel}>
           {aiSpec && (
             <div>
-              <div style={styles.label}>AI Response</div>
-              <pre style={styles.codeBlock}>{JSON.stringify(aiSpec, null, 2)}</pre>
+              <div style={styles.label}>AI Interpretation</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 8 }}>
+                {[
+                  { label: 'Chart', value: aiSpec.echartsType },
+                  { label: 'Group by', value: aiSpec.groupByDimension },
+                  { label: 'Channel filter', value: aiSpec.channelFilter },
+                  { label: 'Bucket', value: aiSpec.timeBucket },
+                  { label: 'Months', value: aiSpec.lastNMonths != null ? (aiSpec.lastNMonths === 0 ? 'this month' : `last ${aiSpec.lastNMonths}`) : null },
+                  { label: 'Series', value: aiSpec.labels?.join(', ') },
+                ].filter(r => r.value != null && r.value !== '').map(r => (
+                  <span key={r.label} style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: '#374151' }}>
+                    <span style={{ color: '#6b7280', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.5px' }}>{r.label}: </span>
+                    {r.value}
+                  </span>
+                ))}
+              </div>
               <hr style={styles.separator} />
             </div>
           )}
