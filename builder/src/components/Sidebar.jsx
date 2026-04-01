@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
+import { isAdmin } from '../lib/permissions';
 import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
 
 const NAV_ITEMS = [
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
 const ADMIN_ITEMS = [
   { path: '/admin/registry', label: 'Metric Registry', icon: '\u2261' },
   { path: '/admin/dimensions', label: 'Dimensions', icon: '\u25A6' },
+  { path: '/admin/insights', label: 'AI Insights', icon: '\u25C8' },
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
@@ -168,16 +170,20 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
-          {/* Admin */}
-          <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
-            Admin
-          </div>
-          {ADMIN_ITEMS.map(item => (
-            <NavLink key={item.path} to={item.path} style={linkStyle}>
-              <span style={{ fontSize: 16 }}>{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
+          {/* Admin — only visible to admin users */}
+          {isAdmin(currentUser) && (
+            <>
+              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
+                Admin
+              </div>
+              {ADMIN_ITEMS.map(item => (
+                <NavLink key={item.path} to={item.path} style={linkStyle}>
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </>
+          )}
         </nav>
 
         {/* User section at bottom */}

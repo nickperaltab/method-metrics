@@ -420,3 +420,21 @@ export async function saveFeedback({ userEmail, source, messageIndex, chartId, s
   });
   if (!res.ok) throw new Error(`Save feedback failed: ${res.status}`);
 }
+
+export async function fetchAllConversations(limit = 200) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/conversations?order=updated_at.desc&limit=${limit}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`fetchAllConversations failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAllFeedback(limit = 200) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/feedback?order=created_at.desc&limit=${limit}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`fetchAllFeedback failed: ${res.status}`);
+  return res.json();
+}

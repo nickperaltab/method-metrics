@@ -422,7 +422,12 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             id: conversationId,
             userEmail: userEmail || 'anonymous',
             title,
-            messages: allMessages.map(m => ({ role: m.role, content: m.content })),
+            messages: allMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+              ...(m.aiSpec ? { aiSpec: m.aiSpec } : {}),
+              ...(m.queryDetails ? { queryDetails: m.queryDetails.map(q => ({ metricName: q.metricName, metricId: q.metricId, sql: q.sql, dateColumn: q.dateColumn })) } : {}),
+            })),
             currentChartSpec: newSpec,
           });
           if (!conversationId && saved && saved.length > 0) {
@@ -489,7 +494,12 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         setMessages(allMessages);
         try {
           const title = updatedMessages[0]?.content?.slice(0, 80) || 'Untitled';
-          const saved = await saveConversation({ id: conversationId, userEmail: userEmail || 'anonymous', title, messages: allMessages.map(m => ({ role: m.role, content: m.content })), currentChartSpec: newSpec });
+          const saved = await saveConversation({ id: conversationId, userEmail: userEmail || 'anonymous', title, messages: allMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+              ...(m.aiSpec ? { aiSpec: m.aiSpec } : {}),
+              ...(m.queryDetails ? { queryDetails: m.queryDetails.map(q => ({ metricName: q.metricName, metricId: q.metricId, sql: q.sql, dateColumn: q.dateColumn })) } : {}),
+            })), currentChartSpec: newSpec });
           if (!conversationId && saved && saved.length > 0) setConversationId(saved[0].id);
           if (userEmail) loadConversations(userEmail).then(setRecentConversations).catch(() => {});
         } catch { /* non-critical */ }
@@ -585,7 +595,12 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           id: conversationId,
           userEmail: userEmail || 'anonymous',
           title,
-          messages: allMessages.map(m => ({ role: m.role, content: m.content })),
+          messages: allMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+              ...(m.aiSpec ? { aiSpec: m.aiSpec } : {}),
+              ...(m.queryDetails ? { queryDetails: m.queryDetails.map(q => ({ metricName: q.metricName, metricId: q.metricId, sql: q.sql, dateColumn: q.dateColumn })) } : {}),
+            })),
           currentChartSpec: newSpec,
         });
         if (!conversationId && saved && saved.length > 0) {

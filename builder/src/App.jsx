@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import Charts from './pages/Charts';
 import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
+import AdminInsights from './pages/AdminInsights';
 import ApprovedDashboards from './pages/ApprovedDashboards';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/approved" element={<ApprovedDashboards />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />
+            <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
           </Routes>
         </Layout>
       </HashRouter>
