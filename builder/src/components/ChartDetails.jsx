@@ -228,7 +228,7 @@ function DataTable({ labels, data }) {
   );
 }
 
-export default function ChartDetails({ queryDetails, styleRules, metrics }) {
+export default function ChartDetails({ queryDetails, styleRules, metrics, aiSpec }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!queryDetails || queryDetails.length === 0) return null;
@@ -240,6 +240,13 @@ export default function ChartDetails({ queryDetails, styleRules, metrics }) {
       </button>
       {expanded && (
         <div style={styles.panel}>
+          {aiSpec && (
+            <div>
+              <div style={styles.label}>AI Response</div>
+              <pre style={styles.codeBlock}>{JSON.stringify(aiSpec, null, 2)}</pre>
+              <hr style={styles.separator} />
+            </div>
+          )}
           {styleRules && styleRules.length > 0 && (
             <div>
               <div style={styles.label}>Style Rules</div>

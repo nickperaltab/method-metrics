@@ -146,6 +146,7 @@ describe('AI Chart Builder Evals', () => {
     const result = await callAi('show me trial distribution by country as a pie chart');
     assertValidSpec(result, 'pie by country');
     assert.strictEqual(result.echarts_type, 'pie', 'should be pie chart');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
   });
 
   it('stacked bar: trials by channel over time', async () => {
@@ -376,6 +377,21 @@ describe('Dimension Breakdown Evals', () => {
     assertValidSpec(result, 'trials by country');
     assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54)');
     assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('trial distribution by country (vague phrasing) → group_by_dimension SignupCountry', async () => {
+    const result = await callAi('show me trial distribution by country');
+    assertValidSpec(result, 'trial distribution by country');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54)');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('trials by country horizontal bar → group_by_dimension SignupCountry', async () => {
+    const result = await callAi('show me trials by country as a horizontal bar');
+    assertValidSpec(result, 'trials by country horizontal bar');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54)');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+    assert.strictEqual(result.echarts_type, 'horizontal_bar', 'should be horizontal_bar');
   });
 
   it('SEO trials by month → channel_filter not group_by_dimension', async () => {

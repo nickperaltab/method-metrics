@@ -562,6 +562,17 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           chartOption,
           queryDetails: collectedDetails,
           styleRules: dataConfig.styleRules || [],
+          aiSpec: {
+            metricIds: result.metricIds,
+            echartsType,
+            groupByDimension: dataConfig.groupByDimension,
+            channelFilter: dataConfig.channelFilter,
+            timeBucket: dataConfig.timeBucket,
+            lastNMonths: dataConfig.lastNMonths,
+            xField: dataConfig.xField,
+            yFields: dataConfig.yFields,
+            labels: dataConfig.labels,
+          },
         };
       }
       const allMessages = [...updatedMessages, assistantMsg];

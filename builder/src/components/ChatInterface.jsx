@@ -290,7 +290,7 @@ export default function ChatInterface({
                 </div>
               )}
               {msg.queryDetails && msg.queryDetails.length > 0 && (
-                <ChartDetails queryDetails={msg.queryDetails} styleRules={msg.styleRules} metrics={metrics} />
+                <ChartDetails queryDetails={msg.queryDetails} styleRules={msg.styleRules} metrics={metrics} aiSpec={msg.aiSpec} />
               )}
             </div>
           );
