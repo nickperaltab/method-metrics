@@ -303,7 +303,22 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setError(null);
 
     try {
-      const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec, approvedDimensions);
+      let result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec, approvedDimensions);
+
+      // If AI returned an invalid metric ID, retry with a correction message before giving up
+      if (result.error) {
+        let aiRetryMessages = [...updatedMessages];
+        for (let attempt = 0; attempt < 2 && result.error; attempt++) {
+          aiRetryMessages = [...aiRetryMessages, {
+            role: 'user',
+            content: `That returned an error: "${result.error}". Please choose a valid metric ID from the catalog provided — do not invent IDs that were not listed.`,
+          }];
+          const retried = await generateChartSpecWithHistory(aiRetryMessages, metrics, schemaCache, lastSpec, approvedDimensions);
+          if (!retried.error) { result = retried; break; }
+          result = retried;
+        }
+      }
+
       if (result.type === 'text') {
         const content = result.suggestion
           ? `${result.content}\n\n${result.suggestion}`
@@ -315,7 +330,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
       if (result.error) {
         const errText = result.suggestion ? `${result.error}. ${result.suggestion}` : result.error;
-        setMessages(prev => [...prev, { role: 'assistant', content: errText }]);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: errText,
+          isError: true,
+          queryDetails: [],
+          aiSpec: result.metric_ids ? { metricIds: result.metric_ids, echartsType: result.echarts_type } : null,
+        }]);
         setLoading(false);
         return;
       }

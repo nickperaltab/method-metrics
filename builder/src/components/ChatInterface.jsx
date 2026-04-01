@@ -267,7 +267,7 @@ export default function ChatInterface({
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
               )}
-              {(msg.chartOption || msg.kpiData || msg.tableData) && (
+              {(msg.chartOption || msg.kpiData || msg.tableData || msg.isError) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <FeedbackButtons
                     userEmail={userEmail}
@@ -289,8 +289,8 @@ export default function ChatInterface({
                   )}
                 </div>
               )}
-              {msg.queryDetails && msg.queryDetails.length > 0 && (
-                <ChartDetails queryDetails={msg.queryDetails} styleRules={msg.styleRules} metrics={metrics} aiSpec={msg.aiSpec} />
+              {(msg.queryDetails?.length > 0 || (msg.isError && msg.aiSpec)) && (
+                <ChartDetails queryDetails={msg.queryDetails || []} styleRules={msg.styleRules} metrics={metrics} aiSpec={msg.aiSpec} />
               )}
             </div>
           );

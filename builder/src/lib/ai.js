@@ -3,12 +3,12 @@ import { invokeAiChart } from './supabase';
 const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy', 'variance']);
 const VALID_STYLE_OPERATORS = new Set(['<', '<=', '>', '>=', '==', '!=']);
 
-function normalizeStyleRules(rules) {
+export function normalizeStyleRules(rules) {
   if (!Array.isArray(rules)) return [];
   return rules
     .map((rule) => {
       const target = rule.target || rule.target_series || rule.series;
-      const compareTo = rule.compare_to || rule.compare_series || rule.compare;
+      const compareTo = rule.compareTo || rule.compare_to || rule.compare_series || rule.compare;
       const thresholdValue = rule.threshold ?? rule.value ?? null;
       const parsedThreshold = thresholdValue != null && !Number.isNaN(Number(thresholdValue))
         ? Number(thresholdValue)
