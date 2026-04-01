@@ -457,7 +457,6 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       updateDashboard(id, { layout: updated }).catch(() => {});
       return updated;
     });
-    setRefreshKey(prev => prev + 1);
   }, [id]);
 
   const handleAddChart = useCallback((chart) => {
