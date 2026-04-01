@@ -188,7 +188,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const [modalTab, setModalTab] = useState('mine');
+  const [modalTab, setModalTab] = useState(null);
   const [modalSearch, setModalSearch] = useState('');
   const [modalMetricFilter, setModalMetricFilter] = useState(new Set()); // set of metric ids
   const [containerWidth, setContainerWidth] = useState(1352);
@@ -457,7 +457,6 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       updateDashboard(id, { layout: updated }).catch(() => {});
       return updated;
     });
-    setRefreshKey(prev => prev + 1);
   }, [id]);
 
   const handleAddChart = useCallback((chart) => {
@@ -474,9 +473,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     const newLayout = [...gridLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }];
     setGridLayout(newLayout);
     setShowAddModal(false);
-    // Save layout and trigger chart data load
+    // Save layout — chartMap + gridLayout changes trigger the data build effect automatically
     updateDashboard(id, { layout: newLayout }).catch(() => {});
-    setRefreshKey(prev => prev + 1);
   }, [gridLayout, id]);
 
   const handleChatChartSaved = useCallback((chartId) => {
@@ -746,18 +744,26 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
       {showAddModal && (() => {
         const onDashboard = new Set(gridLayout.map(item => item.i));
-        const sourceList = modalTab === 'mine' ? myCharts : approvedCharts;
 
-        // Collect unique metrics used across charts in this tab (excluding already-on-dashboard)
-        const availableInTab = sourceList.filter(c => !onDashboard.has(String(c.id)));
-        const metricIdsInTab = [...new Set(availableInTab.flatMap(c => c.metric_ids || []))];
-        const metricChipList = metricIdsInTab
-          .map(mid => metrics.find(m => m.id === mid))
+        // Merge and deduplicate all available charts
+        const allAvailable = [...myCharts];
+        for (const c of approvedCharts) {
+          if (!allAvailable.some(x => x.id === c.id)) allAvailable.push(c);
+        }
+        const available = allAvailable.filter(c => !onDashboard.has(String(c.id)));
+
+        // Collect unique metrics for chips (use Number() to normalize IDs)
+        const metricIdsInCharts = [...new Set(available.flatMap(c => (c.metric_ids || []).map(Number)))];
+        const metricChipList = metricIdsInCharts
+          .map(mid => metrics.find(m => Number(m.id) === mid))
           .filter(Boolean)
           .sort((a, b) => a.name.localeCompare(b.name));
 
-        const filtered = availableInTab.filter(c => {
-          if (modalMetricFilter.size > 0 && !(c.metric_ids || []).some(mid => modalMetricFilter.has(mid))) return false;
+        // Filter
+        const filtered = available.filter(c => {
+          if (modalTab === 'mine' && !canDelete(currentUser, c)) return false;
+          if (modalTab === 'approved' && !c.is_approved) return false;
+          if (modalMetricFilter.size > 0 && !(c.metric_ids || []).some(mid => modalMetricFilter.has(Number(mid)))) return false;
           if (!modalSearch) return true;
           const q = modalSearch.toLowerCase();
           const chartTypeLabel = TYPE_LABELS[c.gw_spec?.echartsType] || '';
@@ -765,12 +771,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             c.description?.toLowerCase().includes(q) ||
             chartTypeLabel.includes(q) ||
             (c.metric_ids || []).some(mid => {
-              const m = metrics.find(x => x.id === mid);
+              const m = metrics.find(x => Number(x.id) === Number(mid));
               return m?.name?.toLowerCase().includes(q);
             });
         });
 
-        const closeModal = () => { setShowAddModal(false); setModalSearch(''); setModalMetricFilter(new Set()); };
+        const closeModal = () => { setShowAddModal(false); setModalSearch(''); setModalMetricFilter(new Set()); setModalTab(null); };
         const toggleMetricChip = (mid) => setModalMetricFilter(prev => {
           const next = new Set(prev);
           if (next.has(mid)) next.delete(mid); else next.add(mid);
@@ -799,29 +805,38 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 >
                   + Create a New Chart from Scratch
                 </button>
-                <div style={styles.modalTabs}>
+
+                {/* Owner chips */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                   <button
-                    style={modalTab === 'mine' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => { setModalTab('mine'); setModalMetricFilter(new Set()); }}
+                    style={modalTab === null ? styles.metricChipActive : styles.metricChip}
+                    onClick={() => setModalTab(null)}
                   >
-                    My Charts ({myCharts.filter(c => !onDashboard.has(String(c.id))).length})
+                    All ({available.length})
                   </button>
                   <button
-                    style={modalTab === 'approved' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => { setModalTab('approved'); setModalMetricFilter(new Set()); }}
+                    style={modalTab === 'mine' ? styles.metricChipActive : styles.metricChip}
+                    onClick={() => setModalTab(modalTab === 'mine' ? null : 'mine')}
                   >
-                    Method Approved ({approvedCharts.filter(c => !onDashboard.has(String(c.id))).length})
+                    My Charts ({available.filter(c => canDelete(currentUser, c)).length})
+                  </button>
+                  <button
+                    style={modalTab === 'approved' ? styles.metricChipActive : styles.metricChip}
+                    onClick={() => setModalTab(modalTab === 'approved' ? null : 'approved')}
+                  >
+                    Method Approved ({available.filter(c => c.is_approved).length})
                   </button>
                 </div>
               </div>
 
+              {/* Metric chips */}
               {metricChipList.length > 0 && (
                 <div style={styles.metricChips}>
                   {metricChipList.map(m => (
                     <button
                       key={m.id}
-                      style={modalMetricFilter.has(m.id) ? styles.metricChipActive : styles.metricChip}
-                      onClick={() => toggleMetricChip(m.id)}
+                      style={modalMetricFilter.has(Number(m.id)) ? styles.metricChipActive : styles.metricChip}
+                      onClick={() => toggleMetricChip(Number(m.id))}
                     >
                       {m.name}
                     </button>
