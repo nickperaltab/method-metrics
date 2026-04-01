@@ -110,7 +110,7 @@ export async function fetchChartDatasets({
     }
   }
 
-  if (rawDatasets.length === 0) return null;
+  if (rawDatasets.length === 0) return { empty: true, labels: [], datasets: [], queryDetails };
 
   // Merge labels (union) and align datasets
   const allLabelsSet = new Set();

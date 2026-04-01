@@ -4,9 +4,9 @@ import assert from 'node:assert';
 const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
-const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials
-- id:55 name:"Syncs" type:primitive view:v_syncs
-- id:56 name:"Conversions" type:primitive view:v_conversions
+const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
 - id:20 name:"Conversion Rate" type:derived view:none formula:SAFE_DIVIDE({56},{54}) depends_on:[56,54]
 - id:25 name:"Sync Rate" type:derived view:none formula:SAFE_DIVIDE({55},{54}) depends_on:[55,54]
 - id:46 name:"Churn Rate" type:derived view:none
@@ -19,11 +19,11 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials
 - id:274 name:"Cancellations Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for cancellations/churn. Pair with Churn (id:59) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
 - id:275 name:"New Net SaaS Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for new net SaaS revenue. Use same chart type (bar or line), never combo."`;
 
-const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), Channel(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
-v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
-v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)`;
+const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
+v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
+v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)`;
 
-const VALID_ECHARTS_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy']);
+const VALID_ECHARTS_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy', 'variance']);
 
 async function callAi(prompt) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
@@ -357,6 +357,32 @@ describe('Conversational AI Evals', () => {
     assertValidSpec(r2, 'make it monthly');
     assert(r2.metric_ids.includes(54), 'should keep Trials');
     assert.strictEqual(r2.data_config.time_bucket, 'month', 'should change to monthly');
+  });
+});
+
+// --- Dimension Breakdown Evals ---
+
+describe('Dimension Breakdown Evals', () => {
+  it('trials by attribution channel → group_by_dimension, not pre-aggregated metric', async () => {
+    const result = await callAi('show me trials by attribution channel as a stacked bar');
+    assertValidSpec(result, 'trials by attribution channel');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54), not a pre-aggregated metric');
+    assert.strictEqual(result.data_config.group_by_dimension, 'AttributionChannel', 'should set group_by_dimension to AttributionChannel');
+    assert.strictEqual(result.echarts_type, 'stacked_bar', 'should be stacked_bar');
+  });
+
+  it('trials by country → group_by_dimension SignupCountry', async () => {
+    const result = await callAi('show me trials broken down by country');
+    assertValidSpec(result, 'trials by country');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54)');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('SEO trials by month → channel_filter not group_by_dimension', async () => {
+    const result = await callAi('show me SEO trials by month');
+    assertValidSpec(result, 'SEO trials filter');
+    assert.strictEqual(result.data_config.channel_filter, 'SEO', 'SEO should be a channel_filter');
+    assert.strictEqual(result.data_config.group_by_dimension, null, 'SEO is a filter not a dimension — group_by_dimension should be null');
   });
 });
 

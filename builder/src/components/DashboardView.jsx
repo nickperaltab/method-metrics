@@ -416,7 +416,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         }
 
         const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig });
-        if (!chartData) return;
+        if (!chartData || chartData.empty) return;
 
         if (echartsType === 'table') {
           setChartOptions(prev => ({ ...prev, [chartId]: { _tableData: true, labels: chartData.labels, datasets: chartData.datasets } }));

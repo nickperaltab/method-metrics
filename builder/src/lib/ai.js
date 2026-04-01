@@ -21,7 +21,7 @@ function normalizeStyleRules(rules) {
 }
 
 // Validate AI-returned column names against actual schema and approved dimensions.
-function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
+export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
   const primaryView = resolvedMetrics.find(m => m.view_name)?.view_name;
   if (!primaryView) return;
   const schema = schemaMap[primaryView] || [];

@@ -225,7 +225,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
 
       // Fetch and align chart data using shared utility
       const chartData = await fetchChartDatasets({ metricIds: result.metricIds, metrics, dataConfig });
-      if (!chartData) {
+      if (!chartData || chartData.empty) {
         setAiError('No data loaded for the requested metrics');
         return;
       }
@@ -256,7 +256,7 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
     try {
       const { metricIds, echartsType, dataConfig } = lastSpec;
       const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig, lastNMonthsOverride: months });
-      if (!chartData) return;
+      if (!chartData || chartData.empty) return;
       const option = buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels: lastSpec.showLabels, colors: lastSpec.colors });
       setChartOption(option);
     } catch { /* ignore */ } finally {

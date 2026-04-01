@@ -124,7 +124,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     }
 
     const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig, lastNMonthsOverride: overrideLastNMonths });
-    if (!chartData) return null;
+    if (!chartData || chartData.empty) return null;
     return buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels, colors });
   }, [metrics]);
 
@@ -273,8 +273,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
     try {
       const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec, approvedDimensions);
-      console.log('[DEBUG] AI result:', JSON.stringify(result?.dataConfig || result));
-
       if (result.type === 'text') {
         const content = result.suggestion
           ? `${result.content}\n\n${result.suggestion}`
@@ -468,11 +466,47 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         return;
       }
 
-      const chartData = await fetchChartDatasets({ metricIds: result.metricIds, metrics, dataConfig });
-      if (!chartData) {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'No data loaded for the requested metrics.' }]);
+      // Retry loop: if the query returns no data, feed the failure back to the AI and try again.
+      const MAX_RETRIES = 2;
+      let currentResult = result;
+      let chartData = null;
+      let retryMessages = [...updatedMessages];
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        chartData = await fetchChartDatasets({ metricIds: currentResult.metricIds, metrics, dataConfig: currentResult.dataConfig });
+        if (chartData && !chartData.empty) break;
+
+        if (attempt < MAX_RETRIES) {
+          const failedDetails = chartData?.queryDetails || [];
+          const failedSql = failedDetails.length > 0
+            ? failedDetails.map(q => `Metric "${q.metricName}" (id:${q.metricId}): ${q.sql}`).join('\n')
+            : `Metrics attempted: ${currentResult.metricIds.join(', ')}`;
+          const correctionMessage = {
+            role: 'user',
+            content: `The previous chart returned no data. Here is what was attempted:\n${failedSql}\n\nPlease pick a different metric or adjust the configuration (e.g. use a different metric_id, correct group_by_dimension, or fix x_field).`,
+          };
+          retryMessages = [...retryMessages, correctionMessage];
+          const corrected = await generateChartSpecWithHistory(retryMessages, metrics, schemaCache, currentResult, approvedDimensions);
+          if (!corrected || corrected.error || corrected.type === 'text') break;
+          currentResult = corrected;
+        }
+      }
+
+      if (!chartData || chartData.empty) {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'I wasn\'t able to load data for that request. Try rephrasing or ask about a different metric.' }]);
         setLoading(false);
         return;
+      }
+
+      // If a retry corrected the spec, update the variables derived from result
+      if (currentResult !== result) {
+        result.metricIds = currentResult.metricIds;
+        result.metrics = currentResult.metrics;
+        echartsType = currentResult.echartsType || echartsType;
+        Object.assign(dataConfig, currentResult.dataConfig); // mutate in place (dataConfig = result.dataConfig, same ref)
+        result.explanation = currentResult.explanation || result.explanation;
+        result.showLabels = currentResult.showLabels;
+        result.colors = currentResult.colors;
       }
 
       const { labels: finalLabels, datasets: finalDatasets, queryDetails: collectedDetails } = chartData;
