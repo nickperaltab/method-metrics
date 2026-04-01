@@ -203,7 +203,6 @@ export default function DashboardList({ userEmail }) {
               <th style={{ ...s.th, width: 120 }} onClick={() => toggleSort('modified')}>Last Modified{sortIcon('modified')}</th>
               <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
               <th style={{ ...s.th, width: 70, textAlign: 'center' }}></th>
-              <th style={{ ...s.th, width: 110, textAlign: 'center' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -223,7 +222,20 @@ export default function DashboardList({ userEmail }) {
                     >
                       {db.name}
                     </span>
-                    {db.is_approved && <span style={s.badge}>Method Approved</span>}
+                    {db.is_approved && (
+                      <span
+                        style={{ ...s.badge, cursor: isMine && admin ? 'pointer' : 'default' }}
+                        onClick={e => isMine && admin ? handleToggleApproval(e, db) : null}
+                        title={isMine && admin ? 'Click to remove approval' : ''}
+                      >Method Approved</span>
+                    )}
+                    {!db.is_approved && isMine && admin && (
+                      <span
+                        style={{ ...s.badgeInactive, cursor: 'pointer' }}
+                        onClick={e => handleToggleApproval(e, db)}
+                        title="Click to mark approved"
+                      >+ approve</span>
+                    )}
                   </td>
                   <td style={s.td}>{db.created_by?.split('@')[0] || '\u2014'}</td>
                   <td style={{ ...s.td, textAlign: 'center' }}>{(db.layout || []).length}</td>
@@ -240,16 +252,6 @@ export default function DashboardList({ userEmail }) {
                   <td style={{ ...s.td, textAlign: 'center' }}>
                     {isMine && (
                       <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>delete</button>
-                    )}
-                  </td>
-                  <td style={{ ...s.td, textAlign: 'center' }}>
-                    {isMine && admin && (
-                      <button
-                        style={{ ...s.actionBtn, color: db.is_approved ? '#dc2626' : '#059669', borderColor: db.is_approved ? '#fecaca' : '#a7f3d0' }}
-                        onClick={e => handleToggleApproval(e, db)}
-                      >
-                        {db.is_approved ? 'remove approval' : 'mark approved'}
-                      </button>
                     )}
                   </td>
                 </tr>
@@ -293,6 +295,10 @@ const s = {
   badge: {
     display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
+  },
+  badgeInactive: {
+    display: 'inline-block', background: '#f8f9fa', border: '1px dashed #d1d5db', color: '#9ca3af',
+    padding: '1px 6px', borderRadius: 10, fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
   },
   starBtn: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
   actionBtn: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '4px 10px', borderRadius: 4 },

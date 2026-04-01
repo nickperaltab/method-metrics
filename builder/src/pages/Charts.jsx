@@ -223,7 +223,6 @@ export default function Charts() {
               <th style={{ ...s.th, width: 85, textAlign: 'center' }} onClick={() => toggleSort('dashboards')}>Dashboards{sortIcon('dashboards')}</th>
               <th style={{ ...s.th, width: 100 }} onClick={() => toggleSort('created')}>Created{sortIcon('created')}</th>
               <th style={{ ...s.th, width: 70, textAlign: 'center' }}></th>
-              <th style={{ ...s.th, width: 110, textAlign: 'center' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -247,7 +246,20 @@ export default function Charts() {
                     >
                       {chart.name || 'Untitled'}
                     </span>
-                    {chart.is_approved && <span style={s.badge}>Method Approved</span>}
+                    {chart.is_approved && (
+                      <span
+                        style={{ ...s.badge, cursor: isMine && admin ? 'pointer' : 'default' }}
+                        onClick={() => isMine && admin && handleToggleApproval(chart)}
+                        title={isMine && admin ? 'Click to remove approval' : ''}
+                      >Method Approved</span>
+                    )}
+                    {!chart.is_approved && isMine && admin && (
+                      <span
+                        style={{ ...s.badgeInactive, cursor: 'pointer' }}
+                        onClick={() => handleToggleApproval(chart)}
+                        title="Click to mark approved"
+                      >+ approve</span>
+                    )}
                     <div
                       style={{ ...s.descRow, cursor: isMine ? 'pointer' : 'default' }}
                       onClick={() => isMine && handleEditDescription(chart)}
@@ -263,16 +275,6 @@ export default function Charts() {
                   <td style={{ ...s.td, textAlign: 'center' }}>
                     {isMine && (
                       <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => handleDelete(chart)}>delete</button>
-                    )}
-                  </td>
-                  <td style={{ ...s.td, textAlign: 'center' }}>
-                    {isMine && admin && (
-                      <button
-                        style={{ ...s.actionBtn, color: chart.is_approved ? '#dc2626' : '#059669', borderColor: chart.is_approved ? '#fecaca' : '#a7f3d0' }}
-                        onClick={() => handleToggleApproval(chart)}
-                      >
-                        {chart.is_approved ? 'remove approval' : 'mark approved'}
-                      </button>
                     )}
                   </td>
                 </tr>
@@ -316,6 +318,10 @@ const s = {
   badge: {
     display: 'inline-block', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
     padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
+  },
+  badgeInactive: {
+    display: 'inline-block', background: '#f8f9fa', border: '1px dashed #d1d5db', color: '#9ca3af',
+    padding: '1px 6px', borderRadius: 10, fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginLeft: 8,
   },
   descRow: { fontSize: 11, color: '#9ca3af', marginTop: 2, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   actionBtn: { background: '#ffffff', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '4px 10px', borderRadius: 4 },
