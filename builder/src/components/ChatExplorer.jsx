@@ -21,6 +21,37 @@ import { evaluateFormula } from '../lib/sanitize';
 import { getMonthIndices, formatMonthLabels, sliceSeries, computeGrowthSeries } from '../lib/yoyUtils';
 import schemaCache from '../lib/schemaCache';
 
+function suggestChartName(spec, metrics) {
+  if (!spec) return '';
+  const parts = [];
+
+  // Metric names
+  const metricNames = (spec.metricIds || [])
+    .map(id => metrics.find(m => m.id === id)?.name)
+    .filter(Boolean);
+  if (metricNames.length > 0) {
+    parts.push(metricNames.length <= 2 ? metricNames.join(' & ') : `${metricNames[0]} + ${metricNames.length - 1} more`);
+  }
+
+  // Time frame
+  const dc = spec.dataConfig || {};
+  if (dc.lastNMonths) {
+    parts.push(`Last ${dc.lastNMonths} Months`);
+  } else if (dc.timeBucket) {
+    const bucketLabel = { monthly: 'Monthly', weekly: 'Weekly', daily: 'Daily', quarterly: 'Quarterly', yearly: 'Yearly' };
+    parts.push(bucketLabel[dc.timeBucket] || dc.timeBucket);
+  }
+
+  // Dimensions / group by
+  if (dc.channelFilter) {
+    parts.push(`By ${dc.channelFilter}`);
+  } else if (dc.groupBy) {
+    parts.push(`By ${dc.groupBy}`);
+  }
+
+  return parts.join(' - ');
+}
+
 export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvatar, modalMode, onChartSaved, editChartId: editChartIdProp }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -637,7 +668,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           onSave={handleSaveConfirm}
           onClose={() => setShowSaveModal(false)}
           dashboards={dashboards}
-          defaultName={addToDashboardId ? '' : ''}
+          defaultName={editingChartInfo ? '' : suggestChartName(lastSpec, metrics)}
           editingChart={editingChartInfo}
           onUpdate={handleUpdateChart}
         />

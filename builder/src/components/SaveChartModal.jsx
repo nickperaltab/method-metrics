@@ -23,6 +23,7 @@ const styles = {
     outline: 'none', boxSizing: 'border-box', cursor: 'pointer',
   },
   fieldGroup: { marginBottom: 16 },
+  hint: { fontSize: 11, color: '#9ca3af', marginTop: 6, lineHeight: 1.5, fontStyle: 'italic' },
   actions: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 },
   cancelBtn: {
     background: '#ffffff', border: '1px solid #e2e5e9', color: '#374151',
@@ -72,6 +73,11 @@ export default function SaveChartModal({ onSave, onClose, dashboards = [], defau
             placeholder="Chart name"
             autoFocus
           />
+          <div style={styles.hint}>
+            Suggested format: Metric(s) - Time Frame - Dimensions
+            <br />
+            e.g. "Trials - Last 6 Months - By Vertical"
+          </div>
         </div>
 
         <div style={styles.fieldGroup}>
