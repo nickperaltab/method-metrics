@@ -147,34 +147,23 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
-          {/* Method Approved Dashboards */}
-          {approvedDashboards.length > 0 && (
-            <>
-              <NavLink to="/dashboards" style={linkStyle}>
-                <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{'\u2713'}</span>
-                Method Approved Dashboards
-              </NavLink>
-              {approvedDashboards.slice(0, 8).map(d => (
-                <NavLink key={`approved-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
-                  <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                </NavLink>
-              ))}
-              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-            </>
-          )}
-
-          {/* My Dashboards */}
+          {/* All Dashboards */}
           <NavLink to="/dashboards" end style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u25A0'}</span>
             All Dashboards
           </NavLink>
-          {myDashboards.slice(0, 8).map(d => (
-            <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
-              <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-            </NavLink>
-          ))}
+          {[...approvedDashboards, ...myDashboards]
+            .filter((d, i, arr) => arr.findIndex(x => x.id === d.id) === i)
+            .slice(0, 8)
+            .map(d => (
+              <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
+                {d.is_approved
+                  ? <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{'\u2713'}</span>
+                  : <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
+                }
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+              </NavLink>
+            ))}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
