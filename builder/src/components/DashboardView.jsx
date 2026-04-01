@@ -312,7 +312,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     async function buildChartOption(chartId) {
       const chart = chartMap[chartId];
       if (!chart?.gw_spec) return;
-      const { metricIds, echartsType, dataConfig } = chart.gw_spec;
+      const { metricIds, echartsType, dataConfig, colors, showLabels } = chart.gw_spec;
       if (!metricIds || !echartsType || !dataConfig) return;
 
       setChartLoading(prev => ({ ...prev, [chartId]: true }));
@@ -356,7 +356,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             } catch { /* skip */ }
           }
           if (yoyDatasets.length > 0) {
-            const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { valueFormat });
+            const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { valueFormat, showLabels, colors });
             setChartOptions(prev => ({ ...prev, [chartId]: option }));
           }
           return;
@@ -421,7 +421,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
         if (echartsType === 'table') {
           setChartOptions(prev => ({ ...prev, [chartId]: { _tableData: true, labels: chartData.labels, datasets: chartData.datasets } }));
         } else {
-          const option = buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig);
+          const option = buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels, colors });
           setChartOptions(prev => ({ ...prev, [chartId]: option }));
         }
       } catch {
