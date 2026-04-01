@@ -484,6 +484,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           content: result.explanation || '',
           tableData: { labels: finalLabels, datasets: finalDatasets },
           queryDetails: collectedDetails,
+          styleRules: dataConfig.styleRules || [],
         };
       } else {
         const chartOption = buildEChartsOption(echartsType, finalLabels, finalDatasets, dataConfig, { showLabels: result.showLabels, colors: result.colors });
@@ -492,6 +493,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           content: result.explanation || '',
           chartOption,
           queryDetails: collectedDetails,
+          styleRules: dataConfig.styleRules || [],
         };
       }
       const allMessages = [...updatedMessages, assistantMsg];

@@ -228,7 +228,7 @@ function DataTable({ labels, data }) {
   );
 }
 
-export default function ChartDetails({ queryDetails, metrics }) {
+export default function ChartDetails({ queryDetails, styleRules, metrics }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!queryDetails || queryDetails.length === 0) return null;
@@ -240,6 +240,18 @@ export default function ChartDetails({ queryDetails, metrics }) {
       </button>
       {expanded && (
         <div style={styles.panel}>
+          {styleRules && styleRules.length > 0 && (
+            <div>
+              <div style={styles.label}>Style Rules</div>
+              {styleRules.map((rule, i) => (
+                <div key={i} style={{ fontSize: 12, color: '#374151', marginBottom: 4 }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: rule.color, marginRight: 6, verticalAlign: 'middle' }} />
+                  {rule.target} {rule.operator} {rule.compareTo ? `"${rule.compareTo}"` : rule.threshold} → <span style={{ color: rule.color, fontWeight: 600 }}>{rule.color}</span>
+                </div>
+              ))}
+              <hr style={styles.separator} />
+            </div>
+          )}
           {queryDetails.map((detail, i) => (
             <div key={i}>
               {i > 0 && <hr style={styles.separator} />}
