@@ -20,7 +20,9 @@ Return ONLY valid JSON in this exact format:
     "channel_filter": "<channel_name or null>",
     "group_by_dimension": "<column_name or null>",
     "labels": ["<display label for each y_field>", ...],
-    "style_rules": [{"target": "<series label>", "compare_to": "<other series label>", "operator": "<", "color": "#f87171"}] | null
+    "style_rules": [{"target": "<series label>", "compare_to": "<other series label>", "operator": "<", "color": "#f87171"}] | null,
+    "target_line": {"value": <number>, "label": "<string>", "color": "<hex>"} | null,
+    "orientation": "horizontal" | null
   },
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
@@ -55,6 +57,8 @@ Rules:
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 - colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
+- target_line: optional horizontal reference line on bar/line charts. Set when user says "with a X% target", "show the target", "add a benchmark at X", etc. Fields: value (number), label (string shown on line), color (hex, default #ef4444). Example: {"value": 95, "label": "Target", "color": "#ef4444"}. Default: null.
+- orientation: set to "horizontal" when user asks for a "horizontal stacked bar". Only applies to stacked_bar type. Default: null.
 - style_rules: optional array of conditional coloring rules. Each rule colors individual data points in a series when a condition is met. Fields:
   - target: the label name of the series to style (must match a label in labels[])
   - compareTo: label of another series to compare against (for actual vs forecast). null if using threshold.
@@ -72,12 +76,13 @@ IMPORTANT — Attribution channels:
 - channel_filter filters TO one channel (e.g., "show me SEO trials" → channel_filter: "SEO").
 
 IMPORTANT — Dimension breakdowns (group_by_dimension):
-- When user asks "by channel", "by country", "by industry", etc., check the metric's dimensions field for the correct column name. Each metric lists its available dimensions (e.g., dimensions:{"Channel":"Channel","Country":"SignupCountry"}).
-- Set group_by_dimension to the COLUMN NAME from the dimensions mapping (the value, not the key).
-- If the metric has no dimensions field, do not set group_by_dimension.
+- ONLY use group_by_dimension when the metric explicitly lists a dimensions: field in its catalog entry (e.g., dimensions:[Channel,SignupCountry]).
+- Set group_by_dimension to a column name that appears in the metric's dimensions: list. NEVER use a column name that is not in that list.
+- If the metric has NO dimensions: field, you MUST set group_by_dimension to null. Do not guess column names from the schema.
 - Best chart types for dimension breakdowns: heatmap, stacked_bar, pie, horizontal_bar.
 - Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
 - channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.
+- Attribution channels (SEO, PPC, etc.) are NOT dimensions — they use channel_filter, not group_by_dimension.
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.
@@ -205,7 +210,7 @@ Deno.serve(async (req) => {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-5',
       max_tokens: 1024,
       system: systemPrompt,
       messages: claudeMessages,

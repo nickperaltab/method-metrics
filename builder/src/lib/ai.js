@@ -27,32 +27,35 @@ function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
   const schema = schemaMap[primaryView] || [];
   const validCols = schema.map(f => f.name);
 
-  // Validate group_by_dimension — must be an approved dimension if we have them
+  // Validate group_by_dimension — must be an explicitly approved dimension.
+  // If no approvedDimensions list is provided, reject all group_by_dimension values
+  // to prevent unapproved schema columns from being used as dimensions.
   if (dc.group_by_dimension) {
     if (approvedDimensions && approvedDimensions.length > 0) {
       const primaryMetric = resolvedMetrics[0];
       const approved = approvedDimensions
         .filter(d => d.metric_id === primaryMetric?.id)
         .map(d => d.column_name);
-      if (approved.length > 0 && !approved.includes(dc.group_by_dimension)) {
+      if (approved.length === 0 || !approved.includes(dc.group_by_dimension)) {
         const match = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
         dc.group_by_dimension = match || null;
       }
-    } else if (!validCols.includes(dc.group_by_dimension)) {
-      const match = validCols.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
-      dc.group_by_dimension = match || null;
+    } else {
+      // No approved dimensions list — reject all unapproved dimensions
+      dc.group_by_dimension = null;
     }
   }
 
-  // Validate x_field — fall back to first DATE column if invalid
-  if (dc.x_field && !validCols.includes(dc.x_field)) {
+  // Validate x_field — only correct it if schema is loaded and the field is invalid.
+  // If schema is empty (still loading), leave x_field as-is so the query can still run.
+  if (dc.x_field && validCols.length > 0 && !validCols.includes(dc.x_field)) {
     const match = validCols.find(c => c.toLowerCase() === dc.x_field.toLowerCase());
-    dc.x_field = match || schema.find(f => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(f.type))?.name || null;
+    dc.x_field = match || schema.find(f => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(f.type))?.name || dc.x_field;
   }
 }
 
-export async function generateChartSpecWithHistory(messages, metrics, schemaMap, currentChartSpec) {
-  const metricContext = buildMetricContext(metrics);
+export async function generateChartSpecWithHistory(messages, metrics, schemaMap, currentChartSpec, approvedDimensions) {
+  const metricContext = buildMetricContext(metrics, approvedDimensions);
   const schemaContext = buildSchemaContext(schemaMap);
 
   const aiMessages = messages.map(m => ({
@@ -89,7 +92,7 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
 
   const echartsType = VALID_TYPES.has(result.echarts_type) ? result.echarts_type : 'bar';
   const dc = result.data_config || {};
-  validateColumns(dc, resolvedMetrics, schemaMap);
+  validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions);
 
   return {
     metrics: resolvedMetrics,
@@ -107,6 +110,8 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
       endDateRule: dc.end_date_rule || null,
       styleRules: normalizeStyleRules(dc.style_rules || result.style_rules),
       labels: dc.labels || resolvedMetrics.map(m => m.name),
+      targetLine: dc.target_line ? { value: Number(dc.target_line.value), label: dc.target_line.label || '', color: dc.target_line.color || '#ef4444' } : null,
+      orientation: dc.orientation || null,
     },
     echartsType,
     showLabels: !!result.show_labels,
@@ -194,6 +199,8 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
       endDateRule: dc.end_date_rule || null,
       styleRules: normalizeStyleRules(dc.style_rules || result.style_rules),
       labels: dc.labels || resolvedMetrics.map(m => m.name),
+      targetLine: dc.target_line ? { value: Number(dc.target_line.value), label: dc.target_line.label || '', color: dc.target_line.color || '#ef4444' } : null,
+      orientation: dc.orientation || null,
     },
     echartsType,
     showLabels: !!result.show_labels,

@@ -224,6 +224,18 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
       sql = `SELECT * FROM (${sql}) sub WHERE period >= ${dateExpr}`;
     }
     const result = await queryBq(sql);
+    // Handle multi-series results (chart_sql returns a `series` column)
+    if (result.rows.length > 0 && result.rows[0].series != null) {
+      const seriesMap = {};
+      for (const row of result.rows) {
+        if (!seriesMap[row.series]) seriesMap[row.series] = { data: [], labels: [] };
+        seriesMap[row.series].labels.push(row.period);
+        seriesMap[row.series].data.push(Number(row.value) || 0);
+      }
+      const output = { multiSeries: true, series: seriesMap, sql };
+      aggCache[cacheKey] = output;
+      return output;
+    }
     const output = {
       labels: result.rows.map(r => r.period),
       data: result.rows.map(r => Number(r.value) || 0),

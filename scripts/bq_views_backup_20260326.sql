@@ -16,11 +16,26 @@
 
 CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_trials` AS
 SELECT
-  SignupDate, CompanyAccount, Channel, SignupCountry, SyncType, SyncTypeRegion, Vertical, CustDatIndustry,
+  SignupDate, CompanyAccount, SignupCountry, SyncType, SyncTypeRegion, Vertical, CustDatIndustry,
   Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email,
   Att_Referral_Link, Att_Referral_Program, Att_Direct, Att_Partners, Att_Content,
   Att_Remarketing, Att_Other, Att_None, Att_Backlinks, Att_Banner_Ads,
-  Att_Help_Center, Att_Online_Chat_Tool, Att_Seminar_Conference
+  Att_Help_Center, Att_Online_Chat_Tool, Att_Seminar_Conference,
+  CASE
+    WHEN Att_SEO = 1 THEN 'SEO'
+    WHEN Att_Pay_Per_Click = 1 THEN 'PPC'
+    WHEN Att_OPN_Other_Peoples_Networks = 1 THEN 'OPN'
+    WHEN Att_Social = 1 THEN 'Social'
+    WHEN Att_Email = 1 THEN 'Email'
+    WHEN Att_Referral_Link = 1 THEN 'Referral'
+    WHEN Att_Direct = 1 THEN 'Direct'
+    WHEN Att_Partners = 1 THEN 'Partners'
+    WHEN Att_Content = 1 THEN 'Content'
+    WHEN Att_Remarketing = 1 THEN 'Remarketing'
+    WHEN Att_Other = 1 THEN 'Other'
+    WHEN Att_None = 1 THEN 'None'
+    ELSE 'Unknown'
+  END AS AttributionChannel
 FROM revenue.Account
 WHERE IsConversionException = FALSE
   AND Partner != 'Method Integration'
@@ -39,7 +54,21 @@ SELECT
   Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social,
   Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None,
   Att_Backlinks, Att_Banner_Ads, Att_Help_Center, Att_Online_Chat_Tool,
-  Att_Referral_Link, Att_Referral_Program, Att_Seminar_Conference
+  Att_Referral_Link, Att_Referral_Program, Att_Seminar_Conference,
+  CASE
+    WHEN Att_SEO = 1 THEN 'SEO'
+    WHEN Att_Pay_Per_Click = 1 THEN 'PPC'
+    WHEN Att_OPN_Other_Peoples_Networks = 1 THEN 'OPN'
+    WHEN Att_Social = 1 THEN 'Social'
+    WHEN Att_Referral_Link = 1 THEN 'Referral'
+    WHEN Att_Direct = 1 THEN 'Direct'
+    WHEN Att_Partners = 1 THEN 'Partners'
+    WHEN Att_Content = 1 THEN 'Content'
+    WHEN Att_Remarketing = 1 THEN 'Remarketing'
+    WHEN Att_Other = 1 THEN 'Other'
+    WHEN Att_None = 1 THEN 'None'
+    ELSE 'Unknown'
+  END AS AttributionChannel
 FROM `project-for-method-dw.revenue.Funnel`
 WHERE EventType = 'Sync';
 
@@ -48,7 +77,6 @@ SELECT
   FirstSaaSInvoiceTxnDate,
   SignupDate,
   CompanyAccount,
-  Channel,
   SignupCountry,
   SyncType,
   SyncTypeRegion,
@@ -59,7 +87,23 @@ SELECT
   Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social,
   Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None,
   Att_Backlinks, Att_Banner_Ads, Att_Help_Center, Att_Online_Chat_Tool,
-  Att_Referral_Link, Att_Referral_Program, Att_Seminar_Conference
+  Att_Referral_Link, Att_Referral_Program, Att_Seminar_Conference,
+  Att_Email,
+  CASE
+    WHEN Att_SEO = 1 THEN 'SEO'
+    WHEN Att_Pay_Per_Click = 1 THEN 'PPC'
+    WHEN Att_OPN_Other_Peoples_Networks = 1 THEN 'OPN'
+    WHEN Att_Social = 1 THEN 'Social'
+    WHEN Att_Email = 1 THEN 'Email'
+    WHEN Att_Referral_Link = 1 THEN 'Referral'
+    WHEN Att_Direct = 1 THEN 'Direct'
+    WHEN Att_Partners = 1 THEN 'Partners'
+    WHEN Att_Content = 1 THEN 'Content'
+    WHEN Att_Remarketing = 1 THEN 'Remarketing'
+    WHEN Att_Other = 1 THEN 'Other'
+    WHEN Att_None = 1 THEN 'None'
+    ELSE 'Unknown'
+  END AS AttributionChannel
 FROM `project-for-method-dw.revenue.Account`
 WHERE IsConversionException = FALSE
   AND Partner != 'Method Integration'

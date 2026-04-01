@@ -6,7 +6,7 @@ import { useBqData } from '../hooks/useBqData';
 import { useUser } from '../contexts/UserContext';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
-import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation } from '../lib/supabase';
+import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation, fetchAllApprovedDimensions } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import {
@@ -36,6 +36,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveMessageIndex, setSaveMessageIndex] = useState(null);
   const [dashboards, setDashboards] = useState([]);
+  const [approvedDimensions, setApprovedDimensions] = useState([]);
   const [currentTimeRange, setCurrentTimeRange] = useState(null);
   const [recentConversations, setRecentConversations] = useState([]);
   const [editingChartInfo, setEditingChartInfo] = useState(null);
@@ -67,9 +68,10 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     loadSchemas();
   }, [bqConnected, metrics, schemasLoaded]);
 
-  // Load dashboards for save modal
+  // Load dashboards and approved dimensions
   useEffect(() => {
     fetchDashboards().then(setDashboards).catch(() => {});
+    fetchAllApprovedDimensions().then(setApprovedDimensions).catch(() => {});
   }, []);
 
   // Load recent conversations
@@ -270,7 +272,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setError(null);
 
     try {
-      const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec);
+      const result = await generateChartSpecWithHistory(updatedMessages, metrics, schemaCache, lastSpec, approvedDimensions);
 
       if (result.type === 'text') {
         const content = result.suggestion

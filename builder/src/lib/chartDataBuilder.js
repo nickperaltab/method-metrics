@@ -82,7 +82,13 @@ export async function fetchChartDatasets({
         });
         queryDetails.push({ metricName: label, metricId: metric.id, sql: grouped.sql, dateColumn: dateCol, labels: grouped.labels, data: [], groupedBy: groupByDimension });
       } catch (e) {
+        console.error(`fetchGroupedData failed for ${metric.view_name} grouped by ${groupByDimension}:`, e);
         queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
+        // Fallback: fetch un-grouped data so the chart still renders
+        try {
+          const agg = await fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule);
+          rawDatasets.push({ label, ...agg });
+        } catch { /* give up */ }
       }
 
     } else if (metric.view_name || metric.chart_sql) {
@@ -90,8 +96,14 @@ export async function fetchChartDatasets({
       const dateCol = getDateCol(metric.view_name, xField);
       try {
         const agg = await fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule);
-        rawDatasets.push({ label, ...agg });
-        queryDetails.push({ metricName: label, metricId: metric.id, sql: agg.sql, dateColumn: dateCol, labels: agg.labels, data: agg.data });
+        if (agg.multiSeries) {
+          for (const [seriesName, seriesData] of Object.entries(agg.series)) {
+            rawDatasets.push({ label: seriesName, ...seriesData });
+          }
+        } else {
+          rawDatasets.push({ label, ...agg });
+        }
+        queryDetails.push({ metricName: label, metricId: metric.id, sql: agg.sql, dateColumn: dateCol, labels: agg.multiSeries ? [] : agg.labels, data: agg.multiSeries ? [] : agg.data });
       } catch (e) {
         queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
       }

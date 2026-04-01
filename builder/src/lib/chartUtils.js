@@ -343,23 +343,34 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       grid: baseGrid,
       xAxis: categoryAxis,
       yAxis: valueAxis,
-      series: dsList.map((ds, i) => ({
-        name: ds.label,
-        type: 'line',
-        data: ds.data.map((v, idx) => {
-          const extra = showLabels && idx === ds.data.length - 1
-            ? { label: { show: true, ...labelStyle, position: 'top' } }
-            : null;
-          return wrapValue(ds, idx, v, extra);
-        }),
-        smooth: true,
-        symbol: showLabels ? 'circle' : 'none',
-        showSymbol: showLabels ? false : false,
-        symbolSize: showLabels ? 4 : 0,
-        lineStyle: { width: 2 },
-        itemStyle: { color: palette[i % palette.length] },
-        label: { show: false },
-      })),
+      series: dsList.map((ds, i) => {
+        const seriesItem = {
+          name: ds.label,
+          type: 'line',
+          data: ds.data.map((v, idx) => {
+            const extra = showLabels && idx === ds.data.length - 1
+              ? { label: { show: true, ...labelStyle, position: 'top' } }
+              : null;
+            return wrapValue(ds, idx, v, extra);
+          }),
+          smooth: true,
+          symbol: showLabels ? 'circle' : 'none',
+          showSymbol: showLabels ? false : false,
+          symbolSize: showLabels ? 4 : 0,
+          lineStyle: { width: 2 },
+          itemStyle: { color: palette[i % palette.length] },
+          label: { show: false },
+        };
+        if (dataConfig?.targetLine && i === 0) {
+          seriesItem.markLine = {
+            silent: true,
+            data: [{ yAxis: dataConfig.targetLine.value }],
+            lineStyle: { color: dataConfig.targetLine.color || '#ef4444', type: 'dashed', width: 2 },
+            label: { formatter: dataConfig.targetLine.label || '' },
+          };
+        }
+        return seriesItem;
+      }),
     };
   }
 
@@ -402,7 +413,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       yAxis: valueAxis,
       series: dsList.map((ds, i) => {
         const hasPointStyles = ds.pointStyles?.some(Boolean);
-        return {
+        const seriesItem = {
           name: ds.label,
           type: 'bar',
           data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
@@ -411,18 +422,28 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
             : { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
           ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
         };
+        if (dataConfig?.targetLine && i === 0) {
+          seriesItem.markLine = {
+            silent: true,
+            data: [{ yAxis: dataConfig.targetLine.value }],
+            lineStyle: { color: dataConfig.targetLine.color || '#ef4444', type: 'dashed', width: 2 },
+            label: { formatter: dataConfig.targetLine.label || '' },
+          };
+        }
+        return seriesItem;
       }),
     };
   }
 
   // --- Stacked Bar ---
   if (echartsType === 'stacked_bar') {
+    const isHorizontal = dataConfig?.orientation === 'horizontal';
     return {
       tooltip: baseTooltip,
       legend: baseLegend,
-      grid: baseGrid,
-      xAxis: categoryAxis,
-      yAxis: valueAxis,
+      grid: isHorizontal ? { ...baseGrid, left: 120 } : baseGrid,
+      xAxis: isHorizontal ? valueAxis : categoryAxis,
+      yAxis: isHorizontal ? { ...categoryAxis, inverse: true } : valueAxis,
       series: dsList.map((ds, i) => ({
         name: ds.label,
         type: 'bar',
