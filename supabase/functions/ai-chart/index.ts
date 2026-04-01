@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const EDGE_FUNCTION_VERSION = '22';
 
 const SYSTEM_PROMPT = `You are a chart configuration assistant for Method CRM's metrics dashboard.
 
@@ -79,19 +80,21 @@ IMPORTANT — Dimension breakdowns (group_by_dimension):
 - ONLY use group_by_dimension when the metric explicitly lists a dimensions: field in its catalog entry (e.g., dimensions:[AttributionChannel,SignupCountry]).
 - Set group_by_dimension to a column name that appears in the metric's dimensions: list. NEVER use a column name that is not in that list.
 - If the metric has NO dimensions: field, you MUST set group_by_dimension to null. Do not guess column names from the schema.
-- Best chart types for dimension breakdowns: stacked_bar (over time), pie (proportions), horizontal_bar (ranked totals).
+- stacked_bar ALWAYS requires group_by_dimension. If you choose stacked_bar, you MUST set group_by_dimension. If you cannot, use bar instead.
+- pie and horizontal_bar for dimension breakdowns also require group_by_dimension.
 - Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
-- channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.
-- IMPORTANT distinction: channel_filter="SEO" filters TO one specific channel. group_by_dimension="AttributionChannel" breaks down BY all channels. "trials by attribution channel" → group_by_dimension:"AttributionChannel". "SEO trials" → channel_filter:"SEO". Never set both at once.
+- channel_filter="SEO" filters TO one specific channel. group_by_dimension="AttributionChannel" breaks down BY all channels. Never set both at once.
 
-Trigger words for group_by_dimension — when user says any of these, set group_by_dimension:
-- "by country", "per country", "by SignupCountry", "distribution across countries", "breakdown by country", "split by country" → group_by_dimension: "SignupCountry"
-- "by attribution channel", "by channel", "stacked by channel", "broken down by channel" → group_by_dimension: "AttributionChannel"
-- "by vertical", "by industry", "by Vertical" → group_by_dimension: "Vertical"
-- "by sync type", "by SyncType" → group_by_dimension: "SyncType"
-Example: "show me trial distribution by country" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"horizontal_bar"
-Example: "show me trials by attribution channel as a stacked bar" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
+Trigger words for group_by_dimension — when user says any of these, ALWAYS set group_by_dimension:
+- "by channel", "by attribution channel", "per channel", "stacked by channel", "broken down by channel", "across channels" → group_by_dimension: "AttributionChannel"
+- "by country", "per country", "across countries", "breakdown by country", "split by country" → group_by_dimension: "SignupCountry"
+- "by vertical", "by industry" → group_by_dimension: "Vertical"
+- "by sync type" → group_by_dimension: "SyncType"
+Example: "trials by attribution channel" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
+Example: "trials by channel" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
+Example: "show me trials by country" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"horizontal_bar"
 Example: "show me trials across countries as a pie" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"pie"
+Example: "SEO trials by month" → metric_ids:[54], channel_filter:"SEO", group_by_dimension:null, echarts_type:"bar"
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.
@@ -151,6 +154,17 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
       status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // Info endpoint — returns live system prompt and capabilities for admin tooling
+  if (body.action === 'info') {
+    return new Response(JSON.stringify({
+      version: EDGE_FUNCTION_VERSION,
+      system_prompt: SYSTEM_PROMPT,
+      supported_chart_types: ['line','bar','stacked_bar','horizontal_bar','pie','combo','funnel','heatmap','area','kpi','table','yoy','variance'],
+    }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
