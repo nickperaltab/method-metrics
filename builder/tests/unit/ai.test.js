@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMetricContext, buildSchemaContext, validateColumns } from '../../src/lib/ai.js';
+import { buildMetricContext, buildSchemaContext, validateColumns, normalizeStyleRules, applyPromptOverrides } from '../../src/lib/ai.js';
 
 describe('buildMetricContext', () => {
   const metrics = [
@@ -115,5 +115,207 @@ describe('validateColumns', () => {
     const dc = { x_field: 'signupdate', group_by_dimension: null };
     validateColumns(dc, [metric54], schemaMap, []);
     expect(dc.x_field).toBe('SignupDate');
+  });
+});
+
+describe('normalizeStyleRules', () => {
+  it('normalizes standard camelCase fields', () => {
+    const rules = [{ target: 'Trials', compareTo: 'Trials Forecast', operator: '<', color: '#ef4444' }];
+    const result = normalizeStyleRules(rules);
+    expect(result).toHaveLength(1);
+    expect(result[0].target).toBe('Trials');
+    expect(result[0].compareTo).toBe('Trials Forecast');
+    expect(result[0].operator).toBe('<');
+    expect(result[0].color).toBe('#ef4444');
+  });
+
+  it('normalizes snake_case compare_to field from AI', () => {
+    const rules = [{ target: 'Trials', compare_to: 'Trials Forecast', operator: '<', color: '#ef4444' }];
+    const result = normalizeStyleRules(rules);
+    expect(result[0].compareTo).toBe('Trials Forecast');
+  });
+
+  it('normalizes compare_series field variant', () => {
+    const rules = [{ target: 'Syncs', compare_series: 'Syncs Forecast', operator: '>', color: '#22c55e' }];
+    const result = normalizeStyleRules(rules);
+    expect(result[0].compareTo).toBe('Syncs Forecast');
+    expect(result[0].operator).toBe('>');
+  });
+
+  it('normalizes target_series field variant', () => {
+    const rules = [{ target_series: 'Trials', compareTo: 'Trials Forecast', operator: '<', color: '#ef4444' }];
+    const result = normalizeStyleRules(rules);
+    expect(result[0].target).toBe('Trials');
+  });
+
+  it('normalizes threshold from value field', () => {
+    const rules = [{ target: 'Conversion Rate', value: 0.15, operator: '<', color: '#ef4444' }];
+    const result = normalizeStyleRules(rules);
+    expect(result[0].threshold).toBe(0.15);
+    expect(result[0].compareTo).toBeUndefined();
+  });
+
+  it('parses string threshold to number', () => {
+    const rules = [{ target: 'Conversion Rate', threshold: '0.15', operator: '<', color: '#ef4444' }];
+    const result = normalizeStyleRules(rules);
+    expect(result[0].threshold).toBe(0.15);
+  });
+
+  it('filters out rules with no target', () => {
+    const rules = [{ compareTo: 'Trials Forecast', operator: '<', color: '#ef4444' }];
+    expect(normalizeStyleRules(rules)).toHaveLength(0);
+  });
+
+  it('filters out rules with neither compareTo nor threshold', () => {
+    const rules = [{ target: 'Trials', operator: '<', color: '#ef4444' }];
+    expect(normalizeStyleRules(rules)).toHaveLength(0);
+  });
+
+  it('defaults invalid operator to <', () => {
+    const rules = [{ target: 'Trials', compareTo: 'Trials Forecast', operator: 'invalid', color: '#ef4444' }];
+    expect(normalizeStyleRules(rules)[0].operator).toBe('<');
+  });
+
+  it('defaults missing color to #f87171', () => {
+    const rules = [{ target: 'Trials', compareTo: 'Trials Forecast', operator: '<' }];
+    expect(normalizeStyleRules(rules)[0].color).toBe('#f87171');
+  });
+
+  it('handles multiple rules', () => {
+    const rules = [
+      { target: 'Trials', compareTo: 'Trials Forecast', operator: '<', color: '#ef4444' },
+      { target: 'Trials', compareTo: 'Trials Forecast', operator: '>', color: '#22c55e' },
+    ];
+    expect(normalizeStyleRules(rules)).toHaveLength(2);
+  });
+
+  it('returns empty array for non-array input', () => {
+    expect(normalizeStyleRules(null)).toEqual([]);
+    expect(normalizeStyleRules(undefined)).toEqual([]);
+    expect(normalizeStyleRules('bad')).toEqual([]);
+  });
+});
+
+describe('applyPromptOverrides', () => {
+  const approvedDimensions = [
+    { metric_id: 54, column_name: 'AttributionChannel' },
+    { metric_id: 54, column_name: 'SignupCountry' },
+    { metric_id: 54, column_name: 'Vertical' },
+    { metric_id: 54, column_name: 'SyncType' },
+    { metric_id: 55, column_name: 'AttributionChannel' },
+    { metric_id: 55, column_name: 'SyncType' },
+  ];
+  const metric54 = { id: 54, view_name: 'v_trials' };
+  const metric55 = { id: 55, view_name: 'v_syncs' };
+
+  it('sets group_by_dimension for "by channel"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials by channel', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('sets group_by_dimension for "by attribution channel"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials by attribution channel', dc, 'stacked_bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('sets group_by_dimension for "by country"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('show me trials by country', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('SignupCountry');
+  });
+
+  it('sets group_by_dimension for "by vertical"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials by vertical', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('Vertical');
+  });
+
+  it('sets group_by_dimension for "by industry"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials by industry', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('Vertical');
+  });
+
+  it('sets group_by_dimension for "by sync type"', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('syncs by sync type', dc, 'bar', [metric55], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('SyncType');
+  });
+
+  it('does not set group_by_dimension if dimension not approved for that metric', () => {
+    const dc = { group_by_dimension: null };
+    // Syncs doesn't have SignupCountry approved
+    applyPromptOverrides('syncs by country', dc, 'bar', [metric55], approvedDimensions);
+    expect(dc.group_by_dimension).toBeNull();
+  });
+
+  it('does not override group_by_dimension already set by AI', () => {
+    const dc = { group_by_dimension: 'SignupCountry' };
+    applyPromptOverrides('trials by channel', dc, 'stacked_bar', [metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('SignupCountry'); // AI value preserved
+  });
+
+  it('sets channel_filter for SEO', () => {
+    const dc = { channel_filter: null, group_by_dimension: null };
+    applyPromptOverrides('SEO trials by month', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.channel_filter).toBe('SEO');
+    expect(dc.group_by_dimension).toBeNull();
+  });
+
+  it('sets channel_filter for PPC', () => {
+    const dc = { channel_filter: null, group_by_dimension: null };
+    applyPromptOverrides('show me PPC conversions', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.channel_filter).toBe('PPC');
+  });
+
+  it('does not set channel_filter when group_by_dimension is set', () => {
+    const dc = { channel_filter: null, group_by_dimension: 'AttributionChannel' };
+    applyPromptOverrides('trials by channel with SEO', dc, 'stacked_bar', [metric54], approvedDimensions);
+    expect(dc.channel_filter).toBeNull();
+  });
+
+  it('sets time_bucket to week for "weekly"', () => {
+    const dc = { time_bucket: 'month' };
+    applyPromptOverrides('show me weekly trials', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.time_bucket).toBe('week');
+  });
+
+  it('sets time_bucket to day for "daily"', () => {
+    const dc = { time_bucket: 'month' };
+    applyPromptOverrides('daily syncs this month', dc, 'bar', [metric55], approvedDimensions);
+    expect(dc.time_bucket).toBe('day');
+  });
+
+  it('sets show_labels for "data labels"', () => {
+    const dc = {};
+    applyPromptOverrides('show trials with data labels', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.show_labels).toBe(true);
+  });
+
+  it('sets show_labels for "show values"', () => {
+    const dc = {};
+    applyPromptOverrides('show values on the chart', dc, 'bar', [metric54], approvedDimensions);
+    expect(dc.show_labels).toBe(true);
+  });
+
+  it('downgrades stacked_bar to bar when group_by_dimension is null', () => {
+    const dc = { group_by_dimension: null };
+    const type = applyPromptOverrides('trials as a stacked bar', dc, 'stacked_bar', [metric54], approvedDimensions);
+    expect(type).toBe('bar');
+  });
+
+  it('keeps stacked_bar when group_by_dimension is set', () => {
+    const dc = { group_by_dimension: null };
+    const type = applyPromptOverrides('trials by channel', dc, 'stacked_bar', [metric54], approvedDimensions);
+    expect(type).toBe('stacked_bar');
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('skips group_by_dimension when no approvedDimensions provided (legacy path)', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials by channel', dc, 'bar', [metric54], null);
+    expect(dc.group_by_dimension).toBeNull();
   });
 });

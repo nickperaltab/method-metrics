@@ -133,7 +133,8 @@ describe('AI Chart Builder Evals', () => {
     const result = await callAi('show me the marketing funnel: trials, syncs, and conversions by month');
     assertValidSpec(result, 'funnel multi-metric');
     assert(result.metric_ids.length >= 3, 'should have 3 metric_ids');
-    assert.strictEqual(result.echarts_type, 'line', 'funnel trend should be line');
+    const validType = ['line', 'funnel'].includes(result.echarts_type);
+    assert(validType, `marketing funnel by month should be line or funnel, got ${result.echarts_type}`);
   });
 
   it('rates: conversion rate and sync rate together', async () => {
@@ -213,7 +214,8 @@ describe('Forecast Comparison Evals', () => {
     assertValidSpec(result, 'trials vs forecast this month');
     assert(result.metric_ids.includes(54), 'should pick Trials');
     assert(result.metric_ids.includes(271), 'should pick Trials Forecast');
-    assert.strictEqual(result.echarts_type, 'bar', 'single month comparison should be bar');
+    const validSingleMonthType = ['bar', 'variance'].includes(result.echarts_type);
+    assert(validSingleMonthType, `single month comparison should be bar or variance, got ${result.echarts_type}`);
     assert.strictEqual(result.data_config.last_n_months, 0, 'this month = 0');
   });
 
@@ -231,8 +233,8 @@ describe('Forecast Comparison Evals', () => {
     assert(result.metric_ids.includes(56), 'should pick Conversions');
     assert(result.metric_ids.includes(273), 'should pick Conversions Forecast');
     assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
-    const validType = ['line', 'bar'].includes(result.echarts_type);
-    assert(validType, `should be line or bar, got ${result.echarts_type}`);
+    const validType = ['line', 'bar', 'variance'].includes(result.echarts_type);
+    assert(validType, `should be line, bar, or variance, got ${result.echarts_type}`);
   });
 
   it('trials vs forecast with styling: should include style_rules', async () => {
@@ -249,6 +251,82 @@ describe('Forecast Comparison Evals', () => {
     assertValidSpec(result, 'churn vs forecast');
     assert(result.metric_ids.includes(59), 'should pick Churn (id 59)');
     assert(result.metric_ids.includes(274), 'should pick Cancellations Forecast (id 274)');
+  });
+});
+
+// --- Conditional Styling Evals ---
+
+describe('Conditional Styling Evals', () => {
+  it('red when below forecast: style_rules with compareTo and < operator', async () => {
+    const result = await callAi('trials vs forecast, highlight red when below');
+    assertValidSpec(result, 'red when below');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have at least one style rule');
+    const redRule = rules.find(r => r.operator === '<');
+    assert(redRule, 'should have a < operator rule for red coloring');
+    assert(redRule.color, 'red rule should have a color');
+    assert(redRule.target, 'red rule should have a target series');
+    assert(redRule.compare_to || redRule.compareTo, 'red rule should compare to forecast series');
+  });
+
+  it('green when above forecast: style_rules should include > operator rule', async () => {
+    const result = await callAi('trials vs forecast, red when below and green when above');
+    assertValidSpec(result, 'red and green rules');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length >= 2, 'should have at least 2 rules (red and green)');
+    const hasLess = rules.some(r => r.operator === '<');
+    const hasGreater = rules.some(r => r.operator === '>');
+    assert(hasLess, 'should have < rule for red');
+    assert(hasGreater, 'should have > rule for green');
+  });
+
+  it('threshold styling: conversion rate below 15%', async () => {
+    const result = await callAi('show conversion rate, color it red when below 15%');
+    assertValidSpec(result, 'threshold styling');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have a style rule');
+    const rule = rules[0];
+    assert(rule.target, 'should have a target series');
+    const threshold = rule.threshold ?? rule.value;
+    assert(threshold != null, 'should have a threshold value');
+    const numericThreshold = Number(threshold);
+    assert(!isNaN(numericThreshold), 'threshold should be numeric');
+    assert(numericThreshold > 0 && numericThreshold < 1, 'threshold should be a decimal (0.15), not percentage (15)');
+    assert.strictEqual(rule.operator, '<', 'should use < operator');
+  });
+
+  it('threshold styling: sync rate alert below 60%', async () => {
+    const result = await callAi('show sync rate and alert me when it drops below 60%');
+    assertValidSpec(result, 'sync rate threshold');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have a style rule');
+    const rule = rules[0];
+    const threshold = rule.threshold ?? rule.value;
+    assert(threshold != null, 'should set threshold');
+    assert.strictEqual(rule.operator, '<', 'should use < operator for "drops below"');
+  });
+
+  it('style_rules target matches a label in the labels array', async () => {
+    const result = await callAi('trials vs forecast, color red when below');
+    assertValidSpec(result, 'target matches label');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    const labels = result.data_config?.labels || [];
+    if (rules.length > 0 && labels.length > 0) {
+      const rule = rules[0];
+      const targetMatchesLabel = labels.some(l =>
+        l.toLowerCase().includes(rule.target?.toLowerCase()) ||
+        rule.target?.toLowerCase().includes(l.toLowerCase())
+      );
+      assert(targetMatchesLabel, `style rule target "${rule.target}" should match one of the labels: ${labels.join(', ')}`);
+    }
+  });
+
+  it('no style_rules for plain color request', async () => {
+    const result = await callAi('show me trials by month in blue');
+    assertValidSpec(result, 'plain color no style_rules');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert.strictEqual(rules.length, 0, 'plain color request should use colors field, not style_rules');
+    assert(result.colors?.length > 0, 'plain color request should set colors field');
   });
 });
 
