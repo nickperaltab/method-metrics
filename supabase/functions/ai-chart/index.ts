@@ -19,7 +19,8 @@ Return ONLY valid JSON in this exact format:
     "last_n_months": <integer or null>,
     "channel_filter": "<channel_name or null>",
     "group_by_dimension": "<column_name or null>",
-    "labels": ["<display label for each y_field>", ...]
+    "labels": ["<display label for each y_field>", ...],
+    "style_rules": [{"target": "<series label>", "compare_to": "<other series label>", "operator": "<", "color": "#f87171"}] | null
   },
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
@@ -40,6 +41,7 @@ Supported echarts_type values:
 - "kpi" — single big number card. ONLY use when user explicitly asks for a count/number using phrases like "how many", "what's the count", "total number of", "give me the number". Do NOT use kpi for rate/percentage metrics (Conversion Rate, Sync Rate) — always use "line" or "bar" for rates. Do NOT use kpi just because the user mentions "this month" — use a chart with last_n_months:0 instead. KPI is ONLY for primitive count metrics (Trials, Syncs, Conversions), never derived.
 - "table" — data table. Use when user says "table", "table view", "show as table", "list the data". Renders a sortable HTML table instead of a chart.
 - "yoy" — year-over-year comparison. Use when user says "year over year", "YoY", "compare years", "annual comparison". Shows grouped bars with months on X axis, one series per year. Only works with primitive metrics (not derived rates).
+- "variance" — actual vs target/forecast comparison. First metric renders as bars, second as dashed line. Bars turn red when actual < target, green when above. Use when user says "compare to forecast", "vs target", "variance", "actual vs plan", "highlight where below". Requires exactly 2 metric_ids.
 
 Rules:
 - metric_ids: array of metric IDs to fetch data for. Use one per y_field.
@@ -52,6 +54,7 @@ Rules:
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
 - show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
 - colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
+- style_rules: optional array of conditional styling rules. Each rule: {"target": "<series label>", "compare_to": "<other series label>" OR "threshold": <number>, "operator": "<" | "<=" | ">" | ">=" | "==" | "!=", "color": "#hex"}. Use when user asks to "highlight", "flag", "color when below/above", "turn red if", etc. For variance charts, style_rules are automatically applied (bars red when < target). For other chart types, set style_rules when the user explicitly asks for conditional coloring. Default: null.
 
 IMPORTANT — Attribution channels:
 - Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.

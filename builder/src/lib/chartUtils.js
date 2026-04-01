@@ -490,6 +490,52 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     };
   }
 
+  // --- Variance (actual bars + target dashed line, conditional coloring) ---
+  if (echartsType === 'variance') {
+    const actualDs = dsList[0];
+    const targetDs = dsList[1];
+    const targetData = targetDs?.data || [];
+    const series = [
+      {
+        name: actualDs.label,
+        type: 'bar',
+        data: actualDs.data.map((v, idx) => {
+          // Apply style_rules first if they exist, otherwise default red/green logic
+          const style = actualDs.pointStyles?.[idx];
+          if (style) return { value: v, itemStyle: { ...style, borderRadius: [3, 3, 0, 0] } };
+          const below = targetData[idx] != null && v < targetData[idx];
+          return {
+            value: v,
+            itemStyle: {
+              color: below ? '#f87171' : '#34d399',
+              borderRadius: [3, 3, 0, 0],
+            },
+          };
+        }),
+        ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
+      },
+    ];
+    if (targetDs) {
+      series.push({
+        name: targetDs.label,
+        type: 'line',
+        data: targetData,
+        lineStyle: { type: 'dashed', width: 2 },
+        itemStyle: { color: '#60a5fa' },
+        symbol: 'circle',
+        symbolSize: 6,
+      });
+    }
+    return {
+      tooltip: baseTooltip,
+      legend: baseLegend,
+      grid: baseGrid,
+      xAxis: categoryAxis,
+      yAxis: valueAxis,
+      series,
+    };
+  }
+
   // --- Combo (bar + line) ---
   if (echartsType === 'combo') {
     return {
