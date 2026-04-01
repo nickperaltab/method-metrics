@@ -458,19 +458,40 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   // --- Horizontal Bar ---
   if (echartsType === 'horizontal_bar') {
+    // When multiple datasets (dimension breakdown), aggregate into one ranked bar per dimension value.
+    const isGrouped = dsList.length > 1;
+    const hBarYLabels = isGrouped
+      ? dsList.map(ds => ds.label)
+      : displayLabels;
+    const hBarSeries = isGrouped
+      ? [{
+          type: 'bar',
+          data: dsList
+            .map((ds, i) => ({ value: ds.data.reduce((s, v) => s + (v || 0), 0), itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] } }))
+            .sort((a, b) => a.value - b.value),
+          ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
+        }]
+      : dsList.map((ds, i) => ({
+          name: ds.label,
+          type: 'bar',
+          data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
+          itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] },
+          ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
+        }));
+    // Sort y-labels to match sorted bars when grouped
+    const hBarYSorted = isGrouped
+      ? dsList
+          .map((ds, i) => ({ label: ds.label, total: ds.data.reduce((s, v) => s + (v || 0), 0) }))
+          .sort((a, b) => a.total - b.total)
+          .map(d => d.label)
+      : hBarYLabels;
     return {
       tooltip: baseTooltip,
-      legend: baseLegend,
-      grid: { ...baseGrid, left: 120 },
+      legend: isGrouped ? { show: false } : baseLegend,
+      grid: { ...baseGrid, left: 140 },
       xAxis: valueAxis,
-      yAxis: { ...categoryAxis, inverse: true },
-      series: dsList.map((ds, i) => ({
-        name: ds.label,
-        type: 'bar',
-        data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
-        itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] },
-        ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
-      })),
+      yAxis: { ...categoryAxis, data: hBarYSorted, inverse: false },
+      series: hBarSeries,
     };
   }
 

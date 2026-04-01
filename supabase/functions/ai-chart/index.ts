@@ -76,13 +76,22 @@ IMPORTANT — Attribution channels:
 - channel_filter filters TO one channel (e.g., "show me SEO trials" → channel_filter: "SEO").
 
 IMPORTANT — Dimension breakdowns (group_by_dimension):
-- ONLY use group_by_dimension when the metric explicitly lists a dimensions: field in its catalog entry (e.g., dimensions:[Channel,SignupCountry]).
+- ONLY use group_by_dimension when the metric explicitly lists a dimensions: field in its catalog entry (e.g., dimensions:[AttributionChannel,SignupCountry]).
 - Set group_by_dimension to a column name that appears in the metric's dimensions: list. NEVER use a column name that is not in that list.
 - If the metric has NO dimensions: field, you MUST set group_by_dimension to null. Do not guess column names from the schema.
-- Best chart types for dimension breakdowns: heatmap, stacked_bar, pie, horizontal_bar.
+- Best chart types for dimension breakdowns: stacked_bar (over time), pie (proportions), horizontal_bar (ranked totals).
 - Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
 - channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.
 - Attribution channels (SEO, PPC, etc.) are NOT dimensions — they use channel_filter, not group_by_dimension.
+
+Trigger words for group_by_dimension — when user says any of these, set group_by_dimension:
+- "by country", "per country", "by SignupCountry", "distribution across countries", "breakdown by country", "split by country" → group_by_dimension: "SignupCountry"
+- "by attribution channel", "by channel", "stacked by channel", "broken down by channel" → group_by_dimension: "AttributionChannel"
+- "by vertical", "by industry", "by Vertical" → group_by_dimension: "Vertical"
+- "by sync type", "by SyncType" → group_by_dimension: "SyncType"
+Example: "show me trial distribution by country" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"horizontal_bar"
+Example: "show me trials by attribution channel as a stacked bar" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
+Example: "show me trials across countries as a pie" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"pie"
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.
