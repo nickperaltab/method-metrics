@@ -82,7 +82,7 @@ IMPORTANT — Dimension breakdowns (group_by_dimension):
 - Best chart types for dimension breakdowns: stacked_bar (over time), pie (proportions), horizontal_bar (ranked totals).
 - Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
 - channel_filter and group_by_dimension serve different purposes: filter narrows to one value; group_by breaks down by all values.
-- Attribution channels (SEO, PPC, etc.) are NOT dimensions — they use channel_filter, not group_by_dimension.
+- IMPORTANT distinction: channel_filter="SEO" filters TO one specific channel. group_by_dimension="AttributionChannel" breaks down BY all channels. "trials by attribution channel" → group_by_dimension:"AttributionChannel". "SEO trials" → channel_filter:"SEO". Never set both at once.
 
 Trigger words for group_by_dimension — when user says any of these, set group_by_dimension:
 - "by country", "per country", "by SignupCountry", "distribution across countries", "breakdown by country", "split by country" → group_by_dimension: "SignupCountry"
