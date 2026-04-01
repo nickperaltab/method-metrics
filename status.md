@@ -1,75 +1,58 @@
 # Method Metrics — Status
 
-**Last updated:** 2026-03-31
+**Last updated:** 2026-04-01
 
 ## Current state
 
-App is live on GitHub Pages: https://nickperaltab.github.io/method-metrics/builder/#/chat
+App is live on GitHub Pages: https://nickperaltab.github.io/method-metrics/builder/
 
-13 tickets shipped and merged to main. Supabase migrations applied. GitHub Pages CI deploys automatically on push to main.
+Ownership model (#36) fully shipped. UX overhaul in progress — All Charts and All Dashboards are now unified pages with chip filters, search, and sortable columns. Chart builder integration working (save, add to dashboard, colors/labels apply correctly).
 
-## What Nic is doing now
+## What was done today (2026-04-01)
 
-1. **Get chart builder working** — the AI chat flow, chart rendering, and save-to-dashboard flow need to work within the new app shell on GitHub Pages.
+- Replaced all native browser dialogs with custom Dialog component (green confirm, red danger, JetBrains Mono)
+- Removed edit mode from dashboards — owners always edit, non-owners see read-only with owner attribution
+- Added star, delete, approve to dashboard view header
+- Blank canvas empty state with "Add Existing Charts" / "Create New Chart from Scratch"
+- Rebuilt chart picker modal: 860px, search, metric chips (multi-select), description, dashboard counts, owner chips
+- Unified **All Dashboards**: one list, chip filters (All/Mine/Approved), search, sortable columns, inline approve badge
+- Unified **All Charts**: same pattern + metric chips, edit button → chart builder, inline description editing
+- Sidebar consolidated: one "All Dashboards" list, "All Charts" link
+- Fixed: chart not rendering after add/remove (was wiping caches via full reload)
+- Fixed: saved charts not in My Charts (ChatExplorer missing created_by_user)
+- Fixed: dashboard colors not applying (gw_spec colors/showLabels not passed to buildEChartsOption)
+- Fixed: duplicate dashboard creation (Enter key bubbling in Dialog)
+- Added recently viewed tracking (recordView on dashboard load)
+- Added auto-suggested chart names (Metric - Time Frame - Dimension)
+- Moved approval toggle inline next to name (clickable badge, no separate column)
 
-## What Justin is doing now
+## What Nic needs to do
 
-QA on the UX — testing all flows on the live GitHub Pages URL.
+1. **Fix Syncs metric** — Sync Count chart has metric_ids pointing to Trials, not Syncs
+2. **Chart builder edit experience** — clicking into a saved chart should load the conversation history
+3. **Chart descriptions** — populate descriptions on existing charts (search depends on this)
 
-## Key architecture changes (for Nic)
+## What's next for Justin
 
-- **Vite base path**: `vite.config.js` uses `process.env.VITE_BASE || '/'`. GitHub Pages CI sets `VITE_BASE=/method-metrics/builder/`. Vercel should leave it unset (defaults to `/`).
-- **2 metric types only**: Primitive and Derived. Old types (foundational, transform, etc.) are gone. `getType()` in tracker.html and `groupMetrics()` in supabase.js updated.
-- **Auto-generated queries killed**: `fetchChartData()` in bigquery.js no longer falls back to `fetchAggregatedData()`. Every metric needs `chart_sql`.
-- **User system**: `UserProvider` wraps the app. `useUser()` hook gives `currentUser`. User picker on first visit, stored in localStorage. Users table in Supabase with Justin and Nic seeded.
-- **App shell**: `Layout.jsx` + `Sidebar.jsx` replaced `TopBar.jsx`. Sidebar has Home, Chart Builder, My Charts, My Dashboards, Admin (Registry, Dimensions).
-- **New pages**: `pages/Home.jsx`, `pages/Registry.jsx`, `pages/Dimensions.jsx`, `pages/Charts.jsx`, `pages/ApprovedDashboards.jsx`
-- **Dashboard features**: Stars (`dashboard_stars` table), folders (`dashboard_folders` table), recently viewed (`dashboard_views` table). DashboardList.jsx rewritten with sort/star/folder support.
-- **Dashboard edit mode**: DashboardView.jsx has an Edit toggle. Charts are draggable/resizable in edit mode. Edit/remove controls only show in edit mode.
-- **BQ OAuth**: Added `hint: 'j.porter@method.me'` and `prompt: 'select_account'` to `connectBq()`.
+- QA the unified All Dashboards and All Charts pages
+- QA recently viewed on Home (should now populate as you visit dashboards)
+- Review chart naming convention (auto-suggested on save)
 
-## Supabase tables added
+## Key architecture (for Nic)
 
-- `users` — id, name, email, role. Seeded with Justin + Nic.
-- `approved_dimensions` — metric_id, dimension_name, column_name, verified_at. Seeded for trials/syncs/conversions/churn.
-- `dashboard_stars` — dashboard_id, user_id. Unique per pair.
-- `dashboard_folders` — name, user_id, sort_order.
-- `dashboard_views` — dashboard_id, user_id, viewed_at. For recently viewed.
+- **No edit mode**: DashboardView is always editable for owners. `isDraggable={isMine}`, `isResizable={isMine}`. Layout auto-saves on drag/resize stop.
+- **Dialog component**: `builder/src/components/Dialog.jsx` — never use window.prompt/confirm.
+- **Ownership**: `created_by_user` UUID on charts and dashboards. `canDelete(user, item)` and `isAdmin(user)` in `lib/permissions.js`.
+- **Chart save must include `createdByUser: currentUser?.id`** — both ChatExplorer and Explorer now do this.
+- **Chart colors**: `gw_spec` stores `colors` and `showLabels` at top level. DashboardView now passes them to `buildEChartsOption`.
+- **Metric ID types**: Always use `Number()` when comparing `metric_ids` from charts with metric catalog IDs.
 
 ## Deployment
 
-**GitHub Pages only.** Static React build, no server needed. Auto-deploys on push to main via GitHub Actions. Vercel evaluated and deferred (#34) — no current need for SSR/API routes.
-
-CI workflow (`.github/workflows/static.yml`) builds with `VITE_BASE=/method-metrics/builder/` and copies output to `_site/builder`.
+GitHub Pages only. Auto-deploys on push to main via GitHub Actions.
 
 ## Remaining tickets
 
-- **#24** — Graduate 13 verified metrics. Blocked on Justin's approval.
-- **#27** — Future: Metric solver as in-app feature.
-- **#30** — Future: Retire method-data-modelling repo.
-- **#34** — Future: Evaluate Vercel if SSR/API routes ever needed.
-
-## File map (new/changed files)
-
-```
-builder/src/
-  App.jsx                    — Rewired: Layout wrapper, new routes
-  contexts/UserContext.jsx   — NEW: user provider + useUser hook
-  components/
-    Layout.jsx               — NEW: sidebar + content area wrapper
-    Sidebar.jsx              — NEW: persistent left nav with favorites
-    UserPicker.jsx           — NEW: first-visit "Who are you?" picker
-    TopBar.jsx               — Updated: shows user name + switch button
-    DashboardList.jsx        — Rewritten: stars, folders, sort
-    DashboardView.jsx        — Updated: edit mode toggle, drag/resize
-  pages/
-    Home.jsx                 — NEW: favorites, recents, recommended
-    Registry.jsx             — NEW: full metric registry (replaces tracker.html)
-    Dimensions.jsx           — NEW: approved dimensions management
-    Charts.jsx               — NEW: chart library with search/rename/delete
-    ApprovedDashboards.jsx   — NEW: placeholder
-  lib/
-    supabase.js              — Added: fetchUsers, stars, folders, views, dimensions APIs
-    bigquery.js              — Changed: killed auto-gen, added login hint
-    ai.js                    — Changed: 2 types, approved dimensions in context
-```
+- **#24** — Graduate 13 verified metrics. Blocked on Justin.
+- **#36** — Ownership model. Shipped.
+- Vector/semantic search — future, once chart descriptions exist.
