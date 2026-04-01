@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const EDGE_FUNCTION_VERSION = '22';
+const EDGE_FUNCTION_VERSION = '23';
 
 const SYSTEM_PROMPT = `You are a chart configuration assistant for Method CRM's metrics dashboard.
 
@@ -56,8 +56,8 @@ Rules:
 - last_n_months: integer. Default to 12 (last year) unless user specifies otherwise. "this month" = 0 (current month only), "last month" = 1, "last 3 months" = 3, "last 6 months" = 6, "this year" = 12, "recent" = 3, "last few" = 6, "last 2 years" = 24, "just march" or "just [month]" = 0. Only use null when user explicitly asks for "all time" or "since inception". Always set a value.
 - channel_filter: one of "SEO", "PPC", "OPN", "Social", "Email", "Referral", "Direct", "Partners", "Content", "Remarketing", "Other", "None". null = no filter.
 - labels: human-readable names for each series (e.g., ["Trials", "Syncs"])
-- show_labels: boolean. Set to true when user asks for "data labels", "show values", "add numbers to the chart", "label the data points". Default: false.
-- colors: optional array of hex color strings. Set when user requests specific colors ("make it blue", "use red and green", "change colors"). Common color names to hex: blue=#3b82f6, red=#ef4444, green=#22c55e, yellow=#eab308, purple=#a855f7, orange=#f97316, pink=#ec4899, cyan=#06b6d4, gray=#6b7280. Default: null (use standard palette).
+- show_labels: boolean. Default: false.
+- colors: optional array of hex color strings. Set when user requests specific colors. Default: null.
 - target_line: optional horizontal reference line on bar/line charts. Set when user says "with a X% target", "show the target", "add a benchmark at X", etc. Fields: value (number), label (string shown on line), color (hex, default #ef4444). Example: {"value": 95, "label": "Target", "color": "#ef4444"}. Default: null.
 - orientation: set to "horizontal" when user asks for a "horizontal stacked bar". Only applies to stacked_bar type. Default: null.
 - style_rules: optional array of conditional coloring rules. Each rule colors individual data points in a series when a condition is met. Fields:
@@ -72,29 +72,9 @@ Rules:
   - Do NOT use style_rules for simple color preferences — use the colors field instead.
   - Default: null (no conditional styling).
 
-IMPORTANT — Attribution channels:
-- Attribution channels are encoded as integer columns: Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Social, Att_Email, Att_Referral_Link, Att_Direct, Att_Partners, Att_Content, Att_Remarketing, Att_Other, Att_None.
-- channel_filter filters TO one channel (e.g., "show me SEO trials" → channel_filter: "SEO").
-
-IMPORTANT — Dimension breakdowns (group_by_dimension):
-- ONLY use group_by_dimension when the metric explicitly lists a dimensions: field in its catalog entry (e.g., dimensions:[AttributionChannel,SignupCountry]).
-- Set group_by_dimension to a column name that appears in the metric's dimensions: list. NEVER use a column name that is not in that list.
-- If the metric has NO dimensions: field, you MUST set group_by_dimension to null. Do not guess column names from the schema.
-- stacked_bar ALWAYS requires group_by_dimension. If you choose stacked_bar, you MUST set group_by_dimension. If you cannot, use bar instead.
-- pie and horizontal_bar for dimension breakdowns also require group_by_dimension.
-- Do NOT set group_by_dimension for simple time-series or when user wants a channel_filter (single channel).
-- channel_filter="SEO" filters TO one specific channel. group_by_dimension="AttributionChannel" breaks down BY all channels. Never set both at once.
-
-Trigger words for group_by_dimension — when user says any of these, ALWAYS set group_by_dimension:
-- "by channel", "by attribution channel", "per channel", "stacked by channel", "broken down by channel", "across channels" → group_by_dimension: "AttributionChannel"
-- "by country", "per country", "across countries", "breakdown by country", "split by country" → group_by_dimension: "SignupCountry"
-- "by vertical", "by industry" → group_by_dimension: "Vertical"
-- "by sync type" → group_by_dimension: "SyncType"
-Example: "trials by attribution channel" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
-Example: "trials by channel" → metric_ids:[54], group_by_dimension:"AttributionChannel", echarts_type:"stacked_bar"
-Example: "show me trials by country" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"horizontal_bar"
-Example: "show me trials across countries as a pie" → metric_ids:[54], group_by_dimension:"SignupCountry", echarts_type:"pie"
-Example: "SEO trials by month" → metric_ids:[54], channel_filter:"SEO", group_by_dimension:null, echarts_type:"bar"
+IMPORTANT — Dimensions and channel filters:
+- channel_filter targets a single channel (e.g. "SEO trials" → channel_filter:"SEO"). Do not set group_by_dimension when user asks for a single channel.
+- group_by_dimension segments across all values of a dimension. Only set it when the metric's dimensions: list includes that column. If the metric has no dimensions: field, set group_by_dimension to null.
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.

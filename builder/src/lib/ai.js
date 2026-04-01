@@ -20,6 +20,54 @@ function normalizeStyleRules(rules) {
     .filter(r => r.target && (r.compareTo || r.threshold != null));
 }
 
+// Deterministic post-processing: apply keyword-based overrides to the AI's data_config.
+// Moves all trigger-word logic out of the system prompt and into reliable frontend code.
+export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetrics, approvedDimensions) {
+  const prompt = userPrompt.toLowerCase();
+
+  // 1. group_by_dimension — only fires if AI left it null
+  if (!dc.group_by_dimension) {
+    const GROUP_BY_TRIGGERS = [
+      { patterns: ['by channel', 'by attribution channel', 'per channel', 'across channels', 'channel breakdown', 'by source'], dimension: 'AttributionChannel' },
+      { patterns: ['by country', 'per country', 'across countries', 'by region'], dimension: 'SignupCountry' },
+      { patterns: ['by vertical', 'by industry'], dimension: 'Vertical' },
+      { patterns: ['by sync type'], dimension: 'SyncType' },
+    ];
+    for (const { patterns, dimension } of GROUP_BY_TRIGGERS) {
+      if (patterns.some(p => prompt.includes(p))) {
+        if (approvedDimensions && approvedDimensions.length > 0) {
+          const primaryMetric = resolvedMetrics[0];
+          const approved = approvedDimensions.filter(d => d.metric_id === primaryMetric?.id).map(d => d.column_name);
+          if (approved.includes(dimension)) dc.group_by_dimension = dimension;
+        }
+        break;
+      }
+    }
+  }
+
+  // 2. channel_filter — only if no group_by breakdown and AI left it null
+  if (!dc.channel_filter && !dc.group_by_dimension) {
+    const CHANNELS = ['SEO', 'PPC', 'OPN', 'Social', 'Email', 'Referral', 'Direct', 'Partners', 'Content', 'Remarketing'];
+    for (const ch of CHANNELS) {
+      if (new RegExp(`\\b${ch}\\b`, 'i').test(userPrompt)) { dc.channel_filter = ch; break; }
+    }
+  }
+
+  // 3. show_labels
+  if (['data labels', 'show values', 'add numbers', 'label the', 'show numbers'].some(t => prompt.includes(t))) {
+    dc.show_labels = true;
+  }
+
+  // 4. time_bucket — only override for explicit week/day requests
+  if (/\bby week\b|\bweekly\b/.test(prompt)) dc.time_bucket = 'week';
+  else if (/\bby day\b|\bdaily\b/.test(prompt)) dc.time_bucket = 'day';
+
+  // 5. stacked_bar guard — can't render stacked without a dimension
+  if (echartsType === 'stacked_bar' && !dc.group_by_dimension) echartsType = 'bar';
+
+  return echartsType;
+}
+
 // Validate AI-returned column names against actual schema and approved dimensions.
 export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
   const primaryView = resolvedMetrics.find(m => m.view_name)?.view_name;
@@ -90,9 +138,11 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
     resolvedMetrics.push(m);
   }
 
-  const echartsType = VALID_TYPES.has(result.echarts_type) ? result.echarts_type : 'bar';
+  let echartsType = VALID_TYPES.has(result.echarts_type) ? result.echarts_type : 'bar';
   const dc = result.data_config || {};
   validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions);
+  const lastUserMsg = messages.filter(m => m.role === 'user').at(-1)?.content || '';
+  echartsType = applyPromptOverrides(lastUserMsg, dc, echartsType, resolvedMetrics, approvedDimensions);
 
   return {
     metrics: resolvedMetrics,
@@ -114,7 +164,7 @@ export async function generateChartSpecWithHistory(messages, metrics, schemaMap,
       orientation: dc.orientation || null,
     },
     echartsType,
-    showLabels: !!result.show_labels,
+    showLabels: !!(dc.show_labels || result.show_labels),
     colors: result.colors || null,
     explanation: result.explanation || '',
   };
@@ -179,9 +229,10 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
     resolvedMetrics.push(m);
   }
 
-  const echartsType = VALID_TYPES.has(result.echarts_type) ? result.echarts_type : 'bar';
+  let echartsType = VALID_TYPES.has(result.echarts_type) ? result.echarts_type : 'bar';
   const dc = result.data_config || {};
   validateColumns(dc, resolvedMetrics, schemaMap);
+  echartsType = applyPromptOverrides(prompt, dc, echartsType, resolvedMetrics, null);
 
   return {
     metrics: resolvedMetrics,
@@ -203,7 +254,7 @@ export async function generateChartSpec(prompt, metrics, schemaMap) {
       orientation: dc.orientation || null,
     },
     echartsType,
-    showLabels: !!result.show_labels,
+    showLabels: !!(dc.show_labels || result.show_labels),
     colors: result.colors || null,
     explanation: result.explanation || '',
   };
