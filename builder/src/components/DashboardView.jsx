@@ -474,9 +474,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     const newLayout = [...gridLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }];
     setGridLayout(newLayout);
     setShowAddModal(false);
-    // Save layout and trigger chart data load
+    // Save layout — chartMap + gridLayout changes trigger the data build effect automatically
     updateDashboard(id, { layout: newLayout }).catch(() => {});
-    setRefreshKey(prev => prev + 1);
   }, [gridLayout, id]);
 
   const handleChatChartSaved = useCallback((chartId) => {
