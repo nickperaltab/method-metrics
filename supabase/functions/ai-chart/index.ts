@@ -19,7 +19,8 @@ Return ONLY valid JSON in this exact format:
     "last_n_months": <integer or null>,
     "channel_filter": "<channel_name or null>",
     "group_by_dimension": "<column_name or null>",
-    "labels": ["<display label for each y_field>", ...]
+    "labels": ["<display label for each y_field>", ...],
+    "style_rules": [{"target": "<series label>", "compare_to": "<other series label>", "operator": "<", "color": "#f87171"}] | null
   },
   "echarts_type": "<chart_type>",
   "show_labels": true | false,
@@ -41,6 +42,7 @@ Supported echarts_type values:
 - "kpi" — single big number card. ONLY use when user explicitly asks for a count/number using phrases like "how many", "what's the count", "total number of", "give me the number". Do NOT use kpi for rate/percentage metrics (Conversion Rate, Sync Rate) — always use "line" or "bar" for rates. Do NOT use kpi just because the user mentions "this month" — use a chart with last_n_months:0 instead. KPI is ONLY for primitive count metrics (Trials, Syncs, Conversions), never derived.
 - "table" — data table. Use when user says "table", "table view", "show as table", "list the data". Renders a sortable HTML table instead of a chart.
 - "yoy" — year-over-year comparison. Use when user says "year over year", "YoY", "compare years", "annual comparison". Shows grouped bars with months on X axis, one series per year. Only works with primitive metrics (not derived rates).
+- "variance" — actual vs target/forecast comparison. First metric renders as bars, second as dashed line. Bars turn red when actual < target, green when above. Use when user says "compare to forecast", "vs target", "variance", "actual vs plan", "highlight where below". Requires exactly 2 metric_ids.
 
 Rules:
 - metric_ids: array of metric IDs to fetch data for. Use one per y_field.

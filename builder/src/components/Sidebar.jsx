@@ -14,7 +14,8 @@ const ADMIN_ITEMS = [
 
 export default function Sidebar({ collapsed, onToggle }) {
   const { currentUser, switchUser } = useUser();
-  const [dashboards, setDashboards] = useState([]);
+  const [myDashboards, setMyDashboards] = useState([]);
+  const [approvedDashboards, setApprovedDashboards] = useState([]);
   const [stars, setStars] = useState([]);
 
   const loadData = useCallback(() => {
@@ -23,11 +24,8 @@ export default function Sidebar({ collapsed, onToggle }) {
       fetchMyDashboards(currentUser.id),
       fetchApprovedDashboardsList(),
     ]).then(([mine, approved]) => {
-      const all = [...mine];
-      for (const d of approved) {
-        if (!all.some(x => x.id === d.id)) all.push(d);
-      }
-      setDashboards(all);
+      setMyDashboards(mine);
+      setApprovedDashboards(approved);
     }).catch(() => {});
     fetchStars(currentUser.id).then(setStars).catch(() => {});
   }, [currentUser]);
@@ -54,6 +52,8 @@ export default function Sidebar({ collapsed, onToggle }) {
     margin: '2px 8px',
     transition: 'all .15s',
   });
+
+  const sectionLabel = { padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' };
 
   return (
     <>
@@ -125,34 +125,51 @@ export default function Sidebar({ collapsed, onToggle }) {
           </NavLink>
           <NavLink to="/charts" style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u25A3'}</span>
-            My Charts
+            All Charts
           </NavLink>
 
           {/* Favorites */}
           {stars.length > 0 && (
             <>
               <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
-                {'\u2605'} Favorites
-              </div>
-              {dashboards.filter(d => stars.includes(d.id)).map(d => (
-                <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
-                  <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                </NavLink>
-              ))}
+              <div style={sectionLabel}>{'\u2605'} Favorites</div>
+              {[...myDashboards, ...approvedDashboards]
+                .filter((d, i, arr) => stars.includes(d.id) && arr.findIndex(x => x.id === d.id) === i)
+                .map(d => (
+                  <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
+                    <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                  </NavLink>
+                ))}
             </>
           )}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
+          {/* Method Approved Dashboards */}
+          {approvedDashboards.length > 0 && (
+            <>
+              <NavLink to="/dashboards" style={linkStyle}>
+                <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{'\u2713'}</span>
+                Method Approved Dashboards
+              </NavLink>
+              {approvedDashboards.slice(0, 8).map(d => (
+                <NavLink key={`approved-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
+                  <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                </NavLink>
+              ))}
+              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+            </>
+          )}
+
           {/* My Dashboards */}
           <NavLink to="/dashboards" end style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u25A0'}</span>
-            My Dashboards
+            All Dashboards
           </NavLink>
-          {dashboards.slice(0, 8).map(d => (
+          {myDashboards.slice(0, 8).map(d => (
             <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
               <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>

@@ -622,3 +622,68 @@ describe('buildEChartsOption style_rules coloring', () => {
     expect(option.series[0].itemStyle.color).toBeDefined();
   });
 });
+
+describe('buildEChartsOption — variance chart type', () => {
+  const labels = ['2025-01', '2025-02', '2025-03'];
+  const actualDs = { label: 'Trials', data: [100, 80, 120] };
+  const targetDs = { label: 'Forecast', data: [90, 100, 110] };
+  const dataConfig = { styleRules: [] };
+
+  it('renders bars for actual and dashed line for target', () => {
+    const option = buildEChartsOption('variance', labels, [actualDs, targetDs], dataConfig);
+    expect(option.series).toHaveLength(2);
+    expect(option.series[0].type).toBe('bar');
+    expect(option.series[1].type).toBe('line');
+    expect(option.series[1].lineStyle.type).toBe('dashed');
+  });
+
+  it('colors bars red when actual < target, green when >=', () => {
+    const option = buildEChartsOption('variance', labels, [actualDs, targetDs], dataConfig);
+    const barData = option.series[0].data;
+    // 100 >= 90 → green
+    expect(barData[0].itemStyle.color).toBe('#34d399');
+    // 80 < 100 → red
+    expect(barData[1].itemStyle.color).toBe('#f87171');
+    // 120 >= 110 → green
+    expect(barData[2].itemStyle.color).toBe('#34d399');
+  });
+
+  it('preserves actual data values in bar series', () => {
+    const option = buildEChartsOption('variance', labels, [actualDs, targetDs], dataConfig);
+    const barValues = option.series[0].data.map(d => d.value);
+    expect(barValues).toEqual([100, 80, 120]);
+  });
+
+  it('passes target data through to line series', () => {
+    const option = buildEChartsOption('variance', labels, [actualDs, targetDs], dataConfig);
+    expect(option.series[1].data).toEqual([90, 100, 110]);
+  });
+
+  it('handles single dataset (no target line)', () => {
+    const option = buildEChartsOption('variance', labels, [actualDs], dataConfig);
+    expect(option.series).toHaveLength(1);
+    expect(option.series[0].type).toBe('bar');
+    // With no target, all bars should be green (not < undefined)
+    option.series[0].data.forEach(d => {
+      expect(d.itemStyle.color).toBe('#34d399');
+    });
+  });
+
+  it('all bars green when actual >= target everywhere', () => {
+    const highActual = { label: 'Actual', data: [200, 200, 200] };
+    const lowTarget = { label: 'Target', data: [100, 100, 100] };
+    const option = buildEChartsOption('variance', labels, [highActual, lowTarget], dataConfig);
+    option.series[0].data.forEach(d => {
+      expect(d.itemStyle.color).toBe('#34d399');
+    });
+  });
+
+  it('all bars red when actual < target everywhere', () => {
+    const lowActual = { label: 'Actual', data: [50, 50, 50] };
+    const highTarget = { label: 'Target', data: [100, 100, 100] };
+    const option = buildEChartsOption('variance', labels, [lowActual, highTarget], dataConfig);
+    option.series[0].data.forEach(d => {
+      expect(d.itemStyle.color).toBe('#f87171');
+    });
+  });
+});

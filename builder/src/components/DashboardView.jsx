@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
-import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts } from '../lib/supabase';
+import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
 import { fetchChartDatasets } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
@@ -109,7 +109,7 @@ const styles = {
   },
   modalContent: {
     background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 12,
-    width: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+    width: 860, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
     boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
   },
   modalHeader: {
@@ -145,6 +145,7 @@ const styles = {
   chartRowInfo: { flex: 1, minWidth: 0 },
   chartRowName: { fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 2 },
   chartRowMeta: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  chartRowDesc: { fontSize: 11, color: '#9ca3af', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   chartRowCount: { fontSize: 13, fontWeight: 600, color: '#374151', minWidth: 60, textAlign: 'right', flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" },
   chartRowDate: { fontSize: 11, color: '#6b7280', minWidth: 80, textAlign: 'right', flexShrink: 0 },
   approvedBadgeSmall: {
@@ -189,7 +190,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [showChatModal, setShowChatModal] = useState(false);
   const [modalTab, setModalTab] = useState('mine');
   const [modalSearch, setModalSearch] = useState('');
-  const [modalMetricFilter, setModalMetricFilter] = useState(null); // metric id or null
+  const [modalMetricFilter, setModalMetricFilter] = useState(new Set()); // set of metric ids
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [kpiDataMap, setKpiDataMap] = useState({});
@@ -198,6 +199,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [editChartId, setEditChartId] = useState(null);
   const [isStarred, setIsStarred] = useState(false);
   const [dialog, setDialog] = useState(null);
+  const [titleHovered, setTitleHovered] = useState(false);
 
   // Measure container width for GridLayout
   useEffect(() => {
@@ -229,6 +231,9 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
         setDashboard(dbVal);
         setGridLayout(dbVal.layout || []);
+
+        // Record this view for Recently Viewed on Home
+        if (currentUser) recordView(dbVal.id, currentUser.id);
 
         // Load charts by IDs from the dashboard layout (not filtered by user)
         const chartIds = (dbVal.layout || []).map(item => item.i);
@@ -462,14 +467,17 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       setShowAddModal(false);
       return;
     }
+    // Add chart to the lookup map so it renders immediately
+    setChartMap(prev => ({ ...prev, [chartId]: chart }));
     // Find next available Y position
     const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
-    setGridLayout(prev => [
-      ...prev,
-      { i: chartId, x: 0, y: maxY, w: 6, h: 4 },
-    ]);
+    const newLayout = [...gridLayout, { i: chartId, x: 0, y: maxY, w: 6, h: 4 }];
+    setGridLayout(newLayout);
     setShowAddModal(false);
-  }, [gridLayout]);
+    // Save layout and trigger chart data load
+    updateDashboard(id, { layout: newLayout }).catch(() => {});
+    setRefreshKey(prev => prev + 1);
+  }, [gridLayout, id]);
 
   const handleChatChartSaved = useCallback((chartId) => {
     const maxY = gridLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
@@ -540,6 +548,28 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     }
   }, [dashboard]);
 
+  const handleRenameTitle = useCallback(() => {
+    if (!dashboard) return;
+    setDialog({
+      type: 'prompt',
+      title: 'Rename dashboard',
+      label: 'Name',
+      defaultValue: dashboard.name,
+      onConfirm: async (name) => {
+        setDialog(null);
+        if (name === dashboard.name) return;
+        try {
+          await updateDashboard(id, { name });
+          setDashboard(prev => ({ ...prev, name }));
+          window.dispatchEvent(new Event('stars-changed'));
+        } catch (e) {
+          setError(`Rename failed: ${e.message}`);
+        }
+      },
+      onCancel: () => setDialog(null),
+    });
+  }, [dashboard, id]);
+
   if (loading) {
     return <div style={styles.layout}><div style={styles.empty}>Loading dashboard...</div></div>;
   }
@@ -564,7 +594,21 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       <div style={styles.header}>
         <div style={styles.titleRow}>
           <button style={styles.backBtn} onClick={() => navigate('/dashboards')}>&#8592;</button>
-          <span style={styles.title}>{dashboard?.name || 'Dashboard'}</span>
+          <span
+            style={{
+              ...styles.title,
+              cursor: isMine ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+            onClick={isMine ? handleRenameTitle : undefined}
+            onMouseEnter={() => isMine && setTitleHovered(true)}
+            onMouseLeave={() => setTitleHovered(false)}
+          >
+            {dashboard?.name || 'Dashboard'}
+            {isMine && (
+              <span style={{ fontSize: 13, color: titleHovered ? '#6b7280' : 'transparent', transition: 'color .15s' }}>&#9998;</span>
+            )}
+          </span>
           {dashboard?.is_approved && (
             <span style={styles.approvedBadge}>Method Approved</span>
           )}
@@ -713,7 +757,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           .sort((a, b) => a.name.localeCompare(b.name));
 
         const filtered = availableInTab.filter(c => {
-          if (modalMetricFilter && !(c.metric_ids || []).includes(modalMetricFilter)) return false;
+          if (modalMetricFilter.size > 0 && !(c.metric_ids || []).some(mid => modalMetricFilter.has(mid))) return false;
           if (!modalSearch) return true;
           const q = modalSearch.toLowerCase();
           const chartTypeLabel = TYPE_LABELS[c.gw_spec?.echartsType] || '';
@@ -726,7 +770,12 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             });
         });
 
-        const closeModal = () => { setShowAddModal(false); setModalSearch(''); setModalMetricFilter(null); };
+        const closeModal = () => { setShowAddModal(false); setModalSearch(''); setModalMetricFilter(new Set()); };
+        const toggleMetricChip = (mid) => setModalMetricFilter(prev => {
+          const next = new Set(prev);
+          if (next.has(mid)) next.delete(mid); else next.add(mid);
+          return next;
+        });
 
         return (
           <div style={styles.modal} onClick={closeModal}>
@@ -753,13 +802,13 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 <div style={styles.modalTabs}>
                   <button
                     style={modalTab === 'mine' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => { setModalTab('mine'); setModalMetricFilter(null); }}
+                    onClick={() => { setModalTab('mine'); setModalMetricFilter(new Set()); }}
                   >
                     My Charts ({myCharts.filter(c => !onDashboard.has(String(c.id))).length})
                   </button>
                   <button
                     style={modalTab === 'approved' ? styles.modalTabActive : styles.modalTab}
-                    onClick={() => { setModalTab('approved'); setModalMetricFilter(null); }}
+                    onClick={() => { setModalTab('approved'); setModalMetricFilter(new Set()); }}
                   >
                     Method Approved ({approvedCharts.filter(c => !onDashboard.has(String(c.id))).length})
                   </button>
@@ -771,19 +820,27 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                   {metricChipList.map(m => (
                     <button
                       key={m.id}
-                      style={modalMetricFilter === m.id ? styles.metricChipActive : styles.metricChip}
-                      onClick={() => setModalMetricFilter(modalMetricFilter === m.id ? null : m.id)}
+                      style={modalMetricFilter.has(m.id) ? styles.metricChipActive : styles.metricChip}
+                      onClick={() => toggleMetricChip(m.id)}
                     >
                       {m.name}
                     </button>
                   ))}
+                  {modalMetricFilter.size > 0 && (
+                    <button
+                      style={{ ...styles.metricChip, color: '#6b7280', borderStyle: 'dashed' }}
+                      onClick={() => setModalMetricFilter(new Set())}
+                    >
+                      clear
+                    </button>
+                  )}
                 </div>
               )}
 
               <div style={styles.modalList}>
                 {filtered.length === 0 ? (
                   <div style={{ ...styles.empty, padding: 32 }}>
-                    {modalSearch || modalMetricFilter ? 'No charts match your filters.' : 'No charts available.'}
+                    {modalSearch || modalMetricFilter.size > 0 ? 'No charts match your filters.' : 'No charts available.'}
                   </div>
                 ) : (
                   filtered.map(chart => {
@@ -808,6 +865,11 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                           <div style={styles.chartRowMeta}>
                             {metricNames || `${(chart.metric_ids || []).length} metric(s)`}
                           </div>
+                          {chart.description ? (
+                            <div style={styles.chartRowDesc}>{chart.description}</div>
+                          ) : (
+                            <div style={{ ...styles.chartRowDesc, fontStyle: 'italic' }}>No description</div>
+                          )}
                         </div>
                         <div style={styles.chartRowDate}>
                           {chart.created_at ? new Date(chart.created_at).toLocaleDateString() : '—'}
