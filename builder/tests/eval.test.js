@@ -743,3 +743,633 @@ describe('Multi-Step Conversation Chains', () => {
     ]);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// V2 Architecture Evals — 2-call Haiku (intent classifier + spec generator)
+// Compare pass rates against V1 on the same representative prompts.
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function callAiV2(prompt) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart-v2`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'apikey': SUPABASE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt, metricContext: METRIC_CONTEXT, schemaContext: SCHEMA_CONTEXT }),
+  });
+  if (!res.ok) throw new Error(`AI V2 function failed: ${res.status}`);
+  return res.json();
+}
+
+describe('V2: Dimension Breakdowns', () => {
+  it('[V2] trials by attribution channel → group_by_dimension', async () => {
+    const result = await callAiV2('show me trials by attribution channel as a stacked bar');
+    assertValidSpec(result, '[V2] trials by attribution channel');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials (id 54)');
+    assert.strictEqual(result.data_config.group_by_dimension, 'AttributionChannel', 'should set group_by_dimension');
+    assert.strictEqual(result.echarts_type, 'stacked_bar', 'should be stacked_bar');
+  });
+
+  it('[V2] trials broken down by country → group_by_dimension SignupCountry', async () => {
+    const result = await callAiV2('show me trials broken down by country');
+    assertValidSpec(result, '[V2] trials broken down by country');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('[V2] trial distribution by country (vague phrasing) → group_by_dimension', async () => {
+    const result = await callAiV2('show me trial distribution by country');
+    assertValidSpec(result, '[V2] trial distribution by country');
+    assert.strictEqual(result.metric_ids[0], 54, 'should pick Trials');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('[V2] trials by country horizontal bar → group_by_dimension + correct type', async () => {
+    const result = await callAiV2('show me trials by country as a horizontal bar');
+    assertValidSpec(result, '[V2] horizontal bar by country');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension');
+    assert.strictEqual(result.echarts_type, 'horizontal_bar', 'should be horizontal_bar');
+  });
+
+  it('[V2] SEO trials → channel_filter, NOT group_by_dimension', async () => {
+    const result = await callAiV2('show me SEO trials by month');
+    assertValidSpec(result, '[V2] SEO channel filter');
+    assert.strictEqual(result.data_config.channel_filter, 'SEO', 'SEO should be a channel_filter');
+    assert.strictEqual(result.data_config.group_by_dimension, null, 'group_by_dimension should be null for single channel');
+  });
+});
+
+describe('V2: Channel Filters', () => {
+  it('[V2] PPC conversions → channel_filter PPC', async () => {
+    const result = await callAiV2('show me PPC conversions by month');
+    assertValidSpec(result, '[V2] PPC conversions');
+    assert.strictEqual(result.data_config.channel_filter, 'PPC', 'should filter by PPC');
+    assert(result.metric_ids.includes(56), 'should pick Conversions');
+  });
+
+  it('[V2] weekly SEO trials last 3 months → channel + time combo', async () => {
+    const result = await callAiV2('show me weekly SEO trials for the last 3 months');
+    assertValidSpec(result, '[V2] weekly SEO');
+    assert.strictEqual(result.data_config.time_bucket, 'week', 'should be weekly');
+    assert.strictEqual(result.data_config.channel_filter, 'SEO', 'should filter SEO');
+    assert.strictEqual(result.data_config.last_n_months, 3, 'should be last 3 months');
+  });
+
+  it('[V2] syncs by channel (breakdown not filter)', async () => {
+    const result = await callAiV2('show me syncs by channel');
+    assertValidSpec(result, '[V2] syncs by channel');
+    assert.notStrictEqual(result.data_config.x_field, 'Channel', 'should not use Channel as x_field');
+  });
+});
+
+describe('V2: Time Range Precision', () => {
+  it('[V2] this month → last_n_months: 0', async () => {
+    const r = await callAiV2('show me trials this month');
+    assertValidSpec(r, '[V2] this month');
+    assert.strictEqual(r.data_config.last_n_months, 0, '"this month" should be 0');
+  });
+
+  it('[V2] last 6 months → last_n_months: 6', async () => {
+    const r = await callAiV2('show me trials for the last 6 months');
+    assertValidSpec(r, '[V2] last 6 months');
+    assert.strictEqual(r.data_config.last_n_months, 6, 'should set last_n_months to 6');
+  });
+
+  it('[V2] weekly time bucket', async () => {
+    const r = await callAiV2('show me weekly syncs');
+    assertValidSpec(r, '[V2] weekly syncs');
+    assert.strictEqual(r.data_config.time_bucket, 'week', 'should be weekly');
+  });
+
+  it('[V2] daily trials last 2 months', async () => {
+    const r = await callAiV2('show me daily trials for the last 2 months');
+    assertValidSpec(r, '[V2] daily trials');
+    assert.strictEqual(r.data_config.time_bucket, 'day', 'should be daily');
+    assert.strictEqual(r.data_config.last_n_months, 2, 'should be last 2 months');
+  });
+});
+
+describe('V2: Basic Happy Path', () => {
+  it('[V2] trials by month → line chart', async () => {
+    const result = await callAiV2('show me trials by month');
+    assertValidSpec(result, '[V2] trials by month');
+    assert(result.metric_ids.includes(54), 'should pick Trials (id 54)');
+    assert.strictEqual(result.echarts_type, 'line', 'should be line chart');
+  });
+
+  it('[V2] trials and syncs → multi-metric', async () => {
+    const result = await callAiV2('show me trials and syncs by month');
+    assertValidSpec(result, '[V2] trials and syncs');
+    assert(result.metric_ids.length >= 2, 'should have at least 2 metrics');
+    assert(result.data_config.labels.length >= 2, 'should have at least 2 labels');
+  });
+
+  it('[V2] pie chart trial distribution by country', async () => {
+    const result = await callAiV2('show me trial distribution by country as a pie chart');
+    assertValidSpec(result, '[V2] pie by country');
+    assert.strictEqual(result.echarts_type, 'pie', 'should be pie chart');
+    assert.strictEqual(result.data_config.group_by_dimension, 'SignupCountry', 'should set group_by_dimension to SignupCountry');
+  });
+
+  it('[V2] invalid prompt → error or suggestion', async () => {
+    const result = await callAiV2('show me pizza sales');
+    assert(result.error || result.suggestion, 'should return error for invalid metric');
+  });
+});
+
+describe('V2: Derived Metrics', () => {
+  it('[V2] conversion rate → derived metric id 20', async () => {
+    const result = await callAiV2('show me conversion rate by month');
+    assertValidSpec(result, '[V2] conversion rate');
+    assert(result.metric_ids.includes(20), 'should pick Conversion Rate (id 20)');
+  });
+
+  it('[V2] trials vs forecast → variance/bar, not combo', async () => {
+    const result = await callAiV2('trials vs forecast');
+    assertValidSpec(result, '[V2] trials vs forecast');
+    assert(result.metric_ids.includes(54), 'should pick Trials');
+    assert(result.metric_ids.includes(271), 'should pick Trials Forecast');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
+  });
+});
+
+describe('V2: Chart Type Variety', () => {
+  it('[V2] funnel: trials, syncs, conversions', async () => {
+    const result = await callAiV2('show me the marketing funnel: trials, syncs, and conversions by month');
+    assertValidSpec(result, '[V2] funnel multi-metric');
+    assert(result.metric_ids.length >= 3, 'should have 3 metric_ids');
+    const validType = ['line', 'funnel'].includes(result.echarts_type);
+    assert(validType, `should be line or funnel, got ${result.echarts_type}`);
+  });
+
+  it('[V2] rates: conversion rate and sync rate together', async () => {
+    const result = await callAiV2('show me conversion rate and sync rate by month');
+    assertValidSpec(result, '[V2] rates multi-metric');
+    assert(result.metric_ids.length >= 2, 'should have at least 2 rates');
+  });
+
+  it('[V2] stacked bar: trials by channel over time', async () => {
+    const result = await callAiV2('show me trials stacked by channel over time');
+    assertValidSpec(result, '[V2] stacked bar');
+    const isStacked = result.echarts_type === 'stacked_bar' || result.echarts_type === 'bar';
+    assert(isStacked, `should be stacked_bar or bar, got ${result.echarts_type}`);
+  });
+
+  it('[V2] area chart: syncs over time', async () => {
+    const result = await callAiV2('show me syncs over time as an area chart');
+    assertValidSpec(result, '[V2] area chart');
+    assert.strictEqual(result.echarts_type, 'area', 'should be area chart');
+  });
+
+  it('[V2] combo: trials bar with conversion rate line', async () => {
+    const result = await callAiV2('show me trials as bars with conversion rate as a line overlay by month');
+    assertValidSpec(result, '[V2] combo chart');
+    assert.strictEqual(result.echarts_type, 'combo', 'should be combo chart');
+    assert(result.metric_ids.length >= 2, 'should have at least 2 metrics for combo');
+  });
+
+  it('[V2] this year scope', async () => {
+    const result = await callAiV2('show me syncs this year');
+    assertValidSpec(result, '[V2] this year');
+    assert.strictEqual(result.data_config.last_n_months, 12, 'this year should be last 12 months');
+  });
+});
+
+describe('V2: Forecast Comparison', () => {
+  it('[V2] trials vs forecast this month → bar for single month', async () => {
+    const result = await callAiV2('trials vs forecast this month');
+    assertValidSpec(result, '[V2] trials vs forecast this month');
+    assert(result.metric_ids.includes(54), 'should pick Trials');
+    assert(result.metric_ids.includes(271), 'should pick Trials Forecast');
+    const validType = ['bar', 'variance'].includes(result.echarts_type);
+    assert(validType, `single month comparison should be bar or variance, got ${result.echarts_type}`);
+    assert.strictEqual(result.data_config.last_n_months, 0, 'this month = 0');
+  });
+
+  it('[V2] syncs actual vs budget', async () => {
+    const result = await callAiV2('show me syncs actual vs budget');
+    assertValidSpec(result, '[V2] syncs vs budget');
+    assert(result.metric_ids.includes(55), 'should pick Syncs');
+    assert(result.metric_ids.includes(272), 'should pick Syncs Forecast');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
+  });
+
+  it('[V2] conversions vs forecast over time', async () => {
+    const result = await callAiV2('conversions vs forecast over time');
+    assertValidSpec(result, '[V2] conversions vs forecast');
+    assert(result.metric_ids.includes(56), 'should pick Conversions');
+    assert(result.metric_ids.includes(273), 'should pick Conversions Forecast');
+    assert.notStrictEqual(result.echarts_type, 'combo', 'should NOT be combo');
+    const validType = ['line', 'bar', 'variance'].includes(result.echarts_type);
+    assert(validType, `should be line, bar, or variance, got ${result.echarts_type}`);
+  });
+
+  it('[V2] trials vs forecast with styling', async () => {
+    const result = await callAiV2('trials vs forecast, highlight red when below');
+    assertValidSpec(result, '[V2] trials vs forecast styled');
+    assert(result.data_config.style_rules?.length > 0, 'should have style_rules');
+    const rule = result.data_config.style_rules[0];
+    assert.strictEqual(rule.operator, '<', 'should use < operator');
+    assert(rule.color, 'should have a color');
+  });
+
+  it('[V2] churn vs forecast', async () => {
+    const result = await callAiV2('churn vs forecast');
+    assertValidSpec(result, '[V2] churn vs forecast');
+    assert(result.metric_ids.includes(58), 'should pick Churn');
+    assert(result.metric_ids.includes(274), 'should pick Churn Forecast');
+  });
+});
+
+describe('V2: Conditional Styling', () => {
+  it('[V2] red when below forecast', async () => {
+    const result = await callAiV2('trials vs forecast, highlight red when below');
+    assertValidSpec(result, '[V2] red when below');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have at least one style rule');
+    const redRule = rules.find(r => r.operator === '<');
+    assert(redRule, 'should have a < operator rule');
+    assert(redRule.color, 'red rule should have a color');
+    assert(redRule.target, 'red rule should have a target series');
+    assert(redRule.compare_to || redRule.compareTo, 'red rule should compare to forecast series');
+  });
+
+  it('[V2] red and green when above/below forecast', async () => {
+    const result = await callAiV2('trials vs forecast, red when below and green when above');
+    assertValidSpec(result, '[V2] red and green rules');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length >= 2, 'should have at least 2 rules (red and green)');
+    assert(rules.some(r => r.operator === '<'), 'should have < rule for red');
+    assert(rules.some(r => r.operator === '>'), 'should have > rule for green');
+  });
+
+  it('[V2] threshold styling: conversion rate below 15%', async () => {
+    const result = await callAiV2('show conversion rate, color it red when below 15%');
+    assertValidSpec(result, '[V2] threshold styling');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have a style rule');
+    const rule = rules[0];
+    const threshold = rule.threshold ?? rule.value;
+    assert(threshold != null, 'should have a threshold value');
+    const numericThreshold = Number(threshold);
+    assert(!isNaN(numericThreshold), 'threshold should be numeric');
+    assert(numericThreshold > 0 && numericThreshold < 1, 'threshold should be a decimal (0.15)');
+    assert.strictEqual(rule.operator, '<', 'should use < operator');
+  });
+
+  it('[V2] threshold styling: sync rate below 60%', async () => {
+    const result = await callAiV2('show sync rate and alert me when it drops below 60%');
+    assertValidSpec(result, '[V2] sync rate threshold');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert(rules.length > 0, 'should have a style rule');
+    const rule = rules[0];
+    const threshold = rule.threshold ?? rule.value;
+    assert(threshold != null, 'should set threshold');
+    const numericThreshold = Number(threshold);
+    assert(!isNaN(numericThreshold) && numericThreshold > 0, 'threshold should be a positive number');
+    assert(numericThreshold < 100, 'threshold should be less than 100');
+    assert.strictEqual(rule.operator, '<', 'should use < operator');
+  });
+
+  it('[V2] no style_rules for plain color request', async () => {
+    const result = await callAiV2('show me trials by month in blue');
+    assertValidSpec(result, '[V2] plain color no style_rules');
+    const rules = result.data_config?.style_rules || result.style_rules || [];
+    assert.strictEqual(rules.length, 0, 'plain color should use colors field, not style_rules');
+    assert(result.colors?.length > 0, 'should set colors field');
+  });
+});
+
+describe('V2: Time Range (full)', () => {
+  it('[V2] last month → last_n_months: 1', async () => {
+    const r = await callAiV2('show me trials last month');
+    assertValidSpec(r, '[V2] last month');
+    assert.strictEqual(r.data_config.last_n_months, 1, '"last month" should be 1');
+  });
+
+  it('[V2] "just march" should have a time filter', async () => {
+    const r = await callAiV2('show me trials for march');
+    assertValidSpec(r, '[V2] just march');
+    assert(r.data_config.last_n_months != null, 'should have a time filter');
+  });
+
+  it('[V2] "this month" with derived metric → monthly bucket', async () => {
+    const r = await callAiV2('conversion rate this month');
+    assert(Array.isArray(r.metric_ids) && r.metric_ids.length > 0, 'must have metric_ids');
+    assert(r.data_config, 'must have data_config');
+    if (r.echarts_type !== 'kpi') {
+      assert.strictEqual(r.data_config.time_bucket, 'month', 'derived rates should use monthly bucket');
+    }
+  });
+
+  it('[V2] last 3 months → 3', async () => {
+    const r = await callAiV2('show me syncs for the last 3 months');
+    assertValidSpec(r, '[V2] last 3 months');
+    assert.strictEqual(r.data_config.last_n_months, 3, 'last 3 months = 3');
+  });
+});
+
+describe('V2: Pivot Tables', () => {
+  it('[V2] trials and syncs by channel as table → pivot mode', async () => {
+    const r = await callAiV2('show me trials and syncs by channel as a table');
+    assertValidSpec(r, '[V2] trials and syncs pivot');
+    assert.strictEqual(r.echarts_type, 'table', 'should be table type');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel', 'should group by AttributionChannel');
+    assert(r.metric_ids.includes(54), 'should include Trials');
+    assert(r.metric_ids.includes(55), 'should include Syncs');
+    assert.strictEqual(r.data_config.last_n_months, 0, 'pivot should default to MTD');
+  });
+
+  it('[V2] trials by channel table → single metric pivot', async () => {
+    const r = await callAiV2('show trials by channel as a table');
+    assertValidSpec(r, '[V2] trials by channel table');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(54));
+  });
+});
+
+async function callAiV2Conversational(messages, currentChartSpec) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart-v2`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'apikey': SUPABASE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages,
+      metricContext: METRIC_CONTEXT,
+      schemaContext: SCHEMA_CONTEXT,
+      currentChartSpec,
+    }),
+  });
+  if (!res.ok) throw new Error(`AI V2 function failed: ${res.status}`);
+  return res.json();
+}
+
+describe('V2: Conversational', () => {
+  it('[V2] follow-up: add metric to existing chart', async () => {
+    const r1 = await callAiV2('show me trials by month');
+    assertValidSpec(r1, '[V2] initial trials');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'add syncs too' },
+    ], r1);
+    assertValidSpec(r2, '[V2] add syncs');
+    assert(r2.metric_ids.length >= 2, 'should have at least 2 metrics');
+    assert(r2.metric_ids.includes(54), 'should keep Trials');
+    assert(r2.metric_ids.includes(55), 'should add Syncs');
+  });
+
+  it('[V2] follow-up: change chart type', async () => {
+    const r1 = await callAiV2('show me trials by month');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'make it a bar chart' },
+    ], r1);
+    assertValidSpec(r2, '[V2] change to bar');
+    assert.strictEqual(r2.echarts_type, 'bar', 'should be bar');
+    assert(r2.metric_ids.includes(54), 'should still have Trials');
+  });
+
+  it('[V2] follow-up: change time range', async () => {
+    const r1 = await callAiV2('show me trials by month');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'just the last 6 months' },
+    ], r1);
+    assertValidSpec(r2, '[V2] last 6 months follow-up');
+    assert.strictEqual(r2.data_config.last_n_months, 6, 'should filter to 6 months');
+  });
+
+  it('[V2] follow-up: add channel filter', async () => {
+    const r1 = await callAiV2('show me trials by month');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'only SEO' },
+    ], r1);
+    assertValidSpec(r2, '[V2] SEO filter follow-up');
+    assert.strictEqual(r2.data_config.channel_filter, 'SEO', 'should filter by SEO');
+  });
+
+  it('[V2] follow-up: completely different topic resets', async () => {
+    const r1 = await callAiV2('show me trials by month');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me trials by month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'show me churn rate by month' },
+    ], r1);
+    assertValidSpec(r2, '[V2] topic change');
+    assert(r2.metric_ids.includes(46), 'should pick Churn Rate');
+  });
+
+  it('[V2] follow-up: "just do march" preserves time_bucket', async () => {
+    const r1 = await callAiV2('conversion rate this month');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'conversion rate this month' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'just do march please' },
+    ], r1);
+    assertValidSpec(r2, '[V2] just do march');
+    assert(r2.metric_ids.includes(20), 'should keep Conversion Rate');
+    assert(r2.data_config.time_bucket, 'time_bucket should be set');
+  });
+
+  it('[V2] follow-up: "make it monthly" changes bucket, keeps metric', async () => {
+    const r1 = await callAiV2('show me daily trials for the last 2 months');
+    const r2 = await callAiV2Conversational([
+      { role: 'user', content: 'show me daily trials for the last 2 months' },
+      { role: 'assistant', content: JSON.stringify(r1) },
+      { role: 'user', content: 'make it monthly' },
+    ], r1);
+    assertValidSpec(r2, '[V2] make it monthly');
+    assert(r2.metric_ids.includes(54), 'should keep Trials');
+    assert.strictEqual(r2.data_config.time_bucket, 'month', 'should change to monthly');
+  });
+});
+
+async function runChainV2(steps, initialSpec = null) {
+  const messages = [];
+  let currentSpec = initialSpec;
+  const results = [];
+  for (const step of steps) {
+    messages.push({ role: 'user', content: step.prompt });
+    const result = await callAiV2Conversational(messages, currentSpec);
+    assertValidSpec(result, step.label);
+    step.validate(result, results);
+    messages.push({ role: 'assistant', content: JSON.stringify(result) });
+    currentSpec = result;
+    results.push(result);
+  }
+  return results;
+}
+
+describe('V2: Multi-Step Chains', () => {
+  it('[V2] chain: trials → add syncs → stacked bars → SEO filter → last 3 months', async () => {
+    await runChainV2([
+      {
+        prompt: 'show me trials by month',
+        label: '[V2] step 1: initial trials',
+        validate: (r) => {
+          assertHasMetrics(r, [54], '[V2] step 1');
+          assert.strictEqual(r.data_config.time_bucket, 'month');
+        },
+      },
+      {
+        prompt: 'add syncs too',
+        label: '[V2] step 2: add syncs',
+        validate: (r) => {
+          assertHasMetrics(r, [54, 55], '[V2] step 2');
+        },
+      },
+      {
+        prompt: 'make it stacked bars',
+        label: '[V2] step 3: stacked bars',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'stacked_bar', 'should be stacked_bar');
+          assert(r.metric_ids.length >= 2, 'should keep both metrics');
+        },
+      },
+      {
+        prompt: 'only SEO',
+        label: '[V2] step 4: SEO filter',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.channel_filter, 'SEO', 'should filter by SEO');
+        },
+      },
+      {
+        prompt: 'just last 3 months',
+        label: '[V2] step 5: last 3 months',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.last_n_months, 3, 'should be 3 months');
+        },
+      },
+    ]);
+  });
+
+  it('[V2] chain: conversion rate → add sync rate → weekly → table', async () => {
+    await runChainV2([
+      {
+        prompt: 'show me conversion rate by month',
+        label: '[V2] step 1: conversion rate',
+        validate: (r) => { assertHasMetrics(r, [20], '[V2] step 1'); },
+      },
+      {
+        prompt: 'compare to sync rate',
+        label: '[V2] step 2: add sync rate',
+        validate: (r) => { assertHasMetrics(r, [20, 25], '[V2] step 2'); },
+      },
+      {
+        prompt: 'make it weekly',
+        label: '[V2] step 3: weekly',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.time_bucket, 'week', 'should be weekly');
+          assert(r.metric_ids.length >= 2, 'should keep both rates');
+        },
+      },
+      {
+        prompt: 'show as table',
+        label: '[V2] step 4: table',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'table', 'should be table');
+        },
+      },
+    ]);
+  });
+
+  it('[V2] chain: edit saved chart — change range, add metric, change type', async () => {
+    const savedSpec = {
+      metric_ids: [54, 55],
+      echarts_type: 'line',
+      data_config: {
+        x_field: 'SignupDate',
+        y_fields: ['COUNT', 'COUNT'],
+        time_bucket: 'month',
+        last_n_months: 12,
+        channel_filter: null,
+        labels: ['Trials', 'Syncs'],
+      },
+      show_labels: false,
+      explanation: 'Trials and Syncs by month',
+    };
+    await runChainV2([
+      {
+        prompt: 'show last 6 months instead',
+        label: '[V2] edit step 1: change range',
+        validate: (r) => {
+          assert.strictEqual(r.data_config.last_n_months, 6, 'should be 6 months');
+          assertHasMetrics(r, [54, 55], '[V2] edit step 1');
+          assert.strictEqual(r.echarts_type, 'line', 'type should stay line');
+        },
+      },
+      {
+        prompt: 'add conversion rate',
+        label: '[V2] edit step 2: add derived metric',
+        validate: (r) => { assertHasMetrics(r, [54, 55, 20], '[V2] edit step 2'); },
+      },
+      {
+        prompt: 'make it a combo chart',
+        label: '[V2] edit step 3: combo',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'combo', 'should be combo');
+          assert(r.metric_ids.length >= 3, 'should keep all 3 metrics');
+        },
+      },
+    ], savedSpec);
+  });
+
+  it('[V2] chain: topic reset from saved chart', async () => {
+    const savedSpec = {
+      metric_ids: [54, 55],
+      echarts_type: 'line',
+      data_config: {
+        x_field: 'SignupDate',
+        y_fields: ['COUNT', 'COUNT'],
+        time_bucket: 'month',
+        last_n_months: 12,
+        channel_filter: null,
+        labels: ['Trials', 'Syncs'],
+      },
+      explanation: 'Trials and Syncs',
+    };
+    await runChainV2([
+      {
+        prompt: 'now show me churn rate by month',
+        label: '[V2] reset: churn rate',
+        validate: (r) => {
+          assertHasMetrics(r, [46], '[V2] reset');
+          assert(!r.metric_ids.includes(54), 'should NOT include Trials');
+          assert(!r.metric_ids.includes(55), 'should NOT include Syncs');
+        },
+      },
+    ], savedSpec);
+  });
+
+  it('[V2] chain: data labels persist across chart type change', async () => {
+    await runChainV2([
+      {
+        prompt: 'show me trials by month with data labels',
+        label: '[V2] step 1: with labels',
+        validate: (r) => {
+          assertHasMetrics(r, [54], '[V2] step 1');
+          assert.strictEqual(r.show_labels, true, 'show_labels should be true');
+        },
+      },
+      {
+        prompt: 'make it a bar chart',
+        label: '[V2] step 2: bar with labels preserved',
+        validate: (r) => {
+          assert.strictEqual(r.echarts_type, 'bar', 'should be bar');
+          assert.strictEqual(r.show_labels, true, 'show_labels should still be true');
+        },
+      },
+    ]);
+  });
+});

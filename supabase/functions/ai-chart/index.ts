@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const EDGE_FUNCTION_VERSION = '25';
+const EDGE_FUNCTION_VERSION = '27';
 
 const SYSTEM_PROMPT = `You are a chart configuration assistant for Method CRM's metrics dashboard.
 
@@ -21,7 +21,7 @@ Return ONLY valid JSON in this exact format:
     "channel_filter": "<channel_name or null>",
     "group_by_dimension": "<column_name or null>",
     "labels": ["<display label for each y_field>", ...],
-    "style_rules": [{"target": "<series label>", "compare_to": "<other series label>", "operator": "<", "color": "#f87171"}] | null,
+    "style_rules": [{"target": "<series label>", "compare_to": "<other series label or null>", "threshold": <number or null>, "operator": "<", "color": "#f87171"}] | null,
     "target_line": {"value": <number>, "label": "<string>", "color": "<hex>"} | null,
     "orientation": "horizontal" | null
   },
@@ -68,7 +68,8 @@ Rules:
   - color: hex color to apply when condition is true
   Use style_rules when:
   - Comparing actual vs forecast: color actual bars red when below forecast, green when above. When user asks for BOTH colors, return TWO rules. Example: [{"target": "Trials", "compareTo": "Trials Forecast", "operator": "<", "color": "#ef4444"}, {"target": "Trials", "compareTo": "Trials Forecast", "operator": ">", "color": "#22c55e"}]
-  - Threshold alerts: color a rate metric red when below target. Example: {"target": "Conversion Rate", "threshold": 0.15, "operator": "<", "color": "#ef4444"}
+  - Threshold alerts: color a rate metric red when below a numeric target. When the user says "alert when below X%" or "drops below X%", ALWAYS set threshold as a decimal (e.g. 60% → 0.60, 15% → 0.15). The threshold field MUST be a number, never null. Example: {"target": "Sync Rate", "threshold": 0.60, "operator": "<", "color": "#ef4444"}
+  - IMPORTANT: When using threshold styling, set BOTH style_rules (for per-point coloring) AND target_line (for the reference line). They serve different visual purposes.
   - Do NOT use style_rules for simple color preferences — use the colors field instead.
   - Default: null (no conditional styling).
 
