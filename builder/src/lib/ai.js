@@ -36,7 +36,7 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
     for (const { patterns, dimension } of GROUP_BY_TRIGGERS) {
       if (patterns.some(p => prompt.includes(p))) {
         if (approvedDimensions && approvedDimensions.length > 0) {
-          const primaryMetric = resolvedMetrics[0];
+          const primaryMetric = resolvedMetrics.find(m => m.view_name) || resolvedMetrics[0];
           const approved = approvedDimensions.filter(d => d.metric_id === primaryMetric?.id).map(d => d.column_name);
           if (approved.includes(dimension)) dc.group_by_dimension = dimension;
         }
@@ -80,7 +80,7 @@ export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensio
   // to prevent unapproved schema columns from being used as dimensions.
   if (dc.group_by_dimension) {
     if (approvedDimensions && approvedDimensions.length > 0) {
-      const primaryMetric = resolvedMetrics[0];
+      const primaryMetric = resolvedMetrics.find(m => m.view_name) || resolvedMetrics[0];
       const approved = approvedDimensions
         .filter(d => d.metric_id === primaryMetric?.id)
         .map(d => d.column_name);
