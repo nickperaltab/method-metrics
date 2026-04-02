@@ -568,6 +568,43 @@ describe('Pivot Table Evals', () => {
     assert(r.metric_ids.includes(54), 'should include Trials');
     assert.strictEqual(r.data_config.last_n_months, 0);
   });
+
+  it('syncs forecast by channel → uses channel-level syncs forecast', async () => {
+    const r = await callAi('show me syncs forecast and syncs by channel as a table');
+    assertValidSpec(r, 'syncs forecast by channel');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(306), 'should use Syncs Forecast by Channel (id:306)');
+    assert(r.metric_ids.includes(55), 'should include Syncs');
+    assert.strictEqual(r.data_config.last_n_months, 0);
+  });
+
+  it('trials trajectory by channel → uses trajectory metric', async () => {
+    const r = await callAi('show me trials trajectory by channel as a table');
+    assertValidSpec(r, 'trials trajectory by channel');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(307), 'should use Trials Trajectory (id:307)');
+    assert.strictEqual(r.data_config.last_n_months, 0);
+  });
+
+  it('trials vs forecast % by channel → uses delta derived metric', async () => {
+    const r = await callAi('show me trials vs forecast % by channel as a table');
+    assertValidSpec(r, 'trials vs forecast % by channel');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(310), 'should use Trials vs Forecast % (id:310)');
+    assert.strictEqual(r.data_config.last_n_months, 0);
+  });
+
+  it('sync rate forecast by channel → uses derived sync rate forecast', async () => {
+    const r = await callAi('show me sync rate forecast by channel as a table');
+    assertValidSpec(r, 'sync rate forecast by channel');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(317), 'should use Sync Rate Forecast (id:317)');
+    assert.strictEqual(r.data_config.last_n_months, 0);
+  });
 });
 
 // --- Multi-Step Conversation Chain Tests ---
