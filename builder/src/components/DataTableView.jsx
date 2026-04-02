@@ -54,7 +54,110 @@ const styles = {
   },
 };
 
-export default function DataTableView({ labels, datasets, title }) {
+function fmtPivot(v, type) {
+  if (v == null) return '-';
+  if (type === 'string') return v;
+  const n = Number(v);
+  if (isNaN(n)) return v;
+  if (type === 'delta' || type === 'pct') return `${n > 0 ? '+' : ''}${n.toLocaleString()}%`;
+  if (type === 'signed') return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;
+  return n.toLocaleString();
+}
+
+function deltaColor(v, type) {
+  if (type !== 'delta' && type !== 'signed') return undefined;
+  const n = Number(v);
+  if (isNaN(n) || n === 0) return undefined;
+  return n > 0 ? '#059669' : '#dc2626';
+}
+
+function PivotTable({ pivotData, columns }) {
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('desc');
+
+  const dataRows = pivotData.slice(0, -1);
+  const totalRow = pivotData[pivotData.length - 1];
+
+  const sorted = useMemo(() => {
+    if (!sortCol) return dataRows;
+    return [...dataRows].sort((a, b) => {
+      const av = a[sortCol] ?? -Infinity, bv = b[sortCol] ?? -Infinity;
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+  }, [dataRows, sortCol, sortDir]);
+
+  function handleSort(key) {
+    if (key === 'dim') return;
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(key); setSortDir('desc'); }
+  }
+
+  function arrow(key) {
+    if (sortCol !== key) return null;
+    return <span style={styles.sortArrow}>{sortDir === 'asc' ? '▲' : '▼'}</span>;
+  }
+
+  return (
+    <div style={styles.wrapper}>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            {columns.map((col, i) => (
+              <th
+                key={col.key}
+                style={{ ...styles.th, ...(i === 0 ? styles.thFirst : {}), cursor: col.key === 'dim' ? 'default' : 'pointer' }}
+                onClick={() => handleSort(col.key)}
+              >
+                {col.label}{arrow(col.key)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((row, ri) => (
+            <tr key={ri}>
+              {columns.map((col, i) => (
+                <td
+                  key={col.key}
+                  style={{
+                    ...styles.td,
+                    ...(i === 0 ? styles.tdFirst : {}),
+                    color: deltaColor(row[col.key], col.type) || styles.td.color,
+                    fontWeight: col.type === 'delta' || col.type === 'signed' ? 600 : undefined,
+                  }}
+                >
+                  {fmtPivot(row[col.key], col.type)}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {totalRow && (
+            <tr style={styles.totalRow}>
+              {columns.map((col, i) => (
+                <td
+                  key={col.key}
+                  style={{
+                    ...styles.td,
+                    ...(i === 0 ? styles.tdFirst : {}),
+                    fontWeight: 600,
+                    color: deltaColor(totalRow[col.key], col.type) || undefined,
+                  }}
+                >
+                  {fmtPivot(totalRow[col.key], col.type)}
+                </td>
+              ))}
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function DataTableView({ labels, datasets, title, pivotData, columns }) {
+  if (pivotData && columns) {
+    return <PivotTable pivotData={pivotData} columns={columns} />;
+  }
   const [sortCol, setSortCol] = useState(null); // null = period, 0..n = dataset index
   const [sortDir, setSortDir] = useState('asc');
 

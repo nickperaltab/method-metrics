@@ -1,4 +1,4 @@
-import { fetchAggregatedData, fetchChartData, fetchGroupedData } from './bigquery';
+import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchDimensionSnapshot } from './bigquery';
 import { applyLastNMonths } from './chartUtils';
 import { evaluateFormula } from './sanitize.js';
 import schemaCache from './schemaCache';
@@ -135,4 +135,173 @@ export async function fetchChartDatasets({
   }
 
   return { labels: finalLabels, datasets: finalDatasets, queryDetails };
+}
+
+/**
+ * Fetch pivot table data: dimension rows × metric columns.
+ * Used when echartsType === 'table' AND groupByDimension is set.
+ *
+ * Returns:
+ *   pivotData: [{ dim: "SEO", "Trials": 108, "Syncs": 62, ... }]
+ *   columns: [{ key: "dim", label: "Channel", type: "string" }, { key: "Trials", label: "Trials", type: "number" }, ...]
+ *   queryDetails: [...]
+ */
+export async function fetchPivotData({ metricIds, metrics, dataConfig }) {
+  const { xField, yFields, groupByDimension, channelFilter, lastNMonths } = dataConfig;
+
+  const snapshots = {}; // metricLabel → { snapshot: {dimValue: number}, sql, metricId }
+  const queryDetails = [];
+  const metricLabels = []; // ordered list of metric labels
+
+  for (let i = 0; i < metricIds.length; i++) {
+    const metric = metrics.find(m => m.id === metricIds[i]);
+    if (!metric) continue;
+    let yField = yFields?.[i] || yFields?.[0] || 'COUNT';
+    if (!metric.chart_sql && yField !== 'COUNT') {
+      const schema = schemaCache[metric.view_name] || [];
+      if (!schema.some(c => c.name === yField)) yField = 'COUNT';
+    }
+    const label = dataConfig.labels?.[i] || metric.name;
+
+    if (metric.formula && metric.depends_on && !metric.view_name) {
+      // Derived metric — compute per row after all snapshots are fetched
+      metricLabels.push({ label, metric, derived: true });
+      continue;
+    }
+
+    if (!metric.view_name) continue;
+
+    const dateCol = getDateCol(metric.view_name, xField);
+    try {
+      const { snapshot, sql } = await fetchDimensionSnapshot(
+        metric.view_name, dateCol, yField, groupByDimension, channelFilter, lastNMonths
+      );
+      snapshots[label] = { snapshot, sql, metricId: metric.id };
+      metricLabels.push({ label, metric, derived: false });
+      queryDetails.push({ metricName: label, metricId: metric.id, sql, dateColumn: dateCol, labels: [], data: [] });
+    } catch (e) {
+      queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
+    }
+  }
+
+  // Build union of all dimension values
+  const allDims = new Set();
+  for (const { snapshot } of Object.values(snapshots)) {
+    Object.keys(snapshot).forEach(d => allDims.add(d));
+  }
+  const dims = [...allDims].sort((a, b) => {
+    // Sort by first metric's value descending
+    const firstLabel = metricLabels.find(m => !m.derived)?.label;
+    if (!firstLabel) return 0;
+    return (snapshots[firstLabel]?.snapshot[b] || 0) - (snapshots[firstLabel]?.snapshot[a] || 0);
+  });
+
+  if (dims.length === 0) return { empty: true, pivotData: [], columns: [], queryDetails };
+
+  // Resolve derived metrics per dimension row
+  for (const { label, metric, derived } of metricLabels) {
+    if (!derived) continue;
+    const rowSnapshot = {};
+    for (const dim of dims) {
+      const depValues = {};
+      for (const depId of metric.depends_on) {
+        const dep = metrics.find(m => m.id === depId);
+        if (!dep) continue;
+        const depLabel = dataConfig.labels?.[metricIds.indexOf(depId)] || dep?.name;
+        depValues[depId] = snapshots[depLabel]?.snapshot[dim] || 0;
+      }
+      rowSnapshot[dim] = Math.round(evaluateFormula(metric.formula, depValues) * 100) / 100;
+    }
+    snapshots[label] = { snapshot: rowSnapshot, sql: `Derived: ${metric.formula}`, metricId: metric.id };
+    queryDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A', labels: [], data: [] });
+  }
+
+  // Detect actual+forecast pairs for computed columns
+  // A pair is: metric A + metric "A Forecast" both present
+  const rawLabels = metricLabels.map(m => m.label);
+  const forecastPairs = []; // [{ actualLabel, forecastLabel }]
+  for (const lbl of rawLabels) {
+    const forecastLbl = lbl + ' Forecast';
+    if (rawLabels.includes(forecastLbl) && snapshots[lbl] && snapshots[forecastLbl]) {
+      forecastPairs.push({ actualLabel: lbl, forecastLabel: forecastLbl });
+    }
+  }
+
+  // Date context for trajectory (only for MTD, i.e. last_n_months === 0)
+  const now = new Date();
+  const daysElapsed = now.getDate() - 1;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const canComputeTrajectory = lastNMonths === 0 && daysElapsed > 0;
+
+  // Build pivot rows
+  const pivotData = dims.map(dim => {
+    const row = { dim };
+    for (const lbl of rawLabels) {
+      row[lbl] = snapshots[lbl]?.snapshot[dim] ?? null;
+    }
+    // Computed columns for each actual+forecast pair
+    for (const { actualLabel, forecastLabel } of forecastPairs) {
+      const actual = row[actualLabel];
+      const forecast = row[forecastLabel];
+      if (actual != null && forecast != null && forecast !== 0) {
+        row[`%Δ ${actualLabel}`] = Math.round(((actual - forecast) / forecast) * 1000) / 10;
+      }
+      if (canComputeTrajectory && actual != null) {
+        const traj = Math.round((actual / daysElapsed) * daysInMonth * 10) / 10;
+        row[`Traj ${actualLabel}`] = traj;
+        if (forecast != null && forecast !== 0) {
+          row[`Traj vs Fcst ${actualLabel}`] = Math.round((traj - forecast) * 10) / 10;
+          row[`Traj vs Fcst% ${actualLabel}`] = Math.round(((traj - forecast) / forecast) * 1000) / 10;
+        }
+      }
+    }
+    return row;
+  });
+
+  // Grand total row
+  const totalRow = { dim: 'Grand Total' };
+  const nonDerivedLabels = metricLabels.filter(m => !m.derived).map(m => m.label);
+  for (const lbl of rawLabels) {
+    const vals = pivotData.map(r => r[lbl]).filter(v => v != null);
+    totalRow[lbl] = Math.round(vals.reduce((s, v) => s + v, 0) * 100) / 100;
+  }
+  // Computed totals
+  for (const { actualLabel, forecastLabel } of forecastPairs) {
+    const totalActual = totalRow[actualLabel];
+    const totalForecast = totalRow[forecastLabel];
+    if (totalActual != null && totalForecast != null && totalForecast !== 0) {
+      totalRow[`%Δ ${actualLabel}`] = Math.round(((totalActual - totalForecast) / totalForecast) * 1000) / 10;
+    }
+    if (canComputeTrajectory && totalActual != null) {
+      const traj = Math.round((totalActual / daysElapsed) * daysInMonth * 10) / 10;
+      totalRow[`Traj ${actualLabel}`] = traj;
+      if (totalForecast != null && totalForecast !== 0) {
+        totalRow[`Traj vs Fcst ${actualLabel}`] = Math.round((traj - totalForecast) * 10) / 10;
+        totalRow[`Traj vs Fcst% ${actualLabel}`] = Math.round(((traj - totalForecast) / totalForecast) * 1000) / 10;
+      }
+    }
+  }
+
+  // Build columns definition
+  const columns = [{ key: 'dim', label: groupByDimension || 'Dimension', type: 'string' }];
+  for (const { actualLabel, forecastLabel } of forecastPairs) {
+    columns.push({ key: forecastLabel, label: forecastLabel, type: 'number' });
+    columns.push({ key: actualLabel, label: actualLabel, type: 'number' });
+    columns.push({ key: `%Δ ${actualLabel}`, label: '%Δ', type: 'delta' });
+    if (canComputeTrajectory) {
+      columns.push({ key: `Traj ${actualLabel}`, label: `Traj`, type: 'number' });
+      columns.push({ key: `Traj vs Fcst ${actualLabel}`, label: 'vs Fcst', type: 'signed' });
+      columns.push({ key: `Traj vs Fcst% ${actualLabel}`, label: 'vs Fcst%', type: 'delta' });
+    }
+  }
+  // Add remaining labels not part of a pair
+  const pairedLabels = new Set(forecastPairs.flatMap(p => [p.actualLabel, p.forecastLabel]));
+  for (const lbl of rawLabels) {
+    if (!pairedLabels.has(lbl)) {
+      columns.push({ key: lbl, label: lbl, type: 'number' });
+    }
+  }
+
+  pivotData.push(totalRow);
+  return { pivotData, columns, queryDetails, empty: false };
 }

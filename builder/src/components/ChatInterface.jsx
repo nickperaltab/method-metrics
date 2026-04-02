@@ -264,10 +264,13 @@ export default function ChatInterface({
                   {msg.kpiData.map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
                 </div>
               )}
+              {msg.pivotData && (
+                <DataTableView pivotData={msg.pivotData} columns={msg.pivotColumns} />
+              )}
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
               )}
-              {(msg.chartOption || msg.kpiData || msg.tableData || msg.isError) && (
+              {(msg.chartOption || msg.kpiData || msg.tableData || msg.pivotData || msg.isError) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <FeedbackButtons
                     userEmail={userEmail}

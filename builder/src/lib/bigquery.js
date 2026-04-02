@@ -403,6 +403,65 @@ export async function fetchGroupedData(viewName, xField, yField, timeBucket, gro
 }
 
 /**
+ * Fetch a dimension snapshot: total value per dimension value for a given period.
+ * Unlike fetchGroupedData (time-series), this returns a single number per dimension.
+ * Used for pivot tables: rows=channels, columns=metrics.
+ *
+ * @param {string} viewName - BQ view name
+ * @param {string} xField - Date column for time filter
+ * @param {string} yField - Column for value, or 'COUNT'
+ * @param {string} groupByField - Dimension column (e.g., 'AttributionChannel')
+ * @param {string|null} channelFilter - Channel name or null
+ * @param {number|null} lastNMonths - 0 = current month MTD, 1 = last full month, etc.
+ * @param {number} topN - Max dimension values (default 20)
+ * @returns {{ snapshot: Object<string, number>, sql: string }}
+ */
+export async function fetchDimensionSnapshot(viewName, xField, yField, groupByField, channelFilter, lastNMonths, topN = 20) {
+  validateIdentifier(viewName, 'viewName');
+  validateIdentifier(xField, 'xField');
+  if (yField !== 'COUNT') validateIdentifier(yField, 'yField');
+  validateIdentifier(groupByField, 'groupByField');
+
+  const cacheKey = `dimsnap|${viewName}|${xField}|${yField}|${groupByField}|${channelFilter}|${lastNMonths}|${topN}`;
+  if (aggCache[cacheKey]) return aggCache[cacheKey];
+
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+  const valueExpr = yField === 'COUNT' ? 'COUNT(*)' : `SUM(CAST(${yField} AS FLOAT64))`;
+  const safeTopN = validateInt(topN, 'topN');
+
+  const wheres = [`${groupByField} IS NOT NULL`, `TRIM(CAST(${groupByField} AS STRING)) != ''`];
+
+  if (channelFilter) {
+    const col = ATT_COL_MAP[channelFilter];
+    if (col) wheres.push(`${col} > 0`);
+  }
+
+  if (lastNMonths != null && lastNMonths >= 0) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
+      wheres.push(`${xField} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+      wheres.push(`${xField} < CURRENT_DATE()`);
+    } else {
+      wheres.push(`${xField} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
+      wheres.push(`${xField} < DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    }
+  }
+
+  const whereClause = `WHERE ${wheres.join(' AND ')}`;
+  const sql = `SELECT ${groupByField} AS dim_value, ${valueExpr} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 2 DESC LIMIT ${safeTopN}`;
+
+  const result = await queryBq(sql);
+  const snapshot = {};
+  for (const row of result.rows) {
+    snapshot[String(row.dim_value)] = Number(row.value) || 0;
+  }
+
+  const output = { snapshot, sql };
+  aggCache[cacheKey] = output;
+  return output;
+}
+
+/**
  * Fetch KPI data: current month value + prior month value with delta.
  *
  * @param {string} viewName - BQ view name

@@ -8,7 +8,7 @@ import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation, fetchAllApprovedDimensions } from '../lib/supabase';
 import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
-import { fetchChartDatasets } from '../lib/chartDataBuilder';
+import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import {
   castRow,
   aggregateRows,
@@ -529,6 +529,23 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       }
 
       // Retry loop: if the query returns no data, feed the failure back to the AI and try again.
+      // Pivot table path: table + groupByDimension → dimension rows × metric columns
+      if (echartsType === 'table' && dataConfig.groupByDimension) {
+        const pivotResult = await fetchPivotData({ metricIds: result.metricIds, metrics, dataConfig });
+        const assistantMsg = {
+          role: 'assistant',
+          content: result.explanation || '',
+          pivotData: pivotResult.pivotData,
+          pivotColumns: pivotResult.columns,
+          queryDetails: pivotResult.queryDetails,
+          styleRules: dataConfig.styleRules || [],
+        };
+        const allMessages = [...updatedMessages, assistantMsg];
+        setMessages(allMessages);
+        setLoading(false);
+        return;
+      }
+
       const MAX_RETRIES = 2;
       let currentResult = result;
       let chartData = null;

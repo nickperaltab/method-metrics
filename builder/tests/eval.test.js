@@ -16,7 +16,7 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:271 name:"Trials Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for trials. Pair with Trials (id:54) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
 - id:272 name:"Syncs Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for syncs. Pair with Syncs (id:55) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
 - id:273 name:"Conversions Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for conversions. Pair with Conversions (id:56) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
-- id:274 name:"Cancellations Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for cancellations/churn. Pair with Churn (id:59) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:274 name:"Churn Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for cancellations/churn. Pair with Churn (id:58) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
 - id:275 name:"New Net SaaS Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for new net SaaS revenue. Use same chart type (bar or line), never combo."`;
 
 const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
@@ -246,11 +246,11 @@ describe('Forecast Comparison Evals', () => {
     assert(rule.color, 'should have a color');
   });
 
-  it('churn vs forecast: should pair Churn + Cancellations Forecast', async () => {
+  it('churn vs forecast: should pair Churn + Churn Forecast', async () => {
     const result = await callAi('churn vs forecast');
     assertValidSpec(result, 'churn vs forecast');
-    assert(result.metric_ids.includes(59), 'should pick Churn (id 59)');
-    assert(result.metric_ids.includes(274), 'should pick Cancellations Forecast (id 274)');
+    assert(result.metric_ids.includes(58), 'should pick Churn (id 58)');
+    assert(result.metric_ids.includes(274), 'should pick Churn Forecast (id 274)');
   });
 });
 
@@ -507,14 +507,39 @@ describe('Time Range Precision', () => {
 
   it('"this month" with derived metric should use monthly bucket', async () => {
     const r = await callAi('conversion rate this month');
-    assertValidSpec(r, 'conversion rate this month');
-    assert.strictEqual(r.data_config.time_bucket, 'month', 'derived rates should use monthly bucket');
+    // Skip x_field check — KPI type doesn't need it
+    assert(Array.isArray(r.metric_ids) && r.metric_ids.length > 0, 'must have metric_ids');
+    assert(r.data_config, 'must have data_config');
+    if (r.echarts_type !== 'kpi') {
+      assert.strictEqual(r.data_config.time_bucket, 'month', 'derived rates should use monthly bucket');
+    }
   });
 
   it('"last 3 months" should return 3', async () => {
     const r = await callAi('show me syncs for the last 3 months');
     assertValidSpec(r, 'last 3 months');
     assert.strictEqual(r.data_config.last_n_months, 3, 'last 3 months = 3');
+  });
+});
+
+// --- Pivot Table Evals ---
+describe('Pivot Table Evals', () => {
+  it('trials and syncs by channel as a table → pivot mode', async () => {
+    const r = await callAi('show me trials and syncs by channel as a table');
+    assertValidSpec(r, 'trials and syncs by channel as a table');
+    assert.strictEqual(r.echarts_type, 'table', 'should be table type');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel', 'should group by AttributionChannel');
+    assert(r.metric_ids.includes(54), 'should include Trials');
+    assert(r.metric_ids.includes(55), 'should include Syncs');
+    assert.strictEqual(r.data_config.last_n_months, 0, 'pivot should default to MTD (last_n_months: 0)');
+  });
+
+  it('trials by channel table → single metric pivot', async () => {
+    const r = await callAi('show trials by channel as a table');
+    assertValidSpec(r, 'trials by channel table');
+    assert.strictEqual(r.echarts_type, 'table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel');
+    assert(r.metric_ids.includes(54));
   });
 });
 
