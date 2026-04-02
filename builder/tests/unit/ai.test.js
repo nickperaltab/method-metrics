@@ -105,6 +105,15 @@ describe('validateColumns', () => {
     expect(dc.group_by_dimension).toBe('SignupCountry');
   });
 
+  it('preserves group_by_dimension when derived metric is first and primitive is second', () => {
+    // Regression: derived metric first would clear dimension because it has no approved_dimensions
+    const derivedFirst = { id: 310, view_name: null };
+    const approvedDimensions = [{ metric_id: 54, column_name: 'AttributionChannel' }];
+    const dc = { group_by_dimension: 'AttributionChannel', x_field: 'SignupDate' };
+    validateColumns(dc, [derivedFirst, metric54], schemaMap, approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
   it('preserves x_field when schema is empty (regression: must not null out on cache miss)', () => {
     const dc = { x_field: 'SignupDate', group_by_dimension: null };
     validateColumns(dc, [metric54], {}, []);
@@ -317,5 +326,13 @@ describe('applyPromptOverrides', () => {
     const dc = { group_by_dimension: null };
     applyPromptOverrides('trials by channel', dc, 'bar', [metric54], null);
     expect(dc.group_by_dimension).toBeNull();
+  });
+
+  it('sets group_by_dimension when derived metric is first and primitive is second', () => {
+    // Regression: derived metric has no view_name/approved_dimensions — must not block dimension
+    const derivedFirst = { id: 310, view_name: null, formula: 'SAFE_DIVIDE({54}-{305},{305})*100' };
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials vs forecast % by channel', dc, 'table', [derivedFirst, metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 });
