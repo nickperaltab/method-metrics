@@ -153,6 +153,18 @@ After solving or attempting to solve any metric, update the relevant files:
 4. **General principle learned** — add to this CLAUDE.md
 5. **Verified query created** — save to `knowledge/verified-queries/`
 
+## Chart Builder Philosophy
+
+The chart builder is a **building block system**, not a collection of pre-built templates. Every feature should give users tools to assemble what they need, not hardcode an opinionated output.
+
+**Rules:**
+- **No auto-injection.** Never add columns, metrics, computed values, or visual elements the user didn't ask for. If a user asks for "trials and syncs by channel", they get exactly those two columns — not %Δ, not trajectory, not anything else automatically appended.
+- **No hardcoded chart types for specific use cases.** Don't create a `scorecard_table` or `channel_breakdown` type. Extend existing primitives (`table + group_by_dimension`) to handle new layouts.
+- **Computed values = explicit metrics.** If %Δ or trajectory should appear, those need to be registered metrics in Supabase that the user explicitly selects. Auto-detecting "actual + forecast pair → add computed columns" is magic behavior that violates this rule.
+- **The user decides the output.** Each chart is a combination of: metrics selected + chart type + dimension + time range. The system provides those knobs; the user turns them.
+
+When in doubt: does the user have to explicitly ask for this, or does it happen behind their back? If behind their back, don't do it.
+
 ## Collaborators
 
 - Nic (nickperaltab) — funnel/marketing metrics, dashboard pages

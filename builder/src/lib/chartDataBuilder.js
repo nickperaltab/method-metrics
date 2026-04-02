@@ -216,90 +216,28 @@ export async function fetchPivotData({ metricIds, metrics, dataConfig }) {
     queryDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A', labels: [], data: [] });
   }
 
-  // Detect actual+forecast pairs for computed columns
-  // A pair is: metric A + metric "A Forecast" both present
   const rawLabels = metricLabels.map(m => m.label);
-  const forecastPairs = []; // [{ actualLabel, forecastLabel }]
-  for (const lbl of rawLabels) {
-    const forecastLbl = lbl + ' Forecast';
-    if (rawLabels.includes(forecastLbl) && snapshots[lbl] && snapshots[forecastLbl]) {
-      forecastPairs.push({ actualLabel: lbl, forecastLabel: forecastLbl });
-    }
-  }
 
-  // Date context for trajectory (only for MTD, i.e. last_n_months === 0)
-  const now = new Date();
-  const daysElapsed = now.getDate() - 1;
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const canComputeTrajectory = lastNMonths === 0 && daysElapsed > 0;
-
-  // Build pivot rows
+  // Build pivot rows — only the metrics the user explicitly requested, nothing auto-added
   const pivotData = dims.map(dim => {
     const row = { dim };
     for (const lbl of rawLabels) {
       row[lbl] = snapshots[lbl]?.snapshot[dim] ?? null;
-    }
-    // Computed columns for each actual+forecast pair
-    for (const { actualLabel, forecastLabel } of forecastPairs) {
-      const actual = row[actualLabel];
-      const forecast = row[forecastLabel];
-      if (actual != null && forecast != null && forecast !== 0) {
-        row[`%Δ ${actualLabel}`] = Math.round(((actual - forecast) / forecast) * 1000) / 10;
-      }
-      if (canComputeTrajectory && actual != null) {
-        const traj = Math.round((actual / daysElapsed) * daysInMonth * 10) / 10;
-        row[`Traj ${actualLabel}`] = traj;
-        if (forecast != null && forecast !== 0) {
-          row[`Traj vs Fcst ${actualLabel}`] = Math.round((traj - forecast) * 10) / 10;
-          row[`Traj vs Fcst% ${actualLabel}`] = Math.round(((traj - forecast) / forecast) * 1000) / 10;
-        }
-      }
     }
     return row;
   });
 
   // Grand total row
   const totalRow = { dim: 'Grand Total' };
-  const nonDerivedLabels = metricLabels.filter(m => !m.derived).map(m => m.label);
   for (const lbl of rawLabels) {
     const vals = pivotData.map(r => r[lbl]).filter(v => v != null);
     totalRow[lbl] = Math.round(vals.reduce((s, v) => s + v, 0) * 100) / 100;
   }
-  // Computed totals
-  for (const { actualLabel, forecastLabel } of forecastPairs) {
-    const totalActual = totalRow[actualLabel];
-    const totalForecast = totalRow[forecastLabel];
-    if (totalActual != null && totalForecast != null && totalForecast !== 0) {
-      totalRow[`%Δ ${actualLabel}`] = Math.round(((totalActual - totalForecast) / totalForecast) * 1000) / 10;
-    }
-    if (canComputeTrajectory && totalActual != null) {
-      const traj = Math.round((totalActual / daysElapsed) * daysInMonth * 10) / 10;
-      totalRow[`Traj ${actualLabel}`] = traj;
-      if (totalForecast != null && totalForecast !== 0) {
-        totalRow[`Traj vs Fcst ${actualLabel}`] = Math.round((traj - totalForecast) * 10) / 10;
-        totalRow[`Traj vs Fcst% ${actualLabel}`] = Math.round(((traj - totalForecast) / totalForecast) * 1000) / 10;
-      }
-    }
-  }
 
-  // Build columns definition
+  // Build columns definition — one column per requested metric
   const columns = [{ key: 'dim', label: groupByDimension || 'Dimension', type: 'string' }];
-  for (const { actualLabel, forecastLabel } of forecastPairs) {
-    columns.push({ key: forecastLabel, label: forecastLabel, type: 'number' });
-    columns.push({ key: actualLabel, label: actualLabel, type: 'number' });
-    columns.push({ key: `%Δ ${actualLabel}`, label: '%Δ', type: 'delta' });
-    if (canComputeTrajectory) {
-      columns.push({ key: `Traj ${actualLabel}`, label: `Traj`, type: 'number' });
-      columns.push({ key: `Traj vs Fcst ${actualLabel}`, label: 'vs Fcst', type: 'signed' });
-      columns.push({ key: `Traj vs Fcst% ${actualLabel}`, label: 'vs Fcst%', type: 'delta' });
-    }
-  }
-  // Add remaining labels not part of a pair
-  const pairedLabels = new Set(forecastPairs.flatMap(p => [p.actualLabel, p.forecastLabel]));
   for (const lbl of rawLabels) {
-    if (!pairedLabels.has(lbl)) {
-      columns.push({ key: lbl, label: lbl, type: 'number' });
-    }
+    columns.push({ key: lbl, label: lbl, type: 'number' });
   }
 
   pivotData.push(totalRow);
