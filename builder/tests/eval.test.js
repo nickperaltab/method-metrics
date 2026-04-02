@@ -303,6 +303,10 @@ describe('Conditional Styling Evals', () => {
     const rule = rules[0];
     const threshold = rule.threshold ?? rule.value;
     assert(threshold != null, 'should set threshold');
+    const numericThreshold = Number(threshold);
+    assert(!isNaN(numericThreshold) && numericThreshold > 0, 'threshold should be a positive number');
+    // Accept either decimal (0.60) or percentage (60) form — sync rate is stored as 0-100
+    assert(numericThreshold < 100, 'threshold should be less than 100');
     assert.strictEqual(rule.operator, '<', 'should use < operator for "drops below"');
   });
 
