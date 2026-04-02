@@ -42,6 +42,141 @@ v_syncs_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), tra
 
 const VALID_ECHARTS_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy', 'variance']);
 
+// Structured versions of the metric catalog and schema — used by postProcess to mirror
+// the same validateColumns + applyPromptOverrides pipeline the frontend runs after the AI responds.
+const METRICS = [
+  { id: 54, view_name: 'v_trials' },
+  { id: 55, view_name: 'v_syncs' },
+  { id: 56, view_name: 'v_conversions' },
+  { id: 20, view_name: null },
+  { id: 25, view_name: null },
+  { id: 46, view_name: null },
+  { id: 57, view_name: 'v_new_net_saas' },
+  { id: 58, view_name: 'v_churn' },
+  { id: 59, view_name: 'v_bom_customers' },
+  { id: 271, view_name: 'v_scorecard_mtd' },
+  { id: 272, view_name: 'v_scorecard_mtd' },
+  { id: 273, view_name: 'v_scorecard_mtd' },
+  { id: 274, view_name: 'v_scorecard_mtd' },
+  { id: 275, view_name: 'v_scorecard_mtd' },
+  { id: 305, view_name: 'v_trials_forecast_channel' },
+  { id: 306, view_name: 'v_syncs_forecast_channel' },
+  { id: 307, view_name: 'v_trials_trajectory_channel' },
+  { id: 308, view_name: 'v_syncs_trajectory_channel' },
+  { id: 309, view_name: null },
+  { id: 310, view_name: null },
+  { id: 311, view_name: null },
+  { id: 312, view_name: null },
+  { id: 313, view_name: null },
+  { id: 314, view_name: null },
+  { id: 315, view_name: null },
+  { id: 316, view_name: null },
+  { id: 317, view_name: null },
+];
+
+const APPROVED_DIMENSIONS = [
+  { metric_id: 54, column_name: 'AttributionChannel' },
+  { metric_id: 54, column_name: 'SignupCountry' },
+  { metric_id: 54, column_name: 'SyncType' },
+  { metric_id: 54, column_name: 'Vertical' },
+  { metric_id: 55, column_name: 'AttributionChannel' },
+  { metric_id: 55, column_name: 'SyncType' },
+  { metric_id: 56, column_name: 'AttributionChannel' },
+  { metric_id: 56, column_name: 'SignupCountry' },
+  { metric_id: 56, column_name: 'Vertical' },
+  { metric_id: 305, column_name: 'AttributionChannel' },
+  { metric_id: 306, column_name: 'AttributionChannel' },
+  { metric_id: 307, column_name: 'AttributionChannel' },
+  { metric_id: 308, column_name: 'AttributionChannel' },
+];
+
+const SCHEMA_MAP = {
+  v_trials: [
+    { name: 'SignupDate', type: 'DATE' }, { name: 'CompanyAccount', type: 'STRING' },
+    { name: 'AttributionChannel', type: 'STRING' }, { name: 'SignupCountry', type: 'STRING' },
+    { name: 'Vertical', type: 'STRING' }, { name: 'SyncType', type: 'STRING' },
+  ],
+  v_syncs: [
+    { name: 'SyncDate', type: 'DATE' }, { name: 'SignupDate', type: 'DATE' },
+    { name: 'CompanyAccount', type: 'STRING' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'SyncType', type: 'STRING' }, { name: 'SignupCountry', type: 'STRING' },
+  ],
+  v_conversions: [
+    { name: 'ConversionDate', type: 'DATE' }, { name: 'SignupDate', type: 'DATE' },
+    { name: 'CompanyAccount', type: 'STRING' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'SignupCountry', type: 'STRING' }, { name: 'Vertical', type: 'STRING' },
+  ],
+  v_trials_forecast_channel: [
+    { name: 'forecast_date', type: 'DATE' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'forecast_value', type: 'FLOAT' },
+  ],
+  v_syncs_forecast_channel: [
+    { name: 'forecast_date', type: 'DATE' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'forecast_value', type: 'FLOAT' },
+  ],
+  v_trials_trajectory_channel: [
+    { name: 'snapshot_date', type: 'DATE' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'trajectory_value', type: 'FLOAT' },
+  ],
+  v_syncs_trajectory_channel: [
+    { name: 'snapshot_date', type: 'DATE' }, { name: 'AttributionChannel', type: 'STRING' },
+    { name: 'trajectory_value', type: 'FLOAT' },
+  ],
+};
+
+// Mirror the frontend post-processing pipeline (validateColumns + applyPromptOverrides from ai.js).
+// Ensures evals fail on bugs in the frontend layer, not just the AI response.
+function postProcess(prompt, result) {
+  if (!result || result.error || result.type === 'text') return result;
+  const resolvedMetrics = (result.metric_ids || []).map(id => METRICS.find(m => m.id === id)).filter(Boolean);
+  if (resolvedMetrics.length === 0) return result;
+  const dc = result.data_config || {};
+
+  // validateColumns: check group_by_dimension against approved dimensions
+  const hasPrimitive = resolvedMetrics.some(m => m.view_name);
+  if (dc.group_by_dimension) {
+    if (hasPrimitive) {
+      const approved = resolvedMetrics.flatMap(m => APPROVED_DIMENSIONS.filter(d => d.metric_id === m.id).map(d => d.column_name));
+      if (approved.length === 0 || !approved.includes(dc.group_by_dimension)) {
+        dc.group_by_dimension = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase()) || null;
+      }
+    }
+    // All derived → pass through (dependencies validate their own dims)
+  }
+
+  // applyPromptOverrides: keyword-based fixes
+  const lp = prompt.toLowerCase();
+  const GROUP_BY_TRIGGERS = [
+    { patterns: ['by channel', 'by attribution channel', 'per channel', 'across channels', 'channel breakdown', 'by source'], dimension: 'AttributionChannel' },
+    { patterns: ['by country', 'per country', 'across countries', 'by region'], dimension: 'SignupCountry' },
+    { patterns: ['by vertical', 'by industry'], dimension: 'Vertical' },
+    { patterns: ['by sync type'], dimension: 'SyncType' },
+  ];
+  if (!dc.group_by_dimension) {
+    for (const { patterns, dimension } of GROUP_BY_TRIGGERS) {
+      if (patterns.some(p => lp.includes(p))) {
+        if (!hasPrimitive) {
+          dc.group_by_dimension = dimension; // all derived — pass through
+        } else {
+          const approved = resolvedMetrics.flatMap(m => APPROVED_DIMENSIONS.filter(d => d.metric_id === m.id).map(d => d.column_name));
+          if (approved.includes(dimension)) dc.group_by_dimension = dimension;
+        }
+        break;
+      }
+    }
+  }
+  if (!dc.channel_filter && !dc.group_by_dimension) {
+    for (const ch of ['SEO', 'PPC', 'OPN', 'Social', 'Email', 'Referral', 'Direct', 'Partners', 'Content', 'Remarketing']) {
+      if (new RegExp(`\\b${ch}\\b`, 'i').test(prompt)) { dc.channel_filter = ch; break; }
+    }
+  }
+  if (/\bby week\b|\bweekly\b/.test(lp)) dc.time_bucket = 'week';
+  else if (/\bby day\b|\bdaily\b/.test(lp)) dc.time_bucket = 'day';
+  if (result.echarts_type === 'stacked_bar' && !dc.group_by_dimension) result.echarts_type = 'bar';
+
+  return result;
+}
+
 async function callAi(prompt) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chart`, {
     method: 'POST',
@@ -53,7 +188,7 @@ async function callAi(prompt) {
     body: JSON.stringify({ prompt, metricContext: METRIC_CONTEXT, schemaContext: SCHEMA_CONTEXT }),
   });
   if (!res.ok) throw new Error(`AI function failed: ${res.status}`);
-  return res.json();
+  return postProcess(prompt, await res.json());
 }
 
 function assertValidSpec(result, label) {
@@ -369,7 +504,8 @@ async function callAiConversational(messages, currentChartSpec) {
     }),
   });
   if (!res.ok) throw new Error(`AI function failed: ${res.status}`);
-  return res.json();
+  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+  return postProcess(lastUserMsg, await res.json());
 }
 
 describe('Conversational AI Evals', () => {
@@ -605,6 +741,26 @@ describe('Pivot Table Evals', () => {
     assert(r.metric_ids.includes(317), 'should use Sync Rate Forecast (id:317)');
     assert.strictEqual(r.data_config.last_n_months, 0);
   });
+
+  it('full channel scorecard → all 10 metrics, pivot by channel', async () => {
+    const r = await callAi(
+      'show me trials forecast, trials, trials vs forecast %, trials trajectory, syncs forecast, syncs, syncs vs forecast %, syncs trajectory, sync rate, sync rate forecast by channel as a table'
+    );
+    assertValidSpec(r, 'full channel scorecard');
+    assert.strictEqual(r.echarts_type, 'table', 'should be table');
+    assert(r.data_config.group_by_dimension === 'AttributionChannel', 'should group by channel');
+    assert.strictEqual(r.data_config.last_n_months, 0, 'should be MTD');
+    assert(r.metric_ids.includes(305), 'should include Trials Forecast by Channel (305)');
+    assert(r.metric_ids.includes(54), 'should include Trials (54)');
+    assert(r.metric_ids.includes(310), 'should include Trials vs Forecast % (310)');
+    assert(r.metric_ids.includes(307), 'should include Trials Trajectory (307)');
+    assert(r.metric_ids.includes(306), 'should include Syncs Forecast by Channel (306)');
+    assert(r.metric_ids.includes(55), 'should include Syncs (55)');
+    assert(r.metric_ids.includes(314), 'should include Syncs vs Forecast % (314)');
+    assert(r.metric_ids.includes(308), 'should include Syncs Trajectory (308)');
+    assert(r.metric_ids.includes(25), 'should include Sync Rate (25)');
+    assert(r.metric_ids.includes(317), 'should include Sync Rate Forecast (317)');
+  });
 });
 
 // --- Multi-Step Conversation Chain Tests ---
@@ -824,7 +980,7 @@ async function callAiV2(prompt) {
     body: JSON.stringify({ prompt, metricContext: METRIC_CONTEXT, schemaContext: SCHEMA_CONTEXT }),
   });
   if (!res.ok) throw new Error(`AI V2 function failed: ${res.status}`);
-  return res.json();
+  return postProcess(prompt, await res.json());
 }
 
 describe('V2: Dimension Breakdowns', () => {

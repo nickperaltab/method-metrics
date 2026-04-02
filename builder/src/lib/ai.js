@@ -36,9 +36,16 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
     for (const { patterns, dimension } of GROUP_BY_TRIGGERS) {
       if (patterns.some(p => prompt.includes(p))) {
         if (approvedDimensions && approvedDimensions.length > 0) {
-          const primaryMetric = resolvedMetrics.find(m => m.view_name) || resolvedMetrics[0];
-          const approved = approvedDimensions.filter(d => d.metric_id === primaryMetric?.id).map(d => d.column_name);
-          if (approved.includes(dimension)) dc.group_by_dimension = dimension;
+          const hasPrimitive = resolvedMetrics.some(m => m.view_name);
+          if (!hasPrimitive) {
+            // All derived — pass dimension through (dependencies validate their own dims)
+            dc.group_by_dimension = dimension;
+          } else {
+            const approved = resolvedMetrics.flatMap(m =>
+              approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name)
+            );
+            if (approved.includes(dimension)) dc.group_by_dimension = dimension;
+          }
         }
         break;
       }
@@ -80,13 +87,18 @@ export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensio
   // to prevent unapproved schema columns from being used as dimensions.
   if (dc.group_by_dimension) {
     if (approvedDimensions && approvedDimensions.length > 0) {
-      const primaryMetric = resolvedMetrics.find(m => m.view_name) || resolvedMetrics[0];
-      const approved = approvedDimensions
-        .filter(d => d.metric_id === primaryMetric?.id)
-        .map(d => d.column_name);
-      if (approved.length === 0 || !approved.includes(dc.group_by_dimension)) {
-        const match = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
-        dc.group_by_dimension = match || null;
+      // Derived metrics have no view_name and no approved_dimensions of their own — they fetch
+      // through their primitive dependencies which each validate dimensions independently.
+      // Skip the check entirely when all metrics are derived so the dimension passes through.
+      const hasPrimitive = resolvedMetrics.some(m => m.view_name);
+      if (hasPrimitive) {
+        const approved = resolvedMetrics.flatMap(m =>
+          approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name)
+        );
+        if (approved.length === 0 || !approved.includes(dc.group_by_dimension)) {
+          const match = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
+          dc.group_by_dimension = match || null;
+        }
       }
     } else {
       // No approved dimensions list — reject all unapproved dimensions

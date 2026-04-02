@@ -114,6 +114,16 @@ describe('validateColumns', () => {
     expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 
+  it('passes group_by_dimension through when all metrics are derived (no view_name)', () => {
+    // Derived-only: no primitive in list, so dimension can't be validated — let it through
+    const derived1 = { id: 310, view_name: null };
+    const derived2 = { id: 317, view_name: null };
+    const approvedDimensions = [{ metric_id: 54, column_name: 'AttributionChannel' }];
+    const dc = { group_by_dimension: 'AttributionChannel', x_field: 'forecast_date' };
+    validateColumns(dc, [derived1, derived2], schemaMap, approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
   it('preserves x_field when schema is empty (regression: must not null out on cache miss)', () => {
     const dc = { x_field: 'SignupDate', group_by_dimension: null };
     validateColumns(dc, [metric54], {}, []);
@@ -333,6 +343,15 @@ describe('applyPromptOverrides', () => {
     const derivedFirst = { id: 310, view_name: null, formula: 'SAFE_DIVIDE({54}-{305},{305})*100' };
     const dc = { group_by_dimension: null };
     applyPromptOverrides('trials vs forecast % by channel', dc, 'table', [derivedFirst, metric54], approvedDimensions);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('sets group_by_dimension when all metrics are derived (no primitives in list)', () => {
+    // Derived-only: dependencies validate their own dims, so we pass through
+    const derived1 = { id: 310, view_name: null };
+    const derived2 = { id: 317, view_name: null };
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('trials vs forecast % by channel as a table', dc, 'table', [derived1, derived2], approvedDimensions);
     expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 });
