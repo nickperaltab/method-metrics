@@ -201,6 +201,27 @@ export async function fetchPivotData({ metricIds, metrics, dataConfig }) {
   // Resolve derived metrics per dimension row
   for (const { label, metric, derived } of metricLabels) {
     if (!derived) continue;
+
+    // Auto-fetch any dependency snapshots not already in the map
+    for (const depId of metric.depends_on) {
+      const dep = metrics.find(m => m.id === depId);
+      if (!dep?.view_name) continue; // derived dep — handled by ordering
+      const depLabel = dataConfig.labels?.[metricIds.indexOf(depId)] || dep.name;
+      if (snapshots[depLabel]) continue; // already fetched
+      const dateCol = getDateCol(dep.view_name, xField);
+      const depYField = (() => {
+        const schema = schemaCache[dep.view_name] || [];
+        const numeric = schema.find(c => !['DATE','TIMESTAMP','DATETIME','STRING'].includes(c.type));
+        return numeric?.name || 'COUNT';
+      })();
+      try {
+        const { snapshot, sql } = await fetchDimensionSnapshot(
+          dep.view_name, dateCol, depYField, groupByDimension, channelFilter, lastNMonths
+        );
+        snapshots[depLabel] = { snapshot, sql, metricId: dep.id };
+      } catch { snapshots[depLabel] = { snapshot: {}, sql: 'ERROR', metricId: dep.id }; }
+    }
+
     const rowSnapshot = {};
     for (const dim of dims) {
       const depValues = {};
