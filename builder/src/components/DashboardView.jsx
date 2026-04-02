@@ -8,7 +8,7 @@ import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
-import { fetchChartDatasets } from '../lib/chartDataBuilder';
+import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
 import { evaluateFormula } from '../lib/sanitize';
@@ -194,6 +194,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [containerWidth, setContainerWidth] = useState(1352);
   const [chartOptions, setChartOptions] = useState({});
   const [kpiDataMap, setKpiDataMap] = useState({});
+  const [pivotDataMap, setPivotDataMap] = useState({});
   const [chartLoading, setChartLoading] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
@@ -218,6 +219,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
       setLoading(true);
       setError(null);
       setChartOptions({});
+      setKpiDataMap({});
+      setPivotDataMap({});
       setChartLoading({});
       clearAllCaches(); // Clear BQ data + aggregation caches to ensure fresh data
       try {
@@ -413,6 +416,15 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           }
           setKpiDataMap(prev => ({ ...prev, [chartId]: kpis }));
           return;
+        }
+
+        if (echartsType === 'table' && dataConfig.groupByDimension) {
+          const pivotResult = await fetchPivotData({ metricIds, metrics, dataConfig });
+          if (!pivotResult.empty) {
+            setPivotDataMap(prev => ({ ...prev, [chartId]: { pivotData: pivotResult.pivotData, columns: pivotResult.columns } }));
+            return;
+          }
+          // Pivot returned empty — fall through to regular table path
         }
 
         const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig });
@@ -718,6 +730,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: 16, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                       {kpiDataMap[item.i].map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
                     </div>
+                  ) : pivotDataMap[item.i] ? (
+                    <DataTableView pivotData={pivotDataMap[item.i].pivotData} columns={pivotDataMap[item.i].columns} />
                   ) : chartOptions[item.i]?._tableData ? (
                     <DataTableView labels={chartOptions[item.i].labels} datasets={chartOptions[item.i].datasets} />
                   ) : chartOptions[item.i] ? (

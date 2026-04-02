@@ -113,10 +113,18 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   }, [userEmail]);
 
   // Build a chart from a spec (shared by editChart, time range change, and conversation restore)
+  // Returns { chartOption } for regular charts, or { pivotData, pivotColumns } for pivot tables.
   const buildChartFromSpec = useCallback(async (spec, overrideLastNMonths) => {
     const { metricIds, echartsType, dataConfig, showLabels, colors } = spec;
     const channelFilter = dataConfig.channelFilter;
     const xField = dataConfig.xField;
+
+    // Pivot table path: table + groupByDimension → dimension rows × metric columns
+    if (echartsType === 'table' && dataConfig.groupByDimension) {
+      const pivotResult = await fetchPivotData({ metricIds, metrics, dataConfig });
+      if (!pivotResult.empty) return { pivotData: pivotResult.pivotData, pivotColumns: pivotResult.columns };
+      return null;
+    }
 
     // Year-over-Year: separate path (different return shape)
     if (echartsType === 'yoy') {
@@ -156,7 +164,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
     const chartData = await fetchChartDatasets({ metricIds, metrics, dataConfig, lastNMonthsOverride: overrideLastNMonths });
     if (!chartData || chartData.empty) return null;
-    return buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels, colors });
+    return { chartOption: buildEChartsOption(echartsType, chartData.labels, chartData.datasets, dataConfig, { showLabels, colors }) };
   }, [metrics]);
 
   // Handle editChart query param — load saved chart and render it
@@ -181,13 +189,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         }
 
         const spec = { metricIds, echartsType, dataConfig };
-        const chartOption = await buildChartFromSpec(spec);
+        const built = await buildChartFromSpec(spec);
 
         setLastSpec(spec);
         setCurrentTimeRange(dataConfig.lastNMonths || null);
         setEditingChartInfo({ id: chart.id, name: chart.name });
         setMessages([
-          { role: 'assistant', content: `Editing "${chart.name}". You can modify this chart by describing changes.`, chartOption },
+          { role: 'assistant', content: `Editing "${chart.name}". You can modify this chart by describing changes.`, ...(built || {}) },
         ]);
       } catch (e) {
         setMessages([{ role: 'assistant', content: `Error loading chart: ${e.message}` }]);
@@ -204,13 +212,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setCurrentTimeRange(months);
     setLoading(true);
     try {
-      const chartOption = await buildChartFromSpec(lastSpec, months);
-      if (chartOption) {
+      const built = await buildChartFromSpec(lastSpec, months);
+      if (built) {
         setMessages(prev => {
           const updated = [...prev];
           for (let i = updated.length - 1; i >= 0; i--) {
-            if (updated[i].role === 'assistant' && updated[i].chartOption) {
-              updated[i] = { ...updated[i], chartOption };
+            if (updated[i].role === 'assistant' && (updated[i].chartOption || updated[i].pivotData)) {
+              updated[i] = { ...updated[i], ...built };
               break;
             }
           }
@@ -679,13 +687,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         setCurrentTimeRange(conv.current_chart_spec.dataConfig?.lastNMonths || null);
 
         // Re-build the chart for the last assistant message
-        const chartOption = await buildChartFromSpec(conv.current_chart_spec);
-        if (chartOption) {
+        const built = await buildChartFromSpec(conv.current_chart_spec);
+        if (built) {
           setMessages(prev => {
             const updated = [...prev];
             for (let i = updated.length - 1; i >= 0; i--) {
               if (updated[i].role === 'assistant') {
-                updated[i] = { ...updated[i], chartOption };
+                updated[i] = { ...updated[i], ...built };
                 break;
               }
             }
