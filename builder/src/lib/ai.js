@@ -35,7 +35,10 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
     ];
     for (const { patterns, dimension } of GROUP_BY_TRIGGERS) {
       if (patterns.some(p => prompt.includes(p))) {
-        if (approvedDimensions && approvedDimensions.length > 0) {
+        if (approvedDimensions === null) {
+          // Not yet loaded — pass dimension through without validation
+          dc.group_by_dimension = dimension;
+        } else if (approvedDimensions.length > 0) {
           const hasPrimitive = resolvedMetrics.some(m => m.view_name);
           if (!hasPrimitive) {
             // All derived — pass dimension through (dependencies validate their own dims)
@@ -47,6 +50,7 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
             if (approved.includes(dimension)) dc.group_by_dimension = dimension;
           }
         }
+        // If approvedDimensions is [] (loaded, empty) — don't set dimension
         break;
       }
     }
@@ -83,10 +87,13 @@ export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensio
   const validCols = schema.map(f => f.name);
 
   // Validate group_by_dimension — must be an explicitly approved dimension.
-  // If no approvedDimensions list is provided, reject all group_by_dimension values
-  // to prevent unapproved schema columns from being used as dimensions.
+  // null = approvedDimensions not yet loaded (be permissive, pass through)
+  // []  = loaded but empty (no dimensions configured, reject all)
+  // [...] = loaded with data (validate against list)
   if (dc.group_by_dimension) {
-    if (approvedDimensions && approvedDimensions.length > 0) {
+    if (approvedDimensions === null) {
+      // Not yet loaded — pass through without validation
+    } else if (approvedDimensions.length > 0) {
       // Derived metrics have no view_name and no approved_dimensions of their own — they fetch
       // through their primitive dependencies which each validate dimensions independently.
       // Skip the check entirely when all metrics are derived so the dimension passes through.
@@ -101,7 +108,7 @@ export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensio
         }
       }
     } else {
-      // No approved dimensions list — reject all unapproved dimensions
+      // Loaded but empty — no dimensions configured, reject all
       dc.group_by_dimension = null;
     }
   }

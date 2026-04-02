@@ -124,6 +124,19 @@ describe('validateColumns', () => {
     expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 
+  it('passes group_by_dimension through when approvedDimensions is null (not yet loaded)', () => {
+    // Race condition: approvedDimensions=null means fetch hasn't resolved yet — must not clear dimension
+    const dc = { group_by_dimension: 'AttributionChannel', x_field: 'SignupDate' };
+    validateColumns(dc, [metric54], schemaMap, null);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('clears group_by_dimension when approvedDimensions is [] (loaded, empty)', () => {
+    const dc = { group_by_dimension: 'AttributionChannel', x_field: 'SignupDate' };
+    validateColumns(dc, [metric54], schemaMap, []);
+    expect(dc.group_by_dimension).toBeNull();
+  });
+
   it('preserves x_field when schema is empty (regression: must not null out on cache miss)', () => {
     const dc = { x_field: 'SignupDate', group_by_dimension: null };
     validateColumns(dc, [metric54], {}, []);
@@ -332,10 +345,11 @@ describe('applyPromptOverrides', () => {
     expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 
-  it('skips group_by_dimension when no approvedDimensions provided (legacy path)', () => {
+  it('sets group_by_dimension when approvedDimensions is null (not yet loaded — be permissive)', () => {
+    // null = fetch hasn't resolved yet; dimension keyword in prompt should still trigger
     const dc = { group_by_dimension: null };
     applyPromptOverrides('trials by channel', dc, 'bar', [metric54], null);
-    expect(dc.group_by_dimension).toBeNull();
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
   });
 
   it('sets group_by_dimension when derived metric is first and primitive is second', () => {
@@ -353,5 +367,18 @@ describe('applyPromptOverrides', () => {
     const dc = { group_by_dimension: null };
     applyPromptOverrides('trials vs forecast % by channel as a table', dc, 'table', [derived1, derived2], approvedDimensions);
     expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('sets group_by_dimension when approvedDimensions is null (not yet loaded)', () => {
+    // Race condition: null means fetch hasn't resolved — must still set dimension from prompt keyword
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('show me trials by channel', dc, 'bar', [metric54], null);
+    expect(dc.group_by_dimension).toBe('AttributionChannel');
+  });
+
+  it('does not set group_by_dimension when approvedDimensions is [] (loaded, empty)', () => {
+    const dc = { group_by_dimension: null };
+    applyPromptOverrides('show me trials by channel', dc, 'bar', [metric54], []);
+    expect(dc.group_by_dimension).toBeNull();
   });
 });

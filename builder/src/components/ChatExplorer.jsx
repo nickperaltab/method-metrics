@@ -67,7 +67,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveMessageIndex, setSaveMessageIndex] = useState(null);
   const [dashboards, setDashboards] = useState([]);
-  const [approvedDimensions, setApprovedDimensions] = useState([]);
+  const [approvedDimensions, setApprovedDimensions] = useState(null); // null = not yet loaded; [] = loaded but empty
   const [currentTimeRange, setCurrentTimeRange] = useState(null);
   const [recentConversations, setRecentConversations] = useState([]);
   const [editingChartInfo, setEditingChartInfo] = useState(null);
