@@ -507,26 +507,166 @@ Each stage gates on `invalid_response` — if any step fails, downstream steps a
 
 3. **Don't copy the VisualizeAgent pattern.** Their approach (LLM generates raw JS) is fragile and opposite to our architecture (structured JSON config → deterministic rendering). Our approach is better — keep it.
 
+### WrenAI: Intent Classification, Correction, and Follow-ups
+
+**Source files investigated:**
+
+| File | Purpose |
+|---|---|
+| `wren-ai-service/src/pipelines/generation/intent_classification.py` | Routes queries into 4 categories |
+| `wren-ai-service/src/pipelines/generation/sql_correction.py` | Fixes broken SQL using diagnosed error |
+| `wren-ai-service/src/pipelines/generation/sql_diagnosis.py` | Translates raw DB errors into LLM-friendly explanations |
+| `wren-ai-service/src/pipelines/generation/followup_sql_generation.py` | Conversation-aware SQL generation |
+
+**Intent classification — four categories:**
+
+| Intent | Meaning | Downstream action |
+|---|---|---|
+| `TEXT_TO_SQL` | Valid, actionable query about the data | Full pipeline: retrieval → reasoning → SQL generation |
+| `MISLEADING_QUERY` | Off-topic / irrelevant to schema | Returns NL explanation of why it can't be answered |
+| `GENERAL` | On-topic but incomplete (e.g. "show me orders for these products" without specifying which) | Returns NL assistance asking for clarification |
+| `USER_GUIDE` | Question about the tool itself | Returns help documentation |
+
+The classifier sees the full database schema, so it can distinguish "irrelevant" from "incomplete." Output is enforced via Pydantic model: `{rephrased_question, reasoning (max 20 words), results: enum}`. The rephrased question is used downstream (follow-ups get rephrased into standalone questions).
+
+**SQL correction — two-step diagnosis→fix:**
+
+1. **Diagnosis** receives: original SQL + invalid SQL (after engine transformation) + raw error message. Produces a concise (≤50 words) human-readable explanation of what went wrong and where.
+2. **Correction** receives: database schema + the original SQL + the **diagnosed reasoning** (NOT the raw error). It does NOT see the user's question or the reasoning plan — this focuses it purely on the syntax fix.
+3. **Retry loop**: up to 3 retries (configurable `max_sql_correction_retries`). Timeout errors break immediately (no retry).
+
+Key insight: the diagnosis acts as an intermediary that translates raw DB errors into LLM-friendly descriptions. The correction LLM never sees cryptic error codes.
+
+**Follow-up handling:**
+
+- History is injected as **native chat messages** (user/assistant pairs), not text in the prompt. Limited to 5 turns.
+- The prompt label changes from "User's Question" to "User's Follow-up Question" but the system prompt is identical.
+- No explicit follow-up type detection (e.g. "change chart type" vs "add metric"). Intent classification rephrases into standalone questions; the LLM figures out the rest from conversation context.
+- A separate reasoning plan is generated for follow-ups that accounts for the history.
+
 ---
 
-## Concrete Action Items for `builder/src/lib/ai.js`
+### Vanna: RAG Training & Ask Pipeline
 
-Prioritized by impact vs effort:
+**Source files investigated:**
 
-### 1. Structured prompt sections (WrenAI pattern) — LOW effort, HIGH impact
-Change the Edge Function system prompt to use `### METRICS ###`, `### SCHEMA ###`, `### RULES ###` section headers instead of flat text. Update `buildMetricContext()` and `buildSchemaContext()` to wrap their output.
+| File | Purpose |
+|---|---|
+| `src/vanna/legacy/base/base.py` | Core `train()`, `ask()`, `generate_sql()`, prompt assembly |
+| `src/vanna/legacy/chromadb/chromadb_vector.py` | ChromaDB vector store implementation |
 
-### 2. Few-shot examples (WrenAI + Vanna pattern) — MEDIUM effort, HIGH impact
-Add a `### EXAMPLES ###` section to the prompt with 5-10 hardcoded question→config pairs covering common patterns (single metric, multi-metric, breakdown, forecast comparison, derived rate). Pull from verified eval test cases.
+**Training pipeline — `train()` accepts four data types:**
 
-### 3. Error retry loop (Google Open Data QnA pattern) — MEDIUM effort, HIGH impact
-When BQ query fails, append the error to chat history and re-call the Edge Function. Use `generateChartSpecWithHistory()` with an extra message: `{role: "user", content: "The query failed with error: {error}. Please fix the config."}`. Limit to 1 retry.
+| Input | Processing | Storage |
+|---|---|---|
+| `ddl="CREATE TABLE..."` | Stored as-is | `ddl` vector collection |
+| `documentation="Revenue is..."` | Stored as-is | `documentation` vector collection |
+| `question="..." + sql="..."` | Stored as JSON pair | `sql` vector collection |
+| `sql="SELECT..."` (no question) | LLM auto-generates a question, then stores the pair | `sql` vector collection |
 
-### 4. YAML test cases + result persistence (nao pattern) — LOW effort, MEDIUM impact
-Extract eval test definitions to `builder/tests/eval-cases.json`. Add JSON result output with timestamps, token counts, and pass/fail. Enables regression tracking.
+Three separate vector collections, each searched independently. Default embedding: `all-MiniLM-L6-v2` via ChromaDB. IDs are deterministic UUIDs from content hash (deduplication built-in).
 
-### 5. Cost/latency tracking in evals (nao pattern) — LOW effort, MEDIUM impact
-Have the Edge Function return `{tokens, latency_ms}` alongside the config. Record in eval results. Track over time to catch prompt bloat.
+**Ask pipeline — `generate_sql()` retrieval:**
 
-### 6. Two-pass reasoning (WrenAI pattern) — HIGH effort, HIGH impact (defer)
-For complex multi-metric queries, generate a reasoning plan first, then the config. This is the biggest accuracy win but requires a second LLM call. Defer until the simpler changes are in place and we have eval data showing where accuracy gaps remain.
+```python
+question_sql_list = self.get_similar_question_sql(question)  # top-10 from sql collection
+ddl_list = self.get_related_ddl(question)                    # top-10 from ddl collection
+doc_list = self.get_related_documentation(question)          # top-10 from doc collection
+```
+
+Pure top-k similarity, no threshold filtering, no reranking, no diversity. All three results merged into one prompt.
+
+**Prompt assembly (exact structure):**
+
+```
+System message:
+  "You are a {dialect} expert. Please help to generate a SQL query..."
+  ===Tables
+  {DDL statements, up to token budget}
+  ===Additional Context
+  {Documentation strings, up to token budget}
+  ===Response Guidelines
+  1. If context sufficient → generate SQL
+  2. If almost sufficient but need specific string values → generate intermediate_sql
+  3. If insufficient → explain why
+  4. Use most relevant tables
+  5. If question answered before → repeat exact answer
+  6. Ensure {dialect}-compliant SQL
+
+Few-shot messages (user/assistant pairs):
+  User: "What is total revenue?"
+  Assistant: "SELECT SUM(amount) FROM orders"
+  ... (up to 10 pairs)
+
+Final user message:
+  "{user's actual question}"
+```
+
+**Token budget management:** `max_tokens=14000` default. DDL and documentation are added one-by-one; if adding the next item would exceed budget, it's silently dropped. Estimation: `len(string) / 4`.
+
+**Intermediate SQL pattern:** If the LLM response contains `"intermediate_sql"`, Vanna runs that query first, appends results to documentation context, and re-prompts. This handles data-dependent queries (e.g., "show revenue for our top customer" — LLM first queries to find who the top customer is).
+
+**Auto-training feedback loop:** When `auto_train=True` in `ask()`, successful question→SQL pairs are automatically added to the vector store. Over time, the system gets better at your specific queries.
+
+---
+
+## Suggestions
+
+Each suggestion is graded on:
+- **Impact**: how much it improves accuracy, UX, or developer velocity
+- **Complexity**: engineering effort to implement
+- **Risk**: chance of breaking existing behavior or adding fragility
+
+### Prompt Engineering
+
+| # | Suggestion | Source | Impact | Complexity | Risk | Notes |
+|---|---|---|---|---|---|---|
+| 1 | **Add section headers to prompt** (`### METRICS ###`, `### SCHEMA ###`, `### RULES ###`) | WrenAI | HIGH | LOW | NONE | 5-min change in Edge Function system prompt. Every project we studied does this. Our `buildMetricContext()` dumps a flat list — wrapping it in headers helps the LLM parse context at scale. |
+| 2 | **Inject few-shot examples** into the prompt as question→config pairs | WrenAI, Vanna | HIGH | LOW | LOW | Hardcode 5-10 examples from our eval tests covering: single metric, multi-metric, breakdown, forecast comparison, derived rate, style rules. No vector search needed. Vanna puts them as user/assistant message pairs (not in system prompt) — do the same. |
+| 3 | **Intent classification before generation** — route off-topic/incomplete queries early | WrenAI | MEDIUM | MEDIUM | LOW | Today we try to generate a config for everything and return `error` on failure. Adding a lightweight classification step ("is this about our metrics?") would give better error messages and save LLM calls on junk prompts. Could be a simple prompt prefix or a separate cheap call (Haiku). |
+| 4 | **Two-pass reasoning for complex queries** — generate a plan first, then the config | WrenAI | HIGH | HIGH | MEDIUM | WrenAI's biggest accuracy multiplier. For multi-metric or derived metric queries, a reasoning step ("which metrics are needed? what are their dependencies?") before config generation would help. Risk: doubles latency. Gate on prompt complexity (e.g., >1 metric or contains "vs"/"compare"). |
+| 5 | **Rephrase follow-ups into standalone questions** via intent classification | WrenAI | MEDIUM | MEDIUM | LOW | WrenAI's classifier rephrases "make it weekly" into "show me trials by week." Our follow-up path passes raw "make it weekly" to the LLM with chat history — works but is fragile with long conversations. Rephrasing keeps the prompt clean. |
+
+### Error Handling & Reliability
+
+| # | Suggestion | Source | Impact | Complexity | Risk | Notes |
+|---|---|---|---|---|---|---|
+| 6 | **Error retry loop** — on BQ failure, append error to chat history and re-call | Google QnA | HIGH | MEDIUM | LOW | Google uses 2 retries with chat-based rewriting (LLM sees all previous failures). We should do 1 retry using `generateChartSpecWithHistory()` — append `{role:"user", content:"Query failed: {error}. Fix the config."}`. Our infra already supports this. |
+| 7 | **Diagnosis before correction** — translate raw BQ errors into LLM-friendly descriptions | WrenAI | MEDIUM | MEDIUM | LOW | WrenAI's correction LLM never sees raw error codes — a diagnosis step translates them first. For us: parse common BQ errors ("Unrecognized name: Channel" → "Column 'Channel' does not exist in view v_trials. Available columns: SignupDate, CompanyAccount, ...") before feeding to retry. |
+| 8 | **Chat-based retry context** — use same conversation for retries so LLM sees failed attempts | Google QnA | MEDIUM | LOW | NONE | Google's key insight: the rewrite prompt says "present a different approach from previous ones." Using the same chat session prevents the LLM from repeating the same mistake. Our `generateChartSpecWithHistory` already does this — just need to wire it into an error handler. |
+
+### Eval & Testing
+
+| # | Suggestion | Source | Impact | Complexity | Risk | Notes |
+|---|---|---|---|---|---|---|
+| 9 | **Extract test cases to JSON** — separate test definitions from test logic | nao | MEDIUM | LOW | NONE | Move from inline JS assertions to `eval-cases.json`: `{prompt, expectedMetricIds, expectedType, assertions}`. Runner loops over them. Adding a test becomes editing JSON, not writing code. |
+| 10 | **Track tokens/cost/latency per test** | nao | MEDIUM | LOW | NONE | Have Edge Function return `{tokens, latency_ms}` in response. Record in eval output. Catches prompt bloat and regressions over time. |
+| 11 | **Persist eval results to JSON with timestamps** | nao | MEDIUM | LOW | NONE | Write to `builder/tests/eval-results/results_YYYYMMDD.json`. Enables regression tracking across prompt changes. |
+| 12 | **Parallel eval execution** | nao | LOW | LOW | NONE | Our tests run sequentially. `Promise.all` batches of 5 would cut wall time from ~60s to ~15s. |
+| 13 | **Multi-model eval comparison** | nao | LOW | MEDIUM | LOW | nao's `-m` flag benchmarks same prompts across models. Useful when evaluating Haiku vs Sonnet vs GPT-4.1 for the Edge Function. |
+
+### Context & Retrieval
+
+| # | Suggestion | Source | Impact | Complexity | Risk | Notes |
+|---|---|---|---|---|---|---|
+| 14 | **Token budget for metric context** — drop metrics that don't fit | Vanna | LOW | LOW | LOW | Vanna silently drops DDL items exceeding 14k tokens. We dump all ~30 live metrics into context (~2k tokens today). Not urgent, but as metric count grows toward 100+, we'll need to either retrieve relevant metrics or truncate. Estimate: `len(context) / 4` and cap at a budget. |
+| 15 | **Few-shot retrieval from verified queries** — surface relevant examples per prompt | WrenAI, Vanna | HIGH | HIGH | MEDIUM | Both WrenAI and Vanna use vector similarity to find relevant question→SQL pairs. We have `knowledge/verified-queries/` already. Full implementation needs: embed queries, store in Supabase pgvector, retrieve top-3 per prompt. Simpler alternative: keyword matching against metric names in the prompt. |
+| 16 | **Historical question cache** — short-circuit identical/similar prompts | WrenAI, Google QnA | MEDIUM | MEDIUM | LOW | WrenAI caches at 0.9 similarity; Google does exact-match. For us: cache `{prompt_hash → config}` in Supabase. Exact-match first (zero LLM cost), optional fuzzy later. Saves money on repeated dashboard loads. |
+| 17 | **Auto-enrich metric descriptions** via LLM | Google QnA | LOW | LOW | LOW | Google's DescriptionAgent generates 2-line descriptions from column names + types. Many of our metrics have sparse `notes`. A one-time script could generate descriptions for metrics missing them. Not runtime — a maintenance tool. |
+| 18 | **Auto-train on successful queries** — feedback loop | Vanna | MEDIUM | HIGH | MEDIUM | Vanna auto-adds successful question→SQL pairs to the vector store. For us: when a user generates a chart and doesn't modify it, store `{prompt → config}` as a verified example. Risk: bad configs pollute the store. Needs a quality gate (e.g., only cache if user saves/pins the chart). |
+
+### Architecture
+
+| # | Suggestion | Source | Impact | Complexity | Risk | Notes |
+|---|---|---|---|---|---|---|
+| 19 | **Intermediate query pattern** — LLM requests a preliminary data lookup before answering | Vanna | LOW | HIGH | MEDIUM | Vanna's `intermediate_sql` lets the LLM say "I need to see distinct values in column X first." For us this would mean: LLM asks "what channels exist?", we run a quick BQ query, feed results back, then LLM generates the final config. Cool but our metric catalog already provides this context. Only useful if we add ad-hoc querying beyond the catalog. |
+| 20 | **Separate metric selection from visualization** — two-call architecture | Google QnA | MEDIUM | HIGH | MEDIUM | Google separates SQL generation from chart selection. WrenAI separates reasoning from SQL. We could split: Call 1 picks metrics + data config, Call 2 picks chart type + visual options. Doubles latency but improves accuracy on both. Defer until eval data shows where accuracy gaps are. |
+
+### What NOT to Copy
+
+| Pattern | Source | Why skip it |
+|---|---|---|
+| Generate raw chart JS instead of structured config | Google QnA VisualizeAgent | Our structured JSON → ECharts approach is more reliable and maintainable. Raw JS generation is fragile. |
+| Schema-as-files with tool-use agent | nao | Requires a full agent loop with multiple tool calls per query. Our prompt-injection approach is faster and simpler for ~30 metrics. Only reconsider at 500+ metrics. |
+| Full vector search infrastructure for metric retrieval | WrenAI, Vanna | Overkill for ~30 live metrics. Our flat catalog fits easily in context. Revisit when metric count exceeds context budget (~100+). |
+| Intermediate SQL / data-peeking | Vanna | Our metric catalog already tells the LLM what dimensions and values exist. No need to query BQ mid-prompt. |
