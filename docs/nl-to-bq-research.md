@@ -235,7 +235,46 @@ export function getDatabaseObjects(projectFolder): DatabaseObject[] {
 
 **Verdict for 30-100 metrics: schema-as-files is significantly better.** Even at 30 metrics, lazy loading means you only inject the 2-3 relevant ones per query.
 
-**Still needs investigation:** their eval/test framework — test case format for adapting to `eval.test.js`.
+#### Eval Framework ✅ Investigated
+
+**File structure:**
+```
+cli/nao_core/commands/test/
+├── case.py      # test case schema
+├── runner.py    # core execution + comparison logic
+├── client.py    # API client
+└── server.py    # results dashboard
+example/tests/total_revenue.yml
+```
+
+**Test case format (YAML):**
+```yaml
+name: total_revenue
+prompt: What is the total revenue from all orders?
+sql: |
+  SELECT SUM(amount) as total_revenue
+  FROM orders
+```
+
+**Evaluation method — 3 layers:**
+1. Zod schema extraction: builds schema from SQL column names, prompts agent to return structured data matching it
+2. DataFrame normalization: sort columns alphabetically, sort rows, round floats to 2 decimal places, reset indices
+3. Comparison: exact match first (`df.equals()`), then approximate numeric (`numpy.allclose(rtol=1e-5, atol=1e-8)`)
+
+Row order is ignored. Cost and token usage tracked per test. Results shown in a web dashboard (`nao test server`).
+
+**vs. our `eval.test.js`:**
+
+| | nao | eval.test.js |
+|---|---|---|
+| Format | YAML (language-agnostic) | JS (hardcoded) |
+| Numeric comparison | Tolerance-based | Exact equality only |
+| Cost tracking | ✅ tokens + cost per test | ❌ |
+| Parallelization | ThreadPoolExecutor | Serial |
+| Dashboard | ✅ web UI | ❌ console only |
+| Domain depth | Generic SQL | Deep Method CRM assertions |
+
+**Recommendation:** Keep `eval.test.js` — it has 70 test cases with deep domain knowledge. Add three patterns from nao: (1) tolerance-based numeric comparison instead of exact equality, (2) token/cost logging per test, (3) `Promise.all()` for parallel execution.
 
 ---
 
@@ -463,7 +502,7 @@ Our `depends_on` int[] in Supabase is underutilized. Cube's `type: 'number', sql
 
 ## What to Investigate Next
 
-- [ ] nao eval framework — test case format and how to adapt to `eval.test.js`
+Nothing — all repos fully investigated. ✅
 
 ---
 
