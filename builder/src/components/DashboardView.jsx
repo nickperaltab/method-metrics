@@ -7,7 +7,7 @@ import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView } from '../lib/supabase';
-import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq } from '../lib/bigquery';
+import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq, fetchDrillData } from '../lib/bigquery';
 import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
 import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
@@ -171,7 +171,7 @@ const styles = {
 
 const ROW_HEIGHT = 80;
 const COLS = 12;
-const TYPE_LABELS = { line: 'line chart', bar: 'bar chart', stacked_bar: 'stacked bar chart', pie: 'pie chart', kpi: 'kpi', yoy: 'year over year', table: 'table', area: 'area chart', combo: 'combo chart', funnel: 'funnel', heatmap: 'heatmap', horizontal_bar: 'horizontal bar chart' };
+const TYPE_LABELS = { line: 'line chart', bar: 'bar chart', stacked_bar: 'stacked bar chart', pie: 'pie chart', kpi: 'kpi', yoy: 'year over year', table: 'table', area: 'area chart', combo: 'combo chart', funnel: 'funnel', heatmap: 'heatmap', horizontal_bar: 'horizontal bar chart', drill_table: 'detail table' };
 
 export default function DashboardView({ userEmail, userAvatar, metrics = [], bqConnected }) {
   const { id } = useParams();
@@ -195,6 +195,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
   const [chartOptions, setChartOptions] = useState({});
   const [kpiDataMap, setKpiDataMap] = useState({});
   const [pivotDataMap, setPivotDataMap] = useState({});
+  const [drillDataMap, setDrillDataMap] = useState({});
   const [chartLoading, setChartLoading] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [editChartId, setEditChartId] = useState(null);
@@ -361,6 +362,18 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           if (yoyDatasets.length > 0) {
             const option = buildEChartsOption('yoy', monthLabels, yoyDatasets, dataConfig, { valueFormat, showLabels, colors });
             setChartOptions(prev => ({ ...prev, [chartId]: option }));
+          }
+          return;
+        }
+
+        // Drill table branch
+        if (echartsType === 'drill_table') {
+          const metric = metrics.find(m => m.id === metricIds[0]);
+          if (metric?.view_name) {
+            try {
+              const drillResult = await fetchDrillData(metric.view_name, dataConfig.lastNMonths);
+              setDrillDataMap(prev => ({ ...prev, [chartId]: { rows: drillResult.rows, columns: drillResult.columns } }));
+            } catch { /* leave unset */ }
           }
           return;
         }
@@ -730,6 +743,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: 16, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                       {kpiDataMap[item.i].map((kpi, ki) => <KpiCard key={ki} {...kpi} />)}
                     </div>
+                  ) : drillDataMap[item.i] ? (
+                    <DataTableView pivotData={drillDataMap[item.i].rows} columns={drillDataMap[item.i].columns} noTotal />
                   ) : pivotDataMap[item.i] ? (
                     <DataTableView pivotData={pivotDataMap[item.i].pivotData} columns={pivotDataMap[item.i].columns} />
                   ) : chartOptions[item.i]?._tableData ? (

@@ -71,12 +71,12 @@ function deltaColor(v, type) {
   return n > 0 ? '#059669' : '#dc2626';
 }
 
-function PivotTable({ pivotData, columns }) {
+function PivotTable({ pivotData, columns, noTotal }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('desc');
 
-  const dataRows = pivotData.slice(0, -1);
-  const totalRow = pivotData[pivotData.length - 1];
+  const dataRows = noTotal ? pivotData : pivotData.slice(0, -1);
+  const totalRow = noTotal ? null : pivotData[pivotData.length - 1];
 
   const sorted = useMemo(() => {
     if (!sortCol) return dataRows;
@@ -154,9 +154,9 @@ function PivotTable({ pivotData, columns }) {
   );
 }
 
-export default function DataTableView({ labels, datasets, title, pivotData, columns }) {
+export default function DataTableView({ labels, datasets, title, pivotData, columns, noTotal }) {
   if (pivotData && columns) {
-    return <PivotTable pivotData={pivotData} columns={columns} />;
+    return <PivotTable pivotData={pivotData} columns={columns} noTotal={noTotal} />;
   }
   const [sortCol, setSortCol] = useState(null); // null = period, 0..n = dataset index
   const [sortDir, setSortDir] = useState('asc');

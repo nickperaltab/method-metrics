@@ -1,6 +1,6 @@
 import { invokeAiChart } from './supabase';
 
-const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy', 'variance']);
+const VALID_TYPES = new Set(['line', 'bar', 'stacked_bar', 'horizontal_bar', 'pie', 'combo', 'funnel', 'heatmap', 'area', 'table', 'kpi', 'yoy', 'variance', 'drill_table']);
 const VALID_STYLE_OPERATORS = new Set(['<', '<=', '>', '>=', '==', '!=']);
 
 export function normalizeStyleRules(rules) {

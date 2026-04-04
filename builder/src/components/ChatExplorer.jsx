@@ -7,7 +7,7 @@ import { useUser } from '../contexts/UserContext';
 import { mapBqSchemaToGwFields } from '../lib/fieldMapper';
 import { generateChartSpecWithHistory } from '../lib/ai';
 import { saveConversation, saveChart, updateChart, fetchDashboards, createDashboard, updateDashboard, loadChart, loadConversations, loadConversation, fetchAllApprovedDimensions } from '../lib/supabase';
-import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData } from '../lib/bigquery';
+import { queryBq, fetchAggregatedData, fetchChartData, fetchGroupedData, fetchYoYData, fetchKpiData, fetchViewData, fetchDrillData } from '../lib/bigquery';
 import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import {
   castRow,
@@ -532,6 +532,39 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           if (!conversationId && saved && saved.length > 0) setConversationId(saved[0].id);
           if (userEmail) loadConversations(userEmail).then(setRecentConversations).catch(() => {});
         } catch { /* non-critical */ }
+        setLoading(false);
+        return;
+      }
+
+      // Drill table: raw row-level query, no aggregation
+      if (echartsType === 'drill_table') {
+        const viewName = result.metrics[0]?.view_name;
+        if (!viewName) {
+          setMessages(prev => [...prev, { role: 'assistant', content: 'Drill table requires a metric with a view. Try a metric like New Net SaaS or Cancellations.' }]);
+          setLoading(false);
+          return;
+        }
+        try {
+          const drillResult = await fetchDrillData(viewName, dataConfig.lastNMonths);
+          const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: false, colors: null };
+          setLastSpec(newSpec);
+          const assistantMsg = {
+            role: 'assistant',
+            content: result.explanation || '',
+            drillData: { rows: drillResult.rows, columns: drillResult.columns },
+            queryDetails: [{ metricName: result.metrics[0].name, metricId: result.metrics[0].id, sql: drillResult.sql, dateColumn: 'N/A', labels: [], data: [] }],
+          };
+          const allMessages = [...updatedMessages, assistantMsg];
+          setMessages(allMessages);
+          try {
+            const title = updatedMessages[0]?.content?.slice(0, 80) || 'Untitled';
+            const saved = await saveConversation({ id: conversationId, userEmail: userEmail || 'anonymous', title, messages: allMessages.map(m => ({ role: m.role, content: m.content })), currentChartSpec: newSpec });
+            if (!conversationId && saved?.length > 0) setConversationId(saved[0].id);
+            if (userEmail) loadConversations(userEmail).then(setRecentConversations).catch(() => {});
+          } catch { /* non-critical */ }
+        } catch (e) {
+          setMessages(prev => [...prev, { role: 'assistant', content: `Error loading drill data: ${e.message}` }]);
+        }
         setLoading(false);
         return;
       }

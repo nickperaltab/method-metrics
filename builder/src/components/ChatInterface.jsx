@@ -270,7 +270,10 @@ export default function ChatInterface({
               {msg.tableData && (
                 <DataTableView labels={msg.tableData.labels} datasets={msg.tableData.datasets} />
               )}
-              {(msg.chartOption || msg.kpiData || msg.tableData || msg.pivotData || msg.isError) && (
+              {msg.drillData && (
+                <DataTableView pivotData={msg.drillData.rows} columns={msg.drillData.columns} noTotal />
+              )}
+              {(msg.chartOption || msg.kpiData || msg.tableData || msg.pivotData || msg.drillData || msg.isError) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <FeedbackButtons
                     userEmail={userEmail}

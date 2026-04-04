@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const EDGE_FUNCTION_VERSION = '27';
+const EDGE_FUNCTION_VERSION = '28';
 
 const SYSTEM_PROMPT = `You are a chart configuration assistant for Method CRM's metrics dashboard.
 
@@ -46,6 +46,7 @@ Supported echarts_type values:
 - "table" — data table. Use when user says "table", "table view", "show as table", "list the data". Renders a sortable HTML table. When group_by_dimension is also set, renders as a pivot table: rows = dimension values (e.g. channels), columns = one per metric. Use last_n_months: 0 for MTD snapshot. Example: "trials and syncs by channel as a table" → table + group_by_dimension: AttributionChannel + last_n_months: 0.
 - "yoy" — year-over-year comparison. Use when user says "year over year", "YoY", "compare years", "annual comparison". Shows grouped bars with months on X axis, one series per year. Only works with primitive metrics (not derived rates).
 - "variance" — actual vs target/forecast comparison. First metric renders as bars, second as dashed line. Bars turn red when actual < target, green when above. Use when user says "compare to forecast", "vs target", "variance", "actual vs plan", "highlight where below". Requires exactly 2 metric_ids.
+- "drill_table" — raw transaction-level detail table. Use when user says "show me individual transactions", "raw records", "detail table", "drill into", "list the rows", "transaction details". Renders each row from the underlying view. Only works with primitive metrics that have a view_name. Use last_n_months to scope the date range.
 
 Rules:
 - metric_ids: array of metric IDs to fetch data for. Use one per y_field.
@@ -144,7 +145,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       version: EDGE_FUNCTION_VERSION,
       system_prompt: SYSTEM_PROMPT,
-      supported_chart_types: ['line','bar','stacked_bar','horizontal_bar','pie','combo','funnel','heatmap','area','kpi','table','yoy','variance'],
+      supported_chart_types: ['line','bar','stacked_bar','horizontal_bar','pie','combo','funnel','heatmap','area','kpi','table','yoy','variance','drill_table'],
     }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
