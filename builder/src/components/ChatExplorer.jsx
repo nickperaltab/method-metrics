@@ -561,18 +561,24 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         chartData = await fetchChartDatasets({ metricIds: currentResult.metricIds, metrics, dataConfig: currentResult.dataConfig });
-        if (chartData && !chartData.empty) break;
+        // Check for BQ errors in queryDetails (e.g. bad column names, syntax errors)
+        const bqErrors = (chartData?.queryDetails || []).filter(q => q.sql?.startsWith('ERROR:'));
+        if (chartData && !chartData.empty && bqErrors.length === 0) break;
 
         if (attempt < MAX_RETRIES) {
           const failedDetails = chartData?.queryDetails || [];
-          const failedSql = failedDetails.length > 0
-            ? failedDetails.map(q => `Metric "${q.metricName}" (id:${q.metricId}): ${q.sql}`).join('\n')
-            : `Metrics attempted: ${currentResult.metricIds.join(', ')}`;
-          const correctionMessage = {
-            role: 'user',
-            content: `The previous chart returned no data. Here is what was attempted:\n${failedSql}\n\nPlease pick a different metric or adjust the configuration (e.g. use a different metric_id, correct group_by_dimension, or fix x_field).`,
-          };
-          retryMessages = [...retryMessages, correctionMessage];
+          let correctionContent;
+          if (bqErrors.length > 0) {
+            // Surface specific BQ errors so the AI can fix the exact problem
+            const errorLines = bqErrors.map(q => `Metric "${q.metricName}" (id:${q.metricId}): ${q.sql}`).join('\n');
+            correctionContent = `BigQuery returned errors for the previous config:\n${errorLines}\n\nFix the configuration — a column name or field may be wrong. Only use columns listed in the ### SCHEMA ### section.`;
+          } else {
+            const failedSql = failedDetails.length > 0
+              ? failedDetails.map(q => `Metric "${q.metricName}" (id:${q.metricId}): ${q.sql}`).join('\n')
+              : `Metrics attempted: ${currentResult.metricIds.join(', ')}`;
+            correctionContent = `The previous chart returned no data. Here is what was attempted:\n${failedSql}\n\nPlease pick a different metric or adjust the configuration (e.g. use a different metric_id, correct group_by_dimension, or fix x_field).`;
+          }
+          retryMessages = [...retryMessages, { role: 'user', content: correctionContent }];
           const corrected = await generateChartSpecWithHistory(retryMessages, metrics, schemaCache, currentResult, approvedDimensions);
           if (!corrected || corrected.error || corrected.type === 'text') break;
           currentResult = corrected;
