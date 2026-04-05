@@ -20,6 +20,7 @@ import {
   applyChannelFilter,
   applyLastNMonths,
   buildEChartsOption,
+  extractKpiFromTimeSeries,
 } from '../lib/chartUtils';
 import { getMonthIndices, formatMonthLabels, sliceSeries, computeGrowthSeries } from '../lib/yoyUtils';
 import schemaCache from '../lib/schemaCache';
@@ -211,6 +212,15 @@ export default function Explorer({ metrics, bqConnected, userEmail, userAvatar }
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
             try {
               const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
+              kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+            } catch {
+              kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
+            }
+          } else if (metric.chart_sql) {
+            // chart_sql-only metric — execute the SQL and extract current/prior month values
+            try {
+              const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+              const kpi = extractKpiFromTimeSeries(agg.labels, agg.data);
               kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
             } catch {
               kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });

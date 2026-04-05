@@ -16,6 +16,7 @@ import {
   applyChannelFilter,
   applyLastNMonths,
   buildEChartsOption,
+  extractKpiFromTimeSeries,
 } from '../lib/chartUtils';
 import { evaluateFormula } from '../lib/sanitize';
 import { getMonthIndices, formatMonthLabels, sliceSeries, computeGrowthSeries } from '../lib/yoyUtils';
@@ -451,17 +452,9 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             // chart_sql-only metric — execute the SQL and extract current/prior month values
             try {
               const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
-              const now = new Date();
-              const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-              const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
-              const curIdx = agg.labels.indexOf(curMonth);
-              const prevIdx = agg.labels.indexOf(prevMonth);
-              const current = curIdx >= 0 ? agg.data[curIdx] : 0;
-              const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
-              const delta = Math.round((current - prior) * 100) / 100;
-              const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-              kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false });
-              collectedDetails.push({ metricName: label, metricId: metric.id, sql: metric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
+              const kpi = extractKpiFromTimeSeries(agg.labels, agg.data);
+              kpiData.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+              collectedDetails.push({ metricName: label, metricId: metric.id, sql: metric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [kpi.current, kpi.prior] });
             } catch (err) {
               kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: 'N/A', labels: [], data: [] });

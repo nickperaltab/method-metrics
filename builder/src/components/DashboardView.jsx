@@ -10,7 +10,7 @@ import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setA
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq, fetchDrillData } from '../lib/bigquery';
 import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
-import { buildEChartsOption, applyLastNMonths } from '../lib/chartUtils';
+import { buildEChartsOption, applyLastNMonths, extractKpiFromTimeSeries } from '../lib/chartUtils';
 import { evaluateFormula } from '../lib/sanitize';
 import schemaCache from '../lib/schemaCache';
 import ChatModal from './ChatModal';
@@ -421,6 +421,15 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
               const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
               try {
                 const kpi = await fetchKpiData(metric.view_name, dateCol, yField, channelFilter);
+                kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
+              } catch {
+                kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
+              }
+            } else if (metric.chart_sql) {
+              // chart_sql-only metric — execute the SQL and extract current/prior month values
+              try {
+                const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+                const kpi = extractKpiFromTimeSeries(agg.labels, agg.data);
                 kpis.push({ metricName: label, value: kpi.current, delta: kpi.delta, deltaPercent: kpi.deltaPercent, isRate: false });
               } catch {
                 kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });

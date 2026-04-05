@@ -1,5 +1,21 @@
 import { evaluateFormula } from './sanitize.js';
 
+/**
+ * Extract current/prior month KPI values from time-series data (labels + data arrays).
+ * Used for chart_sql-only metrics rendered as KPI tiles.
+ */
+export function extractKpiFromTimeSeries(labels, data, now = new Date()) {
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
+  const curIdx = labels.indexOf(curMonth);
+  const prevIdx = labels.indexOf(prevMonth);
+  const current = curIdx >= 0 ? data[curIdx] : 0;
+  const prior = prevIdx >= 0 ? data[prevIdx] : 0;
+  const delta = Math.round((current - prior) * 100) / 100;
+  const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+  return { current, prior, delta, deltaPercent };
+}
+
 export const COLORS = ['#059669', '#2563eb', '#f59e0b', '#dc2626', '#a78bfa', '#0284c7', '#ea580c', '#c026d3', '#16a34a', '#db2777'];
 
 export const ATT_COL_MAP = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption, applyStyleRulesToDatasets } from '../../src/lib/chartUtils.js';
+import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption, applyStyleRulesToDatasets, extractKpiFromTimeSeries } from '../../src/lib/chartUtils.js';
 
 describe('toBucketKey', () => {
   it('truncates to month', () => {
@@ -685,5 +685,82 @@ describe('buildEChartsOption — variance chart type', () => {
     option.series[0].data.forEach(d => {
       expect(d.itemStyle.color).toBe('#f87171');
     });
+  });
+});
+
+// --- extractKpiFromTimeSeries ---
+
+describe('extractKpiFromTimeSeries', () => {
+  it('extracts current and prior month values from time-series data', () => {
+    // Simulate April 2026
+    const now = new Date(2026, 3, 5); // April 5, 2026
+    const labels = ['2026-02', '2026-03', '2026-04'];
+    const data = [100, 150, 200];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).toBe(200);
+    expect(result.prior).toBe(150);
+    expect(result.delta).toBe(50);
+    expect(result.deltaPercent).toBe(33.3);
+  });
+
+  it('returns 0 for current when current month is not in labels', () => {
+    const now = new Date(2026, 3, 5); // April 2026
+    const labels = ['2026-02', '2026-03']; // no April
+    const data = [100, 150];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).toBe(0);
+    expect(result.prior).toBe(150);
+    expect(result.delta).toBe(-150);
+  });
+
+  it('returns 0 for prior when prior month is not in labels', () => {
+    const now = new Date(2026, 3, 5);
+    const labels = ['2026-04'];
+    const data = [200];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).toBe(200);
+    expect(result.prior).toBe(0);
+    expect(result.deltaPercent).toBe(0); // division by zero → 0
+  });
+
+  it('handles January correctly (prior month is December of previous year)', () => {
+    const now = new Date(2026, 0, 15); // January 2026
+    const labels = ['2025-12', '2026-01'];
+    const data = [300, 350];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).toBe(350);
+    expect(result.prior).toBe(300);
+    expect(result.delta).toBe(50);
+  });
+
+  it('returns all zeros when labels array is empty', () => {
+    const now = new Date(2026, 3, 5);
+    const result = extractKpiFromTimeSeries([], [], now);
+    expect(result.current).toBe(0);
+    expect(result.prior).toBe(0);
+    expect(result.delta).toBe(0);
+    expect(result.deltaPercent).toBe(0);
+  });
+
+  it('computes negative delta when current < prior', () => {
+    const now = new Date(2026, 3, 5);
+    const labels = ['2026-03', '2026-04'];
+    const data = [500, 300];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).toBe(300);
+    expect(result.prior).toBe(500);
+    expect(result.delta).toBe(-200);
+    expect(result.deltaPercent).toBe(-40);
+  });
+
+  it('would catch chart_sql-only metrics returning 0 (the Trials Forecast bug)', () => {
+    // This is the exact scenario that caused the bug: a chart_sql metric
+    // with real data should NOT produce a 0 KPI value
+    const now = new Date(2026, 3, 5);
+    const labels = ['2026-01', '2026-02', '2026-03', '2026-04'];
+    const data = [680, 720, 750, 790];
+    const result = extractKpiFromTimeSeries(labels, data, now);
+    expect(result.current).not.toBe(0);
+    expect(result.current).toBe(790);
   });
 });
