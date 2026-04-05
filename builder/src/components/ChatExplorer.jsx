@@ -402,13 +402,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
                 }
               } else if (depMetric.chart_sql) {
                 try {
-                  const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, 1, null);
-                  const curMonth = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
-                  const prevDate = new Date(); prevDate.setMonth(prevDate.getMonth() - 1);
-                  const prevMonth = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(prevDate).slice(0, 7);
+                  const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, null, null);
+                  const now = new Date();
+                  const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                  const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
                   const curIdx = agg.labels.indexOf(curMonth);
                   const prevIdx = agg.labels.indexOf(prevMonth);
-                  const current = curIdx >= 0 ? agg.data[curIdx] : (agg.data[agg.data.length - 1] || 0);
+                  const current = curIdx >= 0 ? agg.data[curIdx] : 0;
                   const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
                   depKpis[depId] = { current, prior, delta: current - prior, deltaPercent: prior !== 0 ? Math.round(((current - prior) / prior) * 1000) / 10 : 0 };
                   depDetails.push({ metricName: depMetric.name, metricId: depId, sql: depMetric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
@@ -450,13 +450,13 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           } else if (metric.chart_sql) {
             // chart_sql-only metric — execute the SQL and extract current/prior month values
             try {
-              const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, 1, null);
-              const curMonth = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
-              const prevDate = new Date(); prevDate.setMonth(prevDate.getMonth() - 1);
-              const prevMonth = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(prevDate).slice(0, 7);
+              const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+              const now = new Date();
+              const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+              const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
               const curIdx = agg.labels.indexOf(curMonth);
               const prevIdx = agg.labels.indexOf(prevMonth);
-              const current = curIdx >= 0 ? agg.data[curIdx] : (agg.data[agg.data.length - 1] || 0);
+              const current = curIdx >= 0 ? agg.data[curIdx] : 0;
               const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
               const delta = Math.round((current - prior) * 100) / 100;
               const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
