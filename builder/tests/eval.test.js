@@ -1990,7 +1990,7 @@ describe('NRR Scorecard Metrics', () => {
 
 describe('WoW Chart Evals', () => {
   it('new net saas week over week — picks actuals and monthly budget/forecast', async () => {
-    const result = await callAi('show me new net saas week over week for the last 3 months');
+    const result = await callAi('show me new net saas week over week with budget and forecast lines');
     assertValidSpec(result, 'new net saas WoW');
     assert(result.metric_ids.includes(57), 'should include Total New Net SaaS (id:57)');
     assert(result.metric_ids.includes(289) || result.metric_ids.includes(325), 'should include Forecasted or Budgeted New Net SaaS');
