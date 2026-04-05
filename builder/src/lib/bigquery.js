@@ -501,3 +501,49 @@ export async function fetchKpiData(viewName, dateCol, yField, channelFilter) {
 
   return { current, prior, delta, deltaPercent, sql };
 }
+
+// Allowlist of views that support drill-through (raw row queries).
+// Per-view config: which column to use for date ordering.
+const DRILL_VIEWS = {
+  v_new_net_saas: { dateCol: 'TxnDate' },
+  v_dep_revenue: { dateCol: 'TxnDate' },
+  v_total_dep_revenue: { dateCol: 'TxnDate' },
+  v_cancellations: { dateCol: 'CancellationDate' },
+  v_total_net_saas: { dateCol: 'TxnDate' },
+};
+
+/**
+ * Fetch raw rows from a view for drill-through detail tables.
+ * Only permitted views (DRILL_VIEWS allowlist) can be queried.
+ *
+ * @param {string} viewName - Must be in DRILL_VIEWS allowlist
+ * @param {number|null} lastNMonths - Filter to last N months, or null for all
+ * @param {number} [limit=1000] - Max rows to return (capped at 1000)
+ * @returns {{ rows, columns, sql }}
+ */
+export async function fetchDrillData(viewName, lastNMonths, limit = 1000) {
+  validateIdentifier(viewName, 'viewName');
+  if (!DRILL_VIEWS[viewName]) throw new Error(`"${viewName}" is not a permitted drill view`);
+
+  const safeLimit = Math.min(validateInt(Math.min(limit, 1000), 'limit'), 1000);
+  const { dateCol } = DRILL_VIEWS[viewName];
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\``;
+
+  const wheres = [];
+  if (lastNMonths != null) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
+      wheres.push(`${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    } else {
+      wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
+    }
+    wheres.push(`${dateCol} < CURRENT_DATE()`);
+  }
+
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+  const sql = `SELECT * FROM ${table} ${whereClause} ORDER BY ${dateCol} DESC LIMIT ${safeLimit}`;
+
+  const result = await queryBq(sql);
+  const columns = result.schema.map(f => ({ key: f.name, label: f.name, type: f.type }));
+  return { rows: result.rows, columns, sql };
+}
