@@ -44,13 +44,15 @@ export async function fetchChartDatasets({
       const depAggregated = {};
       for (const depId of metric.depends_on) {
         const dep = metrics.find(m => m.id === depId);
-        if (!dep?.view_name) continue;
-        const dateCol = getDateCol(dep.view_name, xField);
+        if (!dep) continue;
         try {
-          const agg = await fetchAggregatedData(dep.view_name, dateCol, 'COUNT', timeBucket, channelFilter, lastNMonths, endDateRule);
-          const counts = {};
-          agg.labels.forEach((l, idx) => { counts[l] = agg.data[idx]; });
-          depAggregated[depId] = counts;
+          if (dep.chart_sql || dep.view_name) {
+            const dateCol = getDateCol(dep.view_name, xField);
+            const agg = await fetchChartData(dep, dateCol, 'COUNT', timeBucket, channelFilter, lastNMonths, endDateRule);
+            const counts = {};
+            agg.labels.forEach((l, idx) => { counts[l] = agg.data[idx]; });
+            depAggregated[depId] = counts;
+          }
         } catch { depAggregated[depId] = {}; }
       }
 
@@ -116,10 +118,25 @@ export async function fetchChartDatasets({
   const allLabelsSet = new Set();
   for (const ds of rawDatasets) ds.labels.forEach(l => allLabelsSet.add(l));
   const allLabels = [...allLabelsSet].sort();
+
+  // Detect if the x-axis is weekly (YYYY-MM-DD). If so, monthly series (YYYY-MM keys from
+  // chart_sql metrics) are normalized: each weekly tick looks up its month prefix in the map.
+  // This lets budget/forecast lines (monthly-only data) appear as flat reference lines on WoW charts.
+  const axisIsWeekly = allLabels.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(allLabels[0]);
+
   const alignedDatasets = rawDatasets.map(ds => {
     const map = {};
     ds.labels.forEach((l, idx) => { map[l] = ds.data[idx]; });
-    return { label: ds.label, data: allLabels.map(l => map[l] || 0) };
+    const isMonthly = ds.labels.length > 0 && /^\d{4}-\d{2}$/.test(ds.labels[0]);
+    const normalize = axisIsWeekly && isMonthly;
+    return {
+      label: ds.label,
+      data: allLabels.map(l => {
+        if (map[l] !== undefined) return map[l];
+        if (normalize) return map[l.slice(0, 7)] ?? 0;
+        return 0;
+      }),
+    };
   });
 
   // Apply lastNMonths for derived metrics only
