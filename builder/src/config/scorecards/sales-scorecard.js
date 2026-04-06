@@ -14,7 +14,7 @@ WITH weekly_conversions AS (
   SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, WEEK(MONDAY)) AS week,
     COUNT(*) AS conversions
   FROM \`project-for-method-dw.revenue.v_conversions\`
-  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 MONTH)
   GROUP BY 1
 ),
 monthly_trials AS (
@@ -77,7 +77,7 @@ export default {
             { id: 319, label: 'Forecasted Conversion Rate', color: '#e84393', renderAs: 'referenceLine' },
             { id: '__weekly_conv_rate', label: 'Conversion Rate', color: '#2563eb', customSql: WEEKLY_CONVERSION_RATE_SQL },
           ],
-          lastNMonths: 3,
+          lastNMonths: 2,
           showLabels: true,
         },
         {
@@ -88,7 +88,7 @@ export default {
             { id: 319, label: 'Forecasted Conversion Rate', color: '#2563eb' },
             { id: 357, label: 'Conversion Rate', color: '#9dc3e6' },
           ],
-          lastNMonths: 6,
+          lastNMonths: 7,
           showLabels: true,
         },
       ],
