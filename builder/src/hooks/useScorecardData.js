@@ -58,9 +58,10 @@ async function parallelLimit(tasks, limit, onProgress) {
       const task = tasks[index++];
       try {
         const result = await task.fn();
+        console.log(`[Scorecard] Fetched ${task.key}:`, result ? (result.labels?.length ?? 'non-standard') + ' periods' : 'null');
         results.set(task.key, result);
       } catch (e) {
-        console.error(`Scorecard fetch failed for ${task.key}:`, e);
+        console.error(`[Scorecard] FAILED ${task.key}:`, e.message);
         results.set(task.key, { error: e.message });
       }
       completed++;
@@ -134,7 +135,9 @@ export default function useScorecardData(config, metrics, bqConnected) {
       tasks.push({
         key,
         fn: async () => {
+          console.log(`[Scorecard] Running custom SQL for ${key}...`);
           const result = await queryBq(sql);
+          console.log(`[Scorecard] Custom SQL ${key}: ${result.rows?.length ?? 0} rows`, result.rows?.slice(0, 3));
           if (result.rows?.length > 0) {
             return {
               labels: result.rows.map(r => r.period),
