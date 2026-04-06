@@ -3,9 +3,6 @@ import EChart from '../EChart';
 import { resolveKpiValue } from './utils';
 
 /**
- * Filter a time-series to only include the last N months from today.
- */
-/**
  * Filter a time-series to a window: last N months up to current month.
  * Removes both old data and future forecast months.
  */
@@ -14,9 +11,7 @@ function filterToWindow(timeSeries, lastNMonths) {
   const now = new Date();
   const cutoffStart = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
   const startStr = `${cutoffStart.getFullYear()}-${String(cutoffStart.getMonth() + 1).padStart(2, '0')}`;
-  // Include current month, exclude future
   const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  // For weekly labels (YYYY-MM-DD), pad end to end of current month
   const endStrDay = `${endStr}-31`;
 
   const filtered = { labels: [], data: [] };
@@ -31,9 +26,6 @@ function filterToWindow(timeSeries, lastNMonths) {
   return filtered.labels.length > 0 ? filtered : null;
 }
 
-/**
- * Align multiple time-series to a common set of labels.
- */
 function alignSeries(metricsData) {
   const allLabels = new Set();
   for (const { data } of metricsData) {
@@ -69,9 +61,33 @@ function formatLabel(l) {
   return l;
 }
 
+/**
+ * Format a chart value for labels/tooltips/axis based on valueFormat.
+ */
+function fmtValue(v, valueFormat, opts = {}) {
+  if (v == null) return '';
+  const { short, axis } = opts;
+  switch (valueFormat) {
+    case 'decimal_rate':
+      // raw decimal → percentage display
+      return axis ? v : `${(v * 100).toFixed(short ? 0 : 2)}%`;
+    case 'currency':
+      if (axis) {
+        if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(0)}K`;
+        return `$${v.toFixed(0)}`;
+      }
+      return short
+        ? `$${Number(v.toFixed(0)).toLocaleString()}`
+        : `$${Number(v.toFixed(2)).toLocaleString()}`;
+    default:
+      return short ? v.toLocaleString() : String(v);
+  }
+}
+
 export default function Chart({ config, dataMap }) {
   const option = useMemo(() => {
-    // Collect and filter data for each metric
+    const vf = config.valueFormat || 'number';
+
     const metricsData = config.metrics
       .filter(m => m.renderAs !== 'referenceLine')
       .map(m => ({
@@ -114,11 +130,7 @@ export default function Chart({ config, dataMap }) {
             position: 'top',
             fontSize: 10,
             fontFamily: "'JetBrains Mono', monospace",
-            formatter: (params) => {
-              if (params.value == null) return '';
-              // Display as percentage: 0.176 → "18%"
-              return `${(params.value * 100).toFixed(0)}%`;
-            },
+            formatter: (params) => fmtValue(params.value, vf, { short: true }),
           } : undefined,
         });
       }
@@ -131,7 +143,7 @@ export default function Chart({ config, dataMap }) {
           let html = `<div style="font-weight:600;margin-bottom:4px">${params[0]?.axisValueLabel || ''}</div>`;
           for (const p of params) {
             if (p.value != null) {
-              html += `<div>${p.marker} ${p.seriesName}: ${(p.value * 100).toFixed(2)}%</div>`;
+              html += `<div>${p.marker} ${p.seriesName}: ${fmtValue(p.value, vf)}</div>`;
             }
           }
           return html;
@@ -142,7 +154,7 @@ export default function Chart({ config, dataMap }) {
         top: 0,
         textStyle: { fontSize: 11 },
       },
-      grid: { left: 50, right: 20, top: 40, bottom: 30 },
+      grid: { left: 60, right: 20, top: 40, bottom: 30 },
       xAxis: {
         type: 'category',
         data: displayLabels,
@@ -152,8 +164,7 @@ export default function Chart({ config, dataMap }) {
         type: 'value',
         axisLabel: {
           fontSize: 10,
-          // Show raw decimal values like Looker: 0, 0.05, 0.10, 0.15...
-          formatter: (v) => v,
+          formatter: (v) => fmtValue(v, vf, { axis: true }),
         },
       },
       series,

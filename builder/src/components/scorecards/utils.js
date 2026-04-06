@@ -26,6 +26,11 @@ export function formatValue(value, format) {
       const v = Number(value);
       const sign = v > 0 ? '+' : '';
       return `${sign}${v.toFixed(2)}%`;
+    case 'currency_delta': {
+      const cv = Number(value);
+      const csign = cv > 0 ? '+' : '';
+      return `${csign}$${Number(cv.toFixed(2)).toLocaleString()}`;
+    }
     default:
       return String(value);
   }
