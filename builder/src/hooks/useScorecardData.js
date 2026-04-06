@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchChartData, fetchAggregatedData, queryBq } from '../lib/bigquery';
+import { buildBatchSql, splitBatchResults, wrapChartSql } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
 import { evaluateFormula } from '../lib/sanitize';
 
@@ -52,55 +53,39 @@ function addDerivedDeps(ids, metricsMap) {
 }
 
 /**
- * Run async tasks with a concurrency limit and per-task retry.
+ * Split an array into chunks of size n.
  */
-async function parallelLimit(tasks, limit, onProgress) {
-  const results = new Map();
-  let completed = 0;
-  let index = 0;
-
-  async function runNext() {
-    while (index < tasks.length) {
-      const task = tasks[index++];
-      let result = null;
-      let lastErr = null;
-      for (let attempt = 0; attempt <= 1; attempt++) {
-        try {
-          result = await task.fn();
-          if (result && (result.labels?.length > 0 || result.multiSeries)) break;
-          if (attempt < 1) {
-            await new Promise(r => setTimeout(r, 500));
-            continue;
-          }
-        } catch (e) {
-          lastErr = e;
-          if (e.message?.includes('session expired')) break;
-          if (attempt < 1) {
-            await new Promise(r => setTimeout(r, 500));
-            continue;
-          }
-        }
-      }
-      if (result) {
-        console.log(`[Scorecard] Fetched ${task.key}:`, result.labels?.length ?? 'non-standard', 'periods');
-        results.set(task.key, result);
-      } else {
-        console.error(`[Scorecard] FAILED ${task.key}:`, lastErr?.message || 'empty result');
-        results.set(task.key, lastErr ? { error: lastErr.message } : null);
-      }
-      completed++;
-      onProgress?.(completed, tasks.length);
-    }
+function chunk(arr, n) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += n) {
+    chunks.push(arr.slice(i, i + n));
   }
+  return chunks;
+}
 
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => runNext());
-  await Promise.all(workers);
-  return results;
+/**
+ * Run a batch of chart_sql queries as a single UNION ALL request.
+ * Returns Map<key, { labels, data }>.
+ */
+async function runBatch(queries) {
+  const batchSql = buildBatchSql(queries);
+  const keyMap = new Map(queries.map(q => [String(q.key), q.key]));
+  const result = await queryBq(batchSql);
+  const split = splitBatchResults(result.rows, keyMap);
+  const map = new Map();
+  for (const [key, rows] of split) {
+    map.set(key, {
+      labels: rows.map(r => r.period),
+      data: rows.map(r => Number(r.value) || 0),
+    });
+  }
+  return map;
 }
 
 /**
  * Hook to load all data for a scorecard config.
- * Fetches primitives in parallel (3 at a time) with retry, then computes derived metrics.
+ * Batches chart_sql metrics into UNION ALL queries (6 per batch),
+ * runs view-based metrics individually, then computes derived metrics.
  */
 export default function useScorecardData(config, metrics, bqConnected) {
   const [dataMap, setDataMap] = useState(new Map());
@@ -133,99 +118,149 @@ export default function useScorecardData(config, metrics, bqConnected) {
       }
     }
 
-    // Build task list for parallel execution
-    const tasks = [];
+    // Split primitives: chart_sql → batchable, view_name → individual
+    const batchable = [];
+    const individual = [];
 
     for (const metric of primitives) {
-      tasks.push({
-        key: metric.id,
-        fn: async () => {
-          if (metric.chart_sql) {
-            return await fetchChartData(metric, null, 'COUNT', 'month', null, 13);
-          } else if (metric.view_name) {
-            const dateCol = config.views?.[metric.view_name]?.dateCol
-              || getDateCol(metric.view_name, 'SignupDate');
-            return await fetchAggregatedData(
-              metric.view_name, dateCol, 'COUNT', 'month', null, 13
-            );
-          }
-          return null;
-        },
-      });
+      if (metric.chart_sql) {
+        batchable.push({ key: metric.id, sql: wrapChartSql(metric.chart_sql, 13) });
+      } else if (metric.view_name) {
+        individual.push(metric);
+      }
     }
 
-    // Weekly fetch tasks for metrics in weekly charts
+    // Add custom SQL to batchable
+    for (const { key, sql } of customSqls) {
+      batchable.push({ key, sql });
+    }
+
+    // Chunk batchable into groups of 6
+    const batches = chunk(batchable, 6);
+
+    // Weekly tasks
+    const weeklyTasks = [];
     for (const [metricId] of weeklyMetrics) {
       const metric = metricsMap.get(metricId);
       if (!metric || !metric.view_name) continue;
-      tasks.push({
-        key: `${metricId}:week`,
-        fn: async () => {
-          const dateCol = config.views?.[metric.view_name]?.dateCol
-            || getDateCol(metric.view_name, 'SignupDate');
-          return await fetchAggregatedData(
-            metric.view_name, dateCol, 'COUNT', 'week', null, 3
-          );
-        },
-      });
+      weeklyTasks.push(metric);
     }
 
-    // Custom SQL tasks
-    for (const { key, sql } of customSqls) {
-      tasks.push({
-        key,
-        fn: async () => {
-          console.log(`[Scorecard] Running custom SQL for ${key}...`);
-          const result = await queryBq(sql);
-          console.log(`[Scorecard] Custom SQL ${key}: ${result.rows?.length ?? 0} rows`);
-          if (result.rows?.length > 0) {
-            return {
-              labels: result.rows.map(r => r.period),
-              data: result.rows.map(r => Number(r.value) || 0),
-            };
-          }
-          return null;
-        },
-      });
-    }
-
-    setProgress({ loaded: 0, total: tasks.length });
+    const totalSteps = batches.length + individual.length + weeklyTasks.length;
+    setProgress({ loaded: 0, total: totalSteps });
     setLoading(true);
 
     (async () => {
-      // Fetch all tasks in parallel with concurrency 3 and per-task retry
-      const rawResults = await parallelLimit(tasks, 3, (loaded, total) => {
-        if (!abortRef.current) setProgress({ loaded, total });
-      });
+      const map = new Map();
+      const errs = new Map();
+      let loaded = 0;
+
+      // 1. Run batched UNION ALL queries (6 per batch, all batches in parallel)
+      if (batches.length > 0) {
+        const batchPromises = batches.map(async (batch) => {
+          try {
+            const results = await runBatch(batch);
+            return { results, error: null };
+          } catch (e) {
+            console.error(`[Scorecard] Batch failed (${batch.length} queries):`, e.message);
+            // Fallback: run individually
+            const results = new Map();
+            for (const q of batch) {
+              try {
+                const result = await queryBq(q.sql);
+                if (result.rows?.length > 0) {
+                  results.set(q.key, {
+                    labels: result.rows.map(r => r.period),
+                    data: result.rows.map(r => Number(r.value) || 0),
+                  });
+                } else {
+                  results.set(q.key, null);
+                }
+              } catch (e2) {
+                results.set(q.key, null);
+                errs.set(q.key, e2.message);
+              }
+            }
+            return { results, error: e.message };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        for (const { results } of batchResults) {
+          for (const [key, value] of results) {
+            map.set(key, value);
+          }
+          loaded++;
+          if (!abortRef.current) setProgress({ loaded, total: totalSteps });
+        }
+
+        // Fill in any missing keys
+        for (const q of batchable) {
+          if (!map.has(q.key)) map.set(q.key, null);
+        }
+
+        console.log(`[Scorecard] ${batchable.length} chart_sql metrics in ${batches.length} batch(es)`);
+      }
 
       if (abortRef.current) return;
 
-      // Normalize results into dataMap
-      const map = new Map();
-      const errs = new Map();
-
-      for (const [key, result] of rawResults) {
-        if (!result || result.error) {
-          map.set(key, null);
-          if (result?.error) errs.set(key, result.error);
-          continue;
+      // 2. Run individual view-based queries in parallel (concurrency 5)
+      const indPromises = individual.map(async (metric) => {
+        try {
+          const dateCol = config.views?.[metric.view_name]?.dateCol
+            || getDateCol(metric.view_name, 'SignupDate');
+          const result = await fetchAggregatedData(
+            metric.view_name, dateCol, 'COUNT', 'month', null, 13
+          );
+          return { key: metric.id, result };
+        } catch (e) {
+          return { key: metric.id, result: null, error: e.message };
         }
-        if (result.multiSeries) {
-          const keys = Object.keys(result.series);
-          if (keys.length > 0) {
-            const first = result.series[keys[0]];
-            map.set(key, { labels: first.labels, data: first.data });
-          } else {
-            map.set(key, null);
-          }
-        } else if (result.labels?.length > 0) {
+      });
+
+      const indResults = await Promise.all(indPromises);
+      for (const { key, result, error } of indResults) {
+        if (result && result.labels?.length > 0) {
           map.set(key, { labels: result.labels, data: result.data });
         } else {
           map.set(key, null);
         }
+        if (error) errs.set(key, error);
+        loaded++;
+        if (!abortRef.current) setProgress({ loaded, total: totalSteps });
       }
 
-      // Compute derived metrics
+      if (abortRef.current) return;
+
+      // 3. Run weekly tasks in parallel
+      const weeklyPromises = weeklyTasks.map(async (metric) => {
+        try {
+          const dateCol = config.views?.[metric.view_name]?.dateCol
+            || getDateCol(metric.view_name, 'SignupDate');
+          const result = await fetchAggregatedData(
+            metric.view_name, dateCol, 'COUNT', 'week', null, 3
+          );
+          return { key: `${metric.id}:week`, result };
+        } catch (e) {
+          return { key: `${metric.id}:week`, result: null, error: e.message };
+        }
+      });
+
+      const weeklyResults = await Promise.all(weeklyPromises);
+      for (const { key, result, error } of weeklyResults) {
+        if (result && result.labels?.length > 0) {
+          map.set(key, { labels: result.labels, data: result.data });
+        } else {
+          map.set(key, null);
+        }
+        if (error) errs.set(key, error);
+        loaded++;
+        if (!abortRef.current) setProgress({ loaded, total: totalSteps });
+      }
+
+      if (abortRef.current) return;
+
+      // 4. Compute derived metrics (instant, no BQ calls)
       for (const metric of derived) {
         if (abortRef.current) return;
         try {
