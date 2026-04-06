@@ -11,6 +11,7 @@ import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
 import AdminInsights from './pages/AdminInsights';
 import ApprovedDashboards from './pages/ApprovedDashboards';
+import Scorecard from './pages/Scorecard';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
@@ -47,6 +48,10 @@ export default function App() {
             <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
             <Route path="/charts" element={<Charts />} />
             <Route path="/approved" element={<ApprovedDashboards />} />
+            <Route path="/scorecards/:id" element={
+              metricsLoading ? <Loading /> :
+              <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
+            } />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />
             <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />

@@ -170,6 +170,16 @@ export default function Sidebar({ collapsed, onToggle }) {
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
+          {/* Scorecards */}
+          <div style={sectionLabel}>Scorecards</div>
+          <NavLink to="/scorecards/sales-scorecard" style={linkStyle}>
+            <span style={{ fontSize: 12, color: '#059669' }}>{'\u25C9'}</span>
+            Sales Scorecard
+          </NavLink>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+
           {/* Admin — only visible to admin users */}
           {isAdmin(currentUser) && (
             <>
