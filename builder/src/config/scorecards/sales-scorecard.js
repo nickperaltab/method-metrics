@@ -169,11 +169,10 @@ export default {
           valueSelector: 'current_or_latest', showDelta: true },
         { metricId: 326, label: 'New Net SaaS Revenue Trajectory', format: 'currency',
           valueSelector: 'current_or_latest' },
-        { metricId: 338, label: 'Net SaaS Trajectory', format: 'currency',
+        // 327/328 are New Net SaaS level (326 vs 289), not total Net SaaS (338/339/340)
+        { metricId: 327, label: 'Forecast vs. Trajectory', format: 'currency',
           valueSelector: 'current_or_latest' },
-        { metricId: 339, label: 'Forecast vs. Trajectory', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 340, label: 'Forecasted Attainment', format: 'percent',
+        { metricId: 328, label: 'Forecasted Attainment', format: 'percent',
           valueSelector: 'current_or_latest' },
       ],
       charts: [
