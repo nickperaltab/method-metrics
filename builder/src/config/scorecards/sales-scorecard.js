@@ -178,7 +178,7 @@ export default {
       charts: [
         {
           label: 'New Net SaaS Week Over Week',
-          chartType: 'line', valueFormat: 'currency',
+          chartType: 'bar', valueFormat: 'currency',
           metrics: [
             { id: 325, label: 'Budgeted New Net SaaS', color: '#a3c771', renderAs: 'referenceLine' },
             { id: 289, label: 'Forecasted New Net SaaS', color: '#e84393', renderAs: 'referenceLine' },
@@ -218,7 +218,7 @@ export default {
       charts: [
         {
           label: 'New DEP Revenue Week Over Week',
-          chartType: 'line', valueFormat: 'currency',
+          chartType: 'bar', valueFormat: 'currency',
           metrics: [
             { id: 282, label: 'Budgeted New DEP Revenue', color: '#a3c771', renderAs: 'referenceLine' },
             { id: 290, label: 'Forecasted New DEP Revenue', color: '#e84393', renderAs: 'referenceLine' },
@@ -298,7 +298,7 @@ export default {
       charts: [
         {
           label: 'Total Net SaaS Week Over Week',
-          chartType: 'line', valueFormat: 'currency',
+          chartType: 'bar', valueFormat: 'currency',
           metrics: [
             { id: 283, label: 'Budgeted Total Net SaaS', color: '#a3c771', renderAs: 'referenceLine' },
             { id: 291, label: 'Forecasted Total Net SaaS', color: '#e84393', renderAs: 'referenceLine' },
@@ -338,7 +338,7 @@ export default {
       charts: [
         {
           label: 'Total DEP Revenue Week Over Week',
-          chartType: 'line', valueFormat: 'currency',
+          chartType: 'bar', valueFormat: 'currency',
           metrics: [
             { id: 284, label: 'Budgeted Total DEP Revenue', color: '#a3c771', renderAs: 'referenceLine' },
             { id: 292, label: 'Forecasted Total DEP Revenue', color: '#e84393', renderAs: 'referenceLine' },
