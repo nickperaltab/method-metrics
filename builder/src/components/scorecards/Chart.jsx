@@ -71,6 +71,9 @@ function fmtValue(v, valueFormat, opts = {}) {
     case 'decimal_rate':
       // raw decimal → percentage display
       return axis ? v : `${(v * 100).toFixed(short ? 0 : 2)}%`;
+    case 'percent':
+      // Value is already a percentage number (e.g. 95.5 meaning 95.5%)
+      return axis ? `${v.toFixed(0)}%` : `${v.toFixed(short ? 0 : 2)}%`;
     case 'currency':
       if (axis) {
         if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(0)}K`;
