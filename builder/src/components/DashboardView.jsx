@@ -532,7 +532,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     for (const item of gridLayout) {
       buildChartOption(item.i);
     }
-  }, [bqConnected, metrics, gridLayout, chartMap]);
+  }, [bqConnected, metrics, gridLayout, chartMap, cacheWarmed]);
 
   const handleLayoutChange = useCallback((newLayout) => {
     setGridLayout(newLayout.map(item => ({
