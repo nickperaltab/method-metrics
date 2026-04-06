@@ -1,6 +1,7 @@
 import React from 'react';
 import KpiColumn from './KpiColumn';
 import Chart from './Chart';
+import DataTable from './DataTable';
 
 export default function ScorecardSection({ section, dataMap }) {
   return (
@@ -23,11 +24,16 @@ export default function ScorecardSection({ section, dataMap }) {
           <KpiColumn kpis={section.kpis} dataMap={dataMap} />
         )}
 
-        {/* Right: Charts — stretch to fill row height */}
+        {/* Right: Charts */}
         {(section.charts || []).map((chart, i) => (
           <Chart key={i} config={chart} dataMap={dataMap} />
         ))}
       </div>
+
+      {/* Tables — full width below the KPI/chart grid */}
+      {(section.tables || []).map((table, i) => (
+        <DataTable key={i} config={table} dataMap={dataMap} />
+      ))}
     </div>
   );
 }

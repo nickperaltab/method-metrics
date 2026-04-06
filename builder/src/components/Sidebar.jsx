@@ -176,6 +176,10 @@ export default function Sidebar({ collapsed, onToggle }) {
             <span style={{ fontSize: 12, color: '#059669' }}>{'\u25C9'}</span>
             Sales Scorecard
           </NavLink>
+          <NavLink to="/scorecards/marketing-scorecard" style={linkStyle}>
+            <span style={{ fontSize: 12, color: '#059669' }}>{'\u25C9'}</span>
+            Marketing Scorecard
+          </NavLink>
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />

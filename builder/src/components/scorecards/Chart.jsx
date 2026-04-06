@@ -110,11 +110,19 @@ export default function Chart({ config, dataMap }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
 
+    // For weekly charts, look up data keyed as "id:week" for view-based metrics
+    const getMetricData = (id) => {
+      if (config.timeBucket === 'week' && typeof id === 'number') {
+        return dataMap.get(`${id}:week`) || dataMap.get(id);
+      }
+      return dataMap.get(id);
+    };
+
     const metricsData = config.metrics
       .filter(m => m.renderAs !== 'referenceLine')
       .map(m => ({
         id: m.id,
-        data: filterToWindow(dataMap.get(m.id), config.lastNMonths),
+        data: filterToWindow(getMetricData(m.id), config.lastNMonths),
       }));
 
     const hasAny = metricsData.some(d => d.data != null);
@@ -149,6 +157,7 @@ export default function Chart({ config, dataMap }) {
           type: seriesType,
           data: values,
           itemStyle: m.color ? { color: m.color } : undefined,
+          ...(config.stacked ? { stack: 'total' } : {}),
           ...(isLine ? { lineStyle: { width: 2 }, symbol: 'circle', symbolSize: 4 } : {}),
           label: config.showLabels && !isLine ? {
             show: true,

@@ -9,6 +9,7 @@ import { evaluateFormula } from '../lib/sanitize';
 function collectMetricIds(config) {
   const ids = new Set();
   const customSqls = [];
+  const weeklyMetrics = new Map(); // metricId → { viewName, dateCol } for weekly fetching
 
   for (const section of config.sections) {
     for (const kpi of section.kpis || []) {
@@ -19,9 +20,15 @@ function collectMetricIds(config) {
         if (typeof m.id === 'number') ids.add(m.id);
         if (m.customSql) customSqls.push({ key: m.id, sql: m.customSql });
       }
+      // Collect metrics that need weekly bucketing
+      if (chart.timeBucket === 'week') {
+        for (const m of chart.metrics || []) {
+          if (typeof m.id === 'number') weeklyMetrics.set(m.id, true);
+        }
+      }
     }
   }
-  return { ids: [...ids], customSqls };
+  return { ids: [...ids], customSqls, weeklyMetrics };
 }
 
 /**
@@ -94,7 +101,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
     abortRef.current = false;
 
     const metricsMap = new Map(metrics.map(m => [m.id, m]));
-    const { ids: directIds, customSqls } = collectMetricIds(config);
+    const { ids: directIds, customSqls, weeklyMetrics } = collectMetricIds(config);
     const allIds = addDerivedDeps(directIds, metricsMap);
 
     // Split into primitives (fetchable) and derived (computed)
@@ -127,6 +134,22 @@ export default function useScorecardData(config, metrics, bqConnected) {
             );
           }
           return null;
+        },
+      });
+    }
+
+    // Add weekly fetch tasks for metrics that appear in weekly charts
+    for (const [metricId] of weeklyMetrics) {
+      const metric = metricsMap.get(metricId);
+      if (!metric || !metric.view_name) continue; // chart_sql metrics can't be re-bucketed
+      tasks.push({
+        key: `${metricId}:week`,
+        fn: async () => {
+          const dateCol = config.views?.[metric.view_name]?.dateCol
+            || getDateCol(metric.view_name, 'SignupDate');
+          return await fetchAggregatedData(
+            metric.view_name, dateCol, 'COUNT', 'week', null, 3
+          );
         },
       });
     }
