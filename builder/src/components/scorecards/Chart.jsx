@@ -74,12 +74,10 @@ export default function Chart({ config, dataMap }) {
     // Collect and filter data for each metric
     const metricsData = config.metrics
       .filter(m => m.renderAs !== 'referenceLine')
-      .map(m => {
-        const raw = dataMap.get(m.id);
-        const filtered = filterToWindow(raw, config.lastNMonths);
-        console.log(`[Chart] ${config.label} | metric ${m.id}: raw=${raw?.labels?.length ?? 'null'} periods, filtered=${filtered?.labels?.length ?? 'null'} periods, lastNMonths=${config.lastNMonths}`);
-        return { id: m.id, data: filtered };
-      });
+      .map(m => ({
+        id: m.id,
+        data: filterToWindow(dataMap.get(m.id), config.lastNMonths),
+      }));
 
     const hasAny = metricsData.some(d => d.data != null);
     if (!hasAny) return null;

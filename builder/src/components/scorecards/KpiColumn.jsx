@@ -23,6 +23,7 @@ export default function KpiColumn({ kpis, dataMap }) {
         }
 
         const noData = value == null;
+        if (noData) console.warn(`[KPI] ${kpi.label} (${kpi.metricId}): No data. series=`, series, `selector=${kpi.valueSelector}`);
 
         let deltaPercent = null;
         if (kpi.showDelta && series) {
