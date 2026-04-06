@@ -18,7 +18,7 @@ export default {
       title: 'Snapshot',
       layout: 'scorecard-row',
       kpis: [
-        { metricId: 361, label: 'Forecast Sync %', format: 'percent',
+        { metricId: 361, label: 'Forecast', format: 'percent',
           valueSelector: 'current_or_latest' },
         { metricId: 300, label: 'Current Sync %', format: 'percent',
           valueSelector: 'current_or_latest' },
@@ -26,8 +26,8 @@ export default {
       charts: [
         {
           label: 'Trials',
-          chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 1,
+          chartType: 'bar', valueFormat: 'number', stacked: true, stackRemainder: true,
+          lastNMonths: 1, showLabels: true,
           metrics: [
             { id: 294, label: 'Trajectory', color: '#2563eb' },
             { id: 285, label: 'Forecast', color: '#e84393' },
@@ -35,8 +35,8 @@ export default {
         },
         {
           label: 'Syncs',
-          chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 1,
+          chartType: 'bar', valueFormat: 'number', stacked: true, stackRemainder: true,
+          lastNMonths: 1, showLabels: true,
           metrics: [
             { id: 295, label: 'Trajectory', color: '#2563eb' },
             { id: 286, label: 'Forecast', color: '#e84393' },
@@ -58,7 +58,7 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 349, label: 'Trajectory vs. Forecast', format: 'number',
           valueSelector: 'current_or_latest' },
-        { metricId: 350, label: 'Forecasted Attainment', format: 'percent',
+        { metricId: 350, label: 'Forecasted Attainment', format: 'percent2',
           valueSelector: 'current_or_latest' },
       ],
       tables: [
@@ -109,7 +109,7 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 351, label: 'Trajectory vs. Forecast', format: 'number',
           valueSelector: 'current_or_latest' },
-        { metricId: 352, label: 'Forecasted Attainment', format: 'percent',
+        { metricId: 352, label: 'Forecasted Attainment', format: 'percent2',
           valueSelector: 'current_or_latest' },
       ],
       tables: [
@@ -156,9 +156,9 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 300, label: 'Current Sync %', format: 'percent',
           valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 363, label: 'Actual vs. Forecast', format: 'percent',
+        { metricId: 363, label: 'Actual vs. Forecast', format: 'percent2',
           valueSelector: 'current_or_latest' },
-        { metricId: 364, label: 'Forecasted Attainment', format: 'percent',
+        { metricId: 364, label: 'Forecasted Attainment', format: 'percent2',
           valueSelector: 'current_or_latest' },
       ],
       tables: [
@@ -170,6 +170,8 @@ export default {
             { metricId: 361, label: 'Forecasted Sync %', format: 'percent' },
             { metricId: 363, label: 'Actual vs. Forecast', format: 'percent' },
             { metricId: 362, label: 'Budgeted Sync Rate', format: 'percent' },
+            { label: 'Actual vs. Budget', format: 'percent',
+              derived: { a: 300, b: 362 } },
           ],
         },
       ],

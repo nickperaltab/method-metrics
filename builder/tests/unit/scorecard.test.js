@@ -152,7 +152,7 @@ describe('Sales scorecard config', () => {
         expect(kpi).toHaveProperty('label');
         expect(kpi).toHaveProperty('format');
         expect(kpi).toHaveProperty('valueSelector');
-        expect(['number', 'percent', 'decimal_rate', 'currency']).toContain(kpi.format);
+        expect(['number', 'percent', 'percent2', 'decimal_rate', 'currency']).toContain(kpi.format);
       }
     }
   });

@@ -17,6 +17,8 @@ export function formatValue(value, format) {
       return Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
     case 'percent':
       return `${Number(value).toFixed(1)}%`;
+    case 'percent2':
+      return `${Number(value).toFixed(2)}%`;
     case 'decimal_rate':
       // Value is a decimal like 0.176 → display as "17.6%"
       return `${(Number(value) * 100).toFixed(2)}%`;

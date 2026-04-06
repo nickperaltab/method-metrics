@@ -131,6 +131,22 @@ export default function Chart({ config, dataMap }) {
     const { labels, aligned } = alignSeries(metricsData, true);
     const displayLabels = labels.map(formatLabel);
 
+    // For stackRemainder: second series becomes (its value - first series value)
+    if (config.stackRemainder && config.metrics.length >= 2) {
+      const firstId = config.metrics.filter(m => m.renderAs !== 'referenceLine')[0]?.id;
+      const secondId = config.metrics.filter(m => m.renderAs !== 'referenceLine')[1]?.id;
+      if (firstId && secondId) {
+        const firstVals = aligned.get(firstId);
+        const secondVals = aligned.get(secondId);
+        if (firstVals && secondVals) {
+          aligned.set(secondId, secondVals.map((v, i) => {
+            if (v == null || firstVals[i] == null) return null;
+            return Math.max(0, v - firstVals[i]);
+          }));
+        }
+      }
+    }
+
     const series = [];
     for (const m of config.metrics) {
       if (m.renderAs === 'referenceLine') {

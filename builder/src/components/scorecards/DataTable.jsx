@@ -71,6 +71,17 @@ export default function DataTable({ config, dataMap }) {
       const label = `${months[parseInt(m, 10) - 1]} ${y}`;
 
       const cells = config.columns.map(col => {
+        if (col.derived) {
+          // Compute derived value from two metrics: { a: metricId, b: metricId, op: 'subtract' }
+          const aData = dataMap.get(col.derived.a);
+          const bData = dataMap.get(col.derived.b);
+          const aIdx = aData?.labels?.indexOf(period) ?? -1;
+          const bIdx = bData?.labels?.indexOf(period) ?? -1;
+          const aVal = aIdx >= 0 ? aData.data[aIdx] : null;
+          const bVal = bIdx >= 0 ? bData.data[bIdx] : null;
+          if (aVal == null || bVal == null) return null;
+          return Math.round((aVal - bVal) * 100) / 100;
+        }
         const series = dataMap.get(col.metricId);
         if (!series) return null;
         const idx = series.labels.indexOf(period);
