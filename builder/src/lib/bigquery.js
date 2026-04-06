@@ -241,7 +241,8 @@ export async function fetchChartData(metric, dateCol, yField, timeBucket, channe
       data: result.rows.map(r => Number(r.value) || 0),
       sql,
     };
-    aggCache[cacheKey] = output;
+    // Only cache non-empty results — empty may be from BQ rate limiting
+    if (output.labels.length > 0) aggCache[cacheKey] = output;
     return output;
   }
   // No chart_sql — fall back to standard aggregation query
