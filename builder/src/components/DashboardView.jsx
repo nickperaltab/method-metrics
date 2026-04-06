@@ -387,13 +387,30 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             if (!metric) continue;
             const yField = dataConfig.yFields?.[i] || dataConfig.yFields?.[0] || 'COUNT';
             const label = dataConfig.labels?.[i] || metric.name;
-            const isRate = !!(metric.formula && metric.depends_on && !metric.view_name);
+            const isDerived = !!(metric.formula && metric.depends_on && !metric.view_name);
+            const isRate = false;
+            const isPercent = isDerived && (metric.formula.includes('* 100') || metric.formula.includes('*100'));
 
-            if (isRate) {
+            if (isDerived) {
               const depKpis = {};
               for (const depId of metric.depends_on) {
                 const depMetric = metrics.find(dm => dm.id === depId);
-                if (depMetric && depMetric.view_name) {
+                if (!depMetric) continue;
+                if (depMetric.chart_sql) {
+                  try {
+                    const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, null, null);
+                    const now = new Date();
+                    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
+                    const curIdx = agg.labels.indexOf(curMonth);
+                    const prevIdx = agg.labels.indexOf(prevMonth);
+                    const current = curIdx >= 0 ? agg.data[curIdx] : (agg.data.length > 0 ? agg.data[agg.data.length - 1] : 0);
+                    const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
+                    depKpis[depId] = { current, prior };
+                  } catch {
+                    depKpis[depId] = { current: 0, prior: 0, error: true };
+                  }
+                } else if (depMetric.view_name) {
                   const depSchema = schemaCache[depMetric.view_name] || [];
                   const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
                   try {
@@ -411,11 +428,27 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 return evaluateFormula(metric.formula, depValues);
               };
               const hasError = metric.depends_on.some(depId => depKpis[depId]?.error);
-              const current = evalFormula('current');
-              const prior = evalFormula('prior');
-              const delta = current - prior;
+              const current = Math.round(evalFormula('current') * 100) / 100;
+              const prior = Math.round(evalFormula('prior') * 100) / 100;
+              const delta = Math.round((current - prior) * 100) / 100;
               const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-              kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: true, hasError });
+              kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, isPercent, displayFormat: metric.display_format, hasError });
+            } else if (metric.chart_sql) {
+              try {
+                const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+                const now = new Date();
+                const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
+                const curIdx = agg.labels.indexOf(curMonth);
+                const prevIdx = agg.labels.indexOf(prevMonth);
+                const current = curIdx >= 0 ? agg.data[curIdx] : (agg.data.length > 0 ? agg.data[agg.data.length - 1] : 0);
+                const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
+                const delta = Math.round((current - prior) * 100) / 100;
+                const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+                kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format });
+              } catch {
+                kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
+              }
             } else if (metric.view_name) {
               const viewSchema = schemaCache[metric.view_name] || [];
               const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name || xField;
