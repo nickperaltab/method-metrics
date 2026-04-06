@@ -21,7 +21,7 @@ export function formatValue(value, format) {
       // Value is a decimal like 0.176 → display as "17.6%"
       return `${(Number(value) * 100).toFixed(2)}%`;
     case 'currency':
-      return `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     case 'delta':
       const v = Number(value);
       const sign = v > 0 ? '+' : '';
