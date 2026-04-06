@@ -86,6 +86,24 @@ WHERE TxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
 GROUP BY 1 ORDER BY 1
 `;
 
+// ── Weekly Budget/Forecast from method_forecast daily table ──
+
+const FORECAST_WEEKLY = (column) => `
+SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
+  ROUND(SUM(${column}), 2) AS value
+FROM \`project-for-method-dw.revenue.method_forecast\`
+WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
+GROUP BY 1 ORDER BY 1
+`;
+
+const FORECAST_WEEKLY_CAST = (column) => `
+SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
+  ROUND(SUM(CAST(${column} AS FLOAT64)), 2) AS value
+FROM \`project-for-method-dw.revenue.method_forecast\`
+WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
+GROUP BY 1 ORDER BY 1
+`;
+
 // ── Dashboard Config ─────────────────────────────────────────
 
 export default {
@@ -161,8 +179,8 @@ export default {
           label: 'New Net SaaS Week Over Week',
           chartType: 'bar', valueFormat: 'currency',
           metrics: [
-            { id: 325, label: 'Budgeted New Net SaaS', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 289, label: 'Forecasted New Net SaaS', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__wk_budget_nns', label: 'Budgeted New Net SaaS', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY('Budgeted_New_Net_SaaS') },
+            { id: '__wk_forecast_nns', label: 'Forecasted New Net SaaS', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY('Forecasted_New_Net_SaaS') },
             { id: '__weekly_new_net_saas', label: 'Total New Net SaaS', color: '#2563eb', customSql: WEEKLY_NEW_NET_SAAS_SQL },
           ],
           lastNMonths: 2, showLabels: true,
@@ -201,8 +219,8 @@ export default {
           label: 'New DEP Revenue Week Over Week',
           chartType: 'bar', valueFormat: 'currency',
           metrics: [
-            { id: 282, label: 'Budgeted New DEP Revenue', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 290, label: 'Forecasted New DEP Revenue', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__wk_budget_dep', label: 'Budgeted New DEP Revenue', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY_CAST('Budgeted_New_DEP_Revenue') },
+            { id: '__wk_forecast_dep', label: 'Forecasted New DEP Revenue', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY_CAST('Forecasted_New_DEP_Revenue') },
             { id: '__weekly_new_dep', label: 'Total New DEP Net SaaS', color: '#2563eb', customSql: WEEKLY_NEW_DEP_SQL },
           ],
           lastNMonths: 2, showLabels: true,
@@ -241,8 +259,8 @@ export default {
           label: 'Churn Count Week Over Week',
           chartType: 'bar', valueFormat: 'number',
           metrics: [
-            { id: 280, label: 'Budgeted Churn', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 274, label: 'Forecasted Churn', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__wk_budget_churn', label: 'Budgeted Churn', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY('Budgeted_Churn') },
+            { id: '__wk_forecast_churn', label: 'Forecasted Churn', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY('Forecasted_Churn') },
             { id: '__weekly_churn_count', label: 'Churned Accounts', color: '#2563eb', customSql: WEEKLY_CHURN_COUNT_SQL },
           ],
           lastNMonths: 2, showLabels: true,
@@ -281,8 +299,8 @@ export default {
           label: 'Total Net SaaS Week Over Week',
           chartType: 'bar', valueFormat: 'currency',
           metrics: [
-            { id: 283, label: 'Budgeted Total Net SaaS', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 291, label: 'Forecasted Total Net SaaS', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__wk_budget_tns', label: 'Budgeted Total Net SaaS', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY('Budgeted_Total_Net_SaaS') },
+            { id: '__wk_forecast_tns', label: 'Forecasted Total Net SaaS', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY('Forecasted_Total_Net_SaaS') },
             { id: '__weekly_total_net_saas', label: 'Total Net SaaS', color: '#2563eb', customSql: WEEKLY_TOTAL_NET_SAAS_SQL },
           ],
           lastNMonths: 2, showLabels: true,
@@ -321,8 +339,8 @@ export default {
           label: 'Total DEP Revenue Week Over Week',
           chartType: 'bar', valueFormat: 'currency',
           metrics: [
-            { id: 284, label: 'Budgeted Total DEP Revenue', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 292, label: 'Forecasted Total DEP Revenue', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__wk_budget_tdep', label: 'Budgeted Total DEP Revenue', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY('Budgeted_Total_DEP_Revenue') },
+            { id: '__wk_forecast_tdep', label: 'Forecasted Total DEP Revenue', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY('Forecasted_Total_DEP_Revenue') },
             { id: '__weekly_total_dep', label: 'Total DEP Net SaaS', color: '#2563eb', customSql: WEEKLY_TOTAL_DEP_SQL },
           ],
           lastNMonths: 2, showLabels: true,

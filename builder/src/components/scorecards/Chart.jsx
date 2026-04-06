@@ -142,12 +142,15 @@ export default function Chart({ config, dataMap }) {
         }
       } else {
         const values = aligned.get(m.id);
+        const seriesType = m.chartType || config.chartType;
+        const isLine = seriesType === 'line' && config.chartType === 'bar';
         series.push({
           name: m.label,
-          type: config.chartType,
+          type: seriesType,
           data: values,
           itemStyle: m.color ? { color: m.color } : undefined,
-          label: config.showLabels ? {
+          ...(isLine ? { lineStyle: { width: 2 }, symbol: 'circle', symbolSize: 4 } : {}),
+          label: config.showLabels && !isLine ? {
             show: true,
             position: 'top',
             fontSize: 10,
