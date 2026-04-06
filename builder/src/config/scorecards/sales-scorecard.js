@@ -88,7 +88,7 @@ export default {
             { id: 319, label: 'Forecasted Conversion Rate', color: '#2563eb' },
             { id: 357, label: 'Conversion Rate', color: '#9dc3e6' },
           ],
-          lastNMonths: 6,
+          lastNMonths: 4,
           showLabels: true,
         },
       ],
