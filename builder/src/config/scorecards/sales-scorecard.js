@@ -14,33 +14,39 @@ const VIEWS = {
 
 // ── Custom Weekly SQL Queries ────────────────────────────────
 
+// Weekly conversion rate matching Looker: SUM(Conversion) / ((SUM(Last Month Trials) + SUM(Forecasted Trials)) / 2)
+// "Last Month Trials" = each trial's SignupDate shifted +1 month, then grouped by ISOWEEK
 const WEEKLY_CONVERSION_RATE_SQL = `
-WITH weekly_conversions AS (
-  SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, WEEK(MONDAY)) AS week,
-    COUNT(*) AS conversions
-  FROM \`project-for-method-dw.revenue.v_conversions\`
-  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+WITH lagged_trials AS (
+  SELECT DATE_ADD(SignupDate, INTERVAL 1 MONTH) AS shifted_date
+  FROM \`project-for-method-dw.revenue.Account\`
+  WHERE IsConversionException = FALSE AND Partner != 'Method Integration'
+    AND SignupDate != DATE('0001-01-01')
+),
+weekly_lagged AS (
+  SELECT DATE_TRUNC(shifted_date, WEEK(MONDAY)) AS week, COUNT(*) AS last_month_trials
+  FROM lagged_trials WHERE shifted_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
   GROUP BY 1
 ),
-monthly_trials AS (
-  SELECT DATE_TRUNC(SignupDate, MONTH) AS month, COUNT(*) AS trials
-  FROM \`project-for-method-dw.revenue.v_trials\` GROUP BY 1
+conversions AS (
+  SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, WEEK(MONDAY)) AS week, COUNT(*) AS conversions
+  FROM \`project-for-method-dw.revenue.Account\`
+  WHERE IsConversionException = FALSE AND Partner != 'Method Integration'
+    AND FirstSaaSInvoiceTxnDate != DATE('0001-01-01')
+    AND FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+  GROUP BY 1
 ),
-trials_with_lag AS (
-  SELECT month, LAG(trials) OVER (ORDER BY month) AS last_month_trials FROM monthly_trials
-),
-forecasted AS (
-  SELECT DATE_TRUNC(forecast_date, MONTH) AS month,
-    ROUND(SUM(forecast_value), 0) AS forecasted_trials
-  FROM \`project-for-method-dw.revenue.v_trials_forecast_channel\`
-  WHERE forecast_date IS NOT NULL GROUP BY 1
+forecast AS (
+  SELECT DATE_TRUNC(Date, WEEK(MONDAY)) AS week, SUM(Forecasted_Trials) AS forecasted_trials
+  FROM \`project-for-method-dw.revenue.method_forecast\`
+  WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
+  GROUP BY 1
 )
-SELECT FORMAT_DATE('%Y-%m-%d', w.week) AS period,
-  ROUND(SAFE_DIVIDE(w.conversions,
-    (t.last_month_trials + f.forecasted_trials) / 2), 4) AS value
-FROM weekly_conversions w
-JOIN trials_with_lag t ON DATE_TRUNC(w.week, MONTH) = t.month
-JOIN forecasted f ON DATE_TRUNC(w.week, MONTH) = f.month
+SELECT FORMAT_DATE('%Y-%m-%d', c.week) AS period,
+  ROUND(SAFE_DIVIDE(c.conversions, (t.last_month_trials + f.forecasted_trials) / 2.0), 4) AS value
+FROM conversions c
+LEFT JOIN weekly_lagged t ON c.week = t.week
+LEFT JOIN forecast f ON c.week = f.week
 ORDER BY 1
 `;
 
