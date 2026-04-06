@@ -52,6 +52,31 @@ export async function fetchChartDatasets({
             const counts = {};
             agg.labels.forEach((l, idx) => { counts[l] = agg.data[idx]; });
             depAggregated[depId] = counts;
+          } else if (dep.formula && dep.depends_on) {
+            // Derived dep — recursively fetch its deps and compute its formula
+            const subDepData = {};
+            for (const subDepId of dep.depends_on) {
+              const subDep = metrics.find(m => m.id === subDepId);
+              if (!subDep) continue;
+              try {
+                if (subDep.chart_sql || subDep.view_name) {
+                  const sDateCol = getDateCol(subDep.view_name, xField);
+                  const sAgg = await fetchChartData(subDep, sDateCol, 'COUNT', timeBucket, channelFilter, lastNMonths, endDateRule);
+                  const sCounts = {};
+                  sAgg.labels.forEach((l, idx) => { sCounts[l] = sAgg.data[idx]; });
+                  subDepData[subDepId] = sCounts;
+                }
+              } catch { subDepData[subDepId] = {}; }
+            }
+            const subLabels = new Set();
+            for (const c of Object.values(subDepData)) Object.keys(c).forEach(k => subLabels.add(k));
+            const counts = {};
+            for (const lbl of subLabels) {
+              const vals = {};
+              for (const sid of dep.depends_on) vals[sid] = subDepData[sid]?.[lbl] || 0;
+              counts[lbl] = Math.round(evaluateFormula(dep.formula, vals) * 100) / 100;
+            }
+            depAggregated[depId] = counts;
           }
         } catch { depAggregated[depId] = {}; }
       }

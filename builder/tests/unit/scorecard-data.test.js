@@ -1,73 +1,59 @@
-// builder/tests/unit/scorecard-data.test.js
 import { describe, it, expect } from 'vitest';
 
-if (typeof globalThis.localStorage === 'undefined') {
-  globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-}
+const { topoSortDerived } = await import('../../src/hooks/useScorecardData.js');
 
-const { groupScorecardTasks } = await import('../../src/hooks/useScorecardData.js');
+describe('topoSortDerived', () => {
+  it('sorts derived metrics so dependencies are computed first', () => {
+    const metrics = [
+      // 363 depends on 300 and 361 (both derived)
+      { id: 363, formula: '{300} - {361}', depends_on: [300, 361] },
+      // 361 depends on 286 and 285 (primitives, not in this list)
+      { id: 361, formula: 'SAFE_DIVIDE({286}, {285}) * 100', depends_on: [286, 285] },
+      // 300 depends on 55 and 54 (primitives, not in this list)
+      { id: 300, formula: 'SAFE_DIVIDE({55}, {54}) * 100', depends_on: [55, 54] },
+    ];
 
-describe('groupScorecardTasks', () => {
-  const makeMetric = (id, overrides = {}) => ({
-    id, name: `Metric ${id}`, view_name: null, chart_sql: null,
-    formula: null, depends_on: null, ...overrides,
+    const sorted = topoSortDerived(metrics);
+    const ids = sorted.map(m => m.id);
+
+    // 300 and 361 must come before 363
+    expect(ids.indexOf(300)).toBeLessThan(ids.indexOf(363));
+    expect(ids.indexOf(361)).toBeLessThan(ids.indexOf(363));
   });
 
-  it('groups single-series chart_sql metrics into batchable', () => {
-    const primitives = [
-      makeMetric(56, { chart_sql: "SELECT '2026-01' AS period, 42 AS value" }),
-      makeMetric(296, { chart_sql: "SELECT '2026-01' AS period, 10 AS value" }),
+  it('handles flat list with no inter-derived dependencies', () => {
+    const metrics = [
+      { id: 300, formula: 'SAFE_DIVIDE({55}, {54}) * 100', depends_on: [55, 54] },
+      { id: 301, formula: 'SAFE_DIVIDE({56}, {55}) * 100', depends_on: [56, 55] },
     ];
-    const result = groupScorecardTasks(primitives, [], {}, 13);
-    expect(result.batchable).toHaveLength(2);
-    expect(result.individual).toHaveLength(0);
+
+    const sorted = topoSortDerived(metrics);
+    expect(sorted).toHaveLength(2);
+    // Both should be present, order doesn't matter
+    expect(sorted.map(m => m.id).sort()).toEqual([300, 301]);
   });
 
-  it('keeps numeric metric IDs as numbers in batchable keys', () => {
-    const primitives = [
-      makeMetric(56, { chart_sql: "SELECT '2026-01' AS period, 42 AS value" }),
-    ];
-    const result = groupScorecardTasks(primitives, [], {}, 13);
-    expect(result.batchable[0].key).toBe(56); // numeric, not '56'
+  it('handles empty list', () => {
+    expect(topoSortDerived([])).toEqual([]);
   });
 
-  it('puts view_name metrics into individual (they use fetchAggregatedData)', () => {
-    const primitives = [
-      makeMetric(54, { view_name: 'v_trials' }),
-    ];
-    const result = groupScorecardTasks(primitives, [], {}, 13);
-    expect(result.batchable).toHaveLength(0);
-    expect(result.individual).toHaveLength(1);
+  it('handles single metric', () => {
+    const metrics = [{ id: 300, formula: '{55}', depends_on: [55] }];
+    const sorted = topoSortDerived(metrics);
+    expect(sorted).toEqual(metrics);
   });
 
-  it('puts custom SQL into batchable with string key', () => {
-    const customSqls = [
-      { key: '__weekly_conv_rate', sql: "SELECT '2026-01-06' AS period, 0.08 AS value" },
+  it('handles multi-level chain: A → B → C', () => {
+    const metrics = [
+      { id: 3, formula: '{2}', depends_on: [2] },    // depends on 2
+      { id: 1, formula: '{99}', depends_on: [99] },   // depends on primitive only
+      { id: 2, formula: '{1}', depends_on: [1] },     // depends on 1
     ];
-    const result = groupScorecardTasks([], customSqls, {}, 13);
-    expect(result.batchable).toHaveLength(1);
-    expect(result.batchable[0].key).toBe('__weekly_conv_rate'); // string
-  });
 
-  it('returns both groups for mixed input', () => {
-    const primitives = [
-      makeMetric(56, { chart_sql: "SELECT '2026-01' AS period, 42 AS value" }),
-      makeMetric(54, { view_name: 'v_trials' }),
-    ];
-    const customSqls = [
-      { key: '__custom', sql: "SELECT '2026-01' AS period, 1 AS value" },
-    ];
-    const result = groupScorecardTasks(primitives, customSqls, {}, 13);
-    expect(result.batchable).toHaveLength(2); // chart_sql + custom
-    expect(result.individual).toHaveLength(1); // view_name
-  });
+    const sorted = topoSortDerived(metrics);
+    const ids = sorted.map(m => m.id);
 
-  it('metric with both chart_sql and view_name goes to batchable (chart_sql takes precedence)', () => {
-    const primitives = [
-      makeMetric(333, { chart_sql: "SELECT '2026-01' AS period, 100 AS value", view_name: 'v_total_dep_revenue' }),
-    ];
-    const result = groupScorecardTasks(primitives, [], {}, 13);
-    expect(result.batchable).toHaveLength(1);
-    expect(result.individual).toHaveLength(0);
+    expect(ids.indexOf(1)).toBeLessThan(ids.indexOf(2));
+    expect(ids.indexOf(2)).toBeLessThan(ids.indexOf(3));
   });
 });

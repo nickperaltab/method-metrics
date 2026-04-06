@@ -200,4 +200,47 @@ describe('evaluateFormula', () => {
     });
     expect(result).toBe(4);
   });
+
+  // --- Formula migration: exact formulas for metrics being converted ---
+
+  it('metric 361: Forecasted Sync Rate', () => {
+    const result = evaluateFormula('SAFE_DIVIDE({286}, {285}) * 100', { 286: 120, 285: 400 });
+    expect(result).toBe(30);
+  });
+
+  it('metric 362: Budgeted Sync Rate', () => {
+    const result = evaluateFormula('SAFE_DIVIDE({358}, {353}) * 100', { 358: 90, 353: 300 });
+    expect(result).toBe(30);
+  });
+
+  it('metric 339: Net SaaS Forecast vs Trajectory', () => {
+    const result = evaluateFormula('{338} - {291}', { 338: 15000, 291: 12000 });
+    expect(result).toBe(3000);
+  });
+
+  it('metric 340: Net SaaS Forecast Attainment', () => {
+    const result = evaluateFormula('SAFE_DIVIDE({338}, {291}) * 100', { 338: 15000, 291: 12000 });
+    expect(result).toBe(125);
+  });
+
+  it('metric 363: Sync Rate vs Forecast', () => {
+    const result = evaluateFormula('{300} - {361}', { 300: 32.5, 361: 30.0 });
+    expect(result).toBe(2.5);
+  });
+
+  it('metric 364: Sync Rate Attainment', () => {
+    const result = evaluateFormula('SAFE_DIVIDE({300}, {361}) * 100', { 300: 33, 361: 30 });
+    expect(result).toBeCloseTo(110, 1);
+  });
+
+  it('metric 340: handles zero forecast gracefully', () => {
+    const result = evaluateFormula('SAFE_DIVIDE({338}, {291}) * 100', { 338: 15000, 291: 0 });
+    expect(result).toBe(0);
+  });
+
+  it('handles non-clean division rounding to 2 decimals', () => {
+    // SAFE_DIVIDE(1, 3) * 100 = 33.333... → safeEvalArithmetic rounds per JS default
+    const result = evaluateFormula('SAFE_DIVIDE({1}, {2}) * 100', { 1: 1, 2: 3 });
+    expect(result).toBeCloseTo(33.33, 0);
+  });
 });

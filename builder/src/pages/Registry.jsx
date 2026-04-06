@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchMetrics, SUPABASE_URL, headers } from '../lib/supabase';
 import Dialog from '../components/Dialog';
+import DependencyView from '../components/DependencyView';
 
 async function updateMetric(id, updates) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${Number(id)}`, {
@@ -45,7 +46,7 @@ export default function Registry() {
   }, []);
 
   const filtered = metrics
-    .filter(m => (tab === 'live' ? m.status === 'live' : m.status !== 'live'))
+    .filter(m => (tab === 'queued' ? m.status !== 'live' : m.status === 'live'))
     .filter(m => !search || m.name?.toLowerCase().includes(search.toLowerCase()));
 
   const sorted = [...filtered].sort((a, b) => {
@@ -139,23 +140,29 @@ export default function Registry() {
         <div style={s.tabs}>
           <button style={tab === 'live' ? s.tabActive : s.tab} onClick={() => setTab('live')}>Live</button>
           <button style={tab === 'queued' ? s.tabActive : s.tab} onClick={() => setTab('queued')}>Queued</button>
+          <button style={tab === 'deps' ? s.tabActive : s.tab} onClick={() => setTab('deps')}>Dependencies</button>
         </div>
-        <input
-          type="text"
-          placeholder="Search metrics..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={s.search}
-        />
-        {selected.size > 0 && (
+        {tab !== 'deps' && (
+          <input
+            type="text"
+            placeholder="Search metrics..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={s.search}
+          />
+        )}
+        {tab !== 'deps' && selected.size > 0 && (
           <button style={s.deleteBtn} onClick={handleBulkDelete}>
             Delete {selected.size} selected
           </button>
         )}
       </div>
 
-      {/* Table */}
-      <div style={s.tableWrap}>
+      {/* Dependencies tab */}
+      {tab === 'deps' && <DependencyView metrics={metrics} />}
+
+      {/* Table (live/queued tabs) */}
+      {tab !== 'deps' && <div style={s.tableWrap}>
         <table style={s.table}>
           <thead>
             <tr>
@@ -245,7 +252,7 @@ export default function Registry() {
           </tbody>
         </table>
         {sorted.length === 0 && <div style={s.empty}>No metrics match your filters.</div>}
-      </div>
+      </div>}
     </div>
   );
 }
