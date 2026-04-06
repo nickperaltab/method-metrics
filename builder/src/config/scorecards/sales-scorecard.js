@@ -104,9 +104,9 @@ WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DAT
 GROUP BY 1 ORDER BY 1
 `;
 
-const FORECAST_WEEKLY_AVG = (column) => `
+const FORECAST_WEEKLY_MAX = (column) => `
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
-  ROUND(AVG(${column}), 4) AS value
+  ROUND(MAX(${column}), 4) AS value
 FROM \`project-for-method-dw.revenue.method_forecast\`
 WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1
@@ -146,8 +146,8 @@ export default {
           label: 'Conversion Rate Week Over Week',
           chartType: 'line', valueFormat: 'decimal_rate',
           metrics: [
-            { id: '__wk_budget_convrate', label: 'Budgeted Conversion Rate', color: '#a3c771', customSql: FORECAST_WEEKLY_AVG('Budgeted_Conversion_Rate') },
-            { id: '__wk_forecast_convrate', label: 'Forecasted Conversion Rate', color: '#e84393', customSql: FORECAST_WEEKLY_AVG('Forecasted_Conversion_Rate') },
+            { id: '__wk_budget_convrate', label: 'Budgeted Conversion Rate', color: '#a3c771', customSql: FORECAST_WEEKLY_MAX('Budgeted_Conversion_Rate') },
+            { id: '__wk_forecast_convrate', label: 'Forecasted Conversion Rate', color: '#e84393', customSql: FORECAST_WEEKLY_MAX('Forecasted_Conversion_Rate') },
             { id: '__weekly_conv_rate', label: 'Conversion Rate', color: '#2563eb', customSql: WEEKLY_CONVERSION_RATE_SQL },
           ],
           lastNMonths: 2, showLabels: true,

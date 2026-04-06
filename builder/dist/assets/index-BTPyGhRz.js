@@ -199,7 +199,7 @@ WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DAT
 GROUP BY 1 ORDER BY 1
 `,a5=r=>`
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
-  ROUND(AVG(${r}), 4) AS value
+  ROUND(MAX(${r}), 4) AS value
 FROM \`project-for-method-dw.revenue.method_forecast\`
 WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1
