@@ -309,9 +309,45 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     ).catch(() => {});
   }, [bqConnected, metrics, chartMap, gridLayout]);
 
-  // Fetch live BQ data for each chart in the layout
+  // Pre-warm chart_sql cache — fetch sequentially to avoid BQ rate limiting
+  const [cacheWarmed, setCacheWarmed] = useState(false);
   useEffect(() => {
     if (!bqConnected || !metrics.length || !gridLayout.length || !Object.keys(chartMap).length) return;
+    setCacheWarmed(false);
+    async function preWarmCache() {
+      const seenIds = new Set();
+      for (const item of gridLayout) {
+        const chart = chartMap[item.i];
+        const ids = chart?.gw_spec?.metricIds || chart?.metric_ids;
+        if (!Array.isArray(ids)) continue;
+        for (const id of ids) {
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          const metric = metrics.find(m => m.id === id);
+          if (!metric) continue;
+          if (metric.chart_sql) {
+            try { await fetchChartData(metric, null, 'COUNT', 'month', null, null, null); } catch {}
+          }
+          if (metric.depends_on?.length) {
+            for (const depId of metric.depends_on) {
+              if (seenIds.has(depId)) continue;
+              seenIds.add(depId);
+              const dep = metrics.find(m => m.id === depId);
+              if (dep?.chart_sql) {
+                try { await fetchChartData(dep, null, 'COUNT', 'month', null, null, null); } catch {}
+              }
+            }
+          }
+        }
+      }
+      setCacheWarmed(true);
+    }
+    preWarmCache();
+  }, [bqConnected, metrics, chartMap, gridLayout]);
+
+  // Fetch live BQ data for each chart in the layout (waits for cache warm)
+  useEffect(() => {
+    if (!bqConnected || !metrics.length || !gridLayout.length || !Object.keys(chartMap).length || !cacheWarmed) return;
 
     async function buildChartOption(chartId) {
       const chart = chartMap[chartId];
@@ -399,7 +435,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 if (depMetric.chart_sql) {
                   try {
                     const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, null, null);
-                    console.log(`[DASH KPI DEBUG] dep id:${depMetric.id} (${depMetric.name}) returned:`, { labels: agg.labels?.slice(-3), data: agg.data?.slice(-3), len: agg.labels?.length });
+
                     const now = new Date();
                     const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                     const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
@@ -437,7 +473,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             } else if (metric.chart_sql) {
               try {
                 const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
-                console.log(`[DASH KPI DEBUG] direct id:${metric.id} (${metric.name}) returned:`, { labels: agg.labels?.slice(-3), data: agg.data?.slice(-3), len: agg.labels?.length });
+
                 const now = new Date();
                 const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
@@ -447,9 +483,10 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
                 const delta = Math.round((current - prior) * 100) / 100;
                 const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-                kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format });
+                const noData = agg.labels.length === 0;
+                kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format, hasError: noData });
               } catch (err) {
-                console.error(`[DASH KPI DEBUG] direct id:${metric.id} (${metric.name}) FAILED:`, err.message);
+
                 kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               }
             } else if (metric.view_name) {

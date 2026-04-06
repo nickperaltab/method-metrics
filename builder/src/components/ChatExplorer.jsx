@@ -437,7 +437,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             // chart_sql takes priority over view_name — it has the specialized query
             try {
               const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
-              console.log(`[KPI DEBUG] id:${metric.id} (${metric.name}) chart_sql returned:`, { labels: agg.labels?.slice(-3), data: agg.data?.slice(-3), totalRows: agg.labels?.length });
+
               const now = new Date();
               const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
               const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
@@ -447,10 +447,11 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
               const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
               const delta = Math.round((current - prior) * 100) / 100;
               const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-              kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format });
+              const noData = agg.labels.length === 0;
+              kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format, hasError: noData });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: metric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
             } catch (err) {
-              console.error(`[KPI DEBUG] id:${metric.id} (${metric.name}) chart_sql FAILED:`, err.message);
+
               kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: 'N/A', labels: [], data: [] });
             }
