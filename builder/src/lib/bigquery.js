@@ -134,6 +134,58 @@ export async function queryBqWithRetry(sql, { maxRetries = 2, retryOnEmpty = fal
   throw lastError;
 }
 
+/**
+ * Wrap a chart_sql query with a time-range filter.
+ * Extracted from fetchChartData() to avoid duplication in batch path.
+ */
+export function wrapChartSql(sql, lastNMonths) {
+  if (lastNMonths == null || lastNMonths < 0) return sql;
+  const months = validateInt(lastNMonths, 'lastNMonths');
+  const dateExpr = months === 0
+    ? `FORMAT_DATE('%Y-%m', DATE_TRUNC(CURRENT_DATE(), MONTH))`
+    : `FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH))`;
+  return `SELECT * FROM (${sql}) sub WHERE period >= ${dateExpr}`;
+}
+
+/**
+ * Build a single UNION ALL query from multiple {key, sql} pairs.
+ * Each sub-query gets a '_key' discriminator column.
+ * All sub-queries MUST return {period, value} columns.
+ * Adds ORDER BY _key, period to preserve row ordering.
+ *
+ * @param {{ key: string|number, sql: string }[]} queries
+ * @returns {string} Combined SQL, or '' if empty
+ */
+export function buildBatchSql(queries) {
+  if (queries.length === 0) return '';
+  const parts = queries.map(q =>
+    `SELECT '${q.key}' AS _key, sub.* FROM (${q.sql}) sub`
+  );
+  return parts.join('\nUNION ALL\n') + '\nORDER BY _key, period';
+}
+
+/**
+ * Split combined batch result rows back into per-key groups.
+ * Uses keyMap to restore original key types (numeric for metric IDs, string for custom SQL).
+ * Strips the _key column from individual rows.
+ *
+ * @param {Object[]} rows - Rows with _key, period, value columns
+ * @param {Map} keyMap - Maps stringified key back to original key (e.g., '56' -> 56)
+ * @returns {Map<string|number, Object[]>} originalKey -> rows (without _key)
+ */
+export function splitBatchResults(rows, keyMap) {
+  const map = new Map();
+  for (const row of rows) {
+    const strKey = row._key;
+    const originalKey = keyMap.get(strKey) ?? keyMap.get(Number(strKey)) ?? strKey;
+    const clean = { ...row };
+    delete clean._key;
+    if (!map.has(originalKey)) map.set(originalKey, []);
+    map.get(originalKey).push(clean);
+  }
+  return map;
+}
+
 export const ATT_COL_MAP = {
   SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
   Social: 'Att_Social', Email: 'Att_Email', Referral: 'Att_Referral_Link',
