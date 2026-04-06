@@ -26,10 +26,27 @@ function filterToWindow(timeSeries, lastNMonths) {
   return filtered.labels.length > 0 ? filtered : null;
 }
 
-function alignSeries(metricsData) {
+function getCurrentPeriodLabels() {
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // Current week (Monday)
+  const d = new Date(now);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+  const week = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { month, week };
+}
+
+function alignSeries(metricsData, ensureCurrentPeriod = false) {
   const allLabels = new Set();
   for (const { data } of metricsData) {
     if (data) data.labels.forEach(l => allLabels.add(l));
+  }
+  // Ensure current period is always present (shows 0 instead of missing)
+  if (ensureCurrentPeriod && allLabels.size > 0) {
+    const { month, week } = getCurrentPeriodLabels();
+    const sample = [...allLabels][0];
+    const currentLabel = sample.length === 7 ? month : week;
+    allLabels.add(currentLabel);
   }
   const labels = [...allLabels].sort();
 
@@ -101,7 +118,7 @@ export default function Chart({ config, dataMap }) {
     const hasAny = metricsData.some(d => d.data != null);
     if (!hasAny) return null;
 
-    const { labels, aligned } = alignSeries(metricsData);
+    const { labels, aligned } = alignSeries(metricsData, true);
     const displayLabels = labels.map(formatLabel);
 
     const series = [];

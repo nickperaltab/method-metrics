@@ -58,6 +58,13 @@ export function resolveKpiValue(timeSeries, selector) {
   if (selector === 'current_or_latest') {
     const idx = labels.indexOf(currentPeriod);
     if (idx >= 0) return data[idx];
+    // If current month not in data but data exists, check if latest is current month
+    // Otherwise return 0 (the month exists, just no data yet — not an error)
+    const latest = labels[labels.length - 1];
+    if (latest && latest < currentPeriod) {
+      // Data ends before current month — current month has zero activity
+      return 0;
+    }
     // Fall back to latest data point
     return data[data.length - 1] ?? null;
   }
