@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  fetchChartData, fetchAggregatedData, queryBqWithRetry,
-  buildBatchSql, splitBatchResults, wrapChartSql,
-} from '../lib/bigquery';
+import { fetchChartData, fetchAggregatedData, queryBq } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
-import { evaluateFormula, validateInt } from '../lib/sanitize';
+import { evaluateFormula } from '../lib/sanitize';
 
 /**
  * Collect all metric IDs referenced in a scorecard config, including derived deps.
@@ -12,7 +9,7 @@ import { evaluateFormula, validateInt } from '../lib/sanitize';
 function collectMetricIds(config) {
   const ids = new Set();
   const customSqls = [];
-  const weeklyMetrics = new Map(); // metricId → { viewName, dateCol } for weekly fetching
+  const weeklyMetrics = new Map();
 
   for (const section of config.sections) {
     for (const kpi of section.kpis || []) {
@@ -23,7 +20,6 @@ function collectMetricIds(config) {
         if (typeof m.id === 'number') ids.add(m.id);
         if (m.customSql) customSqls.push({ key: m.id, sql: m.customSql });
       }
-      // Collect metrics that need weekly bucketing
       if (chart.timeBucket === 'week') {
         for (const m of chart.metrics || []) {
           if (typeof m.id === 'number') weeklyMetrics.set(m.id, true);
@@ -56,7 +52,7 @@ function addDerivedDeps(ids, metricsMap) {
 }
 
 /**
- * Run async tasks with a concurrency limit.
+ * Run async tasks with a concurrency limit and per-task retry.
  */
 async function parallelLimit(tasks, limit, onProgress) {
   const results = new Map();
@@ -78,7 +74,7 @@ async function parallelLimit(tasks, limit, onProgress) {
           }
         } catch (e) {
           lastErr = e;
-          if (e.message?.includes('session expired')) break; // don't retry auth
+          if (e.message?.includes('session expired')) break;
           if (attempt < 1) {
             await new Promise(r => setTimeout(r, 500));
             continue;
@@ -103,43 +99,8 @@ async function parallelLimit(tasks, limit, onProgress) {
 }
 
 /**
- * Separate scorecard metrics into batchable (UNION ALL) and individual tasks.
- * Batchable: chart_sql metrics (single-series {period,value}) and custom SQL.
- * Individual: view_name metrics (need fetchAggregatedData with dynamic params).
- * chart_sql takes precedence over view_name (matching fetchChartData behavior).
- */
-export function groupScorecardTasks(primitives, customSqls, views, lastNMonths) {
-  const batchable = [];
-  const individual = [];
-
-  for (const metric of primitives) {
-    if (metric.chart_sql) {
-      const sql = wrapChartSql(metric.chart_sql, lastNMonths);
-      batchable.push({ key: metric.id, sql }); // keep numeric ID
-    } else if (metric.view_name) {
-      individual.push({
-        key: metric.id,
-        fn: async () => {
-          const dateCol = views?.[metric.view_name]?.dateCol
-            || getDateCol(metric.view_name, 'SignupDate');
-          return await fetchAggregatedData(
-            metric.view_name, dateCol, 'COUNT', 'month', null, lastNMonths
-          );
-        },
-      });
-    }
-  }
-
-  for (const { key, sql } of customSqls) {
-    batchable.push({ key, sql }); // string key like '__weekly_conv_rate'
-  }
-
-  return { batchable, individual };
-}
-
-/**
  * Hook to load all data for a scorecard config.
- * Fetches primitives via batch UNION ALL where possible, individual queries otherwise.
+ * Fetches primitives in parallel (3 at a time) with retry, then computes derived metrics.
  */
 export default function useScorecardData(config, metrics, bqConnected) {
   const [dataMap, setDataMap] = useState(new Map());
@@ -160,7 +121,6 @@ export default function useScorecardData(config, metrics, bqConnected) {
     const { ids: directIds, customSqls, weeklyMetrics } = collectMetricIds(config);
     const allIds = addDerivedDeps(directIds, metricsMap);
 
-    // Split into primitives (fetchable) and derived (computed)
     const primitives = [];
     const derived = [];
     for (const id of allIds) {
@@ -173,15 +133,32 @@ export default function useScorecardData(config, metrics, bqConnected) {
       }
     }
 
-    const { batchable, individual } = groupScorecardTasks(
-      primitives, customSqls, config.views, 13
-    );
+    // Build task list for parallel execution
+    const tasks = [];
 
-    // Add weekly fetch tasks to individual
+    for (const metric of primitives) {
+      tasks.push({
+        key: metric.id,
+        fn: async () => {
+          if (metric.chart_sql) {
+            return await fetchChartData(metric, null, 'COUNT', 'month', null, 13);
+          } else if (metric.view_name) {
+            const dateCol = config.views?.[metric.view_name]?.dateCol
+              || getDateCol(metric.view_name, 'SignupDate');
+            return await fetchAggregatedData(
+              metric.view_name, dateCol, 'COUNT', 'month', null, 13
+            );
+          }
+          return null;
+        },
+      });
+    }
+
+    // Weekly fetch tasks for metrics in weekly charts
     for (const [metricId] of weeklyMetrics) {
       const metric = metricsMap.get(metricId);
       if (!metric || !metric.view_name) continue;
-      individual.push({
+      tasks.push({
         key: `${metricId}:week`,
         fn: async () => {
           const dateCol = config.views?.[metric.view_name]?.dateCol
@@ -193,57 +170,33 @@ export default function useScorecardData(config, metrics, bqConnected) {
       });
     }
 
-    const totalTasks = (batchable.length > 0 ? 1 : 0) + individual.length;
-    setProgress({ loaded: 0, total: totalTasks });
+    // Custom SQL tasks
+    for (const { key, sql } of customSqls) {
+      tasks.push({
+        key,
+        fn: async () => {
+          console.log(`[Scorecard] Running custom SQL for ${key}...`);
+          const result = await queryBq(sql);
+          console.log(`[Scorecard] Custom SQL ${key}: ${result.rows?.length ?? 0} rows`);
+          if (result.rows?.length > 0) {
+            return {
+              labels: result.rows.map(r => r.period),
+              data: result.rows.map(r => Number(r.value) || 0),
+            };
+          }
+          return null;
+        },
+      });
+    }
+
+    setProgress({ loaded: 0, total: tasks.length });
     setLoading(true);
 
     (async () => {
-      // 1. Batched UNION ALL (one BQ request for all chart_sql + customSql)
-      const rawResults = new Map();
-      if (batchable.length > 0) {
-        try {
-          const batchSql = buildBatchSql(batchable);
-          const keyMap = new Map(batchable.map(q => [String(q.key), q.key]));
-          const batchResult = await queryBqWithRetry(batchSql, { maxRetries: 2, retryOnEmpty: true });
-          const split = splitBatchResults(batchResult.rows, keyMap);
-          for (const [key, rows] of split) {
-            rawResults.set(key, {
-              labels: rows.map(r => r.period),
-              data: rows.map(r => Number(r.value) || 0),
-            });
-          }
-          for (const q of batchable) {
-            if (!rawResults.has(q.key)) rawResults.set(q.key, null);
-          }
-          console.log(`[Scorecard] Batch query: ${batchable.length} metrics in 1 request`);
-        } catch (e) {
-          console.error('[Scorecard] Batch query failed, falling back to individual:', e);
-          for (const q of batchable) {
-            try {
-              const result = await queryBqWithRetry(q.sql, { maxRetries: 1 });
-              rawResults.set(q.key, {
-                labels: result.rows.map(r => r.period),
-                data: result.rows.map(r => Number(r.value) || 0),
-              });
-            } catch (e2) {
-              rawResults.set(q.key, { error: e2.message });
-            }
-          }
-        }
-        if (!abortRef.current) setProgress(p => ({ ...p, loaded: 1 }));
-      }
-
-      if (abortRef.current) return;
-
-      // 2. Individual tasks in parallel (concurrency 5, with task-level retry)
-      const indResults = await parallelLimit(individual, 5, (loaded) => {
-        if (!abortRef.current) {
-          setProgress(p => ({ ...p, loaded: (batchable.length > 0 ? 1 : 0) + loaded }));
-        }
+      // Fetch all tasks in parallel with concurrency 3 and per-task retry
+      const rawResults = await parallelLimit(tasks, 3, (loaded, total) => {
+        if (!abortRef.current) setProgress({ loaded, total });
       });
-      for (const [key, result] of indResults) {
-        rawResults.set(key, result);
-      }
 
       if (abortRef.current) return;
 
@@ -257,7 +210,6 @@ export default function useScorecardData(config, metrics, bqConnected) {
           if (result?.error) errs.set(key, result.error);
           continue;
         }
-        // Handle multi-series: flatten primary series
         if (result.multiSeries) {
           const keys = Object.keys(result.series);
           if (keys.length > 0) {
@@ -273,7 +225,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
         }
       }
 
-      // Compute derived metrics (instant, no BQ calls)
+      // Compute derived metrics
       for (const metric of derived) {
         if (abortRef.current) return;
         try {
