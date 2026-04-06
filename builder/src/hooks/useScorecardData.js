@@ -53,6 +53,57 @@ function addDerivedDeps(ids, metricsMap) {
 }
 
 /**
+ * Topologically sort derived metrics so dependencies are computed first.
+ * If metric A depends on metric B (both in the list), B comes first.
+ */
+export function topoSortDerived(derivedMetrics) {
+  if (derivedMetrics.length <= 1) return derivedMetrics;
+
+  const idSet = new Set(derivedMetrics.map(m => m.id));
+  const inDegree = new Map();
+  const adj = new Map();
+
+  for (const m of derivedMetrics) {
+    inDegree.set(m.id, 0);
+    adj.set(m.id, []);
+  }
+
+  for (const m of derivedMetrics) {
+    for (const depId of (m.depends_on || [])) {
+      if (idSet.has(depId)) {
+        adj.get(depId).push(m.id);
+        inDegree.set(m.id, inDegree.get(m.id) + 1);
+      }
+    }
+  }
+
+  const queue = [];
+  for (const m of derivedMetrics) {
+    if (inDegree.get(m.id) === 0) queue.push(m.id);
+  }
+
+  const sorted = [];
+  const byId = new Map(derivedMetrics.map(m => [m.id, m]));
+  while (queue.length > 0) {
+    const id = queue.shift();
+    sorted.push(byId.get(id));
+    for (const neighbor of adj.get(id)) {
+      inDegree.set(neighbor, inDegree.get(neighbor) - 1);
+      if (inDegree.get(neighbor) === 0) queue.push(neighbor);
+    }
+  }
+
+  if (sorted.length < derivedMetrics.length) {
+    console.warn('[Scorecard] Cycle detected in derived metric dependencies — appending remaining');
+    for (const m of derivedMetrics) {
+      if (!sorted.includes(m)) sorted.push(m);
+    }
+  }
+
+  return sorted;
+}
+
+/**
  * Split an array into chunks of size n.
  */
 function chunk(arr, n) {
@@ -71,14 +122,19 @@ async function runBatch(queries) {
   const batchSql = buildBatchSql(queries);
   const keyMap = new Map(queries.map(q => [String(q.key), q.key]));
   const result = await queryBq(batchSql);
+  console.log(`[Scorecard] Batch raw: ${result.rows?.length} rows, keys in result:`, [...new Set(result.rows?.map(r => r._key))]);
   const split = splitBatchResults(result.rows, keyMap);
+  console.log(`[Scorecard] Batch split: ${split.size} keys:`, [...split.keys()]);
   const map = new Map();
   for (const [key, rows] of split) {
-    map.set(key, {
-      labels: rows.map(r => r.period),
-      data: rows.map(r => Number(r.value) || 0),
-    });
+    if (rows.length > 0) {
+      map.set(key, {
+        labels: rows.map(r => r.period),
+        data: rows.map(r => Number(r.value) || 0),
+      });
+    }
   }
+  console.log(`[Scorecard] Batch map: ${map.size} metrics with data, keys:`, [...map.keys()]);
   return map;
 }
 
@@ -261,7 +317,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
       if (abortRef.current) return;
 
       // 4. Compute derived metrics (instant, no BQ calls)
-      for (const metric of derived) {
+      for (const metric of topoSortDerived(derived)) {
         if (abortRef.current) return;
         try {
           const depData = {};
