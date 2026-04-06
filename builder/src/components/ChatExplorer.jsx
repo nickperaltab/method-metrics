@@ -368,11 +368,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       const xField = dataConfig.xField;
       const timeBucket = dataConfig.timeBucket;
 
-      // KPI tile branch — block derived/rate metrics (they produce misleading single-point values)
-      if (echartsType === 'kpi' && result.metrics.some(m => m.formula && m.depends_on && !m.view_name)) {
-        echartsType = 'bar'; // Fall back to bar chart for rates
-        dataConfig.lastNMonths = dataConfig.lastNMonths != null ? dataConfig.lastNMonths : 1; // Default to current month
-      }
       if (echartsType === 'kpi') {
         const kpiData = [];
         const collectedDetails = [];
