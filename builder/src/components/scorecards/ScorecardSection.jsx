@@ -16,14 +16,14 @@ export default function ScorecardSection({ section, dataMap }) {
         display: 'grid',
         gridTemplateColumns: '220px 1fr 1fr',
         gap: 24,
-        alignItems: 'start',
+        alignItems: 'stretch',
       }}>
         {/* Left: KPI column */}
         {section.kpis && (
           <KpiColumn kpis={section.kpis} dataMap={dataMap} />
         )}
 
-        {/* Right: Charts */}
+        {/* Right: Charts — stretch to fill row height */}
         {(section.charts || []).map((chart, i) => (
           <Chart key={i} config={chart} dataMap={dataMap} />
         ))}

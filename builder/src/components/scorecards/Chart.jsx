@@ -155,7 +155,7 @@ export default function Chart({ config, dataMap }) {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: 300, color: '#9ca3af', fontSize: 13,
+        height: '100%', minHeight: 300, color: '#9ca3af', fontSize: 13,
       }}>
         No data available
       </div>
@@ -163,14 +163,16 @@ export default function Chart({ config, dataMap }) {
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{
         fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8,
         fontFamily: "'DM Sans', sans-serif",
       }}>
         {config.label}
       </div>
-      <EChart option={option} style={{ height: 300 }} />
+      <div style={{ flex: 1, minHeight: 300 }}>
+        <EChart option={option} style={{ height: '100%' }} />
+      </div>
     </div>
   );
 }
