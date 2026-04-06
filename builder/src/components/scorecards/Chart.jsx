@@ -5,17 +5,26 @@ import { resolveKpiValue } from './utils';
 /**
  * Filter a time-series to only include the last N months from today.
  */
-function filterLastNMonths(timeSeries, lastNMonths) {
+/**
+ * Filter a time-series to a window: last N months up to current month.
+ * Removes both old data and future forecast months.
+ */
+function filterToWindow(timeSeries, lastNMonths) {
   if (!timeSeries || !lastNMonths) return timeSeries;
   const now = new Date();
-  const cutoff = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
-  const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+  const cutoffStart = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
+  const startStr = `${cutoffStart.getFullYear()}-${String(cutoffStart.getMonth() + 1).padStart(2, '0')}`;
+  // Include current month, exclude future
+  const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // For weekly labels (YYYY-MM-DD), pad end to end of current month
+  const endStrDay = `${endStr}-31`;
 
   const filtered = { labels: [], data: [] };
   for (let i = 0; i < timeSeries.labels.length; i++) {
-    // Compare as string — works for both YYYY-MM and YYYY-MM-DD
-    if (timeSeries.labels[i] >= cutoffStr) {
-      filtered.labels.push(timeSeries.labels[i]);
+    const l = timeSeries.labels[i];
+    const upperBound = l.length === 7 ? endStr : endStrDay;
+    if (l >= startStr && l <= upperBound) {
+      filtered.labels.push(l);
       filtered.data.push(timeSeries.data[i]);
     }
   }
@@ -67,7 +76,7 @@ export default function Chart({ config, dataMap }) {
       .filter(m => m.renderAs !== 'referenceLine')
       .map(m => ({
         id: m.id,
-        data: filterLastNMonths(dataMap.get(m.id), config.lastNMonths),
+        data: filterToWindow(dataMap.get(m.id), config.lastNMonths),
       }));
 
     const hasAny = metricsData.some(d => d.data != null);

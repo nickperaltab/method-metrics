@@ -14,7 +14,7 @@ WITH weekly_conversions AS (
   SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, WEEK(MONDAY)) AS week,
     COUNT(*) AS conversions
   FROM \`project-for-method-dw.revenue.v_conversions\`
-  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 MONTH)
+  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
   GROUP BY 1
 ),
 monthly_trials AS (
