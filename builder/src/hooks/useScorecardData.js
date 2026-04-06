@@ -64,12 +64,26 @@ async function parallelLimit(tasks, limit, onProgress) {
     while (index < tasks.length) {
       const task = tasks[index++];
       try {
-        const result = await task.fn();
+        let result = await task.fn();
+        // Retry once if empty (likely BQ rate limiting)
+        if (result && result.labels?.length === 0) {
+          console.warn(`[Scorecard] Empty result for ${task.key}, retrying...`);
+          await new Promise(r => setTimeout(r, 1000));
+          result = await task.fn();
+        }
         console.log(`[Scorecard] Fetched ${task.key}:`, result ? (result.labels?.length ?? 'non-standard') + ' periods' : 'null');
         results.set(task.key, result);
       } catch (e) {
-        console.error(`[Scorecard] FAILED ${task.key}:`, e.message);
-        results.set(task.key, { error: e.message });
+        // Retry once on error
+        try {
+          await new Promise(r => setTimeout(r, 1000));
+          const retry = await task.fn();
+          console.log(`[Scorecard] Retry succeeded for ${task.key}:`, retry ? (retry.labels?.length ?? 'non-standard') + ' periods' : 'null');
+          results.set(task.key, retry);
+        } catch (e2) {
+          console.error(`[Scorecard] FAILED ${task.key}:`, e2.message);
+          results.set(task.key, { error: e2.message });
+        }
       }
       completed++;
       onProgress?.(completed, tasks.length);

@@ -64,7 +64,7 @@ export default {
       tables: [
         {
           label: 'Trial Summary Table',
-          lastNMonths: 6,
+          lastNMonths: 4,
           columns: [
             { metricId: 54, label: 'Trial', format: 'number' },
             { metricId: 285, label: 'Forecasted Trials', format: 'number' },
@@ -86,7 +86,7 @@ export default {
         {
           label: 'Monthly Trials to Budget & Forecast',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          lastNMonths: 4, showLabels: true,
           metrics: [
             { id: 353, label: 'Budgeted Trials', color: '#1e3a5f' },
             { id: 285, label: 'Forecasted Trials', color: '#2563eb' },
@@ -115,7 +115,7 @@ export default {
       tables: [
         {
           label: 'Sync Summary Table',
-          lastNMonths: 6,
+          lastNMonths: 4,
           columns: [
             { metricId: 55, label: 'Sync', format: 'number' },
             { metricId: 286, label: 'Forecasted Syncs', format: 'number' },
@@ -137,7 +137,7 @@ export default {
         {
           label: 'Monthly Syncs to Budget & Forecast',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          lastNMonths: 4, showLabels: true,
           metrics: [
             { id: 358, label: 'Budgeted Syncs', color: '#1e3a5f' },
             { id: 286, label: 'Forecasted Syncs', color: '#2563eb' },
@@ -164,7 +164,7 @@ export default {
       tables: [
         {
           label: 'Sync Rate Summary Table',
-          lastNMonths: 6,
+          lastNMonths: 4,
           columns: [
             { metricId: 300, label: 'Actual Sync %', format: 'percent' },
             { metricId: 361, label: 'Forecasted Sync %', format: 'percent' },
@@ -179,7 +179,7 @@ export default {
         {
           label: 'Monthly Sync % to Budget & Forecast',
           chartType: 'bar', valueFormat: 'percent',
-          lastNMonths: 6, showLabels: true,
+          lastNMonths: 4, showLabels: true,
           metrics: [
             { id: 362, label: 'Budgeted Sync %', color: '#1e3a5f' },
             { id: 361, label: 'Forecasted Sync %', color: '#2563eb' },

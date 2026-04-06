@@ -56,8 +56,10 @@ export default function DataTable({ config, dataMap }) {
       if (series?.labels) series.labels.forEach(l => allLabels.add(l));
     }
 
-    // Sort descending (most recent first) and limit
-    let sorted = [...allLabels].sort().reverse();
+    // Filter to current month and back, then take lastNMonths
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let sorted = [...allLabels].filter(l => l <= currentPeriod).sort().reverse();
     if (config.lastNMonths) {
       sorted = sorted.slice(0, config.lastNMonths);
     }
