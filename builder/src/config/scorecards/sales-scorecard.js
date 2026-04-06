@@ -55,13 +55,18 @@ export default {
         { metricId: 319, label: 'Forecasted Conversion Rate', format: 'decimal_rate',
           valueSelector: 'current_month' },
         { metricId: 357, label: 'Conversion Rate', format: 'decimal_rate',
-          valueSelector: 'current_month', showDelta: true },
-        { metricId: 321, label: 'Conversion Rate Trajectory', format: 'decimal_rate',
+          valueSelector: 'current_or_latest', showDelta: true },
+        // 321 formula outputs percentage number (8.49), not decimal — use 'percent'
+        { metricId: 321, label: 'Conversion Rate Trajectory', format: 'percent',
           valueSelector: 'current_month' },
-        { metricId: 322, label: 'Forecast vs. Trajectory', format: 'decimal_rate',
-          valueSelector: 'current_month' },
-        { metricId: 323, label: 'Forecasted Attainment', format: 'decimal_rate',
-          valueSelector: 'current_month' },
+        // 322/323: Supabase formulas mix scales (321 is %, 319 is decimal).
+        // Override with corrected formulas that convert 319 to % first.
+        { metricId: 322, label: 'Forecast vs. Trajectory', format: 'percent',
+          valueSelector: 'current_month',
+          formulaOverride: '{321} - ({319} * 100)', depsOverride: [321, 319] },
+        { metricId: 323, label: 'Forecasted Attainment', format: 'percent',
+          valueSelector: 'current_month',
+          formulaOverride: 'SAFE_DIVIDE({321}, {319} * 100) * 100', depsOverride: [321, 319] },
       ],
       charts: [
         {

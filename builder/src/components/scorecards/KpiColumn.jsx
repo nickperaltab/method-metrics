@@ -7,8 +7,21 @@ export default function KpiColumn({ kpis, dataMap }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 200 }}>
       {kpis.map((kpi) => {
-        const series = dataMap.get(kpi.metricId);
-        const value = resolveKpiValue(series, kpi.valueSelector || 'current_month');
+        let value;
+        let series = dataMap.get(kpi.metricId);
+
+        if (kpi.formulaOverride) {
+          // Compute from override formula using dep values from dataMap
+          const depValues = {};
+          for (const depId of kpi.depsOverride || []) {
+            const depSeries = dataMap.get(depId);
+            depValues[depId] = resolveKpiValue(depSeries, kpi.valueSelector || 'current_month') || 0;
+          }
+          value = Math.round(evaluateFormula(kpi.formulaOverride, depValues) * 100) / 100;
+        } else {
+          value = resolveKpiValue(series, kpi.valueSelector || 'current_month');
+        }
+
         const noData = value == null;
 
         let deltaPercent = null;

@@ -42,11 +42,19 @@ export function resolveKpiValue(timeSeries, selector) {
 
   const { labels, data } = timeSeries;
 
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   if (selector === 'current_month') {
-    const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const idx = labels.indexOf(currentPeriod);
     return idx >= 0 ? data[idx] : null;
+  }
+
+  if (selector === 'current_or_latest') {
+    const idx = labels.indexOf(currentPeriod);
+    if (idx >= 0) return data[idx];
+    // Fall back to latest data point
+    return data[data.length - 1] ?? null;
   }
 
   if (selector === 'prior_month') {

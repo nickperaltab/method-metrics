@@ -3,8 +3,27 @@ import EChart from '../EChart';
 import { resolveKpiValue } from './utils';
 
 /**
+ * Filter a time-series to only include the last N months from today.
+ */
+function filterLastNMonths(timeSeries, lastNMonths) {
+  if (!timeSeries || !lastNMonths) return timeSeries;
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
+  const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+
+  const filtered = { labels: [], data: [] };
+  for (let i = 0; i < timeSeries.labels.length; i++) {
+    // Compare as string — works for both YYYY-MM and YYYY-MM-DD
+    if (timeSeries.labels[i] >= cutoffStr) {
+      filtered.labels.push(timeSeries.labels[i]);
+      filtered.data.push(timeSeries.data[i]);
+    }
+  }
+  return filtered.labels.length > 0 ? filtered : null;
+}
+
+/**
  * Align multiple time-series to a common set of labels.
- * Returns { labels, aligned: Map<id, number[]> }
  */
 function alignSeries(metricsData) {
   const allLabels = new Set();
@@ -27,43 +46,39 @@ function alignSeries(metricsData) {
   return { labels, aligned };
 }
 
+function formatLabel(l) {
+  if (l.length === 7) {
+    const [y, m] = l.split('-');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[parseInt(m, 10) - 1]} ${y}`;
+  }
+  if (l.length === 10) {
+    const d = new Date(l + 'T00:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}`;
+  }
+  return l;
+}
+
 export default function Chart({ config, dataMap }) {
   const option = useMemo(() => {
-    // Collect data for each metric
-    const metricsData = config.metrics.map(m => ({
-      id: m.id,
-      data: dataMap.get(m.id) || null,
-    }));
+    // Collect and filter data for each metric
+    const metricsData = config.metrics
+      .filter(m => m.renderAs !== 'referenceLine')
+      .map(m => ({
+        id: m.id,
+        data: filterLastNMonths(dataMap.get(m.id), config.lastNMonths),
+      }));
 
-    // Check if we have any data at all
     const hasAny = metricsData.some(d => d.data != null);
     if (!hasAny) return null;
 
     const { labels, aligned } = alignSeries(metricsData);
-
-    // Format labels for display
-    const displayLabels = labels.map(l => {
-      if (l.length === 7) {
-        // YYYY-MM → "Mon YYYY"
-        const [y, m] = l.split('-');
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${months[parseInt(m, 10) - 1]} ${y}`;
-      }
-      if (l.length === 10) {
-        // YYYY-MM-DD → "Mon DD"
-        const d = new Date(l + 'T00:00:00');
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${months[d.getMonth()]} ${d.getDate()}`;
-      }
-      return l;
-    });
+    const displayLabels = labels.map(formatLabel);
 
     const series = [];
     for (const m of config.metrics) {
-      const values = aligned.get(m.id);
-
       if (m.renderAs === 'referenceLine') {
-        // Flat horizontal line at the current month's value
         const refData = dataMap.get(m.id);
         const refValue = resolveKpiValue(refData, 'current_month')
           ?? resolveKpiValue(refData, 'latest');
@@ -79,6 +94,7 @@ export default function Chart({ config, dataMap }) {
           });
         }
       } else {
+        const values = aligned.get(m.id);
         series.push({
           name: m.label,
           type: config.chartType,
@@ -86,11 +102,12 @@ export default function Chart({ config, dataMap }) {
           itemStyle: m.color ? { color: m.color } : undefined,
           label: config.showLabels ? {
             show: true,
-            position: config.chartType === 'bar' ? 'top' : 'top',
+            position: 'top',
             fontSize: 10,
             fontFamily: "'JetBrains Mono', monospace",
             formatter: (params) => {
               if (params.value == null) return '';
+              // Display as percentage: 0.176 → "18%"
               return `${(params.value * 100).toFixed(0)}%`;
             },
           } : undefined,
@@ -126,7 +143,8 @@ export default function Chart({ config, dataMap }) {
         type: 'value',
         axisLabel: {
           fontSize: 10,
-          formatter: (v) => `${(v * 100).toFixed(0)}%` || v,
+          // Show raw decimal values like Looker: 0, 0.05, 0.10, 0.15...
+          formatter: (v) => v,
         },
       },
       series,
