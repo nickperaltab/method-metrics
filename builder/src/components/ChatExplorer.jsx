@@ -375,9 +375,14 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
           const metric = result.metrics[i];
           const yField = dataConfig.yFields[i] || dataConfig.yFields[0] || 'COUNT';
           const label = dataConfig.labels[i] || metric.name;
-          const isRate = !!(metric.formula && metric.depends_on && !metric.view_name);
+          const isDerived = !!(metric.formula && metric.depends_on && !metric.view_name);
+          // isRate=true tells KpiCard to multiply by 100 and add %. Our formulas already include
+          // the × 100 (e.g., SAFE_DIVIDE(x,y)*100 = 60, not 0.60), so isRate must always be false
+          // for derived metrics. We add % formatting separately via isPercent.
+          const isRate = false;
+          const isPercent = isDerived && (metric.formula.includes('* 100') || metric.formula.includes('*100'));
 
-          if (isRate) {
+          if (isDerived) {
             // Derived metric: fetch KPI for each dependency, apply formula for current + prior
             const depKpis = {};
             const depDetails = [];
@@ -424,7 +429,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             const prior = Math.round(evalFormula('prior') * 100) / 100;
             const delta = Math.round((current - prior) * 100) / 100;
             const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: true, hasError });
+            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, isPercent, hasError });
             collectedDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A (computed)', labels: ['current', 'prior'], data: [current, prior], dependsOn: metric.depends_on });
             depDetails.forEach(d => collectedDetails.push(d));
           } else if (metric.view_name) {
