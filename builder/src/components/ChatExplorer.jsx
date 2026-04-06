@@ -389,18 +389,8 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             for (const depId of metric.depends_on) {
               const depMetric = metrics.find(dm => dm.id === depId);
               if (!depMetric) continue;
-              if (depMetric.view_name) {
-                const depSchema = schemaCache[depMetric.view_name] || [];
-                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
-                if (!dateCol) { depKpis[depId] = { current: 0, prior: 0, error: true }; continue; }
-                try {
-                  const kpiResult = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
-                  depKpis[depId] = kpiResult;
-                  depDetails.push({ metricName: depMetric.name, metricId: depId, sql: kpiResult.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpiResult.current, kpiResult.prior] });
-                } catch {
-                  depKpis[depId] = { current: 0, prior: 0, error: true };
-                }
-              } else if (depMetric.chart_sql) {
+              if (depMetric.chart_sql) {
+                // chart_sql takes priority — has the specialized query
                 try {
                   const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, null, null);
                   const now = new Date();
@@ -412,6 +402,17 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
                   const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
                   depKpis[depId] = { current, prior, delta: current - prior, deltaPercent: prior !== 0 ? Math.round(((current - prior) / prior) * 1000) / 10 : 0 };
                   depDetails.push({ metricName: depMetric.name, metricId: depId, sql: depMetric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
+                } catch {
+                  depKpis[depId] = { current: 0, prior: 0, error: true };
+                }
+              } else if (depMetric.view_name) {
+                const depSchema = schemaCache[depMetric.view_name] || [];
+                const dateCol = depSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
+                if (!dateCol) { depKpis[depId] = { current: 0, prior: 0, error: true }; continue; }
+                try {
+                  const kpiResult = await fetchKpiData(depMetric.view_name, dateCol, 'COUNT', channelFilter);
+                  depKpis[depId] = kpiResult;
+                  depDetails.push({ metricName: depMetric.name, metricId: depId, sql: kpiResult.sql, dateColumn: dateCol, labels: ['current', 'prior'], data: [kpiResult.current, kpiResult.prior] });
                 } catch {
                   depKpis[depId] = { current: 0, prior: 0, error: true };
                 }
@@ -429,9 +430,28 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             const prior = Math.round(evalFormula('prior') * 100) / 100;
             const delta = Math.round((current - prior) * 100) / 100;
             const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, isPercent, hasError });
+            kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, isPercent, displayFormat: metric.display_format, hasError });
             collectedDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A (computed)', labels: ['current', 'prior'], data: [current, prior], dependsOn: metric.depends_on });
             depDetails.forEach(d => collectedDetails.push(d));
+          } else if (metric.chart_sql) {
+            // chart_sql takes priority over view_name — it has the specialized query
+            try {
+              const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+              const now = new Date();
+              const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+              const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
+              const curIdx = agg.labels.indexOf(curMonth);
+              const prevIdx = agg.labels.indexOf(prevMonth);
+              const current = curIdx >= 0 ? agg.data[curIdx] : (agg.data.length > 0 ? agg.data[agg.data.length - 1] : 0);
+              const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
+              const delta = Math.round((current - prior) * 100) / 100;
+              const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
+              kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format });
+              collectedDetails.push({ metricName: label, metricId: metric.id, sql: metric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
+            } catch (err) {
+              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
+              collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: 'N/A', labels: [], data: [] });
+            }
           } else if (metric.view_name) {
             const viewSchema = schemaCache[metric.view_name] || [];
             const dateCol = viewSchema.find(c => ['DATE', 'TIMESTAMP', 'DATETIME'].includes(c.type))?.name;
@@ -446,25 +466,6 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
             } catch (err) {
               kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: dateCol, labels: [], data: [] });
-            }
-          } else if (metric.chart_sql) {
-            // chart_sql-only metric — execute the SQL and extract current/prior month values
-            try {
-              const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
-              const now = new Date();
-              const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-              const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
-              const curIdx = agg.labels.indexOf(curMonth);
-              const prevIdx = agg.labels.indexOf(prevMonth);
-              const current = curIdx >= 0 ? agg.data[curIdx] : 0;
-              const prior = prevIdx >= 0 ? agg.data[prevIdx] : 0;
-              const delta = Math.round((current - prior) * 100) / 100;
-              const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
-              kpiData.push({ metricName: label, value: current, delta, deltaPercent, isRate: false });
-              collectedDetails.push({ metricName: label, metricId: metric.id, sql: metric.chart_sql, dateColumn: 'period', labels: ['current', 'prior'], data: [current, prior] });
-            } catch (err) {
-              kpiData.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
-              collectedDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${err.message}`, dateColumn: 'N/A', labels: [], data: [] });
             }
           }
         }

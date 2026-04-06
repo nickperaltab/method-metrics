@@ -33,7 +33,7 @@ const styles = {
   },
 };
 
-export default function KpiCard({ metricName, value, delta, deltaPercent, isRate, isPercent, hasError }) {
+export default function KpiCard({ metricName, value, delta, deltaPercent, isRate, isPercent, displayFormat, hasError }) {
   if (hasError) {
     return (
       <div style={{ ...styles.card, borderColor: '#7f1d1d' }}>
@@ -44,9 +44,9 @@ export default function KpiCard({ metricName, value, delta, deltaPercent, isRate
     );
   }
 
-  const formattedValue = isRate
+  const formattedValue = displayFormat === 'decimal_rate' || isRate
     ? `${(value * 100).toFixed(1)}%`
-    : isPercent
+    : (displayFormat === 'percent' || isPercent)
       ? `${Number(value).toFixed(1)}%`
       : Number(value).toLocaleString();
 
