@@ -291,7 +291,9 @@ function assertValidSpec(result, label) {
 
   // Must have data_config
   assert(result.data_config, `${label}: must have data_config`);
-  assert(result.data_config.x_field, `${label}: data_config must have x_field`);
+  if (result.echarts_type !== 'kpi') {
+    assert(result.data_config.x_field, `${label}: data_config must have x_field`);
+  }
   assert(Array.isArray(result.data_config.y_fields), `${label}: data_config must have y_fields array`);
   assert(Array.isArray(result.data_config.labels), `${label}: data_config must have labels array`);
 
@@ -300,8 +302,10 @@ function assertValidSpec(result, label) {
     assert(VALID_ECHARTS_TYPES.has(result.echarts_type), `${label}: invalid echarts_type "${result.echarts_type}"`);
   }
 
-  // x_field must not be "Channel" (common hallucination)
-  assert(result.data_config.x_field !== 'Channel', `${label}: x_field should not be "Channel" — no such column exists`);
+  // x_field must not be "Channel" (common hallucination) — skip for KPI
+  if (result.echarts_type !== 'kpi') {
+    assert(result.data_config.x_field !== 'Channel', `${label}: x_field should not be "Channel" — no such column exists`);
+  }
 
   // Must have explanation
   assert(result.explanation, `${label}: must have explanation`);
