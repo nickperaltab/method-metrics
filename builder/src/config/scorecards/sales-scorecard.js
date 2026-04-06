@@ -60,33 +60,14 @@ WHERE is_new_dep = TRUE AND TxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH
 GROUP BY 1 ORDER BY 1
 `;
 
-const WEEKLY_CHURN_RATE_SQL = `
-WITH weekly_churns AS (
-  SELECT DATE_TRUNC(CancellationDate, WEEK(MONDAY)) AS week,
-    COUNT(DISTINCT CompanyAccount) AS churn_count
-  FROM \`project-for-method-dw.revenue.v_cancellations\`
-  WHERE CancellationDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
-    AND CancellationDate <= CURRENT_DATE()
-  GROUP BY 1
-),
-bom AS (
-  SELECT DATE_TRUNC(TxnDate, MONTH) AS m,
-    COUNT(DISTINCT CompanyAccount) AS bom_count
-  FROM \`project-for-method-dw.revenue.v_bom_customers\`
-  GROUP BY 1
-),
-convs AS (
-  SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS m,
-    COUNT(*) AS conv_count
-  FROM \`project-for-method-dw.revenue.v_conversions\`
-  GROUP BY 1
-)
-SELECT FORMAT_DATE('%Y-%m-%d', w.week) AS period,
-  ROUND(w.churn_count * 100.0 / NULLIF(b.bom_count + COALESCE(v.conv_count, 0), 0), 2) AS value
-FROM weekly_churns w
-JOIN bom b ON DATE_TRUNC(w.week, MONTH) = b.m
-LEFT JOIN convs v ON DATE_TRUNC(w.week, MONTH) = v.m
-ORDER BY 1
+// Weekly churn count (not rate) — matches Looker "Churn Count Week Over Week"
+const WEEKLY_CHURN_COUNT_SQL = `
+SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(CancellationDate, WEEK(MONDAY))) AS period,
+  COUNT(DISTINCT CompanyAccount) AS value
+FROM \`project-for-method-dw.revenue.v_cancellations\`
+WHERE CancellationDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+  AND CancellationDate <= CURRENT_DATE()
+GROUP BY 1 ORDER BY 1
 `;
 
 const WEEKLY_TOTAL_NET_SAAS_SQL = `
@@ -244,25 +225,25 @@ export default {
       title: 'Churn Rate',
       layout: 'scorecard-row',
       kpis: [
+        { metricId: 274, label: 'Forecasted Churn', format: 'number',
+          valueSelector: 'current_or_latest' },
         { metricId: 59, label: 'Churn', format: 'number',
-          valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 341, label: 'Churn Trajectory', format: 'number',
+          valueSelector: 'current_or_latest' },
+        { metricId: 297, label: 'Churn Trajectory', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 342, label: 'Forecasted Churn Rate %', format: 'percent',
           valueSelector: 'current_or_latest' },
-        { metricId: 344, label: 'Churn Rate', format: 'percent',
-          valueSelector: 'current_or_latest', showDelta: true },
         { metricId: 345, label: 'Churn Rate % Trajectory', format: 'percent',
           valueSelector: 'current_or_latest' },
       ],
       charts: [
         {
-          label: 'Churn Rate Week Over Week',
-          chartType: 'line', valueFormat: 'percent',
+          label: 'Churn Count Week Over Week',
+          chartType: 'bar', valueFormat: 'number',
           metrics: [
-            { id: 343, label: 'Budgeted Churn Rate', color: '#a3c771', renderAs: 'referenceLine' },
-            { id: 342, label: 'Forecasted Churn Rate', color: '#e84393', renderAs: 'referenceLine' },
-            { id: '__weekly_churn_rate', label: 'Churn Rate', color: '#2563eb', customSql: WEEKLY_CHURN_RATE_SQL },
+            { id: 280, label: 'Budgeted Churn', color: '#a3c771', renderAs: 'referenceLine' },
+            { id: 274, label: 'Forecasted Churn', color: '#e84393', renderAs: 'referenceLine' },
+            { id: '__weekly_churn_count', label: 'Churned Accounts', color: '#2563eb', customSql: WEEKLY_CHURN_COUNT_SQL },
           ],
           lastNMonths: 2, showLabels: true,
         },
@@ -270,8 +251,8 @@ export default {
           label: 'Churn Rate Month Over Month',
           chartType: 'bar', valueFormat: 'percent',
           metrics: [
-            { id: 343, label: 'Budgeted Churn Rate', color: '#1e3a5f' },
-            { id: 342, label: 'Forecasted Churn Rate', color: '#2563eb' },
+            { id: 343, label: 'Budgeted Churn Rate %', color: '#1e3a5f' },
+            { id: 342, label: 'Forecasted Churn Rate %', color: '#2563eb' },
             { id: 344, label: 'Churn Rate', color: '#9dc3e6' },
           ],
           lastNMonths: 4, showLabels: true,

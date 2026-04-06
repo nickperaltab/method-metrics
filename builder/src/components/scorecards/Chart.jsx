@@ -99,6 +99,8 @@ function fmtValue(v, valueFormat, opts = {}) {
       return short
         ? `$${Number(v.toFixed(0)).toLocaleString()}`
         : `$${Number(v.toFixed(2)).toLocaleString()}`;
+    case 'number':
+      return axis ? v.toLocaleString() : Number(v.toFixed(0)).toLocaleString();
     default:
       return short ? v.toLocaleString() : String(v);
   }
