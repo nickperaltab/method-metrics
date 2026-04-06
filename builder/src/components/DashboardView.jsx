@@ -399,6 +399,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 if (depMetric.chart_sql) {
                   try {
                     const agg = await fetchChartData(depMetric, null, 'COUNT', 'month', channelFilter, null, null);
+                    console.log(`[DASH KPI DEBUG] dep id:${depMetric.id} (${depMetric.name}) returned:`, { labels: agg.labels?.slice(-3), data: agg.data?.slice(-3), len: agg.labels?.length });
                     const now = new Date();
                     const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                     const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
@@ -436,6 +437,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
             } else if (metric.chart_sql) {
               try {
                 const agg = await fetchChartData(metric, null, yField, 'month', channelFilter, null, null);
+                console.log(`[DASH KPI DEBUG] direct id:${metric.id} (${metric.name}) returned:`, { labels: agg.labels?.slice(-3), data: agg.data?.slice(-3), len: agg.labels?.length });
                 const now = new Date();
                 const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 const prevMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
@@ -446,7 +448,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                 const delta = Math.round((current - prior) * 100) / 100;
                 const deltaPercent = prior !== 0 ? Math.round((delta / prior) * 1000) / 10 : 0;
                 kpis.push({ metricName: label, value: current, delta, deltaPercent, isRate: false, displayFormat: metric.display_format });
-              } catch {
+              } catch (err) {
+                console.error(`[DASH KPI DEBUG] direct id:${metric.id} (${metric.name}) FAILED:`, err.message);
                 kpis.push({ metricName: label, value: 0, delta: 0, deltaPercent: 0, isRate: false, hasError: true });
               }
             } else if (metric.view_name) {
