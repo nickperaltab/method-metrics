@@ -162,7 +162,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
             const results = await runBatch(batch);
             return { results, error: null };
           } catch (e) {
-            console.error(`[Scorecard] Batch failed (${batch.length} queries):`, e.message);
+            console.error(`[Scorecard] Batch failed (${batch.length} queries, keys: ${batch.map(q => q.key).join(',')}):`, e.message);
             // Fallback: run individually
             const results = new Map();
             for (const q of batch) {

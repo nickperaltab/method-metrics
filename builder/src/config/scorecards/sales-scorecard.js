@@ -104,7 +104,7 @@ GROUP BY 1 ORDER BY 1
 
 const FORECAST_WEEKLY_CAST = (column) => `
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
-  ROUND(SUM(CAST(${column} AS FLOAT64)), 2) AS value
+  ROUND(SUM(SAFE_CAST(${column} AS FLOAT64)), 2) AS value
 FROM \`project-for-method-dw.revenue.method_forecast\`
 WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1
