@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchChartData, fetchAggregatedData, queryBq, clearAggCache } from '../lib/bigquery';
+import { fetchChartData, fetchAggregatedData, queryBq } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
 import { evaluateFormula } from '../lib/sanitize';
 
@@ -46,8 +46,36 @@ function addDerivedDeps(ids, metricsMap) {
 }
 
 /**
+ * Run async tasks with a concurrency limit.
+ */
+async function parallelLimit(tasks, limit, onProgress) {
+  const results = new Map();
+  let completed = 0;
+  let index = 0;
+
+  async function runNext() {
+    while (index < tasks.length) {
+      const task = tasks[index++];
+      try {
+        const result = await task.fn();
+        results.set(task.key, result);
+      } catch (e) {
+        console.error(`Scorecard fetch failed for ${task.key}:`, e);
+        results.set(task.key, { error: e.message });
+      }
+      completed++;
+      onProgress?.(completed, tasks.length);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => runNext());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
  * Hook to load all data for a scorecard config.
- * Fetches primitives sequentially, then computes derived metrics.
+ * Fetches primitives in parallel (3 at a time), then computes derived metrics.
  */
 export default function useScorecardData(config, metrics, bqConnected) {
   const [dataMap, setDataMap] = useState(new Map());
@@ -63,7 +91,6 @@ export default function useScorecardData(config, metrics, bqConnected) {
     }
 
     abortRef.current = false;
-    clearAggCache();
 
     const metricsMap = new Map(metrics.map(m => [m.id, m]));
     const { ids: directIds, customSqls } = collectMetricIds(config);
@@ -82,81 +109,81 @@ export default function useScorecardData(config, metrics, bqConnected) {
       }
     }
 
-    const total = primitives.length + customSqls.length;
-    setProgress({ loaded: 0, total });
-    setLoading(true);
+    // Build task list for parallel execution
+    const tasks = [];
 
-    (async () => {
-      const map = new Map();
-      const errs = new Map();
-      let loaded = 0;
-
-      // Fetch primitives sequentially
-      for (const metric of primitives) {
-        if (abortRef.current) return;
-        try {
-          let result;
+    for (const metric of primitives) {
+      tasks.push({
+        key: metric.id,
+        fn: async () => {
           if (metric.chart_sql) {
-            result = await fetchChartData(metric, null, 'COUNT', 'month', null, 13);
+            return await fetchChartData(metric, null, 'COUNT', 'month', null, 13);
           } else if (metric.view_name) {
             const dateCol = config.views?.[metric.view_name]?.dateCol
               || getDateCol(metric.view_name, 'SignupDate');
-            result = await fetchAggregatedData(
+            return await fetchAggregatedData(
               metric.view_name, dateCol, 'COUNT', 'month', null, 13
             );
           }
+          return null;
+        },
+      });
+    }
 
-          if (result) {
-            // Handle multi-series: flatten primary series
-            if (result.multiSeries) {
-              const keys = Object.keys(result.series);
-              if (keys.length > 0) {
-                const first = result.series[keys[0]];
-                map.set(metric.id, { labels: first.labels, data: first.data });
-              } else {
-                map.set(metric.id, null);
-              }
-            } else if (result.labels?.length > 0) {
-              map.set(metric.id, { labels: result.labels, data: result.data });
-            } else {
-              map.set(metric.id, null);
-            }
-          } else {
-            map.set(metric.id, null);
-          }
-        } catch (e) {
-          console.error(`Scorecard fetch failed for metric ${metric.id}:`, e);
-          map.set(metric.id, null);
-          errs.set(metric.id, e.message);
-          if (e.message?.includes('session expired') || e.message?.includes('401')) break;
-        }
-        loaded++;
-        setProgress({ loaded, total });
-      }
-
-      // Fetch custom SQL entries
-      for (const { key, sql } of customSqls) {
-        if (abortRef.current) return;
-        try {
+    for (const { key, sql } of customSqls) {
+      tasks.push({
+        key,
+        fn: async () => {
           const result = await queryBq(sql);
           if (result.rows?.length > 0) {
-            map.set(key, {
+            return {
               labels: result.rows.map(r => r.period),
               data: result.rows.map(r => Number(r.value) || 0),
-            });
+            };
+          }
+          return null;
+        },
+      });
+    }
+
+    setProgress({ loaded: 0, total: tasks.length });
+    setLoading(true);
+
+    (async () => {
+      // Fetch all primitives + custom SQL in parallel, 3 at a time
+      const rawResults = await parallelLimit(tasks, 3, (loaded, total) => {
+        if (!abortRef.current) setProgress({ loaded, total });
+      });
+
+      if (abortRef.current) return;
+
+      // Normalize results into dataMap
+      const map = new Map();
+      const errs = new Map();
+
+      for (const [key, result] of rawResults) {
+        if (!result || result.error) {
+          map.set(key, null);
+          if (result?.error) errs.set(key, result.error);
+          continue;
+        }
+        // Handle multi-series: flatten primary series
+        if (result.multiSeries) {
+          const keys = Object.keys(result.series);
+          if (keys.length > 0) {
+            const first = result.series[keys[0]];
+            map.set(key, { labels: first.labels, data: first.data });
           } else {
             map.set(key, null);
           }
-        } catch (e) {
-          console.error(`Scorecard custom SQL failed for ${key}:`, e);
+        } else if (result.labels?.length > 0) {
+          map.set(key, { labels: result.labels, data: result.data });
+        } else {
           map.set(key, null);
-          errs.set(key, e.message);
         }
-        loaded++;
-        setProgress({ loaded, total });
       }
 
-      // Compute derived metrics
+      // Compute derived metrics (instant, no BQ calls)
       for (const metric of derived) {
         if (abortRef.current) return;
         try {
@@ -172,7 +199,6 @@ export default function useScorecardData(config, metrics, bqConnected) {
             }
           }
 
-          // Union all period labels
           const allLabels = new Set();
           for (const counts of Object.values(depData)) {
             Object.keys(counts).forEach(k => allLabels.add(k));
