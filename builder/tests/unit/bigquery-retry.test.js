@@ -4,11 +4,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
-if (typeof globalThis.localStorage === 'undefined') {
-  globalThis.localStorage = { getItem: () => 'fake-token', setItem: () => {}, removeItem: () => {} };
-}
+globalThis.localStorage = { getItem: () => 'fake-token', setItem: () => {}, removeItem: () => {} };
 
-const { queryBqWithRetry } = await import('../../src/lib/bigquery.js');
+const { queryBqWithRetry, _setBqToken } = await import('../../src/lib/bigquery.js');
 
 function bqResponse(rows, fields = [{ name: 'period' }, { name: 'value' }]) {
   return {
@@ -32,7 +30,7 @@ function bqErrorResponse(status) {
 }
 
 describe('queryBqWithRetry', () => {
-  beforeEach(() => { mockFetch.mockReset(); });
+  beforeEach(() => { mockFetch.mockReset(); _setBqToken('fake-token'); });
 
   it('returns data on first success', async () => {
     mockFetch.mockResolvedValueOnce(bqResponse([{ period: '2026-01', value: '42' }]));

@@ -10,6 +10,11 @@ export function getBqToken() {
   return bqToken;
 }
 
+/** For unit tests only — restores the token without OAuth flow. */
+export function _setBqToken(token) {
+  bqToken = token;
+}
+
 export async function initBqAuth(onSuccess, onFail) {
   const stored = localStorage.getItem('bq_access_token');
   if (!stored) return;
@@ -102,6 +107,31 @@ export async function queryBq(sql) {
     return o;
   });
   return { rows, schema: fields };
+}
+
+/**
+ * queryBq wrapper with retry for transient BQ failures.
+ * Retries on: BQ 400, BQ 429, timeout messages.
+ * Does NOT retry: 401 (auth), unknown errors (likely SQL bugs).
+ */
+export async function queryBqWithRetry(sql, { maxRetries = 2, retryOnEmpty = false, baseDelay = 500 } = {}) {
+  const RETRYABLE = /BQ 4(00|29)|timed out/;
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await queryBq(sql);
+      if (retryOnEmpty && result.rows.length === 0 && attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, attempt)));
+        continue;
+      }
+      return result;
+    } catch (e) {
+      lastError = e;
+      if (!RETRYABLE.test(e.message) || attempt >= maxRetries) throw e;
+      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, attempt)));
+    }
+  }
+  throw lastError;
 }
 
 export const ATT_COL_MAP = {
