@@ -157,7 +157,13 @@ export default function useScorecardData(config, metrics, bqConnected) {
     }
 
     abortRef.current = false;
+    setLoading(true);
 
+    // Small delay after BQ connects to ensure token is fully ready
+    const delayTimer = setTimeout(startLoading, 500);
+    return () => { abortRef.current = true; clearTimeout(delayTimer); };
+
+    function startLoading() {
     const metricsMap = new Map(metrics.map(m => [m.id, m]));
     const { ids: directIds, customSqls, weeklyMetrics } = collectMetricIds(config);
     const allIds = addDerivedDeps(directIds, metricsMap);
@@ -368,8 +374,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
         setLoading(false);
       }
     })();
-
-    return () => { abortRef.current = true; };
+    } // end startLoading
   }, [config, metrics, bqConnected]);
 
   return { dataMap, loading, progress, errors };
