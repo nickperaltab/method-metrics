@@ -390,7 +390,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
             return { key: `${metricId}:yoy`, result: null };
           }
           try {
-            const sql = buildSemanticSql(metric, 'month', 25, null);
+            const sql = buildSemanticSql(metric, 'month', 36, null);
             const raw = await queryBq(sql);
             return {
               key: `${metricId}:yoy`,

@@ -100,7 +100,7 @@ function fmtValue(v, valueFormat, opts = {}) {
         ? `$${Number(v.toFixed(0)).toLocaleString()}`
         : `$${Number(v.toFixed(2)).toLocaleString()}`;
     case 'number':
-      return axis ? v.toLocaleString() : Number(v.toFixed(0)).toLocaleString();
+      return axis ? Math.round(v).toLocaleString() : Number(v.toFixed(0)).toLocaleString();
     default:
       return short ? v.toLocaleString() : String(v);
   }
@@ -193,10 +193,6 @@ export default function Chart({ config, dataMap, onMetricClick }) {
       const yoyData = dataMap.get(`${metric.id}:yoy`);
       if (!yoyData?.labels?.length) return null;
 
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const priorYear = currentYear - 1;
-
       // Group data by year → month
       const byYear = {};
       yoyData.labels.forEach((label, i) => {
@@ -207,22 +203,19 @@ export default function Chart({ config, dataMap, onMetricClick }) {
       });
 
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      // Show months that exist in either year, up to current month for current year
-      const allMonths = new Set([
-        ...Object.keys(byYear[priorYear] || {}),
-        ...Object.keys(byYear[currentYear] || {}),
-      ]);
+      // All months that appear across any year
+      const allMonths = new Set(yoyData.labels.map(l => l.slice(5, 7)));
       const months = [...allMonths].sort();
       const displayMonths = months.map(m => monthNames[parseInt(m, 10) - 1]);
 
-      const series = [
-        { year: priorYear, color: '#d1d5db' },
-        { year: currentYear, color: '#2563eb' },
-      ].filter(({ year }) => byYear[year]).map(({ year, color }) => ({
+      // Show all years in ascending order, color from light → dark blue
+      const years = Object.keys(byYear).map(Number).sort();
+      const yearColors = ['#bfdbfe', '#93c5fd', '#60a5fa', '#2563eb'];
+      const series = years.map((year, i) => ({
         name: String(year),
         type: 'bar',
         data: months.map(m => byYear[year]?.[m] ?? null),
-        itemStyle: { color },
+        itemStyle: { color: yearColors[Math.max(0, yearColors.length - years.length + i)] },
       }));
 
       if (!series.length) return null;

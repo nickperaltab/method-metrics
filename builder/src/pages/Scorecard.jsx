@@ -101,7 +101,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     return (
       <div style={{ padding: 48, textAlign: 'center', color: '#6b7280' }}>
         <h2 style={{ fontSize: 20, color: '#1a1a1a', marginBottom: 8 }}>{config.title}</h2>
-        <p>Loading metrics... {progress.loaded} / {progress.total}</p>
+        <p>Loading data... {progress.loaded} / {progress.total}</p>
         <div style={{
           width: 200, height: 4, background: '#e2e5e9', borderRadius: 2,
           margin: '12px auto', overflow: 'hidden',
