@@ -4,6 +4,7 @@ import trialsBreakdown from './trials-breakdown-scorecard';
 import syncsBreakdown from './syncs-breakdown-scorecard';
 import conversionsBreakdown from './conversions-breakdown-scorecard';
 import funnelScorecard from './funnel-scorecard';
+import cancellationsBreakdown from './cancellations-breakdown-scorecard';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
@@ -12,4 +13,5 @@ export const SCORECARDS = {
   'syncs-breakdown': syncsBreakdown,
   'conversions-breakdown': conversionsBreakdown,
   'funnel': funnelScorecard,
+  'cancellations-breakdown': cancellationsBreakdown,
 };
