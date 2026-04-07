@@ -44,17 +44,12 @@ function PillGroup({ options, value, onChange }) {
   );
 }
 
-function ScoreCardFilters({ lastNMonths, onLastNMonths, grain, onGrain }) {
+function ScoreCardFilters({ lastNMonths, onLastNMonths }) {
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif" }}>RANGE</span>
         <PillGroup options={DATE_PRESETS} value={lastNMonths} onChange={onLastNMonths} />
-      </div>
-      <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif" }}>GRAIN</span>
-        <PillGroup options={GRAIN_OPTIONS} value={grain} onChange={onGrain} />
       </div>
     </div>
   );
@@ -185,20 +180,23 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         </h1>
         <ScoreCardFilters
           lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
-          grain={grain} onGrain={setGrain}
         />
       </div>
 
-      {ungrouped.map(section => (
-        <ScorecardSection
-          key={section.title}
-          section={section}
-          dataMap={dataMap}
-          onMetricClick={handleMetricClick}
-          filterLastNMonths={filterLastNMonths}
-          grain={grain}
-        />
-      ))}
+      {ungrouped.map(section => {
+        const hasFixedGrain = (section.charts || []).some(c => c.timeBucket || c.yoy);
+        return (
+          <ScorecardSection
+            key={section.title}
+            section={section}
+            dataMap={dataMap}
+            onMetricClick={handleMetricClick}
+            filterLastNMonths={filterLastNMonths}
+            grain={hasFixedGrain ? null : grain}
+            onGrain={hasFixedGrain ? null : setGrain}
+          />
+        );
+      })}
 
       {breakdownSections.length > 0 && (
         <BreakdownTabs
@@ -206,7 +204,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
           filterLastNMonths={filterLastNMonths}
-          grain={grain}
+          grain={null}
         />
       )}
 

@@ -4,7 +4,14 @@ import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
 
-export default function ScorecardSection({ section, dataMap, onMetricClick, filterLastNMonths, grain }) {
+const GRAIN_OPTIONS = [
+  { label: 'Daily', value: 'day' },
+  { label: 'Weekly', value: 'week' },
+  { label: 'Monthly', value: 'month' },
+  { label: 'Quarterly', value: 'quarter' },
+];
+
+export default function ScorecardSection({ section, dataMap, onMetricClick, filterLastNMonths, grain, onGrain }) {
   // Raw table sections render differently — full width, no chart grid
   if (section.type === 'rawTable') {
     return (
@@ -22,12 +29,35 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
 
   return (
     <div style={{ marginBottom: 48 }}>
-      <h2 style={{
-        fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 16,
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        {section.title}
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{
+          fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {section.title}
+        </h2>
+        {onGrain && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {GRAIN_OPTIONS.map(opt => (
+              <button
+                key={opt.label}
+                onClick={() => onGrain(opt.value)}
+                style={{
+                  padding: '4px 12px', fontSize: 12,
+                  fontWeight: grain === opt.value ? 600 : 400,
+                  fontFamily: "'DM Sans', sans-serif",
+                  background: grain === opt.value ? '#2563eb' : '#f3f4f6',
+                  color: grain === opt.value ? '#fff' : '#6b7280',
+                  border: 'none', borderRadius: 16, cursor: 'pointer',
+                  transition: 'background 150ms, color 150ms',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{
         display: 'grid',
