@@ -1,6 +1,6 @@
 /**
- * Trials Breakdown Scorecard
- * One section per approved dimension — all data driven from semantic layer (v_trials).
+ * Trials Dashboard
+ * Overview + dimension breakdowns, all driven from semantic layer (v_trials).
  *
  * Note: AttributionChannel is NOT a direct column in v_trials (it's derived from
  * individual Att_* flag columns). That breakdown requires a BQ view update (Justin).
@@ -8,12 +8,30 @@
 
 export default {
   id: 'trials-breakdown',
-  title: 'Trials Breakdown',
+  title: 'Trials',
   status: 'pending',
   views: {
     v_trials: { dateCol: 'SignupDate' },
   },
   sections: [
+    // ── Overview ────────────────────────────────────────────────
+    {
+      title: 'Overview',
+      kpis: [
+        { metricId: 54, label: 'Trials This Month', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true },
+      ],
+      charts: [
+        {
+          label: 'Monthly Trials',
+          chartType: 'bar', valueFormat: 'number',
+          lastNMonths: 6, showLabels: true,
+          metrics: [{ id: 54, label: 'Trials', color: '#2563eb' }],
+        },
+      ],
+    },
+
+    // ── Breakdowns ──────────────────────────────────────────────
     {
       title: 'By Country',
       charts: [
