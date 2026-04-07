@@ -8,7 +8,7 @@
 export default {
   id: 'funnel',
   title: 'Funnel',
-  status: 'pending',
+  status: 'approved',
   sections: [
     // ── Overview ────────────────────────────────────────────────
     {
@@ -28,7 +28,7 @@ export default {
           metrics: [
             { id: 54, label: 'Trials', color: '#2563eb' },
             { id: 55, label: 'Syncs', color: '#059669' },
-            { id: 56, label: 'Conversions', color: '#dc2626' },
+            { id: 56, label: 'Conversions', color: '#0891b2' },
           ],
         },
       ],
@@ -61,7 +61,7 @@ export default {
         {
           label: 'Trial-to-Close Rate Over Time',
           chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
-          metrics: [{ id: 302, label: 'Trial-to-Close Rate', color: '#dc2626' }],
+          metrics: [{ id: 302, label: 'Trial-to-Close Rate', color: '#0891b2' }],
         },
       ],
     },

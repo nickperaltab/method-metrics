@@ -6,7 +6,7 @@
 export default {
   id: 'conversions-breakdown',
   title: 'Conversions',
-  status: 'pending',
+  status: 'approved',
   views: {
     v_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
   },
@@ -23,7 +23,7 @@ export default {
           label: 'Monthly Conversions',
           chartType: 'bar', valueFormat: 'number',
           lastNMonths: 6, showLabels: true,
-          metrics: [{ id: 56, label: 'Conversions', color: '#dc2626' }],
+          metrics: [{ id: 56, label: 'Conversions', color: '#0891b2' }],
         },
       ],
     },
@@ -49,7 +49,7 @@ export default {
           label: 'Conversions by Week',
           chartType: 'bar', valueFormat: 'number',
           timeBucket: 'week', lastNMonths: 2, showLabels: true,
-          metrics: [{ id: 56, label: 'Conversions', color: '#dc2626' }],
+          metrics: [{ id: 56, label: 'Conversions', color: '#0891b2' }],
         },
       ],
     },
