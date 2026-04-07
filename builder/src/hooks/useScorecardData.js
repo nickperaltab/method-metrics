@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchChartData, fetchAggregatedData, queryBq, buildSemanticSql } from '../lib/bigquery';
+import { fetchChartData, fetchAggregatedData, queryBq, buildSemanticSql, fetchGroupedData } from '../lib/bigquery';
 import { buildBatchSql, splitBatchResults, wrapChartSql } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
 import { evaluateFormula } from '../lib/sanitize';
@@ -11,6 +11,7 @@ function collectMetricIds(config) {
   const ids = new Set();
   const customSqls = [];
   const weeklyMetrics = new Map();
+  const groupedCharts = []; // { metricId, dimension, lastNMonths }
 
   for (const section of config.sections) {
     for (const kpi of section.kpis || []) {
@@ -26,9 +27,16 @@ function collectMetricIds(config) {
           if (typeof m.id === 'number') weeklyMetrics.set(m.id, true);
         }
       }
+      if (chart.groupByDimension) {
+        for (const m of chart.metrics || []) {
+          if (typeof m.id === 'number') {
+            groupedCharts.push({ metricId: m.id, dimension: chart.groupByDimension, lastNMonths: chart.lastNMonths ?? 13 });
+          }
+        }
+      }
     }
   }
-  return { ids: [...ids], customSqls, weeklyMetrics };
+  return { ids: [...ids], customSqls, weeklyMetrics, groupedCharts };
 }
 
 /**
@@ -165,7 +173,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
 
     function startLoading() {
     const metricsMap = new Map(metrics.map(m => [m.id, m]));
-    const { ids: directIds, customSqls, weeklyMetrics } = collectMetricIds(config);
+    const { ids: directIds, customSqls, weeklyMetrics, groupedCharts } = collectMetricIds(config);
     const allIds = addDerivedDeps(directIds, metricsMap);
 
     const primitives = [];
@@ -339,7 +347,30 @@ export default function useScorecardData(config, metrics, bqConnected) {
 
       if (abortRef.current) return;
 
-      // 4. Compute derived metrics (instant, no BQ calls)
+      // 4. Fetch grouped dimension data (for breakdown charts)
+      if (groupedCharts.length > 0) {
+        const groupedPromises = groupedCharts.map(async ({ metricId, dimension, lastNMonths: lnm }) => {
+          const metric = metricsMap.get(metricId);
+          if (!metric?.view_name) return { key: `${metricId}:grouped:${dimension}`, result: null };
+          const dateCol = config.views?.[metric.view_name]?.dateCol || getDateCol(metric.view_name, 'SignupDate');
+          try {
+            const result = await fetchGroupedData(metric.view_name, dateCol, 'COUNT', 'month', dimension, null, lnm);
+            return { key: `${metricId}:grouped:${dimension}`, result };
+          } catch (e) {
+            console.error(`[Scorecard] Grouped query failed for metric ${metricId} by ${dimension}:`, e.message);
+            return { key: `${metricId}:grouped:${dimension}`, result: null };
+          }
+        });
+        const groupedResults = await Promise.all(groupedPromises);
+        for (const { key, result } of groupedResults) {
+          map.set(key, result || null);
+        }
+        console.log(`[Scorecard] ${groupedCharts.length} grouped dimension queries complete`);
+      }
+
+      if (abortRef.current) return;
+
+      // 6. Compute derived metrics (instant, no BQ calls)
       for (const metric of topoSortDerived(derived)) {
         if (abortRef.current) return;
         try {

@@ -186,6 +186,54 @@ export default function Chart({ config, dataMap, onMetricClick }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
 
+    // Grouped dimension chart — multi-series, one series per dimension value
+    if (config.groupByDimension) {
+      const metric = config.metrics?.[0];
+      if (!metric) return null;
+      const grouped = dataMap.get(`${metric.id}:grouped:${config.groupByDimension}`);
+      if (!grouped?.seriesMap || Object.keys(grouped.seriesMap).length === 0) return null;
+
+      const PALETTE = ['#2563eb','#059669','#f59e0b','#e84393','#8b5cf6','#0891b2','#dc2626','#65a30d','#7c3aed','#0284c7','#b45309','#0f766e'];
+      // Sort dimension values by total volume descending
+      const dimValues = Object.keys(grouped.seriesMap).sort((a, b) => {
+        const aTotal = grouped.seriesMap[a].reduce((s, v) => s + (v || 0), 0);
+        const bTotal = grouped.seriesMap[b].reduce((s, v) => s + (v || 0), 0);
+        return bTotal - aTotal;
+      });
+      const displayLabels = grouped.labels.map(formatLabel);
+
+      const groupedSeries = dimValues.map((dim, i) => ({
+        name: dim,
+        type: config.chartType || 'bar',
+        data: grouped.seriesMap[dim],
+        itemStyle: { color: PALETTE[i % PALETTE.length] },
+        ...(config.stacked ? { stack: 'total' } : {}),
+      }));
+
+      return {
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params) => {
+            let html = `<div style="font-weight:600;margin-bottom:4px">${params[0]?.axisValueLabel || ''}</div>`;
+            for (const p of params) {
+              if (p.value != null) {
+                html += `<div>${p.marker} ${p.seriesName}: ${fmtValue(p.value, vf)}</div>`;
+              }
+            }
+            return html;
+          },
+        },
+        legend: { show: true, top: 0, type: 'scroll', textStyle: { fontSize: 11 } },
+        grid: { left: 60, right: 20, top: 40, bottom: 30 },
+        xAxis: { type: 'category', data: displayLabels, axisLabel: { fontSize: 10 } },
+        yAxis: {
+          type: 'value',
+          axisLabel: { fontSize: 10, formatter: (v) => fmtValue(v, vf, { axis: true }) },
+        },
+        series: groupedSeries,
+      };
+    }
+
     // For weekly charts, look up data keyed as "id:week" for view-based metrics
     const getMetricData = (id) => {
       if (config.timeBucket === 'week' && typeof id === 'number') {

@@ -15,7 +15,9 @@ export default function ScorecardSection({ section, dataMap, onMetricClick }) {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '220px 1fr 1fr',
+        gridTemplateColumns: section.kpis
+          ? '220px 1fr 1fr'
+          : `repeat(${Math.min((section.charts || []).length, 2)}, 1fr)`,
         gap: 24,
         alignItems: 'stretch',
       }}>

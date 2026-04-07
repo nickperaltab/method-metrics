@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin } from '../lib/permissions';
 import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
+import { SCORECARDS } from '../config/scorecards';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
@@ -172,14 +173,12 @@ export default function Sidebar({ collapsed, onToggle }) {
 
           {/* Scorecards */}
           <div style={sectionLabel}>Scorecards</div>
-          <NavLink to="/scorecards/sales-scorecard" style={linkStyle}>
-            <span style={{ fontSize: 12, color: '#059669' }}>{'\u25C9'}</span>
-            Sales Scorecard
-          </NavLink>
-          <NavLink to="/scorecards/marketing-scorecard" style={linkStyle}>
-            <span style={{ fontSize: 12, color: '#059669' }}>{'\u25C9'}</span>
-            Marketing Scorecard
-          </NavLink>
+          {Object.values(SCORECARDS).map(sc => (
+            <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
+              <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+              {sc.title}
+            </NavLink>
+          ))}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />

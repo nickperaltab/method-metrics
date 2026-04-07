@@ -11,6 +11,7 @@ const VIEWS = {
 export default {
   id: 'marketing-scorecard',
   title: 'Marketing Scorecard',
+  status: 'pending',
   views: VIEWS,
   sections: [
     // ── 1. Snapshot ──────────────────────────────────────────
