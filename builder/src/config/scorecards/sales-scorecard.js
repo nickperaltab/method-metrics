@@ -43,7 +43,7 @@ forecast AS (
   GROUP BY 1
 )
 SELECT FORMAT_DATE('%Y-%m-%d', c.week) AS period,
-  ROUND(SAFE_DIVIDE(c.conversions, (t.last_month_trials + f.forecasted_trials) / 2.0), 4) AS value
+  ROUND(SAFE_DIVIDE(c.conversions, (t.last_month_trials + f.forecasted_trials) / 2.0) * 100, 2) AS value
 FROM conversions c
 LEFT JOIN weekly_lagged t ON c.week = t.week
 LEFT JOIN forecast f ON c.week = f.week
@@ -138,8 +138,11 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 357, label: 'Conversion Rate', format: 'decimal_rate',
           valueSelector: 'current_or_latest', showDelta: true },
+        // 321 formula outputs percentage number (8.49), not decimal — use 'percent'
         { metricId: 321, label: 'Conversion Rate Trajectory', format: 'percent',
           valueSelector: 'current_or_latest' },
+        // 322/323: Supabase formulas mix scales (321 is %, 319 is decimal).
+        // Override with corrected formulas that convert 319 to % first.
         { metricId: 322, label: 'Forecast vs. Trajectory', format: 'percent',
           valueSelector: 'current_or_latest',
           formulaOverride: '{321} - ({319} * 100)', depsOverride: [321, 319] },
@@ -150,10 +153,10 @@ export default {
       charts: [
         {
           label: 'Conversion Rate Week Over Week',
-          chartType: 'line', valueFormat: 'decimal_rate',
+          chartType: 'line', valueFormat: 'percent',
           metrics: [
-            { id: '__wk_budget_convrate', label: 'Budgeted Conversion Rate', color: '#a3c771', customSql: FORECAST_WEEKLY_MAX('Budgeted_Conversion_Rate') },
-            { id: '__wk_forecast_convrate', label: 'Forecasted Conversion Rate', color: '#e84393', customSql: FORECAST_WEEKLY_MAX('Forecasted_Conversion_Rate') },
+            { id: '__wk_budget_convrate', label: 'Budgeted Conversion Rate', color: '#a3c771', customSql: `SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period, ROUND(MAX(Budgeted_Conversion_Rate) * 100, 2) AS value FROM \`project-for-method-dw.revenue.method_forecast\` WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE() GROUP BY 1 ORDER BY 1` },
+            { id: '__wk_forecast_convrate', label: 'Forecasted Conversion Rate', color: '#e84393', customSql: `SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period, ROUND(MAX(Forecasted_Conversion_Rate) * 100, 2) AS value FROM \`project-for-method-dw.revenue.method_forecast\` WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE() GROUP BY 1 ORDER BY 1` },
             { id: '__weekly_conv_rate', label: 'Conversion Rate', color: '#2563eb', customSql: WEEKLY_CONVERSION_RATE_SQL },
           ],
           lastNMonths: 2, showLabels: true,
