@@ -6,17 +6,25 @@ import { resolveKpiValue } from './utils';
  * Aggregate a monthly time-series into quarters.
  * Labels become "YYYY-QN", values are summed.
  */
-function aggregateToQuarters(timeSeries) {
+function aggregateToQuarters(timeSeries, isRate = false) {
   if (!timeSeries?.labels?.length) return null;
   const quarters = {};
+  const counts = {};
   timeSeries.labels.forEach((label, i) => {
     const [year, month] = label.split('-').map(Number);
     const q = Math.ceil(month / 3);
     const key = `${year}-Q${q}`;
     quarters[key] = (quarters[key] || 0) + (timeSeries.data[i] || 0);
+    counts[key] = (counts[key] || 0) + 1;
   });
   const labels = Object.keys(quarters).sort();
-  return { labels, data: labels.map(k => Math.round(quarters[k])) };
+  return {
+    labels,
+    data: labels.map(k => {
+      const val = isRate ? quarters[k] / counts[k] : quarters[k];
+      return Math.round(val * 100) / 100;
+    }),
+  };
 }
 
 /**
@@ -366,7 +374,7 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       .map(m => {
         const raw = getMetricData(m.id);
         const data = effectiveGrain === 'quarter'
-          ? filterToWindow(aggregateToQuarters(raw), null) // quarters already at right scale
+          ? filterToWindow(aggregateToQuarters(raw, config.valueFormat === 'percent'), null)
           : filterToWindow(raw, effectiveLastNMonths);
         return { id: m.id, data };
       });

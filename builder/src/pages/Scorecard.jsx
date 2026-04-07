@@ -183,20 +183,17 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         />
       </div>
 
-      {ungrouped.map(section => {
-        const hasFixedGrain = (section.charts || []).some(c => c.timeBucket || c.yoy);
-        return (
-          <ScorecardSection
-            key={section.title}
-            section={section}
-            dataMap={dataMap}
-            onMetricClick={handleMetricClick}
-            filterLastNMonths={filterLastNMonths}
-            grain={hasFixedGrain ? null : grain}
-            onGrain={hasFixedGrain ? null : setGrain}
-          />
-        );
-      })}
+      {ungrouped.map((section, i) => (
+        <ScorecardSection
+          key={section.title}
+          section={section}
+          dataMap={dataMap}
+          onMetricClick={handleMetricClick}
+          filterLastNMonths={filterLastNMonths}
+          grain={i === 0 ? grain : null}
+          onGrain={i === 0 ? setGrain : null}
+        />
+      ))}
 
       {breakdownSections.length > 0 && (
         <BreakdownTabs
