@@ -3,7 +3,7 @@ import KpiTile from './KpiTile';
 import { resolveKpiValue, computeDelta } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
 
-export default function KpiColumn({ kpis, dataMap }) {
+export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 200 }}>
       {kpis.map((kpi) => {
@@ -39,6 +39,7 @@ export default function KpiColumn({ kpis, dataMap }) {
             format={kpi.format}
             deltaPercent={deltaPercent}
             noData={noData}
+            onClick={() => onMetricClick?.(kpi.metricId, value, kpi.format)}
           />
         );
       })}

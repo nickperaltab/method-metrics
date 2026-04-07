@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { SCORECARDS } from '../config/scorecards';
 import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
+import MetricInspector from '../components/scorecards/MetricInspector';
 
 export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
   const { dataMap, loading, progress } = useScorecardData(config, metrics, bqConnected);
+  const [inspected, setInspected] = useState(null); // { metricId, value, format }
+
+  const metricsCache = useMemo(() => {
+    if (!metrics) return new Map();
+    return new Map(metrics.map(m => [m.id, m]));
+  }, [metrics]);
 
   if (!config) {
     return (
@@ -64,8 +71,20 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         {config.title}
       </h1>
       {config.sections.map(section => (
-        <ScorecardSection key={section.title} section={section} dataMap={dataMap} />
+        <ScorecardSection
+          key={section.title}
+          section={section}
+          dataMap={dataMap}
+          onMetricClick={(metricId, value, format) => setInspected({ metricId, value, format })}
+        />
       ))}
+      <MetricInspector
+        metricId={inspected?.metricId}
+        currentValue={inspected?.value}
+        valueFormat={inspected?.format}
+        metricsCache={metricsCache}
+        onClose={() => setInspected(null)}
+      />
     </div>
   );
 }

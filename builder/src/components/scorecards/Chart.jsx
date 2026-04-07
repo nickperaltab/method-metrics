@@ -106,7 +106,7 @@ function fmtValue(v, valueFormat, opts = {}) {
   }
 }
 
-export default function Chart({ config, dataMap }) {
+export default function Chart({ config, dataMap, onMetricClick }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
 
@@ -243,6 +243,24 @@ export default function Chart({ config, dataMap }) {
       <div style={{ flex: 1, minHeight: 300 }}>
         <EChart option={option} style={{ height: '100%' }} />
       </div>
+      {onMetricClick && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+          {config.metrics.filter(m => typeof m.id === 'number').map(m => (
+            <span
+              key={m.id}
+              onClick={() => onMetricClick(m.id, null, config.valueFormat)}
+              style={{
+                fontSize: 11, color: '#2563eb', cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              onMouseEnter={e => { e.target.style.textDecoration = 'underline'; }}
+              onMouseLeave={e => { e.target.style.textDecoration = 'none'; }}
+            >
+              ⓘ {m.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

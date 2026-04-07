@@ -3,7 +3,7 @@ import KpiColumn from './KpiColumn';
 import Chart from './Chart';
 import DataTable from './DataTable';
 
-export default function ScorecardSection({ section, dataMap }) {
+export default function ScorecardSection({ section, dataMap, onMetricClick }) {
   return (
     <div style={{ marginBottom: 48 }}>
       <h2 style={{
@@ -21,18 +21,18 @@ export default function ScorecardSection({ section, dataMap }) {
       }}>
         {/* Left: KPI column */}
         {section.kpis && (
-          <KpiColumn kpis={section.kpis} dataMap={dataMap} />
+          <KpiColumn kpis={section.kpis} dataMap={dataMap} onMetricClick={onMetricClick} />
         )}
 
         {/* Right: Charts */}
         {(section.charts || []).map((chart, i) => (
-          <Chart key={i} config={chart} dataMap={dataMap} />
+          <Chart key={i} config={chart} dataMap={dataMap} onMetricClick={onMetricClick} />
         ))}
       </div>
 
       {/* Tables — full width below the KPI/chart grid */}
       {(section.tables || []).map((table, i) => (
-        <DataTable key={i} config={table} dataMap={dataMap} />
+        <DataTable key={i} config={table} dataMap={dataMap} onMetricClick={onMetricClick} />
       ))}
     </div>
   );

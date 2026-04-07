@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { formatValue } from './utils';
 
 const styles = {
   tile: {
-    padding: '8px 0',
+    padding: '8px 12px',
     borderBottom: '1px solid #f1f3f5',
+    cursor: 'pointer',
+    borderRadius: 6,
+    border: '1px solid transparent',
+    transition: 'border-color 150ms ease-out, box-shadow 150ms ease-out',
+    position: 'relative',
+  },
+  tileHover: {
+    borderColor: '#2563eb',
+    boxShadow: '0 0 0 1px #2563eb',
   },
   label: {
     fontSize: 11,
@@ -30,7 +39,9 @@ const styles = {
   },
 };
 
-export default function KpiTile({ label, value, format, deltaPercent, noData }) {
+export default function KpiTile({ label, value, format, deltaPercent, noData, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
   if (noData) {
     return (
       <div style={styles.tile}>
@@ -55,10 +66,16 @@ export default function KpiTile({ label, value, format, deltaPercent, noData }) 
   }
 
   return (
-    <div style={styles.tile}>
+    <div
+      style={{ ...styles.tile, ...(hovered ? styles.tileHover : {}) }}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div style={styles.label}>{label}</div>
       <div style={styles.value}>{formatted}</div>
       {deltaEl}
+      {hovered && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 14, color: '#2563eb' }}>ⓘ</span>}
     </div>
   );
 }

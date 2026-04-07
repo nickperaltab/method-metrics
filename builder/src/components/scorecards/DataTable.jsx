@@ -47,7 +47,7 @@ const styles = {
   },
 };
 
-export default function DataTable({ config, dataMap }) {
+export default function DataTable({ config, dataMap, onMetricClick }) {
   const { rows, columnHeaders } = useMemo(() => {
     // Collect all period labels from column metrics
     const allLabels = new Set();
@@ -109,7 +109,15 @@ export default function DataTable({ config, dataMap }) {
           <tr>
             <th style={styles.thFirst}>Date (Month)</th>
             {columnHeaders.map(col => (
-              <th key={col.metricId} style={styles.th}>{col.label}</th>
+              <th
+                key={col.metricId || col.label}
+                style={{ ...styles.th, ...(col.metricId ? { cursor: 'pointer' } : {}) }}
+                onClick={() => col.metricId && onMetricClick?.(col.metricId, null, col.format)}
+                onMouseEnter={e => { if (col.metricId) e.target.style.background = '#2a4f7a'; }}
+                onMouseLeave={e => { if (col.metricId) e.target.style.background = '#1e3a5f'; }}
+              >
+                {col.label}
+              </th>
             ))}
           </tr>
         </thead>
