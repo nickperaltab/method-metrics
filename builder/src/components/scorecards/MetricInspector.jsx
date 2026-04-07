@@ -234,11 +234,20 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
               {/* Section 3: Formula */}
               <div style={ps.section}>
                 <div style={ps.sectionLabel}>Formula</div>
-                {metric.formula ? (
-                  <FormulaDisplay formula={metric.formula} metricsMap={metricsMap} onNavigate={navigateTo} />
-                ) : deps.length > 0 ? (
+                {metric.formula_display ? (
                   <div style={ps.formulaBox}>
-                    <span style={ps.formulaText}>Depends on: </span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#374151' }}>
+                      {metric.formula_display}
+                    </span>
+                  </div>
+                ) : metric.formula ? (
+                  <FormulaDisplay formula={metric.formula} metricsMap={metricsMap} onNavigate={navigateTo} />
+                ) : (
+                  <div style={ps.dim}>This is a primitive metric — queried directly from BigQuery.</div>
+                )}
+                {deps.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>Built from: </span>
                     {deps.map((dep, i) => (
                       <React.Fragment key={dep.id}>
                         {i > 0 && <span style={ps.formulaText}>, </span>}
@@ -253,19 +262,31 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
                       </React.Fragment>
                     ))}
                   </div>
-                ) : (
-                  <div style={ps.dim}>This is a primitive metric — queried directly from BigQuery.</div>
                 )}
               </div>
 
               {/* Section 4: Data Source */}
-              {metric.view_name && (
+              {(metric.view_name || metric.source_url) && (
                 <div style={ps.section}>
                   <div style={ps.sectionLabel}>Data Source</div>
-                  <div style={ps.sourceRow}>
-                    <span style={ps.sourceIcon}>⛁</span>
-                    <span style={ps.sourceName}>{metric.view_name}</span>
-                  </div>
+                  {metric.view_name && (
+                    <div style={ps.sourceRow}>
+                      <span style={ps.sourceIcon}>⛁</span>
+                      <span style={ps.sourceName}>{metric.view_name}</span>
+                    </div>
+                  )}
+                  {metric.source_url && (
+                    <a
+                      href={metric.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: metric.view_name ? 8 : 0, fontSize: 13, color: '#2563eb', textDecoration: 'none' }}
+                      onMouseEnter={e => { e.target.style.textDecoration = 'underline'; }}
+                      onMouseLeave={e => { e.target.style.textDecoration = 'none'; }}
+                    >
+                      {metric.source_url.includes('google.com/spreadsheets') ? '📊 Open source spreadsheet' : '🔍 Open in BigQuery'}
+                    </a>
+                  )}
                 </div>
               )}
 

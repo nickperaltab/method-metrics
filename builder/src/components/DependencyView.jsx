@@ -64,41 +64,22 @@ function getMisclassFlags(m) {
   return flags;
 }
 
-/** Build a readable formula string from depends_on + known metric names */
+/** Get readable formula — prefer formula_display from Supabase, fall back to generated */
 function getFormulaDisplay(m, metricsById) {
-  // If the metric has an explicit formula field, make it readable
+  if (m.formula_display) return m.formula_display;
+
+  // Fallback: generate from formula field
   if (m.formula) {
-    // Replace {id} with metric names
     let readable = m.formula;
     readable = readable.replace(/\{(\d+)\}/g, (_, id) => {
       const dep = metricsById[Number(id)];
       return dep ? dep.name : `#${id}`;
     });
-    // Make SAFE_DIVIDE readable
     readable = readable.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, '$1 / $2');
     return readable;
   }
 
-  // If it has chart_sql, summarize the pattern
-  if (m.chart_sql) {
-    const sql = m.chart_sql;
-    if (/safe_divide/i.test(sql)) return 'Ratio (see chart_sql)';
-    if (/sum\s*\(/i.test(sql) && /group by/i.test(sql)) return 'Aggregation (see chart_sql)';
-    return 'Custom SQL';
-  }
-
-  // If derived with depends_on, show dependency names
-  if (m.depends_on && m.depends_on.length > 0) {
-    const depNames = m.depends_on.map(id => {
-      const dep = metricsById[id];
-      return dep ? dep.name : `#${id}`;
-    });
-    return `f(${depNames.join(', ')})`;
-  }
-
-  // Primitive with a view_name
   if (m.view_name) return `← ${m.view_name}`;
-
   return '—';
 }
 
@@ -294,8 +275,13 @@ export default function DependencyView({ metrics }) {
                         {hasChildren && <span style={ds.childCount}>{tree.children.length} derived</span>}
                       </div>
                     </td>
-                    <td style={{ ...ds.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6b7280' }}>
-                      {getFormulaDisplay(p, metricsById)}
+                    <td style={ds.td}>
+                      <div style={ds.formulaCell}>{getFormulaDisplay(p, metricsById)}</div>
+                      {p.source_url && (
+                        <a href={p.source_url} target="_blank" rel="noopener noreferrer" style={ds.sourceLink}>
+                          {p.source_url.includes('google.com/spreadsheets') ? '📊 Source spreadsheet' : '🔍 BQ view'}
+                        </a>
+                      )}
                     </td>
                     <td style={{ ...ds.td, fontSize: 12, color: '#6b7280' }}>
                       {p.description || <span style={ds.dim}>—</span>}
@@ -320,8 +306,13 @@ export default function DependencyView({ metrics }) {
                           )}
                         </div>
                       </td>
-                      <td style={{ ...ds.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#2563eb' }}>
-                        {getFormulaDisplay(child, metricsById)}
+                      <td style={ds.td}>
+                        <div style={{ ...ds.formulaCell, color: '#2563eb' }}>{getFormulaDisplay(child, metricsById)}</div>
+                        {child.source_url && (
+                          <a href={child.source_url} target="_blank" rel="noopener noreferrer" style={ds.sourceLink}>
+                            {child.source_url.includes('google.com/spreadsheets') ? '📊 Source' : '🔍 BQ'}
+                          </a>
+                        )}
                       </td>
                       <td style={{ ...ds.td, fontSize: 12, color: '#6b7280' }}>
                         {child.description || <span style={ds.dim}>—</span>}
@@ -413,4 +404,6 @@ const ds = {
 
   badge: { display: 'inline-block', padding: '2px 6px', borderRadius: 3, fontSize: 10, fontFamily: "'JetBrains Mono', monospace", border: '1px solid', whiteSpace: 'nowrap' },
   dim: { color: '#d1d5db', fontSize: 12 },
+  formulaCell: { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#6b7280', lineHeight: 1.5 },
+  sourceLink: { display: 'inline-block', marginTop: 4, fontSize: 11, color: '#2563eb', textDecoration: 'none', fontFamily: "'DM Sans', sans-serif" },
 };
