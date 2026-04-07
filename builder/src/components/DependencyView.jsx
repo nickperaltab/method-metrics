@@ -66,8 +66,18 @@ function getMisclassFlags(m) {
 
 /** Build a readable formula string from depends_on + known metric names */
 function getFormulaDisplay(m, metricsById) {
-  // If the metric has an explicit formula field, show it
-  if (m.formula) return m.formula;
+  // If the metric has an explicit formula field, make it readable
+  if (m.formula) {
+    // Replace {id} with metric names
+    let readable = m.formula;
+    readable = readable.replace(/\{(\d+)\}/g, (_, id) => {
+      const dep = metricsById[Number(id)];
+      return dep ? dep.name : `#${id}`;
+    });
+    // Make SAFE_DIVIDE readable
+    readable = readable.replace(/SAFE_DIVIDE\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, '$1 / $2');
+    return readable;
+  }
 
   // If it has chart_sql, summarize the pattern
   if (m.chart_sql) {
