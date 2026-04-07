@@ -63,6 +63,7 @@ export default function Registry() {
     livePrim: metrics.filter(m => m.status === 'live' && m.metric_type !== 'derived').length,
     liveDerived: metrics.filter(m => m.status === 'live' && m.metric_type === 'derived').length,
     queued: metrics.filter(m => m.status !== 'live').length,
+    approved: metrics.filter(m => m.status === 'live' && m.verified_at).length,
   };
 
   function toggleSort(col) {
@@ -132,6 +133,7 @@ export default function Registry() {
           <div style={s.stat}><span style={{ ...s.statVal, color: '#059669' }}>{counts.livePrim}</span><span style={s.statLabel}>Live Primitives</span></div>
           <div style={s.stat}><span style={{ ...s.statVal, color: '#2563eb' }}>{counts.liveDerived}</span><span style={s.statLabel}>Live Derived</span></div>
           <div style={s.stat}><span style={s.statVal}>{counts.queued}</span><span style={s.statLabel}>Queued</span></div>
+          <div style={s.stat}><span style={{ ...s.statVal, color: '#f59e0b' }}>{counts.approved}</span><span style={s.statLabel}>Approved</span></div>
         </div>
       </div>
 
@@ -173,6 +175,7 @@ export default function Registry() {
               <th style={s.th} onClick={() => toggleSort('id')}>ID {sortCol === 'id' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th} onClick={() => toggleSort('name')}>Name {sortCol === 'name' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th}>Type</th>
+              {tab === 'live' && <th style={{ ...s.th, textAlign: 'center' }}>Approved</th>}
               <th style={s.th}>Description</th>
               {tab === 'queued' && <th style={s.th}>Priority</th>}
               {tab === 'queued' && <th style={s.th}>Assigned</th>}
@@ -184,7 +187,7 @@ export default function Registry() {
               { items: derived, label: 'Derived', color: '#2563eb' },
             ].map(group => group.items.length > 0 && (
               <React.Fragment key={group.label}>
-                <tr><td colSpan={tab === 'queued' ? 7 : 5} style={s.groupRow}>
+                <tr><td colSpan={tab === 'queued' ? 7 : 6} style={s.groupRow}>
                   <span style={{ color: group.color }}>{group.label}</span>
                   <span style={s.groupCount}>{group.items.length}</span>
                 </td></tr>
@@ -204,6 +207,14 @@ export default function Registry() {
                           {(m.metric_type || 'primitive').charAt(0).toUpperCase() + (m.metric_type || 'primitive').slice(1)}
                         </span>
                       </td>
+                      {tab === 'live' && (
+                        <td style={{ ...s.td, textAlign: 'center' }} title={m.verified_at ? `Approved ${new Date(m.verified_at).toLocaleDateString()}` : 'Not yet approved'}>
+                          {m.verified_at
+                            ? <span style={{ color: '#059669', fontSize: 14, fontWeight: 700 }}>✓</span>
+                            : <span style={{ color: '#d1d5db', fontSize: 13 }}>○</span>
+                          }
+                        </td>
+                      )}
                       <td style={s.td} onClick={e => e.stopPropagation()}>
                         <input
                           type="text"
@@ -241,7 +252,7 @@ export default function Registry() {
                       )}
                     </tr>
                     {expandedId === m.id && (
-                      <tr><td colSpan={tab === 'queued' ? 7 : 5} style={{ padding: 0 }}>
+                      <tr><td colSpan={tab === 'queued' ? 7 : 6} style={{ padding: 0 }}>
                         <ExpandPanel metric={m} onUpdate={reload} onSaveField={handleSaveField} onDelete={handleDeleteMetric} />
                       </td></tr>
                     )}
