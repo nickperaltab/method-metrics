@@ -12,8 +12,15 @@ function collectMetricIds(config) {
   const customSqls = [];
   const weeklyMetrics = new Map();
   const groupedCharts = []; // { metricId, dimension, lastNMonths }
+  const yoyMetrics = new Set(); // metric IDs needing 25-month fetch
+  const rawTableSections = []; // sections with type: 'rawTable'
 
   for (const section of config.sections) {
+    if (section.type === 'rawTable') {
+      rawTableSections.push(section);
+      if (section.metricId) ids.add(section.metricId);
+      continue;
+    }
     for (const kpi of section.kpis || []) {
       ids.add(kpi.metricId);
     }
@@ -34,9 +41,14 @@ function collectMetricIds(config) {
           }
         }
       }
+      if (chart.yoy) {
+        for (const m of chart.metrics || []) {
+          if (typeof m.id === 'number') yoyMetrics.add(m.id);
+        }
+      }
     }
   }
-  return { ids: [...ids], customSqls, weeklyMetrics, groupedCharts };
+  return { ids: [...ids], customSqls, weeklyMetrics, groupedCharts, yoyMetrics: [...yoyMetrics], rawTableSections };
 }
 
 /**
@@ -173,7 +185,7 @@ export default function useScorecardData(config, metrics, bqConnected) {
 
     function startLoading() {
     const metricsMap = new Map(metrics.map(m => [m.id, m]));
-    const { ids: directIds, customSqls, weeklyMetrics, groupedCharts } = collectMetricIds(config);
+    const { ids: directIds, customSqls, weeklyMetrics, groupedCharts, yoyMetrics, rawTableSections } = collectMetricIds(config);
     const allIds = addDerivedDeps(directIds, metricsMap);
 
     const primitives = [];
@@ -366,6 +378,62 @@ export default function useScorecardData(config, metrics, bqConnected) {
           map.set(key, result || null);
         }
         console.log(`[Scorecard] ${groupedCharts.length} grouped dimension queries complete`);
+      }
+
+      if (abortRef.current) return;
+
+      // 5. YoY data — 25-month fetch for charts with yoy: true
+      if (yoyMetrics.length > 0) {
+        const yoyPromises = yoyMetrics.map(async (metricId) => {
+          const metric = metricsMap.get(metricId);
+          if (!metric?.semantic_table || !metric?.semantic_measure || !metric?.semantic_date_col) {
+            return { key: `${metricId}:yoy`, result: null };
+          }
+          try {
+            const sql = buildSemanticSql(metric, 'month', 25, null);
+            const raw = await queryBq(sql);
+            return {
+              key: `${metricId}:yoy`,
+              result: {
+                labels: raw.rows.map(r => r.period),
+                data: raw.rows.map(r => Number(r.value) || 0),
+              },
+            };
+          } catch (e) {
+            console.error(`[Scorecard] YoY fetch failed for metric ${metricId}:`, e.message);
+            return { key: `${metricId}:yoy`, result: null };
+          }
+        });
+        const yoyResults = await Promise.all(yoyPromises);
+        for (const { key, result } of yoyResults) {
+          map.set(key, result);
+        }
+      }
+
+      if (abortRef.current) return;
+
+      // 5b. Raw table sections — SELECT raw rows (no aggregation)
+      if (rawTableSections.length > 0) {
+        const rawPromises = rawTableSections.map(async (section) => {
+          const metric = metricsMap.get(section.metricId);
+          if (!metric?.semantic_table) return { key: `${section.metricId}:raw`, result: null };
+          const cols = (section.columns || [metric.semantic_date_col, 'CompanyAccount']).join(', ');
+          const table = `\`project-for-method-dw.revenue.${metric.semantic_table}\``;
+          const limit = section.limit || 100;
+          const orderCol = metric.semantic_date_col;
+          const sql = `SELECT ${cols} FROM ${table} ORDER BY ${orderCol} DESC LIMIT ${limit}`;
+          try {
+            const raw = await queryBq(sql);
+            return { key: `${section.metricId}:raw`, result: { rows: raw.rows, columns: section.columns } };
+          } catch (e) {
+            console.error(`[Scorecard] Raw table fetch failed for metric ${section.metricId}:`, e.message);
+            return { key: `${section.metricId}:raw`, result: null };
+          }
+        });
+        const rawResults = await Promise.all(rawPromises);
+        for (const { key, result } of rawResults) {
+          map.set(key, result);
+        }
       }
 
       if (abortRef.current) return;

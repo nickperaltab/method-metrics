@@ -2,8 +2,24 @@ import React from 'react';
 import KpiColumn from './KpiColumn';
 import Chart from './Chart';
 import DataTable from './DataTable';
+import RawTable from './RawTable';
 
 export default function ScorecardSection({ section, dataMap, onMetricClick }) {
+  // Raw table sections render differently — full width, no chart grid
+  if (section.type === 'rawTable') {
+    return (
+      <div style={{ marginBottom: 48 }}>
+        <h2 style={{
+          fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 16,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {section.title}
+        </h2>
+        <RawTable config={section} dataMap={dataMap} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ marginBottom: 48 }}>
       <h2 style={{

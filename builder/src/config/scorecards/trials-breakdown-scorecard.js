@@ -1,6 +1,8 @@
 /**
  * Trials Dashboard
  * Overview + dimension breakdowns, all driven from semantic layer (v_trials).
+ *
+ * Note: RevenueBucket breakdown requires BQ view update (AnnualSales not in v_trials yet).
  */
 
 export default {
@@ -23,6 +25,32 @@ export default {
           label: 'Monthly Trials',
           chartType: 'bar', valueFormat: 'number',
           lastNMonths: 6, showLabels: true,
+          metrics: [{ id: 54, label: 'Trials', color: '#2563eb' }],
+        },
+      ],
+    },
+
+    // ── Year over Year ───────────────────────────────────────────
+    {
+      title: 'Year over Year',
+      charts: [
+        {
+          label: 'Trials: This Year vs Last Year',
+          chartType: 'bar', valueFormat: 'number',
+          yoy: true,
+          metrics: [{ id: 54, label: 'Trials' }],
+        },
+      ],
+    },
+
+    // ── Weekly ───────────────────────────────────────────────────
+    {
+      title: 'Weekly',
+      charts: [
+        {
+          label: 'Trials by Week',
+          chartType: 'bar', valueFormat: 'number',
+          timeBucket: 'week', lastNMonths: 2, showLabels: true,
           metrics: [{ id: 54, label: 'Trials', color: '#2563eb' }],
         },
       ],
@@ -76,6 +104,16 @@ export default {
           metrics: [{ id: 54, label: 'Trials' }],
         },
       ],
+    },
+
+    // ── Recent Records ───────────────────────────────────────────
+    {
+      type: 'rawTable',
+      title: 'Recent Trials',
+      label: 'Most Recent Trial Accounts',
+      metricId: 54,
+      columns: ['SignupDate', 'CompanyAccount', 'SignupCountry', 'Vertical', 'AttributionChannel'],
+      limit: 100,
     },
   ],
 };

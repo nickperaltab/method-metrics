@@ -186,6 +186,66 @@ export default function Chart({ config, dataMap, onMetricClick }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
 
+    // YoY chart — current year vs prior year, grouped bars by month
+    if (config.yoy) {
+      const metric = config.metrics?.[0];
+      if (!metric) return null;
+      const yoyData = dataMap.get(`${metric.id}:yoy`);
+      if (!yoyData?.labels?.length) return null;
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const priorYear = currentYear - 1;
+
+      // Group data by year → month
+      const byYear = {};
+      yoyData.labels.forEach((label, i) => {
+        const year = parseInt(label.slice(0, 4), 10);
+        const month = label.slice(5, 7);
+        if (!byYear[year]) byYear[year] = {};
+        byYear[year][month] = yoyData.data[i];
+      });
+
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      // Show months that exist in either year, up to current month for current year
+      const allMonths = new Set([
+        ...Object.keys(byYear[priorYear] || {}),
+        ...Object.keys(byYear[currentYear] || {}),
+      ]);
+      const months = [...allMonths].sort();
+      const displayMonths = months.map(m => monthNames[parseInt(m, 10) - 1]);
+
+      const series = [
+        { year: priorYear, color: '#d1d5db' },
+        { year: currentYear, color: '#2563eb' },
+      ].filter(({ year }) => byYear[year]).map(({ year, color }) => ({
+        name: String(year),
+        type: 'bar',
+        data: months.map(m => byYear[year]?.[m] ?? null),
+        itemStyle: { color },
+      }));
+
+      if (!series.length) return null;
+
+      return {
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params) => {
+            let html = `<div style="font-weight:600;margin-bottom:4px">${params[0]?.axisValueLabel || ''}</div>`;
+            for (const p of params) {
+              if (p.value != null) html += `<div>${p.marker} ${p.seriesName}: ${fmtValue(p.value, vf)}</div>`;
+            }
+            return html;
+          },
+        },
+        legend: { show: true, top: 0, textStyle: { fontSize: 11 } },
+        grid: { left: 60, right: 20, top: 40, bottom: 30 },
+        xAxis: { type: 'category', data: displayMonths, axisLabel: { fontSize: 10 } },
+        yAxis: { type: 'value', axisLabel: { fontSize: 10, formatter: (v) => fmtValue(v, vf, { axis: true }) } },
+        series,
+      };
+    }
+
     // Grouped dimension chart — multi-series, one series per dimension value
     if (config.groupByDimension) {
       const metric = config.metrics?.[0];
