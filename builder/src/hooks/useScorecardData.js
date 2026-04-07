@@ -382,6 +382,33 @@ export default function useScorecardData(config, metrics, bqConnected) {
 
       if (abortRef.current) return;
 
+      // 4b. Daily data for semantic metrics (for grain switcher, last 90 days)
+      const semanticPrimitives = primitives.filter(
+        m => m.semantic_table && m.semantic_measure && m.semantic_date_col
+      );
+      if (semanticPrimitives.length > 0) {
+        const dailyPromises = semanticPrimitives.map(async (metric) => {
+          const sql = buildSemanticSql(metric, 'day', 3, null); // ~90 days
+          try {
+            const raw = await queryBq(sql);
+            return {
+              key: `${metric.id}:day`,
+              result: raw.rows?.length > 0
+                ? { labels: raw.rows.map(r => r.period), data: raw.rows.map(r => Number(r.value) || 0) }
+                : null,
+            };
+          } catch (e) {
+            return { key: `${metric.id}:day`, result: null };
+          }
+        });
+        const dailyResults = await Promise.all(dailyPromises);
+        for (const { key, result } of dailyResults) {
+          map.set(key, result);
+        }
+      }
+
+      if (abortRef.current) return;
+
       // 5. YoY data — 25-month fetch for charts with yoy: true
       if (yoyMetrics.length > 0) {
         const yoyPromises = yoyMetrics.map(async (metricId) => {

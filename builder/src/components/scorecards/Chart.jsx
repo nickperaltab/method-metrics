@@ -3,6 +3,45 @@ import EChart from '../EChart';
 import { resolveKpiValue } from './utils';
 
 /**
+ * Aggregate a monthly time-series into quarters.
+ * Labels become "YYYY-QN", values are summed.
+ */
+function aggregateToQuarters(timeSeries) {
+  if (!timeSeries?.labels?.length) return null;
+  const quarters = {};
+  timeSeries.labels.forEach((label, i) => {
+    const [year, month] = label.split('-').map(Number);
+    const q = Math.ceil(month / 3);
+    const key = `${year}-Q${q}`;
+    quarters[key] = (quarters[key] || 0) + (timeSeries.data[i] || 0);
+  });
+  const labels = Object.keys(quarters).sort();
+  return { labels, data: labels.map(k => Math.round(quarters[k])) };
+}
+
+/**
+ * Aggregate a monthly grouped seriesMap into quarters.
+ */
+function aggregateGroupedToQuarters(grouped) {
+  if (!grouped?.labels?.length) return null;
+  const qLabels = {};
+  grouped.labels.forEach((label, i) => {
+    const [year, month] = label.split('-').map(Number);
+    const key = `${year}-Q${Math.ceil(month / 3)}`;
+    if (!qLabels[key]) qLabels[key] = {};
+    for (const [dim, vals] of Object.entries(grouped.seriesMap)) {
+      qLabels[key][dim] = (qLabels[key][dim] || 0) + (vals[i] || 0);
+    }
+  });
+  const labels = Object.keys(qLabels).sort();
+  const seriesMap = {};
+  for (const dim of Object.keys(grouped.seriesMap)) {
+    seriesMap[dim] = labels.map(k => Math.round(qLabels[k]?.[dim] || 0));
+  }
+  return { labels, seriesMap };
+}
+
+/**
  * Filter a time-series to a window: last N months up to current month.
  * Removes both old data and future forecast months.
  */
@@ -65,6 +104,8 @@ function alignSeries(metricsData, ensureCurrentPeriod = false) {
 }
 
 function formatLabel(l) {
+  // Quarter: "2025-Q1"
+  if (/^\d{4}-Q\d$/.test(l)) return l;
   if (l.length === 7) {
     const [y, m] = l.split('-');
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -182,11 +223,12 @@ function ChartInspectMenu({ metrics, customMetrics = [], valueFormat, onMetricCl
   );
 }
 
-export default function Chart({ config, dataMap, onMetricClick, filterLastNMonths }) {
+export default function Chart({ config, dataMap, onMetricClick, filterLastNMonths, grain }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
-    // Date filter: override config.lastNMonths when user selects a preset
     const effectiveLastNMonths = filterLastNMonths ?? config.lastNMonths;
+    // Grain override: 'week' uses :week key, 'quarter' aggregates monthly, 'month' is default
+    const effectiveGrain = grain ?? 'month';
 
     // YoY chart — current year vs prior year, grouped bars by month
     if (config.yoy) {
@@ -248,9 +290,12 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       const rawGrouped = dataMap.get(`${metric.id}:grouped:${config.groupByDimension}`);
       if (!rawGrouped?.seriesMap || Object.keys(rawGrouped.seriesMap).length === 0) return null;
 
-      // Apply date filter to grouped data
-      let grouped = rawGrouped;
-      if (effectiveLastNMonths) {
+      // Apply grain aggregation first, then date filter
+      let grouped = effectiveGrain === 'quarter'
+        ? (aggregateGroupedToQuarters(rawGrouped) || rawGrouped)
+        : rawGrouped;
+
+      if (effectiveLastNMonths && effectiveGrain !== 'quarter') {
         const now = new Date();
         const cutoff = new Date(now.getFullYear(), now.getMonth() - effectiveLastNMonths, 1);
         const startStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
@@ -306,20 +351,25 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       };
     }
 
-    // For weekly charts, look up data keyed as "id:week" for view-based metrics
     const getMetricData = (id) => {
-      if (config.timeBucket === 'week' && typeof id === 'number') {
+      if (effectiveGrain === 'week' || config.timeBucket === 'week') {
         return dataMap.get(`${id}:week`) || dataMap.get(id);
+      }
+      if (effectiveGrain === 'day') {
+        return dataMap.get(`${id}:day`) || dataMap.get(id);
       }
       return dataMap.get(id);
     };
 
     const metricsData = config.metrics
       .filter(m => m.renderAs !== 'referenceLine')
-      .map(m => ({
-        id: m.id,
-        data: filterToWindow(getMetricData(m.id), effectiveLastNMonths),
-      }));
+      .map(m => {
+        const raw = getMetricData(m.id);
+        const data = effectiveGrain === 'quarter'
+          ? filterToWindow(aggregateToQuarters(raw), null) // quarters already at right scale
+          : filterToWindow(raw, effectiveLastNMonths);
+        return { id: m.id, data };
+      });
 
     const hasAny = metricsData.some(d => d.data != null);
     if (!hasAny) return null;
@@ -415,7 +465,7 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       },
       series,
     };
-  }, [config, dataMap, filterLastNMonths]);
+  }, [config, dataMap, filterLastNMonths, grain]);
 
   if (!option) {
     return (
@@ -432,7 +482,7 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
   const customMetrics = config.metrics.filter(m => typeof m.id === 'string' && m.customSql);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{
         fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8,
         fontFamily: "'DM Sans', sans-serif",
@@ -448,9 +498,7 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
           />
         )}
       </div>
-      <div style={{ flex: 1, minHeight: 300 }}>
-        <EChart option={option} style={{ height: '100%' }} />
-      </div>
+      <EChart option={option} style={{ height: 320, width: '100%' }} />
     </div>
   );
 }

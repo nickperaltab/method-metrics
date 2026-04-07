@@ -13,33 +13,54 @@ const DATE_PRESETS = [
   { label: 'All', value: null },
 ];
 
-function DateFilter({ value, onChange }) {
+const GRAIN_OPTIONS = [
+  { label: 'Daily', value: 'day' },
+  { label: 'Weekly', value: 'week' },
+  { label: 'Monthly', value: 'month' },
+  { label: 'Quarterly', value: 'quarter' },
+];
+
+function PillGroup({ options, value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <span style={{ fontSize: 12, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginRight: 4 }}>
-        Show
-      </span>
-      {DATE_PRESETS.map(preset => (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {options.map(opt => (
         <button
-          key={preset.label}
-          onClick={() => onChange(preset.value)}
+          key={opt.label}
+          onClick={() => onChange(opt.value)}
           style={{
-            padding: '4px 12px', fontSize: 12, fontWeight: value === preset.value ? 600 : 400,
+            padding: '4px 12px', fontSize: 12,
+            fontWeight: value === opt.value ? 600 : 400,
             fontFamily: "'DM Sans', sans-serif",
-            background: value === preset.value ? '#2563eb' : '#f3f4f6',
-            color: value === preset.value ? '#fff' : '#6b7280',
+            background: value === opt.value ? '#2563eb' : '#f3f4f6',
+            color: value === opt.value ? '#fff' : '#6b7280',
             border: 'none', borderRadius: 16, cursor: 'pointer',
             transition: 'background 150ms, color 150ms',
           }}
         >
-          {preset.label}
+          {opt.label}
         </button>
       ))}
     </div>
   );
 }
 
-function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths }) {
+function ScoreCardFilters({ lastNMonths, onLastNMonths, grain, onGrain }) {
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif" }}>RANGE</span>
+        <PillGroup options={DATE_PRESETS} value={lastNMonths} onChange={onLastNMonths} />
+      </div>
+      <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif" }}>GRAIN</span>
+        <PillGroup options={GRAIN_OPTIONS} value={grain} onChange={onGrain} />
+      </div>
+    </div>
+  );
+}
+
+function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, grain }) {
   const [active, setActive] = useState(0);
 
   return (
@@ -80,6 +101,7 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths }) 
               dataMap={dataMap}
               onMetricClick={onMetricClick}
               filterLastNMonths={filterLastNMonths}
+              grain={grain}
             />
           ))}
         </div>
@@ -94,6 +116,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { dataMap, loading } = useScorecardData(config, metrics, bqConnected);
   const [inspected, setInspected] = useState(null);
   const [filterLastNMonths, setFilterLastNMonths] = useState(null);
+  const [grain, setGrain] = useState('month');
 
   const metricsCache = useMemo(() => {
     if (!metrics) return new Map();
@@ -160,7 +183,10 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         }}>
           {config.title}
         </h1>
-        <DateFilter value={filterLastNMonths} onChange={setFilterLastNMonths} />
+        <ScoreCardFilters
+          lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
+          grain={grain} onGrain={setGrain}
+        />
       </div>
 
       {ungrouped.map(section => (
@@ -170,6 +196,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
           filterLastNMonths={filterLastNMonths}
+          grain={grain}
         />
       ))}
 
@@ -179,6 +206,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
           filterLastNMonths={filterLastNMonths}
+          grain={grain}
         />
       )}
 
