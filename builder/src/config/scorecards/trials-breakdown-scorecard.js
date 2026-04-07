@@ -8,7 +8,7 @@
 export default {
   id: 'trials-breakdown',
   title: 'Trials',
-  status: 'pending',
+  status: 'approved',
   views: {
     v_trials: { dateCol: 'SignupDate' },
   },

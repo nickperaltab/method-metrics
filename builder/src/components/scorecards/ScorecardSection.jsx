@@ -4,7 +4,7 @@ import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
 
-export default function ScorecardSection({ section, dataMap, onMetricClick }) {
+export default function ScorecardSection({ section, dataMap, onMetricClick, filterLastNMonths }) {
   // Raw table sections render differently — full width, no chart grid
   if (section.type === 'rawTable') {
     return (
@@ -37,18 +37,14 @@ export default function ScorecardSection({ section, dataMap, onMetricClick }) {
         gap: 24,
         alignItems: 'stretch',
       }}>
-        {/* Left: KPI column */}
         {section.kpis && (
           <KpiColumn kpis={section.kpis} dataMap={dataMap} onMetricClick={onMetricClick} />
         )}
-
-        {/* Right: Charts */}
         {(section.charts || []).map((chart, i) => (
-          <Chart key={i} config={chart} dataMap={dataMap} onMetricClick={onMetricClick} />
+          <Chart key={i} config={chart} dataMap={dataMap} onMetricClick={onMetricClick} filterLastNMonths={filterLastNMonths} />
         ))}
       </div>
 
-      {/* Tables — full width below the KPI/chart grid */}
       {(section.tables || []).map((table, i) => (
         <DataTable key={i} config={table} dataMap={dataMap} onMetricClick={onMetricClick} />
       ))}

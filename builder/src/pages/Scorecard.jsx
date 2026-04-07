@@ -6,7 +6,40 @@ import ScorecardSection from '../components/scorecards/ScorecardSection';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 
-function BreakdownTabs({ sections, dataMap, onMetricClick }) {
+const DATE_PRESETS = [
+  { label: '3M', value: 3 },
+  { label: '6M', value: 6 },
+  { label: '12M', value: 12 },
+  { label: 'All', value: null },
+];
+
+function DateFilter({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <span style={{ fontSize: 12, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginRight: 4 }}>
+        Show
+      </span>
+      {DATE_PRESETS.map(preset => (
+        <button
+          key={preset.label}
+          onClick={() => onChange(preset.value)}
+          style={{
+            padding: '4px 12px', fontSize: 12, fontWeight: value === preset.value ? 600 : 400,
+            fontFamily: "'DM Sans', sans-serif",
+            background: value === preset.value ? '#2563eb' : '#f3f4f6',
+            color: value === preset.value ? '#fff' : '#6b7280',
+            border: 'none', borderRadius: 16, cursor: 'pointer',
+            transition: 'background 150ms, color 150ms',
+          }}
+        >
+          {preset.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths }) {
   const [active, setActive] = useState(0);
 
   return (
@@ -18,40 +51,36 @@ function BreakdownTabs({ sections, dataMap, onMetricClick }) {
         Breakdowns
       </h2>
 
-      {/* Tab buttons */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
         {sections.map((section, i) => (
           <button
             key={section.title}
             onClick={() => setActive(i)}
             style={{
-              padding: '6px 16px',
-              fontSize: 13,
+              padding: '6px 16px', fontSize: 13,
               fontWeight: active === i ? 600 : 400,
               fontFamily: "'DM Sans', sans-serif",
               background: active === i ? '#2563eb' : '#f3f4f6',
               color: active === i ? '#fff' : '#374151',
-              border: 'none',
-              borderRadius: 20,
-              cursor: 'pointer',
+              border: 'none', borderRadius: 20, cursor: 'pointer',
               transition: 'background 150ms, color 150ms',
             }}
           >
-            {/* Strip "By " prefix for tab labels */}
             {section.title.replace(/^By /, '')}
           </button>
         ))}
       </div>
 
-      {/* Active breakdown chart */}
       {sections[active] && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: 24,
-        }}>
+        <div>
           {(sections[active].charts || []).map((chart, i) => (
-            <Chart key={i} config={chart} dataMap={dataMap} onMetricClick={onMetricClick} />
+            <Chart
+              key={i}
+              config={chart}
+              dataMap={dataMap}
+              onMetricClick={onMetricClick}
+              filterLastNMonths={filterLastNMonths}
+            />
           ))}
         </div>
       )}
@@ -62,8 +91,9 @@ function BreakdownTabs({ sections, dataMap, onMetricClick }) {
 export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
-  const { dataMap, loading, progress } = useScorecardData(config, metrics, bqConnected);
+  const { dataMap, loading } = useScorecardData(config, metrics, bqConnected);
   const [inspected, setInspected] = useState(null);
+  const [filterLastNMonths, setFilterLastNMonths] = useState(null);
 
   const metricsCache = useMemo(() => {
     if (!metrics) return new Map();
@@ -106,11 +136,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           width: 200, height: 4, background: '#e2e5e9', borderRadius: 2,
           margin: '12px auto', overflow: 'hidden',
         }}>
-          <div style={{
-            width: progress.total ? `${(progress.loaded / progress.total) * 100}%` : '10%',
-            height: '100%', background: '#059669', borderRadius: 2,
-            transition: 'width 0.3s',
-          }} />
+          <div style={{ width: '30%', height: '100%', background: '#059669', borderRadius: 2 }} />
         </div>
       </div>
     );
@@ -124,12 +150,18 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
-      <h1 style={{
-        fontSize: 28, fontWeight: 700, color: '#1a1a1a', marginBottom: 32,
-        fontFamily: "'DM Sans', sans-serif",
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 32,
       }}>
-        {config.title}
-      </h1>
+        <h1 style={{
+          fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {config.title}
+        </h1>
+        <DateFilter value={filterLastNMonths} onChange={setFilterLastNMonths} />
+      </div>
 
       {ungrouped.map(section => (
         <ScorecardSection
@@ -137,6 +169,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           section={section}
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
+          filterLastNMonths={filterLastNMonths}
         />
       ))}
 
@@ -145,6 +178,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           sections={breakdownSections}
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
+          filterLastNMonths={filterLastNMonths}
         />
       )}
 

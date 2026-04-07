@@ -182,9 +182,11 @@ function ChartInspectMenu({ metrics, customMetrics = [], valueFormat, onMetricCl
   );
 }
 
-export default function Chart({ config, dataMap, onMetricClick }) {
+export default function Chart({ config, dataMap, onMetricClick, filterLastNMonths }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
+    // Date filter: override config.lastNMonths when user selects a preset
+    const effectiveLastNMonths = filterLastNMonths ?? config.lastNMonths;
 
     // YoY chart — current year vs prior year, grouped bars by month
     if (config.yoy) {
@@ -243,8 +245,25 @@ export default function Chart({ config, dataMap, onMetricClick }) {
     if (config.groupByDimension) {
       const metric = config.metrics?.[0];
       if (!metric) return null;
-      const grouped = dataMap.get(`${metric.id}:grouped:${config.groupByDimension}`);
-      if (!grouped?.seriesMap || Object.keys(grouped.seriesMap).length === 0) return null;
+      const rawGrouped = dataMap.get(`${metric.id}:grouped:${config.groupByDimension}`);
+      if (!rawGrouped?.seriesMap || Object.keys(rawGrouped.seriesMap).length === 0) return null;
+
+      // Apply date filter to grouped data
+      let grouped = rawGrouped;
+      if (effectiveLastNMonths) {
+        const now = new Date();
+        const cutoff = new Date(now.getFullYear(), now.getMonth() - effectiveLastNMonths, 1);
+        const startStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+        const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const keepIdx = rawGrouped.labels.map((l, i) => (l >= startStr && l <= endStr ? i : -1)).filter(i => i >= 0);
+        if (keepIdx.length > 0) {
+          const filteredSeriesMap = {};
+          for (const [dim, vals] of Object.entries(rawGrouped.seriesMap)) {
+            filteredSeriesMap[dim] = keepIdx.map(i => vals[i]);
+          }
+          grouped = { labels: keepIdx.map(i => rawGrouped.labels[i]), seriesMap: filteredSeriesMap };
+        }
+      }
 
       const PALETTE = ['#2563eb','#059669','#f59e0b','#e84393','#8b5cf6','#0891b2','#dc2626','#65a30d','#7c3aed','#0284c7','#b45309','#0f766e'];
       // Sort dimension values by total volume descending
@@ -299,7 +318,7 @@ export default function Chart({ config, dataMap, onMetricClick }) {
       .filter(m => m.renderAs !== 'referenceLine')
       .map(m => ({
         id: m.id,
-        data: filterToWindow(getMetricData(m.id), config.lastNMonths),
+        data: filterToWindow(getMetricData(m.id), effectiveLastNMonths),
       }));
 
     const hasAny = metricsData.some(d => d.data != null);
@@ -396,7 +415,7 @@ export default function Chart({ config, dataMap, onMetricClick }) {
       },
       series,
     };
-  }, [config, dataMap]);
+  }, [config, dataMap, filterLastNMonths]);
 
   if (!option) {
     return (
