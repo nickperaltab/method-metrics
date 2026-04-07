@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Since queryBq is called internally (not through module export), we test
 // input validation directly and SQL patterns via the exported cache key format.
 
-import { fetchGroupedData, clearAggCache, buildEndDateClause } from '../../src/lib/bigquery.js';
+import { fetchGroupedData, clearAggCache, buildEndDateClause, buildSemanticSql } from '../../src/lib/bigquery.js';
 
 describe('fetchGroupedData — input validation', () => {
   it('rejects SQL injection in groupByField', async () => {
@@ -162,5 +162,70 @@ describe('ATT_COL_MAP — channel filter validation', () => {
 
   it('PPC maps to Att_Pay_Per_Click (not Att_PPC)', () => {
     expect(ATT_COL_MAP.PPC).toBe('Att_Pay_Per_Click');
+  });
+});
+
+describe('buildSemanticSql', () => {
+  const metric = {
+    id: 280,
+    semantic_table: 'method_forecast',
+    semantic_measure: 'ROUND(SUM(Budgeted_Churn), 0)',
+    semantic_date_col: 'Forecasted_Month',
+    semantic_filters: ['Forecasted_Month IS NOT NULL'],
+  };
+
+  it('builds monthly SQL by default', () => {
+    const sql = buildSemanticSql(metric, 'month', null, null);
+    expect(sql).toContain("FORMAT_DATE('%Y-%m', DATE_TRUNC(Forecasted_Month, MONTH))");
+    expect(sql).toContain('ROUND(SUM(Budgeted_Churn), 0) AS value');
+    expect(sql).toContain('`project-for-method-dw.revenue.method_forecast`');
+    expect(sql).toContain('Forecasted_Month IS NOT NULL');
+    expect(sql).toContain('GROUP BY 1 ORDER BY 1');
+  });
+
+  it('builds weekly SQL', () => {
+    const sql = buildSemanticSql(metric, 'week', null, null);
+    expect(sql).toContain("DATE_TRUNC(Forecasted_Month, WEEK(MONDAY))");
+    expect(sql).toContain("FORMAT_DATE('%Y-%m-%d'");
+  });
+
+  it('builds daily SQL', () => {
+    const sql = buildSemanticSql(metric, 'day', null, null);
+    expect(sql).toContain("FORMAT_DATE('%Y-%m-%d', Forecasted_Month)");
+    expect(sql).not.toContain('DATE_TRUNC(Forecasted_Month, DAY');
+  });
+
+  it('builds yearly SQL', () => {
+    const sql = buildSemanticSql(metric, 'year', null, null);
+    expect(sql).toContain("FORMAT_DATE('%Y', DATE_TRUNC(Forecasted_Month, YEAR))");
+  });
+
+  it('adds lastNMonths time range filter', () => {
+    const sql = buildSemanticSql(metric, 'month', 6, null);
+    expect(sql).toContain('INTERVAL 6 MONTH');
+  });
+
+  it('lastNMonths=0 filters to current month only', () => {
+    const sql = buildSemanticSql(metric, 'month', 0, null);
+    expect(sql).toContain('DATE_TRUNC(CURRENT_DATE(), MONTH)');
+    expect(sql).not.toContain('INTERVAL');
+  });
+
+  it('multiple filters joined with AND', () => {
+    const m = { ...metric, semantic_filters: ['Date IS NOT NULL', "Date >= '2024-01-01'"] };
+    const sql = buildSemanticSql(m, 'month', null, null);
+    expect(sql).toContain("Date IS NOT NULL AND Date >= '2024-01-01'");
+  });
+
+  it('no filters produces no static WHERE', () => {
+    const m = { ...metric, semantic_filters: [] };
+    const sql = buildSemanticSql(m, 'month', null, null);
+    expect(sql).not.toContain('IS NOT NULL');
+  });
+
+  it('semantic SQL does not need wrapChartSql — only one INTERVAL', () => {
+    const sql = buildSemanticSql(metric, 'month', 13, null);
+    expect(sql).toContain('INTERVAL 13 MONTH');
+    expect([...sql.matchAll(/INTERVAL/g)].length).toBe(1);
   });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchChartData, fetchAggregatedData, queryBq } from '../lib/bigquery';
+import { fetchChartData, fetchAggregatedData, queryBq, buildSemanticSql } from '../lib/bigquery';
 import { buildBatchSql, splitBatchResults, wrapChartSql } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
 import { evaluateFormula } from '../lib/sanitize';
@@ -185,7 +185,10 @@ export default function useScorecardData(config, metrics, bqConnected) {
     const individual = [];
 
     for (const metric of primitives) {
-      if (metric.chart_sql) {
+      if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+        // Semantic: generate SQL dynamically — do NOT wrap with wrapChartSql (has its own time filter)
+        batchable.push({ key: metric.id, sql: buildSemanticSql(metric, 'month', 13, null) });
+      } else if (metric.chart_sql) {
         batchable.push({ key: metric.id, sql: wrapChartSql(metric.chart_sql, 13) });
       } else if (metric.view_name) {
         individual.push(metric);
@@ -204,8 +207,12 @@ export default function useScorecardData(config, metrics, bqConnected) {
     const weeklyTasks = [];
     for (const [metricId] of weeklyMetrics) {
       const metric = metricsMap.get(metricId);
-      if (!metric || !metric.view_name) continue;
-      weeklyTasks.push(metric);
+      if (!metric) continue;
+      if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+        weeklyTasks.push(metric);
+      } else if (metric.view_name) {
+        weeklyTasks.push(metric);
+      }
     }
 
     const totalSteps = batches.length + individual.length + weeklyTasks.length;
@@ -297,11 +304,21 @@ export default function useScorecardData(config, metrics, bqConnected) {
       // 3. Run weekly tasks in parallel
       const weeklyPromises = weeklyTasks.map(async (metric) => {
         try {
-          const dateCol = config.views?.[metric.view_name]?.dateCol
-            || getDateCol(metric.view_name, 'SignupDate');
-          const result = await fetchAggregatedData(
-            metric.view_name, dateCol, 'COUNT', 'week', null, 3
-          );
+          let result;
+          if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+            const sql = buildSemanticSql(metric, 'week', 3, null);
+            const raw = await queryBq(sql);
+            result = {
+              labels: raw.rows.map(r => r.period),
+              data: raw.rows.map(r => Number(r.value) || 0),
+            };
+          } else {
+            const dateCol = config.views?.[metric.view_name]?.dateCol
+              || getDateCol(metric.view_name, 'SignupDate');
+            result = await fetchAggregatedData(
+              metric.view_name, dateCol, 'COUNT', 'week', null, 3
+            );
+          }
           return { key: `${metric.id}:week`, result };
         } catch (e) {
           return { key: `${metric.id}:week`, result: null, error: e.message };

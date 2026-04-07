@@ -148,6 +148,51 @@ export function wrapChartSql(sql, lastNMonths) {
 }
 
 /**
+ * Build SQL dynamically from semantic metric fields.
+ * semantic_measure and semantic_filters are admin-only raw SQL expressions
+ * (same trust model as chart_sql). semantic_table and semantic_date_col
+ * are validated as identifiers.
+ */
+export function buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule) {
+  validateIdentifier(metric.semantic_table, 'semantic_table');
+  validateIdentifier(metric.semantic_date_col, 'semantic_date_col');
+
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${metric.semantic_table}\``;
+  const dateCol = metric.semantic_date_col;
+  const bucket = timeBucket || 'month';
+
+  let periodExpr;
+  if (bucket === 'week') {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${dateCol}, WEEK(MONDAY)))`;
+  } else if (bucket === 'quarter') {
+    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, QUARTER))`;
+  } else if (bucket === 'day') {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', ${dateCol})`;
+  } else if (bucket === 'year') {
+    periodExpr = `FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, YEAR))`;
+  } else {
+    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, MONTH))`;
+  }
+
+  const wheres = [...(metric.semantic_filters || [])];
+
+  if (lastNMonths != null && lastNMonths >= 0) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
+      wheres.push(`${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    } else {
+      wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
+    }
+  }
+
+  const endClause = buildEndDateClause(dateCol, endDateRule);
+  if (endClause) wheres.push(endClause);
+
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+  return `SELECT ${periodExpr} AS period, ${metric.semantic_measure} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 1`;
+}
+
+/**
  * Build a single UNION ALL query from multiple {key, sql} pairs.
  * Each sub-query gets a '_key' discriminator column.
  * All sub-queries MUST return {period, value} columns.
@@ -291,6 +336,21 @@ export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yea
 }
 
 export async function fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule = null) {
+  // Semantic fields take priority — builds SQL dynamically for any grain
+  if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+    const cacheKey = `semantic|${metric.id}|${timeBucket}|${lastNMonths}|${endDateRule || 'none'}`;
+    if (aggCache[cacheKey]) return aggCache[cacheKey];
+    const sql = buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule);
+    const result = await queryBq(sql);
+    const output = {
+      labels: result.rows.map(r => r.period),
+      data: result.rows.map(r => Number(r.value) || 0),
+      sql,
+    };
+    if (output.labels.length > 0) aggCache[cacheKey] = output;
+    return output;
+  }
+
   // If metric has a pre-written chart_sql query, use it directly
   if (metric.chart_sql) {
     const cacheKey = `chart_sql|${metric.id}|${lastNMonths}|${endDateRule || 'none'}`;
