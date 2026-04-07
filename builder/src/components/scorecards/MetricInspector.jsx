@@ -79,13 +79,14 @@ function FormulaDisplay({ formula, metricsMap, onNavigate }) {
   );
 }
 
-export default function MetricInspector({ metricId, currentValue, valueFormat, metricsCache, onClose }) {
+export default function MetricInspector({ metricId, currentValue, valueFormat, metricsCache, customInfo, onClose }) {
   const [trail, setTrail] = useState([]);
   const panelRef = useRef(null);
   const [visible, setVisible] = useState(false);
 
   const activeId = trail.length > 0 ? trail[trail.length - 1] : metricId;
-  const metric = metricsCache?.get(activeId);
+  const isCustomSql = typeof activeId === 'string' && activeId?.startsWith?.('custom:');
+  const metric = isCustomSql ? null : metricsCache?.get(activeId);
 
   // Build trail on open
   useEffect(() => {
@@ -175,7 +176,26 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
 
         {/* Body */}
         <div style={ps.body}>
-          {metric ? (
+          {isCustomSql && customInfo ? (
+            <>
+              <div style={ps.section}>
+                <div style={ps.metricName}>{customInfo.label}</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <span style={{ ...ps.badge, background: '#fefce8', color: '#a16207', borderColor: '#fde68a' }}>
+                    custom sql
+                  </span>
+                </div>
+              </div>
+              <div style={ps.section}>
+                <div style={ps.sectionLabel}>Description</div>
+                <div style={ps.dim}>This chart uses a custom query not registered as a metric.</div>
+              </div>
+              <div style={ps.section}>
+                <div style={ps.sectionLabel}>SQL Query</div>
+                <pre style={ps.sqlBlock}>{customInfo.sql}</pre>
+              </div>
+            </>
+          ) : metric ? (
             <>
               {/* Section 1: Identity */}
               <div style={ps.section}>

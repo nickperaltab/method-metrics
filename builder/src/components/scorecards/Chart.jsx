@@ -106,9 +106,13 @@ function fmtValue(v, valueFormat, opts = {}) {
   }
 }
 
-function ChartInspectMenu({ metrics, valueFormat, onMetricClick }) {
+function ChartInspectMenu({ metrics, customMetrics = [], valueFormat, onMetricClick }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
+  const allItems = [
+    ...metrics.map(m => ({ id: m.id, label: m.label, isCustom: false })),
+    ...customMetrics.map(m => ({ id: m.id, label: m.label, isCustom: true, sql: m.customSql })),
+  ];
 
   React.useEffect(() => {
     if (!open) return;
@@ -117,10 +121,10 @@ function ChartInspectMenu({ metrics, valueFormat, onMetricClick }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  if (metrics.length === 1) {
+  if (allItems.length === 1 && !allItems[0].isCustom) {
     return (
       <span
-        onClick={() => onMetricClick(metrics[0].id, null, valueFormat)}
+        onClick={() => onMetricClick(allItems[0].id, null, valueFormat)}
         style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', transition: 'color 100ms' }}
         onMouseEnter={e => { e.target.style.color = '#2563eb'; }}
         onMouseLeave={e => { e.target.style.color = '#9ca3af'; }}
@@ -144,20 +148,32 @@ function ChartInspectMenu({ metrics, valueFormat, onMetricClick }) {
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 4,
           background: '#fff', border: '1px solid #e2e5e9', borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: 180, padding: '4px 0',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: 200, padding: '4px 0',
         }}>
-          {metrics.map(m => (
+          {allItems.map(item => (
             <div
-              key={m.id}
-              onClick={() => { onMetricClick(m.id, null, valueFormat); setOpen(false); }}
+              key={item.id}
+              onClick={() => {
+                if (item.isCustom) {
+                  // Pass custom SQL info via a special convention
+                  onMetricClick(`custom:${item.id}`, null, valueFormat, { label: item.label, sql: item.sql });
+                } else {
+                  onMetricClick(item.id, null, valueFormat);
+                }
+                setOpen(false);
+              }}
               style={{
                 padding: '6px 12px', fontSize: 12, color: '#374151', cursor: 'pointer',
                 fontFamily: "'DM Sans', sans-serif",
+                display: 'flex', alignItems: 'center', gap: 6,
               }}
-              onMouseEnter={e => { e.target.style.background = '#f0f4ff'; }}
-              onMouseLeave={e => { e.target.style.background = 'transparent'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f0f4ff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
-              {m.label}
+              {item.label}
+              {item.isCustom && (
+                <span style={{ fontSize: 9, color: '#9ca3af', fontFamily: "'JetBrains Mono', monospace" }}>SQL</span>
+              )}
             </div>
           ))}
         </div>
@@ -293,6 +309,7 @@ export default function Chart({ config, dataMap, onMetricClick }) {
   }
 
   const numericMetrics = config.metrics.filter(m => typeof m.id === 'number');
+  const customMetrics = config.metrics.filter(m => typeof m.id === 'string' && m.customSql);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -302,8 +319,13 @@ export default function Chart({ config, dataMap, onMetricClick }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         {config.label}
-        {onMetricClick && numericMetrics.length > 0 && (
-          <ChartInspectMenu metrics={numericMetrics} valueFormat={config.valueFormat} onMetricClick={onMetricClick} />
+        {onMetricClick && (numericMetrics.length > 0 || customMetrics.length > 0) && (
+          <ChartInspectMenu
+            metrics={numericMetrics}
+            customMetrics={customMetrics}
+            valueFormat={config.valueFormat}
+            onMetricClick={onMetricClick}
+          />
         )}
       </div>
       <div style={{ flex: 1, minHeight: 300 }}>

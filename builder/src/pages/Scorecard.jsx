@@ -75,7 +75,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           key={section.title}
           section={section}
           dataMap={dataMap}
-          onMetricClick={(metricId, value, format) => setInspected({ metricId, value, format })}
+          onMetricClick={(metricId, value, format, customInfo) => setInspected({ metricId, value, format, customInfo })}
         />
       ))}
       <MetricInspector
@@ -83,6 +83,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         currentValue={inspected?.value}
         valueFormat={inspected?.format}
         metricsCache={metricsCache}
+        customInfo={inspected?.customInfo}
         onClose={() => setInspected(null)}
       />
     </div>
