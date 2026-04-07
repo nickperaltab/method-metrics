@@ -8,6 +8,7 @@ export default {
   id: 'cancellations-breakdown',
   title: 'Cancellations',
   status: 'pending',
+  group: 'funnel',
   views: {
     v_cancellations: { dateCol: 'CancellationDate' },
   },

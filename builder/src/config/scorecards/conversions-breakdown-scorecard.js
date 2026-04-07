@@ -7,6 +7,7 @@ export default {
   id: 'conversions-breakdown',
   title: 'Conversions',
   status: 'approved',
+  group: 'funnel',
   views: {
     v_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
   },

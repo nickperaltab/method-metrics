@@ -9,6 +9,7 @@ export default {
   id: 'trials-breakdown',
   title: 'Trials',
   status: 'approved',
+  group: 'funnel',
   views: {
     v_trials: { dateCol: 'SignupDate' },
   },

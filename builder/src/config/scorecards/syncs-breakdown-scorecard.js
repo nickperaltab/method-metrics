@@ -7,6 +7,7 @@ export default {
   id: 'syncs-breakdown',
   title: 'Syncs',
   status: 'approved',
+  group: 'funnel',
   views: {
     v_syncs: { dateCol: 'SyncDate' },
   },

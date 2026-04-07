@@ -9,6 +9,7 @@ export default {
   id: 'funnel',
   title: 'Funnel',
   status: 'approved',
+  group: 'funnel',
   sections: [
     // ── Overview ────────────────────────────────────────────────
     {

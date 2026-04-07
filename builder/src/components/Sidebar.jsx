@@ -172,13 +172,30 @@ export default function Sidebar({ collapsed, onToggle }) {
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
 
           {/* Scorecards */}
-          <div style={sectionLabel}>Scorecards</div>
-          {Object.values(SCORECARDS).map(sc => (
-            <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
-              <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
-              {sc.title}
-            </NavLink>
-          ))}
+          {(() => {
+            const all = Object.values(SCORECARDS);
+            const top = all.filter(sc => !sc.group);
+            const funnel = all.filter(sc => sc.group === 'funnel');
+            return (
+              <>
+                <div style={sectionLabel}>Scorecards</div>
+                {top.map(sc => (
+                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
+                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                    {sc.title}
+                  </NavLink>
+                ))}
+                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+                <div style={sectionLabel}>Funnel</div>
+                {funnel.map(sc => (
+                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
+                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                    {sc.title}
+                  </NavLink>
+                ))}
+              </>
+            );
+          })()}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
