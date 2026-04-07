@@ -3,13 +3,67 @@ import { useParams } from 'react-router-dom';
 import { SCORECARDS } from '../config/scorecards';
 import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
+import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
+
+function BreakdownTabs({ sections, dataMap, onMetricClick }) {
+  const [active, setActive] = useState(0);
+
+  return (
+    <div style={{ marginBottom: 48 }}>
+      <h2 style={{
+        fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 16,
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
+        Breakdowns
+      </h2>
+
+      {/* Tab buttons */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        {sections.map((section, i) => (
+          <button
+            key={section.title}
+            onClick={() => setActive(i)}
+            style={{
+              padding: '6px 16px',
+              fontSize: 13,
+              fontWeight: active === i ? 600 : 400,
+              fontFamily: "'DM Sans', sans-serif",
+              background: active === i ? '#2563eb' : '#f3f4f6',
+              color: active === i ? '#fff' : '#374151',
+              border: 'none',
+              borderRadius: 20,
+              cursor: 'pointer',
+              transition: 'background 150ms, color 150ms',
+            }}
+          >
+            {/* Strip "By " prefix for tab labels */}
+            {section.title.replace(/^By /, '')}
+          </button>
+        ))}
+      </div>
+
+      {/* Active breakdown chart */}
+      {sections[active] && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: 24,
+        }}>
+          {(sections[active].charts || []).map((chart, i) => (
+            <Chart key={i} config={chart} dataMap={dataMap} onMetricClick={onMetricClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
   const { dataMap, loading, progress } = useScorecardData(config, metrics, bqConnected);
-  const [inspected, setInspected] = useState(null); // { metricId, value, format }
+  const [inspected, setInspected] = useState(null);
 
   const metricsCache = useMemo(() => {
     if (!metrics) return new Map();
@@ -62,6 +116,12 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     );
   }
 
+  const handleMetricClick = (metricId, value, format, customInfo) =>
+    setInspected({ metricId, value, format, customInfo });
+
+  const ungrouped = config.sections.filter(s => !s.group);
+  const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
+
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       <h1 style={{
@@ -70,14 +130,24 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
       }}>
         {config.title}
       </h1>
-      {config.sections.map(section => (
+
+      {ungrouped.map(section => (
         <ScorecardSection
           key={section.title}
           section={section}
           dataMap={dataMap}
-          onMetricClick={(metricId, value, format, customInfo) => setInspected({ metricId, value, format, customInfo })}
+          onMetricClick={handleMetricClick}
         />
       ))}
+
+      {breakdownSections.length > 0 && (
+        <BreakdownTabs
+          sections={breakdownSections}
+          dataMap={dataMap}
+          onMetricClick={handleMetricClick}
+        />
+      )}
+
       <MetricInspector
         metricId={inspected?.metricId}
         currentValue={inspected?.value}
