@@ -30,6 +30,23 @@ export default {
       ],
     },
 
+    // ── Sync Rate ────────────────────────────────────────────────
+    {
+      title: 'Sync Rate',
+      kpis: [
+        { metricId: 300, label: 'Sync Rate This Month', format: 'percent',
+          valueSelector: 'current_or_latest', showDelta: true },
+      ],
+      charts: [
+        {
+          label: 'Sync Rate Over Time',
+          chartType: 'line', valueFormat: 'percent',
+          lastNMonths: 12,
+          metrics: [{ id: 300, label: 'Sync Rate', color: '#7c3aed' }],
+        },
+      ],
+    },
+
     // ── Year over Year ───────────────────────────────────────────
     {
       title: 'Year over Year',

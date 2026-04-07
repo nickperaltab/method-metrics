@@ -304,11 +304,14 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
   );
 }
 
+const GRAIN_LABELS = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+
 function TechnicalDetails({ metric, metricsMap, onNavigate }) {
   const [open, setOpen] = useState(false);
   const [sqlExpanded, setSqlExpanded] = useState(false);
 
-  const sql = metric.chart_sql || metric.view_definition;
+  const hasSemantic = metric.semantic_table && metric.semantic_measure && metric.semantic_date_col;
+  const sql = !hasSemantic && (metric.chart_sql || metric.view_definition);
   const sqlPreview = sql && sql.length > 200 ? sql.slice(0, 200) + '...' : sql;
 
   return (
@@ -329,8 +332,50 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
             <span style={ps.techValue}>#{metric.id}</span>
           </div>
 
-          {/* View name */}
-          {metric.view_name && (
+          {/* Semantic fields */}
+          {hasSemantic && (
+            <>
+              <div style={ps.techRow}>
+                <span style={ps.techLabel}>Source</span>
+                <span style={ps.techValue}>revenue.{metric.semantic_table}</span>
+              </div>
+              <div style={ps.techRow}>
+                <span style={ps.techLabel}>Measure</span>
+                <span style={ps.techValue}>{metric.semantic_measure}</span>
+              </div>
+              <div style={ps.techRow}>
+                <span style={ps.techLabel}>Date col</span>
+                <span style={ps.techValue}>{metric.semantic_date_col}</span>
+              </div>
+              {metric.semantic_filters?.length > 0 && (
+                <div style={ps.techRow}>
+                  <span style={ps.techLabel}>Filters</span>
+                  <span style={ps.techValue}>{metric.semantic_filters.join(' AND ')}</span>
+                </div>
+              )}
+              <div style={ps.techRow}>
+                <span style={ps.techLabel}>Grains</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {GRAIN_LABELS.map(g => (
+                    <span key={g} style={{ ...ps.metricChip, cursor: 'default' }}>{g}</span>
+                  ))}
+                </div>
+              </div>
+              {metric.semantic_dimensions?.length > 0 && (
+                <div style={ps.techRow}>
+                  <span style={ps.techLabel}>Dimensions</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {metric.semantic_dimensions.map(d => (
+                      <span key={d} style={{ ...ps.metricChip, cursor: 'default' }}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* View name — for non-semantic primitives */}
+          {!hasSemantic && metric.view_name && (
             <div style={ps.techRow}>
               <span style={ps.techLabel}>View</span>
               <span style={ps.techValue}>revenue.{metric.view_name}</span>
@@ -360,7 +405,7 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
             </div>
           )}
 
-          {/* SQL */}
+          {/* SQL — only for complex metrics without semantic fields */}
           {sql && (
             <div style={ps.techRow}>
               <span style={ps.techLabel}>SQL</span>
