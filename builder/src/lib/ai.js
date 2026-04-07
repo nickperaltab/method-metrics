@@ -44,9 +44,11 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
             // All derived — pass dimension through (dependencies validate their own dims)
             dc.group_by_dimension = dimension;
           } else {
-            const approved = resolvedMetrics.flatMap(m =>
-              approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name)
-            );
+            const approved = resolvedMetrics.flatMap(m => {
+              const semDims = m.semantic_dimensions || [];
+              const tableDims = approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name);
+              return [...new Set([...semDims, ...tableDims])];
+            });
             if (approved.includes(dimension)) dc.group_by_dimension = dimension;
           }
         }
@@ -99,9 +101,11 @@ export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensio
       // Skip the check entirely when all metrics are derived so the dimension passes through.
       const hasPrimitive = resolvedMetrics.some(m => m.view_name);
       if (hasPrimitive) {
-        const approved = resolvedMetrics.flatMap(m =>
-          approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name)
-        );
+        const approved = resolvedMetrics.flatMap(m => {
+          const semDims = m.semantic_dimensions || [];
+          const tableDims = approvedDimensions.filter(d => d.metric_id === m.id).map(d => d.column_name);
+          return [...new Set([...semDims, ...tableDims])];
+        });
         if (approved.length === 0 || !approved.includes(dc.group_by_dimension)) {
           const match = approved.find(c => c.toLowerCase() === dc.group_by_dimension.toLowerCase());
           dc.group_by_dimension = match || null;
@@ -197,12 +201,24 @@ export function buildMetricContext(metrics, approvedDimensions) {
   return chartable.map(m => {
     let line = `- id:${m.id} name:"${m.name}" type:${m.metric_type} view:${m.view_name || 'none'}`;
     if (m.notes) line += ` desc:"${m.notes}"`;
-    if (m.chart_sql) line += ` has_chart_sql:true`;
+
+    // Semantic metrics: expose source table and available grains
+    if (m.semantic_table && m.semantic_measure && m.semantic_date_col) {
+      line += ` source:${m.semantic_table} grains:[daily,weekly,monthly,quarterly,yearly]`;
+    } else if (m.chart_sql) {
+      line += ` has_chart_sql:true`;
+    } else if (m.supported_grains) {
+      line += ` grains:[${m.supported_grains.join(',')}]`;
+    }
+
     if (m.formula) line += ` formula:${m.formula}`;
     if (m.depends_on) line += ` depends_on:[${m.depends_on.join(',')}]`;
-    if (m.supported_grains) line += ` grains:[${m.supported_grains.join(',')}]`;
-    // Only include approved dimensions, not raw schema columns
-    if (approvedDimensions) {
+
+    // Prefer semantic_dimensions on the metric; fall back to approved_dimensions table
+    const semDims = m.semantic_dimensions;
+    if (semDims?.length > 0) {
+      line += ` dimensions:[${semDims.join(',')}]`;
+    } else if (approvedDimensions) {
       const dims = approvedDimensions.filter(d => d.metric_id === m.id);
       if (dims.length > 0) {
         line += ` dimensions:[${dims.map(d => d.column_name).join(',')}]`;
