@@ -6,7 +6,7 @@
 export default {
   id: 'syncs-breakdown',
   title: 'Syncs',
-  status: 'pending',
+  status: 'approved',
   views: {
     v_syncs: { dateCol: 'SyncDate' },
   },
