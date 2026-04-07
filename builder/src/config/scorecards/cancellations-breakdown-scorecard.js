@@ -112,7 +112,7 @@ export default {
       title: 'Recent Cancellations',
       label: 'Most Recent Cancellation Records',
       metricId: 59,
-      columns: ['CancellationDate', 'CompanyAccount', 'SignupCountry', 'Vertical', 'AttributionChannel'],
+      columns: ['CancellationDate', 'CompanyAccount', 'SaaSPayType', 'AgeMonths', 'LicenseCount'],
       limit: 100,
     },
   ],
