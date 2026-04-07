@@ -4,16 +4,13 @@ import { formatValue } from './utils';
 const styles = {
   tile: {
     padding: '8px 12px',
-    borderBottom: '1px solid #f1f3f5',
     cursor: 'pointer',
     borderRadius: 6,
-    border: '1px solid transparent',
-    transition: 'border-color 150ms ease-out, box-shadow 150ms ease-out',
     position: 'relative',
+    transition: 'background 150ms ease-out',
   },
   tileHover: {
-    borderColor: '#2563eb',
-    boxShadow: '0 0 0 1px #2563eb',
+    background: '#f0f4ff',
   },
   label: {
     fontSize: 11,

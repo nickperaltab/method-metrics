@@ -106,6 +106,66 @@ function fmtValue(v, valueFormat, opts = {}) {
   }
 }
 
+function ChartInspectMenu({ metrics, valueFormat, onMetricClick }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  if (metrics.length === 1) {
+    return (
+      <span
+        onClick={() => onMetricClick(metrics[0].id, null, valueFormat)}
+        style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', transition: 'color 100ms' }}
+        onMouseEnter={e => { e.target.style.color = '#2563eb'; }}
+        onMouseLeave={e => { e.target.style.color = '#9ca3af'; }}
+      >
+        ⓘ
+      </span>
+    );
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <span
+        onClick={() => setOpen(!open)}
+        style={{ fontSize: 14, color: open ? '#2563eb' : '#9ca3af', cursor: 'pointer', transition: 'color 100ms' }}
+        onMouseEnter={e => { e.target.style.color = '#2563eb'; }}
+        onMouseLeave={e => { if (!open) e.target.style.color = '#9ca3af'; }}
+      >
+        ⓘ
+      </span>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4,
+          background: '#fff', border: '1px solid #e2e5e9', borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, minWidth: 180, padding: '4px 0',
+        }}>
+          {metrics.map(m => (
+            <div
+              key={m.id}
+              onClick={() => { onMetricClick(m.id, null, valueFormat); setOpen(false); }}
+              style={{
+                padding: '6px 12px', fontSize: 12, color: '#374151', cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+              onMouseEnter={e => { e.target.style.background = '#f0f4ff'; }}
+              onMouseLeave={e => { e.target.style.background = 'transparent'; }}
+            >
+              {m.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Chart({ config, dataMap, onMetricClick }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
@@ -232,35 +292,23 @@ export default function Chart({ config, dataMap, onMetricClick }) {
     );
   }
 
+  const numericMetrics = config.metrics.filter(m => typeof m.id === 'number');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{
         fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8,
         fontFamily: "'DM Sans', sans-serif",
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         {config.label}
+        {onMetricClick && numericMetrics.length > 0 && (
+          <ChartInspectMenu metrics={numericMetrics} valueFormat={config.valueFormat} onMetricClick={onMetricClick} />
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 300 }}>
         <EChart option={option} style={{ height: '100%' }} />
       </div>
-      {onMetricClick && (
-        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-          {config.metrics.filter(m => typeof m.id === 'number').map(m => (
-            <span
-              key={m.id}
-              onClick={() => onMetricClick(m.id, null, config.valueFormat)}
-              style={{
-                fontSize: 11, color: '#2563eb', cursor: 'pointer',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-              onMouseEnter={e => { e.target.style.textDecoration = 'underline'; }}
-              onMouseLeave={e => { e.target.style.textDecoration = 'none'; }}
-            >
-              ⓘ {m.label}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
