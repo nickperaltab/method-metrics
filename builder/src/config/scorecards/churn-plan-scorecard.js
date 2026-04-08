@@ -22,13 +22,12 @@ export default {
       ],
       charts: [
         {
-          label: 'Churn: Actual vs Budget vs Forecast vs Trajectory',
+          label: 'Churn: Actual vs Budget vs Forecast',
           chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
           metrics: [
-            { id: 59,  label: 'Actual',     color: '#dc2626' },
-            { id: 280, label: 'Budget',     color: '#a3c771', chartType: 'line' },
-            { id: 274, label: 'Forecast',   color: '#e84393', chartType: 'line' },
-            { id: 297, label: 'Trajectory', color: '#f59e0b', chartType: 'line' },
+            { id: 59,  label: 'Actual',   color: '#dc2626' },
+            { id: 280, label: 'Budget',   color: '#a3c771' },
+            { id: 274, label: 'Forecast', color: '#e84393' },
           ],
         },
       ],

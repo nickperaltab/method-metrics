@@ -23,13 +23,12 @@ export default {
       ],
       charts: [
         {
-          label: 'Syncs: Actual vs Budget vs Forecast vs Trajectory',
+          label: 'Syncs: Actual vs Budget vs Forecast',
           chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
           metrics: [
-            { id: 55,  label: 'Actual',     color: '#059669' },
-            { id: 358, label: 'Budget',     color: '#a3c771', chartType: 'line' },
-            { id: 286, label: 'Forecast',   color: '#e84393', chartType: 'line' },
-            { id: 295, label: 'Trajectory', color: '#f59e0b', chartType: 'line' },
+            { id: 55,  label: 'Actual',   color: '#059669' },
+            { id: 358, label: 'Budget',   color: '#a3c771' },
+            { id: 286, label: 'Forecast', color: '#e84393' },
           ],
         },
       ],
