@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
-import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars, starDashboard, unstarDashboard, deleteDashboard, setApproved, updateDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchAllDashboards, fetchApprovedDashboardsList, fetchStars, starDashboard, unstarDashboard, deleteDashboard, setApproved, updateDashboard } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
 
@@ -21,29 +21,74 @@ const s = {
   empty: { fontSize: 13, color: '#9ca3af', padding: '8px 0', fontFamily: "'JetBrains Mono', monospace" },
 };
 
-const approvedScorecards = Object.values(SCORECARDS).filter(sc => !sc.group);
+const ALL_SCORECARDS = Object.values(SCORECARDS).filter(sc => !sc.group);
+
+function ScorecardRow({ sc, onNavigate, onHide }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{ ...s.row, borderColor: hovered ? '#059669' : '#e2e5e9' }}
+      onClick={onNavigate}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span style={{ width: 19 }} />
+      <span style={s.rowName}>{sc.title}</span>
+      <span style={s.rowMeta}>Scorecard</span>
+      {hovered && (
+        <button
+          style={{ ...s.actionBtn, color: '#9ca3af', borderColor: '#e2e5e9' }}
+          onClick={e => { e.stopPropagation(); onHide(); }}
+          title="Hide from Home"
+        >
+          hide
+        </button>
+      )}
+    </div>
+  );
+}
+const HIDDEN_SCORECARDS_KEY = 'method_hidden_scorecards';
 
 export default function Home() {
   const navigate = useNavigate();
   const { currentUser } = useUser();
+  const admin = isAdmin(currentUser);
   const [dashboards, setDashboards] = useState([]);
   const [stars, setStars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null);
+  const [hiddenScorecards, setHiddenScorecards] = useState(
+    () => JSON.parse(localStorage.getItem(HIDDEN_SCORECARDS_KEY) || '[]')
+  );
+
+  const visibleScorecards = ALL_SCORECARDS.filter(sc => !hiddenScorecards.includes(sc.id));
+  const hiddenList = ALL_SCORECARDS.filter(sc => hiddenScorecards.includes(sc.id));
+
+  const toggleScorecardHidden = (id) => {
+    setHiddenScorecards(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem(HIDDEN_SCORECARDS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [mine, approved, starIds] = await Promise.all([
-        currentUser ? fetchMyDashboards(currentUser.id) : [],
-        fetchApprovedDashboardsList(),
-        currentUser ? fetchStars(currentUser.id) : [],
+      const [all, starIds] = await Promise.all([
+        admin ? fetchAllDashboards() : Promise.all([
+          currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
+          fetchApprovedDashboardsList(),
+        ]).then(([mine, approved]) => {
+          const merged = [...mine];
+          for (const d of approved) {
+            if (!merged.some(x => x.id === d.id)) merged.push(d);
+          }
+          return merged;
+        }),
+        currentUser ? fetchStars(currentUser.id) : Promise.resolve([]),
       ]);
-      const all = [...mine];
-      for (const d of approved) {
-        if (!all.some(x => x.id === d.id)) all.push(d);
-      }
       setDashboards(all);
       setStars(starIds);
     } catch (e) {
@@ -51,7 +96,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, admin]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -116,8 +161,6 @@ export default function Home() {
     await load();
   }, [load]);
 
-  const admin = isAdmin(currentUser);
-
   const filtered = dashboards.filter(db => {
     if (!search) return true;
     return db.name?.toLowerCase().includes(search.toLowerCase());
@@ -175,19 +218,23 @@ export default function Home() {
       {/* Method Approved scorecards */}
       <div style={s.sectionTitle}>Method Approved</div>
       <div style={s.list}>
-        {approvedScorecards.map(sc => (
-          <div
-            key={sc.id}
-            style={s.row}
-            onClick={() => navigate(`/scorecards/${sc.id}`)}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
-          >
-            <span style={{ width: 19 }} />
-            <span style={s.rowName}>{sc.title}</span>
-            <span style={s.rowMeta}>Scorecard</span>
-          </div>
+        {visibleScorecards.map(sc => (
+          <ScorecardRow key={sc.id} sc={sc} onNavigate={() => navigate(`/scorecards/${sc.id}`)} onHide={() => toggleScorecardHidden(sc.id)} />
         ))}
+        {hiddenList.length > 0 && (
+          <div style={{ fontSize: 11, color: '#9ca3af', paddingLeft: 4 }}>
+            {hiddenList.map(sc => (
+              <span
+                key={sc.id}
+                onClick={() => toggleScorecardHidden(sc.id)}
+                style={{ cursor: 'pointer', marginRight: 12, textDecoration: 'underline dotted' }}
+                title="Show again"
+              >
+                {sc.title}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* AI Dashboards */}

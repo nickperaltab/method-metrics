@@ -231,6 +231,15 @@ export async function fetchApprovedDashboardsList() {
   return res.json();
 }
 
+export async function fetchAllDashboards() {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?order=name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load dashboards (${res.status})`);
+  return res.json();
+}
+
 export async function fetchMyCharts(userId) {
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/saved_charts?created_by_user=eq.${userId}&order=updated_at.desc.nullsfirst,created_at.desc`,
