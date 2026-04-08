@@ -23,7 +23,7 @@ export default {
       charts: [
         {
           label: 'Trials: Actual vs Budget vs Forecast',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
+          chartType: 'bar', valueFormat: 'number', dateFrom: '2026-01',
           metrics: [
             { id: 54,  label: 'Actual',   color: '#2563eb' },
             { id: 353, label: 'Budget',   color: '#a3c771' },
@@ -44,7 +44,7 @@ export default {
       charts: [
         {
           label: 'Budget vs Forecast Gap Over Time',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
+          chartType: 'bar', valueFormat: 'number', dateFrom: '2026-01',
           metrics: [
             { id: 355, label: 'vs Budget',   color: '#a3c771' },
             { id: 354, label: 'vs Forecast', color: '#e84393' },

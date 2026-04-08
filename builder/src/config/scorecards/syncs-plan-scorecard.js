@@ -24,7 +24,7 @@ export default {
       charts: [
         {
           label: 'Syncs: Actual vs Budget vs Forecast',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
+          chartType: 'bar', valueFormat: 'number', dateFrom: '2026-01',
           metrics: [
             { id: 55,  label: 'Actual',   color: '#059669' },
             { id: 358, label: 'Budget',   color: '#a3c771' },
@@ -45,7 +45,7 @@ export default {
       charts: [
         {
           label: 'Sync Rate: Actual vs Budget vs Forecast',
-          chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
+          chartType: 'line', valueFormat: 'percent', dateFrom: '2026-01',
           metrics: [
             { id: 300, label: 'Actual',    color: '#7c3aed' },
             { id: 362, label: 'Budget',    color: '#a3c771' },
@@ -66,7 +66,7 @@ export default {
       charts: [
         {
           label: 'Budget vs Forecast Gap Over Time',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
+          chartType: 'bar', valueFormat: 'number', dateFrom: '2026-01',
           metrics: [
             { id: 360, label: 'vs Budget',   color: '#a3c771' },
             { id: 359, label: 'vs Forecast', color: '#e84393' },

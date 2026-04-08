@@ -23,7 +23,7 @@ export default {
       charts: [
         {
           label: 'Churn: Actual vs Budget vs Forecast',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 12,
+          chartType: 'bar', valueFormat: 'number', dateFrom: '2026-01',
           metrics: [
             { id: 59,  label: 'Actual',   color: '#dc2626' },
             { id: 280, label: 'Budget',   color: '#a3c771' },
@@ -44,7 +44,7 @@ export default {
       charts: [
         {
           label: 'Churn Rate %: Budget vs Forecast vs Trajectory',
-          chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
+          chartType: 'line', valueFormat: 'percent', dateFrom: '2026-01',
           metrics: [
             { id: 343, label: 'Budget',     color: '#a3c771' },
             { id: 342, label: 'Forecast',   color: '#e84393' },

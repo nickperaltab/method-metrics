@@ -53,11 +53,16 @@ function aggregateGroupedToQuarters(grouped) {
  * Filter a time-series to a window: last N months up to current month.
  * Removes both old data and future forecast months.
  */
-function filterToWindow(timeSeries, lastNMonths) {
-  if (!timeSeries || !lastNMonths) return timeSeries;
+function filterToWindow(timeSeries, lastNMonths, dateFrom) {
+  if (!timeSeries || (!lastNMonths && !dateFrom)) return timeSeries;
   const now = new Date();
-  const cutoffStart = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
-  const startStr = `${cutoffStart.getFullYear()}-${String(cutoffStart.getMonth() + 1).padStart(2, '0')}`;
+  let startStr;
+  if (dateFrom) {
+    startStr = dateFrom; // e.g. '2026-01'
+  } else {
+    const cutoffStart = new Date(now.getFullYear(), now.getMonth() - lastNMonths, 1);
+    startStr = `${cutoffStart.getFullYear()}-${String(cutoffStart.getMonth() + 1).padStart(2, '0')}`;
+  }
   const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const endStrDay = `${endStr}-31`;
 
@@ -374,8 +379,8 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       .map(m => {
         const raw = getMetricData(m.id);
         const data = effectiveGrain === 'quarter'
-          ? filterToWindow(aggregateToQuarters(raw, config.valueFormat === 'percent'), null)
-          : filterToWindow(raw, effectiveLastNMonths);
+          ? filterToWindow(aggregateToQuarters(raw, config.valueFormat === 'percent'), null, config.dateFrom)
+          : filterToWindow(raw, effectiveLastNMonths, config.dateFrom);
         return { id: m.id, data };
       });
 
