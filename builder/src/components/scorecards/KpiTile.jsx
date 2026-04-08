@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { formatValue } from './utils';
 
 const styles = {
@@ -36,19 +36,8 @@ const styles = {
   },
 };
 
-export default function KpiTile({ label, value, format, deltaPercent, deltaTooltip, noData, onClick }) {
+export default function KpiTile({ label, value, format, deltaPercent, noData, onClick }) {
   const [hovered, setHovered] = useState(false);
-  const [tooltipOpen, setTooltipOpen] = useState(false);
-  const tooltipRef = useRef(null);
-
-  useEffect(() => {
-    if (!tooltipOpen) return;
-    function close(e) {
-      if (tooltipRef.current && !tooltipRef.current.contains(e.target)) setTooltipOpen(false);
-    }
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [tooltipOpen]);
 
   if (noData) {
     return (
@@ -69,45 +58,21 @@ export default function KpiTile({ label, value, format, deltaPercent, deltaToolt
     deltaEl = (
       <div style={{ ...styles.delta, color }}>
         {arrow} {sign}{deltaPercent.toFixed(1)}%
-        {deltaTooltip && (
-          <span
-            style={{ marginLeft: 4, cursor: 'pointer', color: '#9ca3af', fontSize: 11 }}
-            onClick={(e) => { e.stopPropagation(); setTooltipOpen(o => !o); }}
-          >ⓘ</span>
-        )}
       </div>
     );
   }
 
-  const tooltipEl = tooltipOpen && deltaTooltip ? (
-    <div
-      ref={tooltipRef}
-      style={{
-        position: 'absolute', bottom: '100%', left: 0, zIndex: 50,
-        background: '#1f2937', color: '#f9fafb', borderRadius: 6,
-        padding: '6px 10px', fontSize: 12, whiteSpace: 'nowrap',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)', marginBottom: 4,
-      }}
-    >
-      <div>This month: {formatValue(deltaTooltip.current, deltaTooltip.format)}</div>
-      <div>Last month: {formatValue(deltaTooltip.prior, deltaTooltip.format)}</div>
-      <div style={{ marginTop: 3, color: '#d1d5db' }}>
-        {deltaPercent > 0 ? '+' : ''}{deltaPercent?.toFixed(1)}% vs last month
-      </div>
-    </div>
-  ) : null;
-
   return (
     <div
-      style={{ ...styles.tile, ...(hovered ? styles.tileHover : {}), position: 'relative' }}
+      style={{ ...styles.tile, ...(hovered ? styles.tileHover : {}) }}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {tooltipEl}
       <div style={styles.label}>{label}</div>
       <div style={styles.value}>{formatted}</div>
       {deltaEl}
+      {hovered && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 14, color: '#2563eb' }}>ⓘ</span>}
     </div>
   );
 }
