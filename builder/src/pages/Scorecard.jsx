@@ -10,7 +10,7 @@ const DATE_PRESETS = [
   { label: '3M', value: 3 },
   { label: '6M', value: 6 },
   { label: '12M', value: 12 },
-  { label: 'All', value: null },
+  { label: 'All', value: 'all' },
 ];
 
 const GRAIN_OPTIONS = [
@@ -110,7 +110,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const config = SCORECARDS[id];
   const { dataMap, loading } = useScorecardData(config, metrics, bqConnected);
   const [inspected, setInspected] = useState(null);
-  const [filterLastNMonths, setFilterLastNMonths] = useState(null);
+  const [filterLastNMonths, setFilterLastNMonths] = useState('all');
   const [grain, setGrain] = useState('month');
 
   const metricsCache = useMemo(() => {

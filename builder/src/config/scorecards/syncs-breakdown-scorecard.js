@@ -23,7 +23,7 @@ export default {
         {
           label: 'Monthly Syncs',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          showLabels: true,
           metrics: [{ id: 55, label: 'Syncs', color: '#059669' }],
         },
       ],
@@ -63,7 +63,7 @@ export default {
         {
           label: 'Syncs by Country',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SignupCountry',
+          groupByDimension: 'SignupCountry',
           metrics: [{ id: 55, label: 'Syncs' }],
         },
       ],
@@ -75,7 +75,7 @@ export default {
         {
           label: 'Syncs by Vertical',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'Vertical',
+          groupByDimension: 'Vertical',
           metrics: [{ id: 55, label: 'Syncs' }],
         },
       ],
@@ -87,7 +87,7 @@ export default {
         {
           label: 'Syncs by Sync Type',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SyncType',
+          groupByDimension: 'SyncType',
           metrics: [{ id: 55, label: 'Syncs' }],
         },
       ],
@@ -99,7 +99,7 @@ export default {
         {
           label: 'Syncs by Attribution Channel',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'AttributionChannel',
+          groupByDimension: 'AttributionChannel',
           metrics: [{ id: 55, label: 'Syncs' }],
         },
       ],

@@ -24,7 +24,7 @@ export default {
         {
           label: 'Monthly Cancellations',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          showLabels: true,
           metrics: [{ id: 59, label: 'Cancellations', color: '#dc2626' }],
         },
       ],
@@ -64,7 +64,7 @@ export default {
         {
           label: 'Cancellations by Country',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SignupCountry',
+          groupByDimension: 'SignupCountry',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],
@@ -76,7 +76,7 @@ export default {
         {
           label: 'Cancellations by Vertical',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'Vertical',
+          groupByDimension: 'Vertical',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],
@@ -88,7 +88,7 @@ export default {
         {
           label: 'Cancellations by Sync Type',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SyncType',
+          groupByDimension: 'SyncType',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],
@@ -100,7 +100,7 @@ export default {
         {
           label: 'Cancellations by Attribution Channel',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'AttributionChannel',
+          groupByDimension: 'AttributionChannel',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],
@@ -113,7 +113,7 @@ export default {
         {
           label: 'Cancellations by Customer Age',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'AgeBucket',
+          groupByDimension: 'AgeBucket',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],
@@ -125,7 +125,7 @@ export default {
         {
           label: 'Cancellations by License Count Tier',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'LicenseTier',
+          groupByDimension: 'LicenseTier',
           metrics: [{ id: 59, label: 'Cancellations' }],
         },
       ],

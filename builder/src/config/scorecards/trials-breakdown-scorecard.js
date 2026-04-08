@@ -25,7 +25,7 @@ export default {
         {
           label: 'Monthly Trials',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          showLabels: true,
           metrics: [{ id: 54, label: 'Trials', color: '#2563eb' }],
         },
       ],
@@ -42,8 +42,7 @@ export default {
         {
           label: 'Sync Rate Over Time',
           chartType: 'line', valueFormat: 'percent',
-          lastNMonths: 12,
-          metrics: [{ id: 300, label: 'Sync Rate', color: '#7c3aed' }],
+                    metrics: [{ id: 300, label: 'Sync Rate', color: '#7c3aed' }],
         },
       ],
     },
@@ -82,7 +81,7 @@ export default {
         {
           label: 'Trials by Country',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SignupCountry',
+          groupByDimension: 'SignupCountry',
           metrics: [{ id: 54, label: 'Trials' }],
         },
       ],
@@ -94,7 +93,7 @@ export default {
         {
           label: 'Trials by Vertical',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'Vertical',
+          groupByDimension: 'Vertical',
           metrics: [{ id: 54, label: 'Trials' }],
         },
       ],
@@ -106,7 +105,7 @@ export default {
         {
           label: 'Trials by Sync Type',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SyncType',
+          groupByDimension: 'SyncType',
           metrics: [{ id: 54, label: 'Trials' }],
         },
       ],
@@ -118,7 +117,7 @@ export default {
         {
           label: 'Trials by Attribution Channel',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'AttributionChannel',
+          groupByDimension: 'AttributionChannel',
           metrics: [{ id: 54, label: 'Trials' }],
         },
       ],

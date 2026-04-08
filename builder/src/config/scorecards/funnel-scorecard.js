@@ -25,8 +25,7 @@ export default {
       charts: [
         {
           label: 'Trials, Syncs & Conversions',
-          chartType: 'bar', valueFormat: 'number', lastNMonths: 6,
-          metrics: [
+          chartType: 'bar', valueFormat: 'number',           metrics: [
             { id: 54, label: 'Trials', color: '#2563eb' },
             { id: 55, label: 'Syncs', color: '#059669' },
             { id: 56, label: 'Conversions', color: '#0891b2' },
@@ -45,8 +44,7 @@ export default {
       charts: [
         {
           label: 'Sync Rate Over Time',
-          chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
-          metrics: [{ id: 300, label: 'Sync Rate', color: '#7c3aed' }],
+          chartType: 'line', valueFormat: 'percent',           metrics: [{ id: 300, label: 'Sync Rate', color: '#7c3aed' }],
         },
       ],
     },
@@ -61,8 +59,7 @@ export default {
       charts: [
         {
           label: 'Trial-to-Conversion Rate Over Time',
-          chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
-          metrics: [{ id: 302, label: 'Trial-to-Conversion Rate', color: '#0891b2' }],
+          chartType: 'line', valueFormat: 'percent',           metrics: [{ id: 302, label: 'Trial-to-Conversion Rate', color: '#0891b2' }],
         },
       ],
     },
@@ -77,8 +74,7 @@ export default {
       charts: [
         {
           label: 'Sync-to-Conversion Rate Over Time',
-          chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
-          metrics: [{ id: 301, label: 'Sync-to-Conversion Rate', color: '#ea580c' }],
+          chartType: 'line', valueFormat: 'percent',           metrics: [{ id: 301, label: 'Sync-to-Conversion Rate', color: '#ea580c' }],
         },
       ],
     },

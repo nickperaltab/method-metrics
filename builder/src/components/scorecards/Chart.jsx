@@ -248,7 +248,10 @@ function ChartInspectMenu({ metrics, customMetrics = [], valueFormat, onMetricCl
 export default function Chart({ config, dataMap, onMetricClick, filterLastNMonths, grain }) {
   const option = useMemo(() => {
     const vf = config.valueFormat || 'number';
-    const effectiveLastNMonths = filterLastNMonths ?? config.lastNMonths;
+    // 'all' = no restriction; number = user override; null/undefined = fall back to config default
+    const effectiveLastNMonths = filterLastNMonths === 'all'
+      ? null
+      : (filterLastNMonths ?? config.lastNMonths);
     // Grain override: 'week' uses :week key, 'quarter' aggregates monthly, 'month' is default
     const effectiveGrain = grain ?? 'month';
 

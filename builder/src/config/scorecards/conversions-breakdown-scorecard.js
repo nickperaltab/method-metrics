@@ -23,7 +23,7 @@ export default {
         {
           label: 'Monthly Conversions',
           chartType: 'bar', valueFormat: 'number',
-          lastNMonths: 6, showLabels: true,
+          showLabels: true,
           metrics: [{ id: 56, label: 'Conversions', color: '#0891b2' }],
         },
       ],
@@ -63,7 +63,7 @@ export default {
         {
           label: 'Conversions by Country',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SignupCountry',
+          groupByDimension: 'SignupCountry',
           metrics: [{ id: 56, label: 'Conversions' }],
         },
       ],
@@ -75,7 +75,7 @@ export default {
         {
           label: 'Conversions by Vertical',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'Vertical',
+          groupByDimension: 'Vertical',
           metrics: [{ id: 56, label: 'Conversions' }],
         },
       ],
@@ -87,7 +87,7 @@ export default {
         {
           label: 'Conversions by Sync Type',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'SyncType',
+          groupByDimension: 'SyncType',
           metrics: [{ id: 56, label: 'Conversions' }],
         },
       ],
@@ -99,7 +99,7 @@ export default {
         {
           label: 'Conversions by Attribution Channel',
           chartType: 'bar', valueFormat: 'number', stacked: true,
-          lastNMonths: 6, groupByDimension: 'AttributionChannel',
+          groupByDimension: 'AttributionChannel',
           metrics: [{ id: 56, label: 'Conversions' }],
         },
       ],
