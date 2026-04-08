@@ -51,18 +51,18 @@ export default {
       ],
     },
 
-    // ── Trial-to-Close Rate ──────────────────────────────────────
+    // ── Trial-to-Conversion Rate ──────────────────────────────────────
     {
-      title: 'Trial-to-Close Rate',
+      title: 'Trial-to-Conversion Rate',
       kpis: [
-        { metricId: 302, label: 'Trial-to-Close Rate', format: 'percent',
+        { metricId: 302, label: 'Trial-to-Conversion Rate', format: 'percent',
           valueSelector: 'current_or_latest', showDelta: true },
       ],
       charts: [
         {
-          label: 'Trial-to-Close Rate Over Time',
+          label: 'Trial-to-Conversion Rate Over Time',
           chartType: 'line', valueFormat: 'percent', lastNMonths: 12,
-          metrics: [{ id: 302, label: 'Trial-to-Close Rate', color: '#0891b2' }],
+          metrics: [{ id: 302, label: 'Trial-to-Conversion Rate', color: '#0891b2' }],
         },
       ],
     },

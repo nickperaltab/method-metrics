@@ -41,7 +41,7 @@ All five are nullable. If unset, the system falls back to `chart_sql` or `view_n
 - `semantic_filters` are empty `[]` — the view itself bakes in business logic (exclusions, date guards)
 - `semantic_dimensions` lists categorical columns valid for chart breakdowns
 
-### Derived / formula metrics (e.g. Sync Rate 300, Trial-to-Close Rate 302)
+### Derived / formula metrics (e.g. Sync Rate 300, Trial-to-Conversion Rate 302)
 - No semantic fields needed
 - Defined by `formula` (e.g. `SAFE_DIVIDE({55},{54})*100`) and `depends_on` (e.g. `[55, 54]`)
 - Computed at runtime by `evaluateFormula` in `useScorecardData` using the fetched primitive data
@@ -118,7 +118,7 @@ This lets the AI correctly answer "show me trials weekly by country" — it know
 | 59 | Churn | v_cancellations | COUNT(DISTINCT CompanyAccount) | AttributionChannel, SignupCountry, Vertical, SyncType |
 | 300 | Sync Rate | — | formula: SAFE_DIVIDE({55},{54})*100 | — |
 | 301 | Sync-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{55})*100 | — |
-| 302 | Trial-to-Close Rate | — | formula: SAFE_DIVIDE({56},{54})*100 | — |
+| 302 | Trial-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{54})*100 | — |
 
 ## What We're Building Towards
 
