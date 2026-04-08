@@ -4,6 +4,20 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ---
 
+### Channel Forecast & Trajectory Metrics Are Empty Shells
+**Status:** Open — needs Justin
+Metrics 305 (Trials Forecast by Channel), 307 (Trials Channel Trajectory), 306 (Syncs Forecast by Channel), 308 (Syncs Channel Trajectory) exist in Supabase but have no `chart_sql`, no `formula`, and no `view_name`. They're placeholders.
+These would show budget/forecast/trajectory broken down by attribution channel — useful for the PLAN scorecards once built.
+**Owner:** Justin to define SQL or confirm if these should be derived from channel views.
+
+---
+
+### Conversions Budget Not Yet Built
+**Status:** Open
+Metric 279 (Conversions Budget, queued) is a shell. No budget number for conversions exists yet. Once Justin defines it in `method_forecast`, the Conversions PLAN scorecard can be completed.
+
+---
+
 ## Bugs
 
 ### BQ Connection Indicator Out of Sync
