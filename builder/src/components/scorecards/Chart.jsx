@@ -54,7 +54,7 @@ function aggregateGroupedToQuarters(grouped) {
  * Removes both old data and future forecast months.
  */
 function filterToWindow(timeSeries, lastNMonths, dateFrom) {
-  if (!timeSeries || (!lastNMonths && !dateFrom)) return timeSeries;
+  if (!timeSeries || (lastNMonths == null && !dateFrom)) return timeSeries;
   const now = new Date();
   let startStr;
   if (dateFrom) {

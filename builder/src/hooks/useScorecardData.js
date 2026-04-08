@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchChartData, fetchAggregatedData, queryBq, buildSemanticSql, fetchGroupedData } from '../lib/bigquery';
+import { fetchChartData, fetchAggregatedData, queryBq, buildSemanticSql, buildSemanticGroupedSql, fetchGroupedData } from '../lib/bigquery';
 import { buildBatchSql, splitBatchResults, wrapChartSql } from '../lib/bigquery';
 import { getDateCol } from '../lib/chartDataBuilder';
 import { evaluateFormula } from '../lib/sanitize';
@@ -363,10 +363,31 @@ export default function useScorecardData(config, metrics, bqConnected) {
       if (groupedCharts.length > 0) {
         const groupedPromises = groupedCharts.map(async ({ metricId, dimension, lastNMonths: lnm }) => {
           const metric = metricsMap.get(metricId);
-          if (!metric?.view_name) return { key: `${metricId}:grouped:${dimension}`, result: null };
-          const dateCol = config.views?.[metric.view_name]?.dateCol || getDateCol(metric.view_name, 'SignupDate');
+          if (!metric) return { key: `${metricId}:grouped:${dimension}`, result: null };
           try {
-            const result = await fetchGroupedData(metric.view_name, dateCol, 'COUNT', 'month', dimension, null, lnm);
+            let result;
+            if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+              // Semantic path — uses correct measure, filters, and date column
+              const sql = buildSemanticGroupedSql(metric, dimension, 'month', lnm);
+              const raw = await queryBq(sql);
+              if (!raw.rows?.length) return { key: `${metricId}:grouped:${dimension}`, result: null };
+              const labels = [...new Set(raw.rows.map(r => r.period))].sort();
+              const seriesMap = {};
+              for (const row of raw.rows) {
+                if (!seriesMap[row.dimension]) seriesMap[row.dimension] = {};
+                seriesMap[row.dimension][row.period] = Number(row.value) || 0;
+              }
+              const alignedSeriesMap = {};
+              for (const [dim, byPeriod] of Object.entries(seriesMap)) {
+                alignedSeriesMap[dim] = labels.map(l => byPeriod[l] ?? null);
+              }
+              result = { labels, seriesMap: alignedSeriesMap, sql };
+            } else if (metric.view_name) {
+              const dateCol = config.views?.[metric.view_name]?.dateCol || getDateCol(metric.view_name, 'SignupDate');
+              result = await fetchGroupedData(metric.view_name, dateCol, 'COUNT', 'month', dimension, null, lnm);
+            } else {
+              return { key: `${metricId}:grouped:${dimension}`, result: null };
+            }
             return { key: `${metricId}:grouped:${dimension}`, result };
           } catch (e) {
             console.error(`[Scorecard] Grouped query failed for metric ${metricId} by ${dimension}:`, e.message);

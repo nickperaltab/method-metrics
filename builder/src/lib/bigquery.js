@@ -165,7 +165,7 @@ export function buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule) {
   if (bucket === 'week') {
     periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${dateCol}, WEEK(MONDAY)))`;
   } else if (bucket === 'quarter') {
-    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, QUARTER))`;
+    periodExpr = `CONCAT(FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, QUARTER)), '-Q', CAST(CEIL(EXTRACT(MONTH FROM DATE_TRUNC(${dateCol}, QUARTER)) / 3.0) AS STRING))`;
   } else if (bucket === 'day') {
     periodExpr = `FORMAT_DATE('%Y-%m-%d', ${dateCol})`;
   } else if (bucket === 'year') {
@@ -190,6 +190,53 @@ export function buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule) {
 
   const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
   return `SELECT ${periodExpr} AS period, ${metric.semantic_measure} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 1`;
+}
+
+/**
+ * Build grouped SQL from semantic metric fields.
+ * Produces SELECT period, dimension, measure FROM table WHERE ... GROUP BY 1,2 ORDER BY 1,2.
+ * dimension must be in metric.semantic_dimensions — throws otherwise.
+ */
+export function buildSemanticGroupedSql(metric, dimension, timeBucket, lastNMonths, endDateRule) {
+  const allowed = metric.semantic_dimensions || [];
+  if (!allowed.includes(dimension)) {
+    throw new Error(`"${dimension}" is not an approved dimension for metric ${metric.id}. Allowed: [${allowed.join(', ')}]`);
+  }
+  validateIdentifier(metric.semantic_table, 'semantic_table');
+  validateIdentifier(metric.semantic_date_col, 'semantic_date_col');
+  validateIdentifier(dimension, 'dimension');
+
+  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${metric.semantic_table}\``;
+  const dateCol = metric.semantic_date_col;
+  const bucket = timeBucket || 'month';
+
+  let periodExpr;
+  if (bucket === 'week') {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${dateCol}, WEEK(MONDAY)))`;
+  } else if (bucket === 'quarter') {
+    periodExpr = `CONCAT(FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, QUARTER)), '-Q', CAST(CEIL(EXTRACT(MONTH FROM DATE_TRUNC(${dateCol}, QUARTER)) / 3.0) AS STRING))`;
+  } else if (bucket === 'day') {
+    periodExpr = `FORMAT_DATE('%Y-%m-%d', ${dateCol})`;
+  } else if (bucket === 'year') {
+    periodExpr = `FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, YEAR))`;
+  } else {
+    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, MONTH))`;
+  }
+
+  const wheres = [...(metric.semantic_filters || [])];
+  if (lastNMonths != null && lastNMonths >= 0) {
+    const months = validateInt(lastNMonths, 'lastNMonths');
+    if (months === 0) {
+      wheres.push(`${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
+    } else {
+      wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
+    }
+  }
+  const endClause = buildEndDateClause(dateCol, endDateRule);
+  if (endClause) wheres.push(endClause);
+
+  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
+  return `SELECT ${periodExpr} AS period, ${dimension} AS dimension, ${metric.semantic_measure} AS value FROM ${table} ${whereClause} GROUP BY 1, 2 ORDER BY 1, 2`;
 }
 
 /**
@@ -338,7 +385,7 @@ export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yea
 export async function fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule = null) {
   // Semantic fields take priority — builds SQL dynamically for any grain
   if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
-    const cacheKey = `semantic|${metric.id}|${timeBucket}|${lastNMonths}|${endDateRule || 'none'}`;
+    const cacheKey = `semantic|${metric.id}|${timeBucket}|${lastNMonths}|${endDateRule || 'none'}|${channelFilter || ''}`;
     if (aggCache[cacheKey]) return aggCache[cacheKey];
     const sql = buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule);
     const result = await queryBq(sql);

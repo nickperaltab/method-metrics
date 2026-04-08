@@ -1,4 +1,4 @@
-import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchDimensionSnapshot } from './bigquery';
+import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchDimensionSnapshot, buildSemanticGroupedSql, queryBq } from './bigquery';
 import { applyLastNMonths } from './chartUtils';
 import { evaluateFormula } from './sanitize.js';
 import schemaCache from './schemaCache';
@@ -99,23 +99,37 @@ export async function fetchChartDatasets({
       rawDatasets.push({ label, labels: computedLabels, data: computedData });
       queryDetails.push({ metricName: label, metricId: metric.id, sql: `Derived: ${metric.formula}`, dateColumn: 'N/A', labels: computedLabels, data: computedData });
 
-    } else if (groupByDimension && metric.view_name) {
+    } else if (groupByDimension && (metric.semantic_table || metric.view_name)) {
       // Grouped dimension — one series per dimension value
-      const dateCol = getDateCol(metric.view_name, xField);
+      // Semantic metrics: use buildSemanticGroupedSql (correct measure + filters)
+      // Legacy view metrics: fall back to fetchGroupedData (COUNT(*) on view)
+      let grouped;
       try {
-        const grouped = await fetchGroupedData(metric.view_name, dateCol, yField, timeBucket, groupByDimension, channelFilter, lastNMonths, endDateRule);
+        if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
+          const sql = buildSemanticGroupedSql(metric, groupByDimension, timeBucket, lastNMonths, endDateRule);
+          const raw = await queryBq(sql);
+          const labels = [...new Set(raw.rows.map(r => r.period))].sort();
+          const seriesMap = {};
+          for (const row of raw.rows) {
+            if (!seriesMap[row.dimension]) seriesMap[row.dimension] = {};
+            seriesMap[row.dimension][row.period] = Number(row.value) || 0;
+          }
+          const alignedSeriesMap = {};
+          for (const [dim, byPeriod] of Object.entries(seriesMap)) {
+            alignedSeriesMap[dim] = labels.map(l => byPeriod[l] ?? null);
+          }
+          grouped = { labels, seriesMap: alignedSeriesMap, sql };
+        } else {
+          const dateCol = getDateCol(metric.view_name, xField);
+          grouped = await fetchGroupedData(metric.view_name, dateCol, yField, timeBucket, groupByDimension, channelFilter, lastNMonths, endDateRule);
+        }
         Object.entries(grouped.seriesMap).forEach(([dimValue, data]) => {
           rawDatasets.push({ label: dimValue, labels: grouped.labels, data });
         });
-        queryDetails.push({ metricName: label, metricId: metric.id, sql: grouped.sql, dateColumn: dateCol, labels: grouped.labels, data: [], groupedBy: groupByDimension });
+        queryDetails.push({ metricName: label, metricId: metric.id, sql: grouped.sql, dateColumn: metric.semantic_date_col || xField, labels: grouped.labels, data: [], groupedBy: groupByDimension });
       } catch (e) {
-        console.error(`fetchGroupedData failed for ${metric.view_name} grouped by ${groupByDimension}:`, e);
-        queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
-        // Fallback: fetch un-grouped data so the chart still renders
-        try {
-          const agg = await fetchChartData(metric, dateCol, yField, timeBucket, channelFilter, lastNMonths, endDateRule);
-          rawDatasets.push({ label, ...agg });
-        } catch { /* give up */ }
+        console.error(`Grouped query failed for metric ${metric.id} by ${groupByDimension}:`, e);
+        queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: xField, labels: [], data: [] });
       }
 
     } else if (metric.view_name || metric.chart_sql) {

@@ -4,6 +4,9 @@ vi.mock('../../src/lib/bigquery', () => ({
   fetchGroupedData: vi.fn(),
   fetchChartData: vi.fn(),
   fetchAggregatedData: vi.fn(),
+  buildSemanticGroupedSql: vi.fn(),
+  queryBq: vi.fn(),
+  fetchDimensionSnapshot: vi.fn(),
 }));
 
 vi.mock('../../src/lib/schemaCache', () => ({
@@ -58,13 +61,8 @@ describe('fetchChartDatasets — grouped path', () => {
     expect(fetchChartData).not.toHaveBeenCalled();
   });
 
-  it('falls back to fetchChartData when fetchGroupedData throws (regression: "No data loaded")', async () => {
+  it('returns empty (no silent fallback) when fetchGroupedData throws', async () => {
     fetchGroupedData.mockRejectedValue(new Error('Invalid xField: null'));
-    fetchChartData.mockResolvedValue({
-      labels: ['2025-01', '2025-02'],
-      data: [100, 120],
-      sql: 'SELECT ...',
-    });
 
     const result = await fetchChartDatasets({
       metricIds: [54],
@@ -73,9 +71,10 @@ describe('fetchChartDatasets — grouped path', () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result.empty).toBeFalsy();
-    expect(result.datasets).toHaveLength(1);
-    expect(fetchChartData).toHaveBeenCalledOnce();
+    expect(result.empty).toBe(true);
+    expect(result.datasets).toHaveLength(0);
+    // No silent fallback to ungrouped
+    expect(fetchChartData).not.toHaveBeenCalled();
   });
 
   it('returns empty when seriesMap is empty and fallback also returns nothing', async () => {

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Since queryBq is called internally (not through module export), we test
 // input validation directly and SQL patterns via the exported cache key format.
 
-import { fetchGroupedData, clearAggCache, buildEndDateClause, buildSemanticSql } from '../../src/lib/bigquery.js';
+import { fetchGroupedData, clearAggCache, buildEndDateClause, buildSemanticSql, buildSemanticGroupedSql } from '../../src/lib/bigquery.js';
 
 describe('fetchGroupedData — input validation', () => {
   it('rejects SQL injection in groupByField', async () => {
@@ -227,5 +227,72 @@ describe('buildSemanticSql', () => {
     const sql = buildSemanticSql(metric, 'month', 13, null);
     expect(sql).toContain('INTERVAL 13 MONTH');
     expect([...sql.matchAll(/INTERVAL/g)].length).toBe(1);
+  });
+
+  it('builds quarterly SQL with YYYY-Q# label format', () => {
+    const sql = buildSemanticSql(metric, 'quarter', null, null);
+    expect(sql).toContain("CONCAT(FORMAT_DATE('%Y', DATE_TRUNC(Forecasted_Month, QUARTER))");
+    expect(sql).toContain("'-Q'");
+    expect(sql).not.toContain("FORMAT_DATE('%Y-%m'");
+  });
+});
+
+describe('buildSemanticGroupedSql', () => {
+  const metric = {
+    id: 54,
+    semantic_table: 'v_trials',
+    semantic_measure: 'COUNT(*)',
+    semantic_date_col: 'SignupDate',
+    semantic_filters: [],
+    semantic_dimensions: ['AttributionChannel', 'SignupCountry', 'Vertical'],
+  };
+
+  it('builds grouped SQL with period, dimension, and measure columns', () => {
+    const sql = buildSemanticGroupedSql(metric, 'AttributionChannel', 'month', null);
+    expect(sql).toContain("FORMAT_DATE('%Y-%m', DATE_TRUNC(SignupDate, MONTH)) AS period");
+    expect(sql).toContain('AttributionChannel AS dimension');
+    expect(sql).toContain('COUNT(*) AS value');
+    expect(sql).toContain('`project-for-method-dw.revenue.v_trials`');
+    expect(sql).toContain('GROUP BY 1, 2 ORDER BY 1, 2');
+  });
+
+  it('applies semantic_filters to grouped SQL', () => {
+    const m = { ...metric, semantic_filters: ['SignupDate IS NOT NULL'] };
+    const sql = buildSemanticGroupedSql(m, 'AttributionChannel', 'month', null);
+    expect(sql).toContain('SignupDate IS NOT NULL');
+  });
+
+  it('applies lastNMonths filter', () => {
+    const sql = buildSemanticGroupedSql(metric, 'AttributionChannel', 'month', 6);
+    expect(sql).toContain('INTERVAL 6 MONTH');
+  });
+
+  it('throws when dimension is not in semantic_dimensions', () => {
+    expect(() => buildSemanticGroupedSql(metric, 'LicenseCount', 'month', null))
+      .toThrow(/not an approved dimension/);
+  });
+
+  it('throws when metric has no semantic_dimensions', () => {
+    const m = { ...metric, semantic_dimensions: [] };
+    expect(() => buildSemanticGroupedSql(m, 'AttributionChannel', 'month', null))
+      .toThrow(/not an approved dimension/);
+  });
+
+  it('throws when dimension contains SQL injection', () => {
+    expect(() => buildSemanticGroupedSql(metric, "'; DROP TABLE metrics; --", 'month', null))
+      .toThrow();
+  });
+
+  it('supports weekly grain', () => {
+    const sql = buildSemanticGroupedSql(metric, 'SignupCountry', 'week', null);
+    expect(sql).toContain("DATE_TRUNC(SignupDate, WEEK(MONDAY))");
+    expect(sql).toContain('SignupCountry AS dimension');
+  });
+
+  it('uses semantic_measure not COUNT(*) for custom measure', () => {
+    const m = { ...metric, semantic_measure: 'COUNT(DISTINCT CompanyAccount)' };
+    const sql = buildSemanticGroupedSql(m, 'AttributionChannel', 'month', null);
+    expect(sql).toContain('COUNT(DISTINCT CompanyAccount) AS value');
+    expect(sql).not.toContain('COUNT(*) AS value');
   });
 });
