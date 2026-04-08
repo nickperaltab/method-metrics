@@ -46,7 +46,7 @@ builder/                 — AI Chart Builder (React + Vite)
   supabase/
     functions/
       ai-chart/
-        index.ts         — Edge Function (Claude Haiku proxy)
+        index.ts         — Edge Function (Claude Sonnet 4.5 proxy)
 docs/
   ai-chart-builder-architecture.md  — comprehensive developer/AI-session reference
 ```
@@ -59,6 +59,12 @@ docs/
 - Inline editing saves via PATCH to Supabase REST API
 - Breakdown lenses generate SQL dynamically from primitive schema definitions
 - `view_definition` column in Supabase = cached copy of BQ view SQL (sync manually when views change)
+
+## Semantic Layer
+
+Metrics can have human-readable field definitions stored directly on the `metrics` record (`semantic_table`, `semantic_measure`, `semantic_date_col`, `semantic_filters`, `semantic_dimensions`). When set, these replace `chart_sql` and enable any time grain + dimension breakdowns without custom SQL.
+
+**Full reference:** `docs/semantic-layer.md` — read this before working on metric definitions, scorecards, `buildSemanticSql`, or `buildMetricContext`.
 
 ## Supabase Table: metrics
 
@@ -93,7 +99,7 @@ For detailed architecture, see `docs/ai-chart-builder-architecture.md`.
 ### How It Works
 
 1. **Supabase `metrics` table** — the AI's "menu." On page load, all `live` metric definitions are fetched and formatted into a text catalog the AI can read.
-2. **AI (Claude Haiku 4.5)** — receives the metric catalog + BQ column schemas + user prompt. Returns a JSON config (metric IDs, chart type, time bucket, filters, colors, labels). **Does NOT write SQL or touch data.**
+2. **AI (Claude Sonnet 4.5)** — receives the metric catalog + BQ column schemas + user prompt. Returns a JSON config (metric IDs, chart type, time bucket, filters, colors, labels). **Does NOT write SQL or touch data.**
 3. **Frontend JS** — takes the AI's JSON config, builds a SQL query, and runs it directly against BigQuery via OAuth.
 4. **ECharts** — renders the query results as an interactive chart in the browser.
 
@@ -107,10 +113,11 @@ For detailed architecture, see `docs/ai-chart-builder-architecture.md`.
 ### Deploy
 
 ```
-cd builder && npm run build && vercel --prod
+cd builder && npm run build
+git add dist && git commit -m "build" && git push
 ```
 
-(Vercel deploys from `dist/`; the output is also what GitHub Pages serves.)
+GitHub Pages auto-deploys on push to `main`. Do NOT use `vercel --prod`.
 
 ## Deploy (Tracker)
 
