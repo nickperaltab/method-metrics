@@ -4,6 +4,14 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ---
 
+### Home Page Visual Redesign
+**Status:** Open
+The current Home page rows look utilitarian — individual bordered cards, always-visible action buttons, loud orange "REVIEW REQUESTED" badge. Needs a polish pass before wider sharing.
+**Direction:** Refined editorial list — hairline dividers instead of individual card borders, action buttons (delete, request review) hidden until row hover, Review Requested badge toned down to muted text, better section spacing and typography.
+**Files:** `builder/src/pages/Home.jsx`
+
+---
+
 ### Channel Forecast & Trajectory Metrics Are Empty Shells
 **Status:** Open — needs Justin
 Metrics 305 (Trials Forecast by Channel), 307 (Trials Channel Trajectory), 306 (Syncs Forecast by Channel), 308 (Syncs Channel Trajectory) exist in Supabase but have no `chart_sql`, no `formula`, and no `view_name`. They're placeholders.
