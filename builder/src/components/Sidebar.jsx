@@ -4,6 +4,7 @@ import { useUser } from '../contexts/UserContext';
 import { isAdmin } from '../lib/permissions';
 import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
+import { getScorecardStars } from '../pages/Home';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
@@ -19,6 +20,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const [myDashboards, setMyDashboards] = useState([]);
   const [approvedDashboards, setApprovedDashboards] = useState([]);
   const [stars, setStars] = useState([]);
+  const [scStars, setScStars] = useState(() => getScorecardStars());
   const [adminOpen, setAdminOpen] = useState(false);
 
   const loadData = useCallback(() => {
@@ -37,7 +39,10 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   // Refresh when stars change elsewhere in the app
   useEffect(() => {
-    const handler = () => loadData();
+    const handler = () => {
+      loadData();
+      setScStars(getScorecardStars());
+    };
     window.addEventListener('stars-changed', handler);
     return () => window.removeEventListener('stars-changed', handler);
   }, [loadData]);
@@ -127,22 +132,30 @@ export default function Sidebar({ collapsed, onToggle }) {
             Chart Builder
           </NavLink>
 
-          {/* My Dashboards (starred) */}
-          {stars.length > 0 && (
-            <>
-              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-              <div style={sectionLabel}>My Dashboards</div>
-              {[...myDashboards, ...approvedDashboards]
-                .filter((d, i, arr) => stars.includes(d.id) && arr.findIndex(x => x.id === d.id) === i)
-                .slice(0, 8)
-                .map(d => (
-                  <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
-                    <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
+          {/* My Dashboards (starred scorecards + starred AI dashboards) */}
+          {(scStars.length > 0 || stars.length > 0) && (() => {
+            const starredScorecards = Object.values(SCORECARDS)
+              .filter(sc => !sc.group && scStars.includes(sc.id));
+            const starredDashboards = [...myDashboards, ...approvedDashboards]
+              .filter((d, i, arr) => stars.includes(d.id) && arr.findIndex(x => x.id === d.id) === i)
+              .slice(0, 8);
+            return (
+              <>
+                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+                <div style={sectionLabel}>My Dashboards</div>
+                {starredScorecards.map(sc => (
+                  <NavLink key={`sc-${sc.id}`} to={`/scorecards/${sc.id}`} style={linkStyle}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sc.title}</span>
+                  </NavLink>
+                ))}
+                {starredDashboards.map(d => (
+                  <NavLink key={`db-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                   </NavLink>
                 ))}
-            </>
-          )}
+              </>
+            );
+          })()}
 
           {/* Method Approved scorecards */}
           {(() => {

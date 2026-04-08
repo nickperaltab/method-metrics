@@ -15,82 +15,50 @@ const s = {
   rowName: { flex: 1, fontSize: 13, fontWeight: 500, color: '#1a1a1a' },
   rowMeta: { fontSize: 11, color: '#9ca3af' },
   badge: { fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: 10, padding: '2px 8px' },
-  starBtn: { background: 'none', border: 'none', fontSize: 15, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, color: '#d1d5db' },
+  starBtn: { background: 'none', border: 'none', fontSize: 15, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
   actionBtn: { background: '#fff', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '3px 8px', borderRadius: 4 },
   search: { width: '100%', padding: '8px 12px', border: '1px solid #e2e5e9', borderRadius: 6, fontSize: 13, background: '#fff', color: '#374151', marginBottom: 20, outline: 'none', boxSizing: 'border-box' },
   empty: { fontSize: 13, color: '#9ca3af', padding: '8px 0', fontFamily: "'JetBrains Mono', monospace" },
 };
 
 const ALL_SCORECARDS = Object.values(SCORECARDS).filter(sc => !sc.group);
+const SCORECARD_STARS_KEY = 'method_scorecard_stars';
 
-function ScorecardRow({ sc, onNavigate, onHide }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      style={{ ...s.row, borderColor: hovered ? '#059669' : '#e2e5e9' }}
-      onClick={onNavigate}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <span style={{ width: 19 }} />
-      <span style={s.rowName}>{sc.title}</span>
-      <span style={s.rowMeta}>Scorecard</span>
-      {hovered && (
-        <button
-          style={{ ...s.actionBtn, color: '#9ca3af', borderColor: '#e2e5e9' }}
-          onClick={e => { e.stopPropagation(); onHide(); }}
-          title="Hide from Home"
-        >
-          hide
-        </button>
-      )}
-    </div>
-  );
+export function getScorecardStars() {
+  return JSON.parse(localStorage.getItem(SCORECARD_STARS_KEY) || '[]');
 }
-const HIDDEN_SCORECARDS_KEY = 'method_hidden_scorecards';
 
 export default function Home() {
   const navigate = useNavigate();
   const { currentUser } = useUser();
   const admin = isAdmin(currentUser);
   const [dashboards, setDashboards] = useState([]);
-  const [stars, setStars] = useState([]);
+  const [dbStars, setDbStars] = useState([]);
+  const [scStars, setScStars] = useState(() => getScorecardStars());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null);
-  const [hiddenScorecards, setHiddenScorecards] = useState(
-    () => JSON.parse(localStorage.getItem(HIDDEN_SCORECARDS_KEY) || '[]')
-  );
-
-  const visibleScorecards = ALL_SCORECARDS.filter(sc => !hiddenScorecards.includes(sc.id));
-  const hiddenList = ALL_SCORECARDS.filter(sc => hiddenScorecards.includes(sc.id));
-
-  const toggleScorecardHidden = (id) => {
-    setHiddenScorecards(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      localStorage.setItem(HIDDEN_SCORECARDS_KEY, JSON.stringify(next));
-      return next;
-    });
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [all, starIds] = await Promise.all([
-        admin ? fetchAllDashboards() : Promise.all([
-          currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
-          fetchApprovedDashboardsList(),
-        ]).then(([mine, approved]) => {
-          const merged = [...mine];
-          for (const d of approved) {
-            if (!merged.some(x => x.id === d.id)) merged.push(d);
-          }
-          return merged;
-        }),
+        admin
+          ? fetchAllDashboards()
+          : Promise.all([
+              currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
+              fetchApprovedDashboardsList(),
+            ]).then(([mine, approved]) => {
+              const merged = [...mine];
+              for (const d of approved) {
+                if (!merged.some(x => x.id === d.id)) merged.push(d);
+              }
+              return merged;
+            }),
         currentUser ? fetchStars(currentUser.id) : Promise.resolve([]),
       ]);
       setDashboards(all);
-      setStars(starIds);
+      setDbStars(starIds);
     } catch (e) {
       console.error(e);
     } finally {
@@ -105,19 +73,29 @@ export default function Home() {
     return () => window.removeEventListener('stars-changed', handler);
   }, [load]);
 
-  const toggleStar = useCallback(async (e, db) => {
+  const toggleDbStar = useCallback(async (e, db) => {
     e.stopPropagation();
     if (!currentUser) return;
-    const isStarred = stars.includes(db.id);
+    const isStarred = dbStars.includes(db.id);
     if (isStarred) {
       await unstarDashboard(db.id, currentUser.id);
-      setStars(prev => prev.filter(id => id !== db.id));
+      setDbStars(prev => prev.filter(id => id !== db.id));
     } else {
       await starDashboard(db.id, currentUser.id);
-      setStars(prev => [...prev, db.id]);
+      setDbStars(prev => [...prev, db.id]);
     }
     window.dispatchEvent(new Event('stars-changed'));
-  }, [currentUser, stars]);
+  }, [currentUser, dbStars]);
+
+  const toggleScStar = useCallback((e, id) => {
+    e.stopPropagation();
+    setScStars(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem(SCORECARD_STARS_KEY, JSON.stringify(next));
+      window.dispatchEvent(new Event('stars-changed'));
+      return next;
+    });
+  }, []);
 
   const handleDelete = useCallback((e, db) => {
     e.stopPropagation();
@@ -161,53 +139,20 @@ export default function Home() {
     await load();
   }, [load]);
 
-  const filtered = dashboards.filter(db => {
-    if (!search) return true;
-    return db.name?.toLowerCase().includes(search.toLowerCase());
+  // Sort starred to top
+  const sortedScorecards = [...ALL_SCORECARDS].sort((a, b) => {
+    const aS = scStars.includes(a.id) ? 0 : 1;
+    const bS = scStars.includes(b.id) ? 0 : 1;
+    return aS - bS;
   });
 
-  function DashboardRow({ db }) {
-    const isStarred = stars.includes(db.id);
-    const isMine = canDelete(currentUser, db);
-    return (
-      <div
-        style={s.row}
-        onClick={() => navigate(`/dashboards/${db.id}`)}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
-      >
-        <button
-          style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
-          onClick={e => toggleStar(e, db)}
-          aria-label={isStarred ? 'Unstar' : 'Star'}
-        >
-          {isStarred ? '★' : '☆'}
-        </button>
-        <span
-          style={s.rowName}
-          onClick={isMine ? e => handleRename(e, db) : undefined}
-          title={isMine ? 'Click to rename' : ''}
-        >
-          {db.name}
-        </span>
-        {db.is_approved && <span style={s.badge}>Review Requested</span>}
-        <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
-        {isMine && (
-          <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>
-            delete
-          </button>
-        )}
-        {isMine && admin && (
-          <button
-            style={{ ...s.actionBtn, color: db.is_approved ? '#6b7280' : '#c2410c', borderColor: db.is_approved ? '#e2e5e9' : '#fed7aa' }}
-            onClick={e => handleToggleApproval(e, db)}
-          >
-            {db.is_approved ? 'unrequest' : 'request review'}
-          </button>
-        )}
-      </div>
-    );
-  }
+  const filtered = dashboards
+    .filter(db => !search || db.name?.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const aS = dbStars.includes(a.id) ? 0 : 1;
+      const bS = dbStars.includes(b.id) ? 0 : 1;
+      return aS - bS;
+    });
 
   return (
     <div style={s.layout}>
@@ -218,23 +163,28 @@ export default function Home() {
       {/* Method Approved scorecards */}
       <div style={s.sectionTitle}>Method Approved</div>
       <div style={s.list}>
-        {visibleScorecards.map(sc => (
-          <ScorecardRow key={sc.id} sc={sc} onNavigate={() => navigate(`/scorecards/${sc.id}`)} onHide={() => toggleScorecardHidden(sc.id)} />
-        ))}
-        {hiddenList.length > 0 && (
-          <div style={{ fontSize: 11, color: '#9ca3af', paddingLeft: 4 }}>
-            {hiddenList.map(sc => (
-              <span
-                key={sc.id}
-                onClick={() => toggleScorecardHidden(sc.id)}
-                style={{ cursor: 'pointer', marginRight: 12, textDecoration: 'underline dotted' }}
-                title="Show again"
+        {sortedScorecards.map(sc => {
+          const isStarred = scStars.includes(sc.id);
+          return (
+            <div
+              key={sc.id}
+              style={s.row}
+              onClick={() => navigate(`/scorecards/${sc.id}`)}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
+            >
+              <button
+                style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
+                onClick={e => toggleScStar(e, sc.id)}
+                aria-label={isStarred ? 'Unstar' : 'Star'}
               >
-                {sc.title}
-              </span>
-            ))}
-          </div>
-        )}
+                {isStarred ? '★' : '☆'}
+              </button>
+              <span style={s.rowName}>{sc.title}</span>
+              <span style={s.rowMeta}>Scorecard</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* AI Dashboards */}
@@ -251,7 +201,49 @@ export default function Home() {
         <div style={s.empty}>No dashboards found.</div>
       ) : (
         <div style={s.list}>
-          {filtered.map(db => <DashboardRow key={db.id} db={db} />)}
+          {filtered.map(db => {
+            const isStarred = dbStars.includes(db.id);
+            const isMine = canDelete(currentUser, db);
+            return (
+              <div
+                key={db.id}
+                style={s.row}
+                onClick={() => navigate(`/dashboards/${db.id}`)}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
+              >
+                <button
+                  style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
+                  onClick={e => toggleDbStar(e, db)}
+                  aria-label={isStarred ? 'Unstar' : 'Star'}
+                >
+                  {isStarred ? '★' : '☆'}
+                </button>
+                <span
+                  style={s.rowName}
+                  onClick={isMine ? e => handleRename(e, db) : undefined}
+                  title={isMine ? 'Click to rename' : ''}
+                >
+                  {db.name}
+                </span>
+                {db.is_approved && <span style={s.badge}>Review Requested</span>}
+                <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
+                {isMine && (
+                  <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>
+                    delete
+                  </button>
+                )}
+                {isMine && admin && (
+                  <button
+                    style={{ ...s.actionBtn, color: db.is_approved ? '#6b7280' : '#c2410c', borderColor: db.is_approved ? '#e2e5e9' : '#fed7aa' }}
+                    onClick={e => handleToggleApproval(e, db)}
+                  >
+                    {db.is_approved ? 'unrequest' : 'request review'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
