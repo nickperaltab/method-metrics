@@ -19,6 +19,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   const [myDashboards, setMyDashboards] = useState([]);
   const [approvedDashboards, setApprovedDashboards] = useState([]);
   const [stars, setStars] = useState([]);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const loadData = useCallback(() => {
     if (!currentUser) return;
@@ -159,27 +160,45 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
-          {/* Admin — scorecards + tools */}
+          {/* Admin — collapsible, with Funnel/Plan sub-headings */}
           {isAdmin(currentUser) && (() => {
             const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
             const plan = Object.values(SCORECARDS).filter(sc => sc.group === 'plan');
             return (
               <>
                 <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-                <div style={sectionLabel}>Admin</div>
-                {[...funnel, ...plan].map(sc => (
-                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
-                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
-                    {sc.title}
-                  </NavLink>
-                ))}
-                <div style={{ height: 1, background: '#e2e5e9', margin: '8px 16px' }} />
-                {ADMIN_ITEMS.map(item => (
-                  <NavLink key={item.path} to={item.path} style={linkStyle}>
-                    <span style={{ fontSize: 16 }}>{item.icon}</span>
-                    {item.label}
-                  </NavLink>
-                ))}
+                <div
+                  onClick={() => setAdminOpen(o => !o)}
+                  style={{ ...sectionLabel, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16, userSelect: 'none' }}
+                >
+                  Admin
+                  <span style={{ fontSize: 10, transition: 'transform .15s', display: 'inline-block', transform: adminOpen ? 'rotate(90deg)' : 'none' }}>›</span>
+                </div>
+                {adminOpen && (
+                  <>
+                    <div style={{ ...sectionLabel, paddingLeft: 24, color: '#c4c9d0', marginTop: 4 }}>Funnel</div>
+                    {funnel.map(sc => (
+                      <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={({ isActive }) => ({ ...linkStyle({ isActive }), paddingLeft: 24 })}>
+                        <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                        {sc.title}
+                      </NavLink>
+                    ))}
+                    <div style={{ ...sectionLabel, paddingLeft: 24, color: '#c4c9d0', marginTop: 8 }}>Plan</div>
+                    {plan.map(sc => (
+                      <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={({ isActive }) => ({ ...linkStyle({ isActive }), paddingLeft: 24 })}>
+                        <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                        {sc.title}
+                      </NavLink>
+                    ))}
+                    <div style={{ height: 1, background: '#e2e5e9', margin: '8px 16px' }} />
+                    {ADMIN_ITEMS.map(item => (
+                      <NavLink key={item.path} to={item.path} style={({ isActive }) => ({ ...linkStyle({ isActive }), paddingLeft: 24 })}>
+                        <span style={{ fontSize: 16 }}>{item.icon}</span>
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </>
+                )}
               </>
             );
           })()}
@@ -187,27 +206,8 @@ export default function Sidebar({ collapsed, onToggle }) {
 
         {/* User section at bottom */}
         {currentUser && (
-          <div style={{
-            padding: '12px 16px',
-            borderTop: '1px solid #e2e5e9',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e5e9' }}>
             <span style={{ fontSize: 13, color: '#374151' }}>{currentUser.name}</span>
-            <button
-              onClick={switchUser}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#6b7280',
-                cursor: 'pointer',
-                fontSize: 11,
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
-              switch
-            </button>
           </div>
         )}
       </aside>

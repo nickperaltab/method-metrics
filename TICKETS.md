@@ -68,6 +68,13 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 
 ## Improvements
 
+### Identity via Google OAuth (remove manual user picker)
+**Status:** Open
+Currently users are identified via a manual picker stored in localStorage. Should instead use the Google OAuth email from BQ auth to auto-identify the user: look up email in Supabase `users` table, set role from there. If email not found → viewer (no admin). Manual picker and "switch" button removed. Public/shareable routes (dashboards) should not require identity — defer until public sharing is designed.
+**Files:** `builder/src/contexts/UserContext.jsx`, `builder/src/hooks/useBqAuth.js`, `builder/src/App.jsx`
+
+---
+
 ### All Charts View as Modal for Adding Charts to a Dashboard
 **Status:** Open
 When editing a dashboard and adding a chart, it should open an `/charts`-style browse view in a modal picker instead of requiring users to navigate away. The `/charts` route was removed from the sidebar as a standalone page; this modal is where it belongs.
