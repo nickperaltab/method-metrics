@@ -11,7 +11,6 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { path: '/admin/registry', label: 'Metric Registry', icon: '\u2261' },
-  { path: '/admin/dimensions', label: 'Dimensions', icon: '\u25A6' },
   { path: '/admin/insights', label: 'AI Insights', icon: '\u25C8' },
 ];
 
@@ -126,18 +125,15 @@ export default function Sidebar({ collapsed, onToggle }) {
             <span style={{ fontSize: 16 }}>{'\u2728'}</span>
             Chart Builder
           </NavLink>
-          <NavLink to="/charts" style={linkStyle}>
-            <span style={{ fontSize: 16 }}>{'\u25A3'}</span>
-            All Charts
-          </NavLink>
 
-          {/* Favorites */}
+          {/* My Dashboards (starred) */}
           {stars.length > 0 && (
             <>
               <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-              <div style={sectionLabel}>{'\u2605'} Favorites</div>
+              <div style={sectionLabel}>My Dashboards</div>
               {[...myDashboards, ...approvedDashboards]
                 .filter((d, i, arr) => stars.includes(d.id) && arr.findIndex(x => x.id === d.id) === i)
+                .slice(0, 8)
                 .map(d => (
                   <NavLink key={`fav-${d.id}`} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
                     <span style={{ fontSize: 12, color: '#f59e0b' }}>{'\u2605'}</span>
@@ -147,58 +143,15 @@ export default function Sidebar({ collapsed, onToggle }) {
             </>
           )}
 
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-
-          {/* All Dashboards */}
-          <NavLink to="/dashboards" end style={linkStyle}>
-            <span style={{ fontSize: 16 }}>{'\u25A0'}</span>
-            All Dashboards
-          </NavLink>
-          {[...approvedDashboards, ...myDashboards]
-            .filter((d, i, arr) => arr.findIndex(x => x.id === d.id) === i)
-            .slice(0, 8)
-            .map(d => (
-              <NavLink key={d.id} to={`/dashboards/${d.id}`} style={linkStyle} title={d.name}>
-                {d.is_approved
-                  ? <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{'\u2713'}</span>
-                  : <span style={{ fontSize: 12, opacity: 0.5 }}>{'\u25A0'}</span>
-                }
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-              </NavLink>
-            ))}
-
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-
-          {/* Scorecards */}
+          {/* Method Approved scorecards */}
           {(() => {
-            const all = Object.values(SCORECARDS);
-            const top = all.filter(sc => !sc.group);
-            const funnel = all.filter(sc => sc.group === 'funnel');
-            const plan = all.filter(sc => sc.group === 'plan');
+            const approved = Object.values(SCORECARDS).filter(sc => !sc.group);
             return (
               <>
-                <div style={sectionLabel}>Scorecards</div>
-                {top.map(sc => (
-                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
-                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
-                    {sc.title}
-                  </NavLink>
-                ))}
                 <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-                <div style={sectionLabel}>Funnel</div>
-                {funnel.map(sc => (
+                <div style={sectionLabel}>Method Approved</div>
+                {approved.map(sc => (
                   <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
-                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
-                    {sc.title}
-                  </NavLink>
-                ))}
-                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-                <div style={sectionLabel}>Plan</div>
-                {plan.map(sc => (
-                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
-                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
                     {sc.title}
                   </NavLink>
                 ))}
@@ -206,23 +159,30 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-
-          {/* Admin — only visible to admin users */}
-          {isAdmin(currentUser) && (
-            <>
-              <div style={{ padding: '4px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#6b7280' }}>
-                Admin
-              </div>
-              {ADMIN_ITEMS.map(item => (
-                <NavLink key={item.path} to={item.path} style={linkStyle}>
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              ))}
-            </>
-          )}
+          {/* Admin — scorecards + tools */}
+          {isAdmin(currentUser) && (() => {
+            const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
+            const plan = Object.values(SCORECARDS).filter(sc => sc.group === 'plan');
+            return (
+              <>
+                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+                <div style={sectionLabel}>Admin</div>
+                {[...funnel, ...plan].map(sc => (
+                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
+                    <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                    {sc.title}
+                  </NavLink>
+                ))}
+                <div style={{ height: 1, background: '#e2e5e9', margin: '8px 16px' }} />
+                {ADMIN_ITEMS.map(item => (
+                  <NavLink key={item.path} to={item.path} style={linkStyle}>
+                    <span style={{ fontSize: 16 }}>{item.icon}</span>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </>
+            );
+          })()}
         </nav>
 
         {/* User section at bottom */}

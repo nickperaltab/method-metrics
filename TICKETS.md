@@ -20,6 +20,31 @@ Metric 279 (Conversions Budget, queued) is a shell. No budget number for convers
 
 ## Bugs
 
+### "All" Range Only Shows ~13 Months
+**Status:** Open
+The Range filter's "All" button now correctly bypasses client-side display limits, but `useScorecardData` hardcodes `13` months in the BQ fetch (lines 210, 212, 302). So "All" shows everything fetched — but that's only ~13 months. Showing more requires bumping the fetch limit, which increases query cost/time on large views.
+**Decision needed:** How far back do we want "All" to go? Options: fixed 36 months, or no date filter at all (full history, slowest).
+**Files:** `builder/src/hooks/useScorecardData.js` (three `13` hardcodes)
+
+---
+
+### MetricInspector Shows Wrong SQL for Breakdown Charts
+**Status:** Open
+Clicking ⓘ on a grouped/breakdown chart (e.g. By Attribution Channel) opens MetricInspector for the metric and shows the plain time-series SQL — not the grouped SQL that actually ran. The grouped query adds `dimension AS dimension` and `GROUP BY 1, 2`, which is missing from what's shown.
+**Fix (Option A):** Pass `groupByDimension` through `onMetricClick` → MetricInspector → use `buildSemanticGroupedSql` when dimension is present. Shows the exact query that produced the chart.
+**Files:** `builder/src/components/scorecards/Chart.jsx` (ChartInspectMenu), `builder/src/pages/Scorecard.jsx` (handleMetricClick), `builder/src/components/scorecards/MetricInspector.jsx` (TechnicalDetails)
+
+---
+
+### Conversion Trajectory Diverges from Looker (metric 296)
+**Status:** Open
+Metric 296 (Conversions Trajectory) returns ~86 while Looker shows 75. Root cause: our formula filters `< CURRENT_DATE()` (excludes today) and divides by `day_of_month - 1`, while Looker appears to count through today and divide by `day_of_month + 1`. All downstream metrics cascade from this: Conversion Rate Trajectory (321), Forecast vs. Trajectory (322), and Forecast Attainment (323) all show different values than Looker.
+Separately, the Conversions delta (-81.7% vs Looker's -9.1%) appears to compare April MTD against full prior month instead of March MTD through the same day.
+**Fix candidate:** Update metric 296 `chart_sql` to use `COUNT(...)` through today divided by `(day_of_month + 1)` × days in month. Confirm with Looker formula before changing.
+**Files:** Supabase metric 296 (`chart_sql`), and verify delta logic in `useScorecardData.js`
+
+---
+
 ### BQ Connection Indicator Out of Sync
 **Status:** Open
 When BigQuery token expires mid-session, queries throw "Not connected to BigQuery" but the UI still shows green "BQ Connected". `disconnectBq()` nulls the token but doesn't update React state in `useBqAuth`.
@@ -42,6 +67,13 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 ---
 
 ## Improvements
+
+### All Charts View as Modal for Adding Charts to a Dashboard
+**Status:** Open
+When editing a dashboard and adding a chart, it should open an `/charts`-style browse view in a modal picker instead of requiring users to navigate away. The `/charts` route was removed from the sidebar as a standalone page; this modal is where it belongs.
+**Files:** `builder/src/components/DashboardView.jsx` (add chart modal), `builder/src/pages/Charts.jsx` (reuse as modal content)
+
+---
 
 ### KPI Delta: Show Calculation on Click
 **Status:** Open
