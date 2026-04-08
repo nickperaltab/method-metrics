@@ -160,8 +160,8 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     );
   }
 
-  const handleMetricClick = (metricId, value, format, customInfo) =>
-    setInspected({ metricId, value, format, customInfo });
+  const handleMetricClick = (metricId, value, format, customInfo, deltaInfo) =>
+    setInspected({ metricId, value, format, customInfo, deltaInfo });
 
   const ungrouped = config.sections.filter(s => !s.group);
   const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
@@ -211,6 +211,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         valueFormat={inspected?.format}
         metricsCache={metricsCache}
         customInfo={inspected?.customInfo}
+        deltaInfo={inspected?.deltaInfo}
         onClose={() => setInspected(null)}
       />
     </div>

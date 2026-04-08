@@ -85,7 +85,9 @@ function getCurrentPeriodLabels() {
   const d = new Date(now);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
   const week = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { month, week };
+  const now2 = new Date();
+  const quarter = `${now2.getFullYear()}-Q${Math.ceil((now2.getMonth() + 1) / 3)}`;
+  return { month, week, quarter };
 }
 
 function alignSeries(metricsData, ensureCurrentPeriod = false) {
@@ -95,9 +97,16 @@ function alignSeries(metricsData, ensureCurrentPeriod = false) {
   }
   // Ensure current period is always present (shows 0 instead of missing)
   if (ensureCurrentPeriod && allLabels.size > 0) {
-    const { month, week } = getCurrentPeriodLabels();
+    const { month, week, quarter } = getCurrentPeriodLabels();
     const sample = [...allLabels][0];
-    const currentLabel = sample.length === 7 ? month : week;
+    let currentLabel;
+    if (/^\d{4}-Q\d$/.test(sample)) {
+      currentLabel = quarter;
+    } else if (sample.length === 7) {
+      currentLabel = month;
+    } else {
+      currentLabel = week;
+    }
     allLabels.add(currentLabel);
   }
   const labels = [...allLabels].sort();

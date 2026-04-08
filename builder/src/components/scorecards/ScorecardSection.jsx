@@ -16,12 +16,22 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
   if (section.type === 'rawTable') {
     return (
       <div style={{ marginBottom: 48 }}>
-        <h2 style={{
-          fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 16,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          {section.title}
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <h2 style={{
+            fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {section.title}
+          </h2>
+          {section.metricId && onMetricClick && (
+            <span
+              onClick={() => onMetricClick(section.metricId, null, null)}
+              style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', transition: 'color 100ms' }}
+              onMouseEnter={e => { e.target.style.color = '#2563eb'; }}
+              onMouseLeave={e => { e.target.style.color = '#9ca3af'; }}
+            >ⓘ</span>
+          )}
+        </div>
         <RawTable config={section} dataMap={dataMap} />
       </div>
     );

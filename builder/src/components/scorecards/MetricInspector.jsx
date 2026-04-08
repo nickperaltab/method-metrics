@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatValue } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
+import { buildSemanticSql } from '../../lib/bigquery';
 
 /**
  * Build a human-readable formula replacing {id} with metric names,
@@ -79,7 +80,7 @@ function FormulaDisplay({ formula, metricsMap, onNavigate }) {
   );
 }
 
-export default function MetricInspector({ metricId, currentValue, valueFormat, metricsCache, customInfo, onClose }) {
+export default function MetricInspector({ metricId, currentValue, valueFormat, metricsCache, customInfo, deltaInfo, onClose }) {
   const [trail, setTrail] = useState([]);
   const panelRef = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -201,6 +202,33 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
               <div style={ps.section}>
                 <div style={ps.metricName}>{metric.name}</div>
                 {displayValue && <div style={ps.metricValue}>{displayValue}</div>}
+                {isRoot && deltaInfo && (() => {
+                  const delta = deltaInfo.current - deltaInfo.prior;
+                  const pct = deltaInfo.prior !== 0 ? (delta / Math.abs(deltaInfo.prior)) * 100 : null;
+                  const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#6b7280';
+                  const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '';
+                  return (
+                    <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'flex-end' }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>THIS MONTH</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: '#1a1a1a' }}>
+                          {formatValue(deltaInfo.current, deltaInfo.format)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>LAST MONTH</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: '#6b7280' }}>
+                          {formatValue(deltaInfo.prior, deltaInfo.format)}
+                        </div>
+                      </div>
+                      {pct != null && (
+                        <div style={{ fontSize: 13, fontWeight: 600, color, fontFamily: "'DM Sans', sans-serif", paddingBottom: 2 }}>
+                          {arrow} {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   {metric.status && (
                     <span style={{
@@ -311,7 +339,12 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
   const [sqlExpanded, setSqlExpanded] = useState(false);
 
   const hasSemantic = metric.semantic_table && metric.semantic_measure && metric.semantic_date_col;
-  const sql = !hasSemantic && (metric.chart_sql || metric.view_definition);
+  // For semantic metrics, generate a representative monthly SQL for verification
+  let generatedSql = null;
+  if (hasSemantic) {
+    try { generatedSql = buildSemanticSql(metric, 'month', 12, null); } catch { /* ignore */ }
+  }
+  const sql = generatedSql || metric.chart_sql || metric.view_definition;
   const sqlPreview = sql && sql.length > 200 ? sql.slice(0, 200) + '...' : sql;
 
   return (
@@ -405,10 +438,10 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
             </div>
           )}
 
-          {/* SQL — only for complex metrics without semantic fields */}
+          {/* SQL — generated for semantic metrics, raw for complex metrics */}
           {sql && (
             <div style={ps.techRow}>
-              <span style={ps.techLabel}>SQL</span>
+              <span style={ps.techLabel}>{generatedSql ? 'Generated SQL (monthly · 12mo)' : 'SQL'}</span>
               <pre style={ps.sqlBlock}>
                 {sqlExpanded ? sql : sqlPreview}
               </pre>
