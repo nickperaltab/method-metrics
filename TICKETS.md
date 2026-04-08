@@ -44,3 +44,17 @@ The green/red delta percentage on KPI cards (e.g. +9.2%) has an ⓘ icon that do
 
 Then add both to `semantic_dimensions` on metric 59 and add breakdown tabs to `cancellations-breakdown-scorecard.js`.
 **Files:** `v_cancellations` BQ view, Supabase metric 59, `builder/src/config/scorecards/cancellations-breakdown-scorecard.js`
+
+---
+
+### Churn Rate: Create v_customer_bom View as Semantic Primitive
+**Status:** Open
+Churn Rate = `Churn / (CustomersBOM + Conversions)`. The BOM component doesn't exist as a metric yet. Create a `v_customer_bom` BQ view that exposes one clean row per month with the correct Beginning-of-Month customer count — including the current-month adjustment (prior BOM + prior additions − prior churn, since current month TransLineFlattened data is incomplete mid-month).
+
+Once the view exists:
+1. Register "Customers BOM" as a semantic primitive metric in Supabase (`semantic_table: v_customer_bom`, `semantic_measure: COUNT(DISTINCT CompanyAccount)` or `SUM(TotalCustomersBOM)`)
+2. Define Churn Rate (344) as a formula metric: `{churn_bom_id} / ({churn_bom_id} + {56}) * 100` with `depends_on` referencing Churn (59) and Conversions (56)
+3. Add to Churn scorecard
+
+**Source SQL:** The AdjustedBOM + TotalCustomersBOM CTEs from the existing Churn Rate chart_sql (metric 344) — that logic moves into the view.
+**Files:** BQ `v_customer_bom` view (new), Supabase metrics table (new BOM metric + update 344), `builder/src/config/scorecards/cancellations-breakdown-scorecard.js`
