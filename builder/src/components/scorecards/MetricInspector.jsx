@@ -294,25 +294,41 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
               </div>
 
               {/* Section 4: Data Source */}
-              {(metric.view_name || metric.source_url) && (
+              {(metric.view_name || metric.semantic_table || metric.source_url) && (
                 <div style={ps.section}>
                   <div style={ps.sectionLabel}>Data Source</div>
-                  {metric.view_name && (
-                    <div style={ps.sourceRow}>
-                      <span style={ps.sourceIcon}>⛁</span>
-                      <span style={ps.sourceName}>{metric.view_name}</span>
-                    </div>
-                  )}
-                  {metric.source_url && (
+                  {(metric.view_name || metric.semantic_table) && (() => {
+                    const tableName = metric.semantic_table || metric.view_name;
+                    const bqUrl = `https://console.cloud.google.com/bigquery?project=project-for-method-dw&ws=!1m5!1m4!4m3!1sproject-for-method-dw!2srevenue!3s${tableName}`;
+                    return (
+                      <>
+                        <div style={ps.sourceRow}>
+                          <span style={ps.sourceIcon}>⛁</span>
+                          <span style={ps.sourceName}>revenue.{tableName}</span>
+                        </div>
+                        <a
+                          href={bqUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: '#2563eb', textDecoration: 'none' }}
+                          onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                          onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+                        >
+                          🔍 Open in BigQuery
+                        </a>
+                      </>
+                    );
+                  })()}
+                  {metric.source_url?.includes('google.com/spreadsheets') && (
                     <a
                       href={metric.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: metric.view_name ? 8 : 0, fontSize: 13, color: '#2563eb', textDecoration: 'none' }}
-                      onMouseEnter={e => { e.target.style.textDecoration = 'underline'; }}
-                      onMouseLeave={e => { e.target.style.textDecoration = 'none'; }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: '#2563eb', textDecoration: 'none' }}
+                      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
                     >
-                      {metric.source_url.includes('google.com/spreadsheets') ? '📊 Open source spreadsheet' : '🔍 Open in BigQuery'}
+                      📊 Open source spreadsheet
                     </a>
                   )}
                 </div>
