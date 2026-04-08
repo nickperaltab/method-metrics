@@ -162,29 +162,40 @@ export default function Home() {
 
       {/* Method Approved scorecards */}
       <div style={s.sectionTitle}>Method Approved</div>
-      <div style={s.list}>
-        {sortedScorecards.map(sc => {
-          const isStarred = scStars.includes(sc.id);
-          return (
-            <div
-              key={sc.id}
-              style={s.row}
-              onClick={() => navigate(`/scorecards/${sc.id}`)}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
-            >
-              <button
-                style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
-                onClick={e => toggleScStar(e, sc.id)}
-                aria-label={isStarred ? 'Unstar' : 'Star'}
-              >
-                {isStarred ? '★' : '☆'}
-              </button>
-              <span style={s.rowName}>{sc.title}</span>
-              <span style={s.rowMeta}>Scorecard</span>
-            </div>
-          );
-        })}
+      <div style={{ ...s.list, marginBottom: scStars.length > 0 ? 8 : 32 }}>
+        {sortedScorecards.filter(sc => scStars.includes(sc.id)).map(sc => (
+          <div
+            key={sc.id}
+            style={s.row}
+            onClick={() => navigate(`/scorecards/${sc.id}`)}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
+          >
+            <button
+              style={{ ...s.starBtn, color: '#f59e0b' }}
+              onClick={e => toggleScStar(e, sc.id)}
+              aria-label="Unstar"
+            >★</button>
+            <span style={s.rowName}>{sc.title}</span>
+            <span style={s.rowMeta}>Scorecard</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
+        {sortedScorecards.filter(sc => !scStars.includes(sc.id)).map(sc => (
+          <span
+            key={sc.id}
+            style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => navigate(`/scorecards/${sc.id}`)}
+          >
+            <span
+              style={{ color: '#d1d5db', cursor: 'pointer', fontSize: 13 }}
+              onClick={e => toggleScStar(e, sc.id)}
+              title="Star to pin"
+            >☆</span>
+            {sc.title}
+          </span>
+        ))}
       </div>
 
       {/* AI Dashboards */}
