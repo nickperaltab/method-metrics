@@ -16,6 +16,15 @@ export function useBqAuth() {
         setConnected(false);
       }
     );
+
+    // Listen for mid-session token expiry (triggered by disconnectBq on 401)
+    function handleDisconnect() {
+      setConnected(false);
+      setUserEmail(null);
+      setUserAvatar(null);
+    }
+    window.addEventListener('bq:disconnect', handleDisconnect);
+    return () => window.removeEventListener('bq:disconnect', handleDisconnect);
   }, []);
 
   async function fetchEmail(token) {

@@ -106,6 +106,31 @@ export default {
       ],
     },
 
+    {
+      title: 'By Age Bucket',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'Cancellations by Customer Age',
+          chartType: 'bar', valueFormat: 'number', stacked: true,
+          lastNMonths: 6, groupByDimension: 'AgeBucket',
+          metrics: [{ id: 59, label: 'Cancellations' }],
+        },
+      ],
+    },
+    {
+      title: 'By License Tier',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'Cancellations by License Count Tier',
+          chartType: 'bar', valueFormat: 'number', stacked: true,
+          lastNMonths: 6, groupByDimension: 'LicenseTier',
+          metrics: [{ id: 59, label: 'Cancellations' }],
+        },
+      ],
+    },
+
     // ── Recent Records ───────────────────────────────────────────
     {
       type: 'rawTable',

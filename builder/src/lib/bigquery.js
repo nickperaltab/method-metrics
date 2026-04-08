@@ -59,6 +59,9 @@ export function connectBq(onSuccess) {
 export function disconnectBq() {
   bqToken = null;
   localStorage.removeItem('bq_access_token');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('bq:disconnect'));
+  }
 }
 
 function cleanSql(sql) {

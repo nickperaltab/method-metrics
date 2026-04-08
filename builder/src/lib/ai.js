@@ -84,8 +84,8 @@ export function applyPromptOverrides(userPrompt, dc, echartsType, resolvedMetric
 // Validate AI-returned column names against actual schema and approved dimensions.
 export function validateColumns(dc, resolvedMetrics, schemaMap, approvedDimensions) {
   const primaryView = resolvedMetrics.find(m => m.view_name)?.view_name;
-  if (!primaryView) return;
-  const schema = schemaMap[primaryView] || [];
+  // Don't early-return — dimension validation works even without a primaryView (semantic-only metrics)
+  const schema = primaryView ? (schemaMap[primaryView] || []) : [];
   const validCols = schema.map(f => f.name);
 
   // Validate group_by_dimension — must be an explicitly approved dimension.

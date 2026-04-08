@@ -26,9 +26,17 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
         if (noData) console.warn(`[KPI] ${kpi.label} (${kpi.metricId}): No data. series=`, series, `selector=${kpi.valueSelector}`);
 
         let deltaPercent = null;
+        let deltaTooltip = null;
         if (kpi.showDelta && series) {
           const delta = computeDelta(series);
-          if (delta) deltaPercent = delta.deltaPercent;
+          if (delta) {
+            deltaPercent = delta.deltaPercent;
+            const cur = resolveKpiValue(series, 'current_month');
+            const prior = resolveKpiValue(series, 'prior_month');
+            if (cur != null && prior != null) {
+              deltaTooltip = { current: cur, prior, format: kpi.format };
+            }
+          }
         }
 
         return (
@@ -38,6 +46,7 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
             value={value}
             format={kpi.format}
             deltaPercent={deltaPercent}
+            deltaTooltip={deltaTooltip}
             noData={noData}
             onClick={() => onMetricClick?.(kpi.metricId, value, kpi.format)}
           />

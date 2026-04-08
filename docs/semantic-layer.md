@@ -115,7 +115,7 @@ This lets the AI correctly answer "show me trials weekly by country" — it know
 | 54 | Trials | v_trials | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
 | 55 | Syncs | v_syncs | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
 | 56 | Conversions | v_conversions | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
-| 59 | Churn | v_cancellations | COUNT(DISTINCT CompanyAccount) | AttributionChannel, SignupCountry, Vertical, SyncType |
+| 59 | Churn | v_cancellations | COUNT(DISTINCT CompanyAccount) | AttributionChannel, SignupCountry, Vertical, SyncType, AgeBucket, LicenseTier |
 | 300 | Sync Rate | — | formula: SAFE_DIVIDE({55},{54})*100 | — |
 | 301 | Sync-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{55})*100 | — |
 | 302 | Trial-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{54})*100 | — |
@@ -127,8 +127,11 @@ This lets the AI correctly answer "show me trials weekly by country" — it know
 **Remaining work:**
 - **Cancellations** (59): pending `verified_at` stamp after Nic review
 - **Revenue metrics** (26 metrics in `method_forecast` + simple view aggregates): semantic fields drafted in the migration plan, not yet applied. Blocked only by Justin confirming which metric IDs survive his revenue audit.
-- **Bucketed attributes** for Cancellations: `AgeBucket`, `LicenseTier` columns in `v_cancellations` → would unlock breakdown charts by those dimensions
 - **Revenue dimension breakdowns**: `v_new_net_saas` etc. don't have Country/Vertical — requires Justin to update BQ views
+
+**Implemented:**
+- `buildSemanticGroupedSql(metric, dimension, timeBucket, lastNMonths, endDateRule)` — fully implemented in `bigquery.js`, routed through `useScorecardData` and `chartDataBuilder`. Validates dimension against `semantic_dimensions`, generates `SELECT period, dimension, value FROM ... GROUP BY 1, 2` SQL.
+- `AgeBucket` and `LicenseTier` bucketed columns added to `v_cancellations` BQ view; metric 59 `semantic_dimensions` updated accordingly; breakdown tabs added to Churn scorecard.
 
 ## Revert Strategy
 
