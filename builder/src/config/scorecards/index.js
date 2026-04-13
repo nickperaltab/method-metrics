@@ -8,6 +8,7 @@ import cancellationsBreakdown from './cancellations-breakdown-scorecard';
 import trialsPlan from './trials-plan-scorecard';
 import syncsPlan from './syncs-plan-scorecard';
 import churnPlan from './churn-plan-scorecard';
+import depRevenue from './dep-revenue-scorecard';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
@@ -20,4 +21,5 @@ export const SCORECARDS = {
   'trials-plan': trialsPlan,
   'syncs-plan': syncsPlan,
   'churn-plan': churnPlan,
+  'dep-revenue': depRevenue,
 };

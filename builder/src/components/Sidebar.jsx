@@ -170,6 +170,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           {isAdmin(currentUser) && (() => {
             const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
             const plan = Object.values(SCORECARDS).filter(sc => sc.group === 'plan');
+            const revenue = Object.values(SCORECARDS).filter(sc => sc.group === 'revenue');
             return (
               <>
                 <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
@@ -191,6 +192,13 @@ export default function Sidebar({ collapsed, onToggle }) {
                     ))}
                     <div style={{ ...sectionLabel, paddingLeft: 24, color: '#c4c9d0', marginTop: 8 }}>Plan</div>
                     {plan.map(sc => (
+                      <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={({ isActive }) => ({ ...linkStyle({ isActive }), paddingLeft: 24 })}>
+                        <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
+                        {sc.title}
+                      </NavLink>
+                    ))}
+                    <div style={{ ...sectionLabel, paddingLeft: 24, color: '#c4c9d0', marginTop: 8 }}>Revenue</div>
+                    {revenue.map(sc => (
                       <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={({ isActive }) => ({ ...linkStyle({ isActive }), paddingLeft: 24 })}>
                         <span style={{ fontSize: 12, color: sc.status === 'approved' ? '#059669' : '#f59e0b' }}>{'\u25C9'}</span>
                         {sc.title}
