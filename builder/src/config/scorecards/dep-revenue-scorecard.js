@@ -136,16 +136,5 @@ export default {
       ],
     },
 
-    // ── Raw Records ─────────────────────────────────────────────
-    {
-      title: 'New DEP Transactions',
-      metricId: 329,
-      layout: 'raw-table',
-    },
-    {
-      title: 'All DEP Transactions',
-      metricId: 333,
-      layout: 'raw-table',
-    },
   ],
 };
