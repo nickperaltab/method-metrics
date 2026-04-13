@@ -94,7 +94,7 @@ export default {
         {
           label: 'New DEP Revenue by Channel',
           chartType: 'bar', valueFormat: 'currency',
-          groupByDimension: 'Channel',
+          groupByDimension: 'AttributionChannel',
           metrics: [{ id: 329, label: 'New DEP Revenue' }],
         },
       ],
