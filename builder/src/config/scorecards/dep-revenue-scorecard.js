@@ -1,130 +1,151 @@
 /**
- * DEP Revenue Scorecard — New DEP + Total DEP
- * Duplicated from Sales Scorecard sections 3 & 6.
+ * DEP Revenue Scorecard
+ * Semantic layer — New DEP + Total DEP with dimension breakdowns.
+ * Pattern matches Trials/Syncs/Conversions scorecards.
  */
-
-const VIEWS = {
-  v_new_dep_revenue: { dateCol: 'TxnDate' },
-  v_total_dep_revenue: { dateCol: 'TxnDate' },
-};
-
-const WEEKLY_NEW_DEP_SQL = `
-SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(TxnDate, WEEK(MONDAY))) AS period,
-  ROUND(SUM(SaaSAmount), 2) AS value
-FROM \`project-for-method-dw.revenue.v_new_dep_revenue\`
-WHERE is_new_dep = TRUE AND TxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
-GROUP BY 1 ORDER BY 1
-`;
-
-const WEEKLY_TOTAL_DEP_SQL = `
-SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(TxnDate, WEEK(MONDAY))) AS period,
-  ROUND(SUM(SaaSAmount), 2) AS value
-FROM \`project-for-method-dw.revenue.v_total_dep_revenue\`
-WHERE TxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
-GROUP BY 1 ORDER BY 1
-`;
-
-const FORECAST_WEEKLY_CAST = (column) => `
-SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
-  ROUND(SUM(SAFE_CAST(${column} AS FLOAT64)), 2) AS value
-FROM \`project-for-method-dw.revenue.method_forecast\`
-WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
-GROUP BY 1 ORDER BY 1
-`;
-
-const FORECAST_WEEKLY = (column) => `
-SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
-  ROUND(SUM(${column}), 2) AS value
-FROM \`project-for-method-dw.revenue.method_forecast\`
-WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
-GROUP BY 1 ORDER BY 1
-`;
 
 export default {
   id: 'dep-revenue',
   title: 'DEP Revenue',
   group: 'revenue',
   status: 'pending',
-  views: VIEWS,
+  views: {
+    v_new_dep_revenue: { dateCol: 'TxnDate' },
+    v_total_dep_revenue: { dateCol: 'TxnDate' },
+  },
   sections: [
-    // ── 1. New DEP Revenue ──────────────────────────────────
+    // ── New DEP Revenue Overview ────────────────────────────────
     {
       title: 'New DEP Revenue',
-      layout: 'scorecard-row',
       kpis: [
-        { metricId: 290, label: 'Forecasted New DEP Revenue', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 329, label: 'Total New DEP Net SaaS', format: 'currency',
+        { metricId: 329, label: 'New DEP Revenue This Month', format: 'currency',
           valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 330, label: 'New DEP Revenue Trajectory', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 331, label: 'Forecast vs. Trajectory', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 332, label: 'Forecasted Attainment', format: 'percent',
-          valueSelector: 'current_or_latest' },
       ],
       charts: [
         {
-          label: 'New DEP Revenue Week Over Week',
+          label: 'Monthly New DEP Revenue',
           chartType: 'bar', valueFormat: 'currency',
-          metrics: [
-            { id: '__wk_budget_dep', label: 'Budgeted New DEP Revenue', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY_CAST('Budgeted_New_DEP_Revenue') },
-            { id: '__wk_forecast_dep', label: 'Forecasted New DEP Revenue', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY_CAST('Forecasted_New_DEP_Revenue') },
-            { id: '__weekly_new_dep', label: 'Total New DEP Net SaaS', color: '#2563eb', customSql: WEEKLY_NEW_DEP_SQL },
-          ],
-          lastNMonths: 2, showLabels: true,
-        },
-        {
-          label: 'New DEP Revenue Month Over Month',
-          chartType: 'bar', valueFormat: 'currency',
-          metrics: [
-            { id: 282, label: 'Budgeted New DEP Revenue', color: '#1e3a5f' },
-            { id: 290, label: 'Forecasted New DEP Revenue', color: '#2563eb' },
-            { id: 329, label: 'Total New DEP Net SaaS', color: '#9dc3e6' },
-          ],
-          lastNMonths: 4, showLabels: true,
+          showLabels: true,
+          metrics: [{ id: 329, label: 'New DEP Revenue', color: '#2563eb' }],
         },
       ],
     },
 
-    // ── 2. Total DEP Revenue ────────────────────────────────
+    // ── Total DEP Revenue Overview ──────────────────────────────
     {
       title: 'Total DEP Revenue',
-      layout: 'scorecard-row',
       kpis: [
-        { metricId: 292, label: 'Forecasted Total DEP Revenue', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 333, label: 'Total DEP Net SaaS', format: 'currency',
+        { metricId: 333, label: 'Total DEP Revenue This Month', format: 'currency',
           valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 334, label: 'Total DEP Net SaaS Trajectory', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 335, label: 'Forecast vs. Trajectory', format: 'currency',
-          valueSelector: 'current_or_latest' },
-        { metricId: 336, label: 'Forecasted Attainment', format: 'percent',
-          valueSelector: 'current_or_latest' },
       ],
       charts: [
         {
-          label: 'Total DEP Revenue Week Over Week',
+          label: 'Monthly Total DEP Revenue',
           chartType: 'bar', valueFormat: 'currency',
-          metrics: [
-            { id: '__wk_budget_tdep', label: 'Budgeted Total DEP Revenue', color: '#a3c771', chartType: 'line', customSql: FORECAST_WEEKLY('Budgeted_Total_DEP_Revenue') },
-            { id: '__wk_forecast_tdep', label: 'Forecasted Total DEP Revenue', color: '#e84393', chartType: 'line', customSql: FORECAST_WEEKLY('Forecasted_Total_DEP_Revenue') },
-            { id: '__weekly_total_dep', label: 'Total DEP Net SaaS', color: '#2563eb', customSql: WEEKLY_TOTAL_DEP_SQL },
-          ],
-          lastNMonths: 2, showLabels: true,
-        },
-        {
-          label: 'Total DEP Revenue Month Over Month',
-          chartType: 'bar', valueFormat: 'currency',
-          metrics: [
-            { id: 284, label: 'Budgeted Total DEP Revenue', color: '#1e3a5f' },
-            { id: 292, label: 'Forecasted Total DEP Revenue', color: '#2563eb' },
-            { id: 333, label: 'Total DEP Net SaaS', color: '#9dc3e6' },
-          ],
-          lastNMonths: 4, showLabels: true,
+          showLabels: true,
+          metrics: [{ id: 333, label: 'Total DEP Revenue', color: '#7c3aed' }],
         },
       ],
+    },
+
+    // ── Year over Year ──────────────────────────────────────────
+    {
+      title: 'Year over Year',
+      charts: [
+        {
+          label: 'New DEP Revenue: This Year vs Last Year',
+          chartType: 'bar', valueFormat: 'currency',
+          yoy: true,
+          metrics: [{ id: 329, label: 'New DEP Revenue' }],
+        },
+        {
+          label: 'Total DEP Revenue: This Year vs Last Year',
+          chartType: 'bar', valueFormat: 'currency',
+          yoy: true,
+          metrics: [{ id: 333, label: 'Total DEP Revenue' }],
+        },
+      ],
+    },
+
+    // ── Weekly ──────────────────────────────────────────────────
+    {
+      title: 'Weekly',
+      charts: [
+        {
+          label: 'New DEP Revenue by Week',
+          chartType: 'bar', valueFormat: 'currency',
+          timeBucket: 'week', lastNMonths: 2, showLabels: true,
+          metrics: [{ id: 329, label: 'New DEP Revenue', color: '#2563eb' }],
+        },
+        {
+          label: 'Total DEP Revenue by Week',
+          chartType: 'bar', valueFormat: 'currency',
+          timeBucket: 'week', lastNMonths: 2, showLabels: true,
+          metrics: [{ id: 333, label: 'Total DEP Revenue', color: '#7c3aed' }],
+        },
+      ],
+    },
+
+    // ── Breakdowns (rendered as tabs) ───────────────────────────
+    {
+      title: 'By Channel',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'New DEP Revenue by Channel',
+          chartType: 'bar', valueFormat: 'currency',
+          groupByDimension: 'Channel',
+          metrics: [{ id: 329, label: 'New DEP Revenue' }],
+        },
+      ],
+    },
+    {
+      title: 'By Vertical',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'New DEP Revenue by Vertical',
+          chartType: 'bar', valueFormat: 'currency',
+          groupByDimension: 'Vertical',
+          metrics: [{ id: 329, label: 'New DEP Revenue' }],
+        },
+      ],
+    },
+    {
+      title: 'By Country',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'New DEP Revenue by Country',
+          chartType: 'bar', valueFormat: 'currency',
+          groupByDimension: 'SignupCountry',
+          metrics: [{ id: 329, label: 'New DEP Revenue' }],
+        },
+      ],
+    },
+    {
+      title: 'By Sync Type',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'New DEP Revenue by Sync Type',
+          chartType: 'bar', valueFormat: 'currency',
+          groupByDimension: 'SyncType',
+          metrics: [{ id: 329, label: 'New DEP Revenue' }],
+        },
+      ],
+    },
+
+    // ── Raw Records ─────────────────────────────────────────────
+    {
+      title: 'New DEP Transactions',
+      metricId: 329,
+      layout: 'raw-table',
+    },
+    {
+      title: 'All DEP Transactions',
+      metricId: 333,
+      layout: 'raw-table',
     },
   ],
 };
