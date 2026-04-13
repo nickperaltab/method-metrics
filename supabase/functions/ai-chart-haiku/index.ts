@@ -1,75 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const EDGE_FUNCTION_VERSION = '33';
-
-const VALID_CHART_TYPES = new Set([
-  'line','bar','stacked_bar','horizontal_bar','pie','combo','funnel',
-  'heatmap','area','kpi','table','yoy','variance','drill_table',
-]);
-const VALID_TIME_BUCKETS = new Set(['month','week','day']);
-const VALID_OPERATORS = new Set(['<','<=','>','>=','==','!=']);
-
-function validateChartSpec(spec: Record<string, unknown>, metricContext: string): string[] {
-  const errors: string[] = [];
-
-  // Extract valid metric IDs from context
-  const validIds = new Set<number>();
-  const idMatches = metricContext.matchAll(/id:(\d+)/g);
-  for (const m of idMatches) validIds.add(parseInt(m[1]));
-
-  // metric_ids must exist and be valid
-  if (!Array.isArray(spec.metric_ids) || spec.metric_ids.length === 0) {
-    errors.push('metric_ids must be a non-empty array');
-  } else {
-    for (const id of spec.metric_ids as number[]) {
-      if (!validIds.has(id)) errors.push(`metric_id ${id} not in catalog. Valid: [${[...validIds].join(',')}]`);
-    }
-  }
-
-  // echarts_type must be valid
-  if (spec.echarts_type && !VALID_CHART_TYPES.has(spec.echarts_type as string)) {
-    errors.push(`Invalid echarts_type "${spec.echarts_type}". Must be one of: ${[...VALID_CHART_TYPES].join(', ')}`);
-  }
-
-  const dc = spec.data_config as Record<string, unknown> | undefined;
-  if (dc) {
-    // time_bucket
-    if (dc.time_bucket && !VALID_TIME_BUCKETS.has(dc.time_bucket as string)) {
-      errors.push(`Invalid time_bucket "${dc.time_bucket}". Must be month, week, or day`);
-    }
-
-    // Array length consistency
-    const ids = spec.metric_ids as unknown[];
-    const yf = dc.y_fields as unknown[];
-    const labels = dc.labels as unknown[];
-    if (ids && yf && ids.length !== yf.length) {
-      errors.push(`metric_ids length (${ids.length}) must match y_fields length (${yf.length})`);
-    }
-    if (ids && labels && ids.length !== labels.length) {
-      errors.push(`metric_ids length (${ids.length}) must match labels length (${labels.length})`);
-    }
-
-    // last_n_months
-    if (dc.last_n_months !== null && dc.last_n_months !== undefined) {
-      const lnm = dc.last_n_months as number;
-      if (typeof lnm !== 'number' || lnm < 0 || !Number.isInteger(lnm)) {
-        errors.push(`last_n_months must be a non-negative integer or null, got ${lnm}`);
-      }
-    }
-
-    // style_rules operators
-    if (Array.isArray(dc.style_rules)) {
-      for (const rule of dc.style_rules as Record<string, unknown>[]) {
-        if (rule.operator && !VALID_OPERATORS.has(rule.operator as string)) {
-          errors.push(`Invalid style_rule operator "${rule.operator}"`);
-        }
-      }
-    }
-  }
-
-  return errors;
-}
+const EDGE_FUNCTION_VERSION = '31';
 
 const SYSTEM_PROMPT = `You are a chart configuration assistant for Method CRM's metrics dashboard.
 
@@ -151,7 +83,6 @@ Rules:
 IMPORTANT — Dimensions and channel filters:
 - channel_filter targets a single channel (e.g. "SEO trials" → channel_filter:"SEO"). Do not set group_by_dimension when user asks for a single channel.
 - group_by_dimension segments across all values of a dimension. Only set it when the metric's dimensions: list includes that column. If the metric has no dimensions: field, set group_by_dimension to null.
-- When the user says "by <dimension>" (e.g. "trials by country", "syncs by channel"), ALWAYS use group_by_dimension — do NOT put the dimension in x_field. The x_field should remain the date column for time-series or "COUNT" for aggregations. The frontend handles the grouping via group_by_dimension.
 
 IMPORTANT — Derived metrics:
 - Derived metrics (type "derived") have no view_name. They have a formula and depends_on array.
@@ -343,66 +274,8 @@ Deno.serve(async (req) => {
   }
 
   if (parsed) {
-    // Text responses and errors pass through without chart validation
-    if (typeof parsed === 'object' && parsed !== null && (parsed.type || parsed.error)) {
-      return new Response(JSON.stringify(parsed), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
-
-    // Chart specs get validated
-    if (typeof parsed === 'object' && parsed !== null && parsed.metric_ids) {
-      const errors = validateChartSpec(parsed, metricContext || '');
-
-      if (errors.length === 0) {
-        return new Response(JSON.stringify(parsed), {
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        });
-      }
-
-      // Retry once with error context
-      console.error('Validation errors, retrying:', errors);
-      const retryMessages = [
-        ...claudeMessages,
-        { role: 'assistant', content: text },
-        { role: 'user', content: `Your response had validation errors:\n${errors.join('\n')}\n\nPlease fix and return corrected JSON only.` },
-      ];
-
-      const retryResponse = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages: retryMessages,
-        }),
-      });
-
-      if (retryResponse.ok) {
-        const retryData = await retryResponse.json();
-        let retryText = retryData.content?.[0]?.text || '';
-        retryText = retryText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-        try {
-          const retryParsed = JSON.parse(retryText);
-          if (retryParsed.metric_ids) {
-            const retryErrors = validateChartSpec(retryParsed, metricContext || '');
-            if (retryErrors.length === 0) {
-              return new Response(JSON.stringify(retryParsed), {
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              });
-            }
-            console.error('Retry still has errors:', retryErrors);
-          }
-        } catch { /* retry parse failed */ }
-      }
-
-      // Return original with validation warnings if retry failed
-      (parsed as Record<string, unknown>)._validation_errors = errors;
+    // Basic validation: must be an object with recognized keys
+    if (typeof parsed === 'object' && parsed !== null && (parsed.metric_ids || parsed.type || parsed.error)) {
       return new Response(JSON.stringify(parsed), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       });

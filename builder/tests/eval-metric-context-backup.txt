@@ -1,0 +1,80 @@
+const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
+- id:20 name:"Conversion Rate" type:derived view:none formula:SAFE_DIVIDE({56},{54}) depends_on:[56,54]
+- id:300 name:"Sync Rate" type:derived view:none formula:SAFE_DIVIDE({55},{54})*100 depends_on:[55,54]
+- id:46 name:"Churn Rate" type:derived view:none
+- id:57 name:"New Net SaaS" type:primitive view:v_new_net_saas
+- id:285 name:"Trials Forecast" type:primitive view:none has_chart_sql:true desc:"Total monthly trials forecast across all channels. Use for overall actual vs forecast comparison and KPI tiles. Pair with Trials (id:54)."
+- id:286 name:"Syncs Forecast" type:primitive view:none has_chart_sql:true desc:"Total monthly syncs forecast across all channels. Use for overall actual vs forecast comparison and KPI tiles. Pair with Syncs (id:55)."
+- id:294 name:"Trials Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month trials at current MTD pace. Current month only. MTD actual / day-of-month * days-in-month."
+- id:295 name:"Syncs Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month syncs at current MTD pace. Current month only."
+- id:271 name:"Trials Channel Forecast" type:primitive view:v_trials_forecast_channel dimensions:[AttributionChannel] desc:"Monthly trials forecast by channel. Use group_by_dimension:AttributionChannel for channel-level forecast charts over time."
+- id:272 name:"Syncs Channel Forecast" type:primitive view:v_syncs_forecast_channel dimensions:[AttributionChannel] desc:"Monthly syncs forecast by channel. Use group_by_dimension:AttributionChannel for channel-level forecast charts."
+- id:273 name:"Conversions Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for conversions. Pair with Conversions (id:56) for actual vs forecast comparison. Use same chart type for both — bar for single month, line or bar for multi-month. Never use combo."
+- id:274 name:"Forecasted Churn" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted churn count. Pair with Churn (id:59) for actual vs forecast comparison."
+- id:275 name:"New Net SaaS Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast/budget for new net SaaS revenue. Use same chart type (bar or line), never combo."
+- id:305 name:"Trials Forecast by Channel" type:primitive view:v_trials_forecast_channel dimensions:[AttributionChannel] desc:"Monthly trials forecast broken down by channel. Use with Trials (id:54) for channel-level actual vs forecast pivot. Use last_n_months:0 and group_by_dimension:AttributionChannel."
+- id:306 name:"Syncs Forecast by Channel" type:primitive view:v_syncs_forecast_channel dimensions:[AttributionChannel] desc:"Monthly syncs forecast broken down by channel. Use with Syncs (id:55) for channel-level actual vs forecast pivot."
+- id:307 name:"Trials Channel Trajectory" type:primitive view:v_trials_trajectory_channel dimensions:[AttributionChannel] desc:"Trials MTD trajectory by channel. Always use last_n_months:0 and group_by_dimension:AttributionChannel. For total trajectory without channel breakdown, use Trials Trajectory (id:294)."
+- id:308 name:"Syncs Channel Trajectory" type:primitive view:v_syncs_trajectory_channel dimensions:[AttributionChannel] desc:"Syncs MTD trajectory by channel. For total trajectory, use Syncs Trajectory (id:295)."
+- id:309 name:"Trials vs Forecast" type:derived depends_on:[54,305] desc:"Trials MTD minus trials forecast by channel. Negative = below forecast."
+- id:310 name:"Trials vs Forecast %" type:derived depends_on:[54,305] desc:"Trials MTD vs monthly forecast as a percentage."
+- id:311 name:"Trials Traj vs Forecast" type:derived depends_on:[307,305] desc:"Trials trajectory minus monthly forecast by channel."
+- id:312 name:"Trials Traj vs Forecast %" type:derived depends_on:[307,305] desc:"Trials trajectory vs forecast as a percentage."
+- id:313 name:"Syncs vs Forecast" type:derived depends_on:[55,306] desc:"Syncs MTD minus syncs forecast by channel."
+- id:314 name:"Syncs vs Forecast %" type:derived depends_on:[55,306] desc:"Syncs MTD vs monthly forecast as a percentage."
+- id:315 name:"Syncs Traj vs Forecast" type:derived depends_on:[308,306] desc:"Syncs trajectory minus monthly forecast by channel."
+- id:316 name:"Syncs Traj vs Forecast %" type:derived depends_on:[308,306] desc:"Syncs trajectory vs forecast as a percentage."
+- id:317 name:"Sync Rate Forecast" type:derived depends_on:[306,305] desc:"Expected sync rate by channel: syncs forecast / trials forecast."
+- id:296 name:"Conversions Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month conversion count at current daily pace. Current month only."
+- id:319 name:"Forecasted Conversion Rate" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted conversion rate as a percentage. From method_forecast spreadsheet."
+- id:320 name:"Avg Trial Base MTD" type:primitive view:none has_chart_sql:true desc:"MTD denominator for Conversion Rate Trajectory: (last month actual trials + this month forecasted trials) / 2. Current month only."
+- id:321 name:"Conversion Rate Trajectory" type:derived depends_on:[296,320] desc:"Projected end-of-month conversion rate at current pace. Conversion Trajectory ÷ Avg Trial Base MTD × 100. Current month only."
+- id:322 name:"Conv Rate Forecast vs Trajectory" type:derived depends_on:[321,319] desc:"Delta between Conversion Rate Trajectory and Forecasted Conversion Rate. Negative = behind pace."
+- id:323 name:"Conv Rate Forecast Attainment" type:derived depends_on:[321,319] desc:"Conversion Rate Trajectory as a % of Forecasted Conversion Rate. 100% = on track."
+- id:324 name:"Budgeted Conversion Rate" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted conversion rate as a percentage. Annual budget target. Pair with Forecasted Conversion Rate (id:319) and Scorecard Conversion Rate (id:357) for budget vs forecast vs actual charts."
+- id:325 name:"Budgeted New Net SaaS" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted new net SaaS revenue. Annual budget target. Pair with Forecasted New Net SaaS (id:289) and Total New Net SaaS (id:57) for budget vs forecast vs actual charts."
+- id:289 name:"Forecasted New Net SaaS" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted new net SaaS revenue from method_forecast. Pair with Budgeted New Net SaaS (id:325) and Total New Net SaaS (id:57) for budget vs forecast vs actual charts."
+- id:326 name:"New Net SaaS Revenue Trajectory" type:primitive view:none has_chart_sql:true desc:"MTD new net SaaS extrapolated to end-of-month using business-day pace. Current month only."
+- id:327 name:"New Net SaaS Forecast vs Trajectory" type:derived depends_on:[326,289] desc:"Single delta value: New Net SaaS Revenue Trajectory minus Forecasted New Net SaaS. Negative = behind pace. Current month only."
+- id:328 name:"New Net SaaS Forecast Attainment" type:derived depends_on:[326,289] desc:"New Net SaaS Revenue Trajectory as a % of Forecasted New Net SaaS. 100% = on track. Current month only."
+- id:282 name:"Budgeted New DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted new DEP revenue. Annual budget target. Pair with Forecasted New DEP Revenue (id:290) and Total New DEP Net SaaS (id:329) for budget vs forecast vs actual charts."
+- id:290 name:"Forecasted New DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted new DEP revenue from method_forecast. Pair with Budgeted New DEP Revenue (id:282) and Total New DEP Net SaaS (id:329) for budget vs forecast vs actual charts."
+- id:329 name:"Total New DEP Net SaaS" type:primitive view:none has_chart_sql:true desc:"Total new DEP net SaaS revenue per month. New customers only (first DEP transaction in that month). Source: v_new_dep_revenue."
+- id:330 name:"New DEP Revenue Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month new DEP revenue at current pace. MTD actual + (3-month avg daily rate × remaining calendar days). Current month only."
+- id:331 name:"New DEP Forecast vs Trajectory" type:derived depends_on:[330,290] desc:"Single delta value: New DEP Revenue Trajectory minus Forecasted New DEP Revenue. Negative = behind pace. Current month only."
+- id:332 name:"New DEP Forecast Attainment" type:derived depends_on:[330,290] desc:"New DEP Revenue Trajectory as a % of Forecasted New DEP Revenue. 100% = on track. Current month only."
+- id:283 name:"Budgeted Total Net SaaS" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted total net SaaS revenue. Annual budget target. Pair with Forecasted Total Net SaaS (id:291) and Total Net SaaS (id:337) for budget vs forecast vs actual charts."
+- id:284 name:"Budgeted Total DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted total DEP revenue. Annual budget target. Pair with Forecasted Total DEP Revenue (id:292) and Total DEP Net SaaS (id:333) for budget vs forecast vs actual charts."
+- id:291 name:"Forecasted Total Net SaaS" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted total net SaaS revenue from method_forecast. Pair with Budgeted Total Net SaaS (id:283) and Total Net SaaS (id:337) for budget vs forecast vs actual charts."
+- id:292 name:"Forecasted Total DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted total DEP revenue from method_forecast. Pair with Budgeted Total DEP Revenue (id:284) and Total DEP Net SaaS (id:333) for budget vs forecast vs actual charts."
+- id:333 name:"Total DEP Net SaaS" type:primitive view:v_total_dep_revenue desc:"Total DEP net SaaS revenue. All DEP customers (new + existing). Source: v_total_dep_revenue."
+- id:334 name:"Total DEP Net SaaS Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month total DEP revenue. Formula: (MTD this month / MTD same days last month) × last month total. Current month only."
+- id:335 name:"Total DEP Forecast vs Trajectory" type:derived depends_on:[334,292] desc:"Single delta value: Total DEP Net SaaS Trajectory minus Forecasted Total DEP Revenue. Negative = behind pace. Current month only."
+- id:336 name:"Total DEP Forecast Attainment" type:derived depends_on:[334,292] desc:"Total DEP Net SaaS Trajectory as a % of Forecasted Total DEP Revenue. 100% = on track. Current month only."
+- id:337 name:"Total Net SaaS" type:primitive view:v_total_net_saas desc:"Total net SaaS revenue. All customers. Source: v_total_net_saas."
+- id:338 name:"Net SaaS Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month total net SaaS revenue. Formula: (MTD this month / MTD same days last month) × last month total. Current month only."
+- id:339 name:"Net SaaS Forecast vs Trajectory" type:primitive view:none has_chart_sql:true desc:"Delta: Net SaaS Trajectory minus Forecasted Total Net SaaS. Negative = behind pace. Current month only."
+- id:340 name:"Net SaaS Forecast Attainment" type:primitive view:none has_chart_sql:true desc:"Net SaaS Trajectory as a % of Forecasted Total Net SaaS. 100% = on track. Current month only."
+- id:59 name:"Churn" type:primitive view:v_cancellations has_chart_sql:true desc:"Monthly count of churned accounts. Source: v_cancellations."
+- id:280 name:"Budgeted Churn" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted churn count from method_forecast. Annual budget target."
+- id:341 name:"Churn Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month churn count at current pace. Current month only."
+- id:342 name:"Forecasted Churn Rate %" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted churn rate % from method_forecast. Pair with Budgeted Churn Rate % (id:343) and Churn Rate (id:344) for budget vs forecast vs actual charts."
+- id:343 name:"Budgeted Churn Rate %" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted churn rate % from method_forecast. Annual budget target."
+- id:344 name:"Churn Rate" type:primitive view:none has_chart_sql:true desc:"Historical monthly churn rate: churns / (BOM customers + monthly conversions) × 100."
+- id:345 name:"Churn Rate % Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected churn rate for current month: churn trajectory / BOM customers × 100. Current month only."
+- id:346 name:"NRR" type:primitive view:none has_chart_sql:true desc:"Monthly Net Revenue Retention rate %. Compares SaaSAmount for existing accounts between current month and same month one year ago. Excludes new accounts."
+- id:347 name:"Forecasted NRR" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted NRR percentage from method_forecast. Pair with Budgeted NRR (id:348) and NRR (id:346) for budget vs forecast vs actual charts."
+- id:348 name:"Budgeted NRR" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted NRR percentage from method_forecast. Annual budget target."
+- id:357 name:"Scorecard Conversion Rate" type:primitive view:none has_chart_sql:true desc:"Looker scorecard conversion rate: conversions (FirstSaaSInvoiceTxnDate) / avg(last month trials, forecasted trials). Use for Sales Scorecard. Pair with Forecasted Conversion Rate (id:319) and Budgeted Conversion Rate (id:324) for budget vs forecast vs actual charts. Different from Trial-to-Close Rate (id:302) which uses same-month trials as denominator."`;
+
+
+
+const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
+v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
+v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
+v_trials_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
+v_syncs_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
+v_trials_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)
+v_syncs_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)`;
