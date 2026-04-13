@@ -10,7 +10,6 @@ export default {
   group: 'revenue',
   status: 'pending',
   views: {
-    v_new_dep_revenue: { dateCol: 'TxnDate' },
     v_total_dep_revenue: { dateCol: 'TxnDate' },
   },
   sections: [
