@@ -9,6 +9,7 @@ import trialsPlan from './trials-plan-scorecard';
 import syncsPlan from './syncs-plan-scorecard';
 import churnPlan from './churn-plan-scorecard';
 import depRevenue from './dep-revenue-scorecard';
+import customers from './customers-scorecard';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
@@ -22,4 +23,5 @@ export const SCORECARDS = {
   'syncs-plan': syncsPlan,
   'churn-plan': churnPlan,
   'dep-revenue': depRevenue,
+  'customers': customers,
 };
