@@ -58,6 +58,18 @@ export default {
 
     // ── Breakdowns ──────────────────────────────────────────────
     {
+      title: 'By Product (DEP)',
+      group: 'breakdowns',
+      charts: [
+        {
+          label: 'Customers by DEP Status',
+          chartType: 'bar', valueFormat: 'number',
+          groupByDimension: 'HasDEP',
+          metrics: [{ id: 370, label: 'Customers' }],
+        },
+      ],
+    },
+    {
       title: 'By Channel',
       group: 'breakdowns',
       charts: [
