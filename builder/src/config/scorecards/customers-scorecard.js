@@ -17,7 +17,7 @@ export default {
     {
       title: 'Overview',
       kpis: [
-        { metricId: 370, label: 'Active Customers', format: 'number',
+        { metricId: 370, label: 'Customers', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true },
         { metricId: 371, label: 'New Customers', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true },
@@ -26,10 +26,10 @@ export default {
       ],
       charts: [
         {
-          label: 'Active Customers by Month',
+          label: 'Customers by Month',
           chartType: 'line', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 370, label: 'Active Customers', color: '#2563eb' }],
+          metrics: [{ id: 370, label: 'Customers', color: '#2563eb' }],
         },
         {
           label: 'New vs Churned by Month',
@@ -48,10 +48,10 @@ export default {
       title: 'Year over Year',
       charts: [
         {
-          label: 'Active Customers: This Year vs Last Year',
+          label: 'Customers: This Year vs Last Year',
           chartType: 'bar', valueFormat: 'number',
           yoy: true,
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
@@ -62,10 +62,10 @@ export default {
       group: 'breakdowns',
       charts: [
         {
-          label: 'Active Customers by DEP Status',
+          label: 'Customers by DEP Status',
           chartType: 'bar', valueFormat: 'number',
           groupByDimension: 'HasDEP',
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
@@ -74,10 +74,10 @@ export default {
       group: 'breakdowns',
       charts: [
         {
-          label: 'Active Customers by Channel',
+          label: 'Customers by Channel',
           chartType: 'bar', valueFormat: 'number',
           groupByDimension: 'AttributionChannel',
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
@@ -86,10 +86,10 @@ export default {
       group: 'breakdowns',
       charts: [
         {
-          label: 'Active Customers by Vertical',
+          label: 'Customers by Vertical',
           chartType: 'bar', valueFormat: 'number',
           groupByDimension: 'Vertical',
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
@@ -98,10 +98,10 @@ export default {
       group: 'breakdowns',
       charts: [
         {
-          label: 'Active Customers by Country',
+          label: 'Customers by Country',
           chartType: 'bar', valueFormat: 'number',
           groupByDimension: 'SignupCountry',
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
@@ -110,10 +110,10 @@ export default {
       group: 'breakdowns',
       charts: [
         {
-          label: 'Active Customers by Sync Type',
+          label: 'Customers by Sync Type',
           chartType: 'bar', valueFormat: 'number',
           groupByDimension: 'SyncType',
-          metrics: [{ id: 370, label: 'Active Customers' }],
+          metrics: [{ id: 370, label: 'Customers' }],
         },
       ],
     },
