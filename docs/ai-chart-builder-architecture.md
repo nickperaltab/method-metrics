@@ -4,14 +4,26 @@ This document is the authoritative technical reference for the AI Chart Builder.
 
 ---
 
+## Building Block Philosophy
+
+The chart builder is a set of primitives, not a list of hardcoded templates.
+
+- **No auto-injection.** Never add columns, metrics, computed values, or visual elements the user didn't ask for. Every element in the output must be traceable to an explicit user request.
+- **Computed values = explicit metrics.** If a user wants %Δ vs forecast, that's a derived metric in Supabase — not something the frontend injects. The user assembles the chart by selecting metrics.
+- **One chart type, many configurations.** Extend existing types (e.g., `table + group_by_dimension` = pivot) rather than adding hardcoded new types for each use case.
+- **The building block creates capabilities; the user assembles the experience.**
+
+---
+
 ## How the AI Works
 
-The AI layer is a Supabase Edge Function at `supabase/functions/ai-chart/index.ts`. It proxies requests to Claude Haiku 4.5 (Anthropic API) and handles CORS.
+The AI layer is a Supabase Edge Function at `supabase/functions/ai-chart/index.ts`. It proxies requests to **Claude Sonnet 4.5** (Anthropic API) and handles CORS. Currently version 27.
 
 **System prompt structure:**
-- Metric catalog: all `live` metrics from Supabase, formatted as `ID | name | description | view_name | chart_sql | formula | depends_on`
+- Metric catalog: all `live` metrics from Supabase, formatted by `buildMetricContext()` in `ai.js`
+  - Format: `ID | name | description | view_name | chart_sql | formula | depends_on | notes`
 - BQ column schemas: the known date/dimension/measure columns per view (from `schemaCache.js`)
-- Instructions: how to pick metric IDs, choose chart types, and return valid JSON
+- Instructions: how to pick metric IDs, choose chart types, return valid JSON
 
 **AI response shape:**
 
@@ -19,30 +31,40 @@ The AI layer is a Supabase Edge Function at `supabase/functions/ai-chart/index.t
 {
   "metric_ids": [54, 56],
   "data_config": {
+    "x_field": "TrialStartDate",
+    "y_fields": ["COUNT", "COUNT"],
     "time_bucket": "month",
-    "date_range": "last_12_months",
-    "filters": { "channel": "SEO" }
+    "last_n_months": 12,
+    "channel_filter": null,
+    "group_by_dimension": null,
+    "labels": ["Trials", "Syncs"],
+    "style_rules": null,
+    "target_line": null,
+    "orientation": null
   },
   "echarts_type": "line",
   "show_labels": false,
-  "colors": ["#4ade80", "#60a5fa"],
+  "colors": null,
+  "style_rules": null,
   "explanation": "Showing trials and syncs by month for the last 12 months."
 }
 ```
 
 The AI **does not write SQL** and **does not see raw data**. It only picks from a known catalog of metric IDs.
 
-**Only `live` metrics are shown to the AI.** Metrics are either `live` (verified, visible to AI) or `queued` (unsolved, invisible to AI) — see the Metric Statuses section below.
+**Only `live` metrics are shown to the AI.** Metrics are either `live` (verified, visible to AI) or `queued` (unsolved, invisible to AI).
 
-**Conversational mode:** `ChatExplorer.jsx` sends the full message history plus the current chart state (metric IDs, config, echarts_type) with each follow-up. This allows the AI to modify existing charts (e.g., "make it a bar chart", "add data labels", "use green").
+**Conversational mode:** `ChatExplorer.jsx` sends the full message history (last 10 turns) plus the current chart state with each follow-up. This allows the AI to modify existing charts ("make it a bar chart", "add data labels").
 
-**Hallucination prevention:** After the AI responds, the frontend in `ai.js` validates all returned `metric_ids` against the known set of live metric IDs. Unknown IDs are stripped before the config is used to build queries.
+**Hallucination prevention:** After the AI responds, `ai.js` validates all returned `metric_ids` against the known live set. Unknown IDs are stripped. `applyPromptOverrides()` applies deterministic keyword fixes post-AI (e.g., "YoY" → `yoy` type, "horizontal" → `horizontal_bar`).
+
+**Dimension guard:** `validateColumns()` in `ai.js` checks `group_by_dimension` against each metric's `approved_dimensions` array. If the requested dimension isn't approved for a metric, it's cleared to null to prevent bad queries.
 
 ---
 
 ## Data Pipeline
 
-There are three fetch paths depending on metric type. The correct path is selected in `bigquery.js` based on the metric's Supabase row.
+There are three fetch paths depending on metric type. Path selection happens in `chartDataBuilder.js`, which calls the appropriate functions from `bigquery.js`.
 
 ### Path 1 — Primitive Metrics (Trials, Syncs, Conversions, etc.)
 
@@ -50,54 +72,47 @@ Used when: metric has a `view_name` and no `chart_sql`.
 
 Function: `fetchAggregatedData()` in `bigquery.js`
 
-**What it does:**
-1. Looks up the view's date column from `schemaCache.js` (auto-detected: first DATE or TIMESTAMP column)
-2. Builds a query:
-   ```sql
-   SELECT FORMAT_DATE('%Y-%m', dateCol) AS period, COUNT(*) AS value
-   FROM `project-for-method-dw.revenue.view_name`
-   WHERE dateCol >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
-   GROUP BY 1
-   ORDER BY 1
-   ```
-3. Applies `agg_expression` from the metric row if set (e.g., `SUM(amount)` instead of `COUNT(*)`)
-4. Applies any filters from `data_config.filters` as WHERE clauses
-5. Returns `[{ period: "2025-01", value: 123 }, ...]`
+Builds a `SELECT FORMAT_DATE('%Y-%m', dateCol), COUNT(*) FROM view GROUP BY 1` query with date and channel filters applied.
 
-### Path 2 — Foundational / Revenue Metrics (MRR, Cancellations, Expansions, etc.)
+### Path 2 — Pre-aggregated / Revenue Metrics (MRR, Cancellations, Forecasts, etc.)
 
 Used when: metric has a `chart_sql` field set.
 
 Function: `fetchChartData()` in `bigquery.js`
 
-**What it does:**
-1. Runs the `chart_sql` directly against BigQuery (no modification)
-2. Expects the query to return `{ period, value }` pairs (monthly, pre-aggregated)
-3. Returns the rows as-is
+Runs the `chart_sql` directly against BigQuery (no modification). Expects the query to return `{period, value}` pairs (or multi-series shape for `multiSeries: true` results).
 
-These metrics correspond to BQ views that are already monthly-aggregated (e.g., `v_mrr_monthly`). The generic GROUP BY approach in Path 1 won't work because there's no raw event row to count — the view already returns one row per month.
-
-**Example `chart_sql`:**
-```sql
-SELECT month AS period, mrr_total AS value
-FROM `project-for-method-dw.revenue.v_mrr_monthly`
-ORDER BY 1
-```
+These metrics correspond to BQ views already monthly-aggregated — the generic GROUP BY approach won't work because there's no raw event row to count.
 
 ### Path 3 — Derived / Formula Metrics (Conversion Rate, Sync Rate, etc.)
 
-Used when: metric has a `formula` and `depends_on` array, and no `view_name`.
+Used when: metric has a `formula` and `depends_on` array, no `view_name`.
 
-**What it does:**
-1. Recursively fetches each dependency metric via its own path (Path 1 or Path 2)
-2. Aligns all results by `period`
-3. Evaluates the formula per time bucket using `computeDerived()` in `chartUtils.js`
+Fetches each dependency metric via its own path, aligns by period, then evaluates the formula per bucket using `evaluateFormula()` in `sanitize.js`.
 
-**Formula syntax:** `SAFE_DIVIDE({depId1}, {depId2}) * 100`
-- `{N}` is replaced with the value for metric ID N at that period
-- `SAFE_DIVIDE` returns null if denominator is 0 (avoids divide-by-zero errors)
+**Formula syntax:** `SAFE_DIVIDE({depId1}, {depId2}) * 100` — `{N}` is replaced with the value for metric ID N at that period.
 
-**Limitation:** Derived metrics cannot be rendered as KPI tiles because the dependency metrics may have different date columns, making it impossible to reliably find the "latest period" value.
+### Path 4 — Grouped / Breakdown Charts
+
+Used when: `data_config.group_by_dimension` is set and `echarts_type !== 'table'`.
+
+Function: `fetchGroupedData()` in `bigquery.js`
+
+Returns one series per dimension value (e.g., one line per channel). Each dimension value becomes a labeled dataset.
+
+### Path 5 — Pivot Tables
+
+Used when: `echarts_type === 'table'` AND `data_config.group_by_dimension` is set.
+
+Function: `fetchPivotData()` in `chartDataBuilder.js`
+
+1. For each metric: calls `fetchDimensionSnapshot()` → `{ dimValue: number }` (snapshot totals, no time bucketing)
+2. Builds union of dimension values across all metrics
+3. Joins into rows: `[{ dim: "SEO", "Trials": 108, "Syncs": 62 }, ...]`
+4. Adds Grand Total row
+5. Returns `{ pivotData, columns, queryDetails }`
+
+Only the explicitly requested metrics appear as columns. No auto-computed columns (%Δ, trajectory, etc.) — those are explicit derived metrics the user must add.
 
 ---
 
@@ -107,34 +122,24 @@ No code changes are needed for adding a metric. All configuration lives in Supab
 
 1. **Create or confirm the BQ view** (or use an existing one)
 2. **Add a row to the `metrics` table in Supabase** with:
-   - `name` — display name (e.g., "New MRR")
+   - `name` — display name
    - `description` — one sentence; the AI reads this to understand the metric
-   - For simple event counts (Path 1):
-     - Set `view_name` to the BQ view name
-     - Optionally set `agg_expression` (default is `COUNT(*)`)
-   - For pre-aggregated views (Path 2):
-     - Set `chart_sql` with a query returning `period, value` columns
-   - For derived rates (Path 3):
-     - Set `formula` (e.g., `SAFE_DIVIDE({56},{54}) * 100`)
-     - Set `depends_on` (e.g., `[56, 54]`)
-3. **Set `status`:**
-   - Use `review` initially (invisible to AI, safe to test)
-   - Use `ready` after verifying data looks correct
-   - Use `live` to make it visible to the AI and chart builder users
-4. **No deploy needed** — the AI reads the metric catalog fresh on each page load
+   - For simple event counts (Path 1): set `view_name`
+   - For pre-aggregated views (Path 2): set `chart_sql` returning `period, value` columns
+   - For derived rates (Path 3): set `formula` + `depends_on`
+   - `approved_dimensions` — array of column names allowed for `group_by_dimension` (e.g., `["AttributionChannel"]`)
+   - `notes` — optional; included in AI context for disambiguation
+3. **Set `status: 'live'`** to make it visible to the AI
+4. **No deploy needed** — AI reads metric catalog fresh on each page load
 
 ---
 
 ## Metric Statuses
 
-Controls what the AI can access. Maps to the `status` column in Supabase.
-
-| Status | Visible to AI | Queryable | Description |
-|--------|:---:|:---:|---|
-| `live` | Yes | Yes | Solved, verified, approved |
-| `queued` | No | No | Not yet solved |
-
-The AI context builder (`buildMetricContext()` in `ai.js`) filters to `status = 'live'` before constructing the system prompt.
+| Status | Visible to AI | Description |
+|--------|:---:|---|
+| `live` | Yes | Solved, verified, approved |
+| `queued` | No | Not yet solved |
 
 ---
 
@@ -144,71 +149,91 @@ The AI context builder (`buildMetricContext()` in `ai.js`) filters to `status = 
 |------|-------|
 | `line` | Time series, single or multi-series |
 | `bar` | Vertical bar, single or grouped |
-| `stacked_bar` | Stacked vertical bars |
-| `horizontal_bar` | Horizontal bar |
+| `stacked_bar` | Stacked vertical bars; supports `orientation: "horizontal"` |
+| `horizontal_bar` | Horizontal bar (ranked comparisons, no time axis) |
 | `pie` | Pie / donut |
 | `combo` | Bar + line on same axis |
 | `funnel` | Funnel chart |
 | `heatmap` | Month × year or similar 2D grid |
 | `area` | Area chart |
 | `yoy` | Year-over-year comparison (primitive metrics only) |
-| `table` | Tabular data view |
-| `kpi` | Single big number tile (not available for derived metrics) |
+| `variance` | Actual vs target/forecast — bars turn red/green vs dashed line. Requires exactly 2 metrics. |
+| `table` | Time-series tabular view. With `group_by_dimension` → pivot table (rows = dimension values, columns = metrics). |
+| `kpi` | Single big number tile. Only for primitive count metrics (not derived). |
 
-Chart rendering is handled by `buildEChartsOption()` in `chartUtils.js`, which maps the AI's `echarts_type` + data to a full ECharts option object. The `EChart.jsx` component applies the Method dark theme.
+Chart rendering is handled by `buildEChartsOption()` in `chartUtils.js`. The `EChart.jsx` component applies the Method dark theme.
 
 ---
 
 ## Key Files
 
 ```
-builder/src/lib/ai.js                  — buildMetricContext(), generateChartSpec(), ID validation
-builder/src/lib/bigquery.js            — BQ OAuth, fetchAggregatedData(), fetchChartData(),
-                                         fetchYoYData(), fetchKpiData()
-builder/src/lib/chartUtils.js          — buildEChartsOption(), computeDerived(), formatDateLabels()
-builder/src/lib/schemaCache.js         — shared BQ schema cache (singleton, avoids re-fetching schemas)
-builder/src/lib/supabase.js            — fetchMetrics(), saveChart(), fetchDashboards()
-builder/src/lib/fieldMapper.js         — maps BQ view columns to canonical field names
+builder/src/lib/ai.js                    — buildMetricContext(), generateChartSpec(), applyPromptOverrides(),
+                                           validateColumns(), ID validation
+builder/src/lib/bigquery.js              — BQ OAuth, fetchAggregatedData(), fetchChartData(),
+                                           fetchGroupedData(), fetchYoYData(), fetchKpiData(),
+                                           fetchDimensionSnapshot()
+builder/src/lib/chartDataBuilder.js      — fetchChartDatasets() (multi-metric fetch + label alignment),
+                                           fetchPivotData() (pivot table join)
+builder/src/lib/chartUtils.js            — buildEChartsOption(), computeDerived(), formatDateLabels(),
+                                           applyLastNMonths()
+builder/src/lib/schemaCache.js           — shared BQ schema cache (singleton, avoids re-fetching schemas)
+builder/src/lib/supabase.js              — fetchMetrics(), saveChart(), fetchDashboards()
+builder/src/lib/fieldMapper.js           — maps BQ view columns to canonical field names
+builder/src/lib/sanitize.js              — evaluateFormula(), validateIdentifier() (SQL injection guards)
 builder/src/components/ChatExplorer.jsx  — conversational chart builder (main entry point)
 builder/src/components/Explorer.jsx      — single-shot chart builder
 builder/src/components/DashboardView.jsx — dashboard, re-queries BQ on load (live data)
 builder/src/components/EChart.jsx        — ECharts wrapper with Method dark theme
-supabase/functions/ai-chart/index.ts     — Edge Function (Claude Haiku 4.5 proxy)
+builder/src/components/DataTableView.jsx — tabular view; pivot mode when pivotData prop is set
+builder/src/components/KpiCard.jsx       — KPI tile component
+supabase/functions/ai-chart/index.ts     — Edge Function (Claude Sonnet 4.5 proxy, currently v27)
 ```
 
 ---
 
-## Known Limitations
+## Deploy
 
-- **Derived rate KPIs produce misleading values** — the "latest period" logic breaks when dependencies have different date columns. Derived metrics fall back to bar chart instead of KPI tile.
-- **YoY only for primitive metrics** — `fetchYoYData()` uses the generic date-column detection path. Revenue/derived metrics are not supported.
-- **Revenue metrics require `chart_sql`** — pre-aggregated views cannot use the generic `GROUP BY dateCol` approach in `fetchAggregatedData()`.
-- **Schema detection picks the first DATE column** — if a view has multiple date columns, the wrong one may be selected. Fix by explicitly setting `date_column` on the metric row (if that column is added) or by using `chart_sql` instead.
-- **Data-fetching logic is partially duplicated** across `Explorer.jsx`, `ChatExplorer.jsx`, and `DashboardView.jsx` (~306 lines). A shared `useChartData` hook would consolidate this.
-- **Viewer mode requires personal BigQuery OAuth** — every dashboard/chat request runs in the browser using the viewer's token. Anyone without dataset + `bigquery.jobs.create` access simply sees the "Connect BigQuery" gate, so a public/internal read-only mode will require a backend proxy or service-account query layer before we can share links broadly.
-- **Metric catalog scales linearly with prompt size** — the entire `metrics` table (currently 242 rows) plus every view schema is stuffed into Claude's context on each request. At ~350–400 metrics we start approaching Anthropic's cost/context limits and the initial schema prefetch becomes slow/expensive. Long-term fix is to move to a semantic layer or retrieval-indexed catalog so we fetch only the relevant metric slices per prompt.
-- **One assistant reply can spawn many BigQuery jobs** — grouped charts, derived metrics, and KPI tiles all run separate queries per metric (and per dependency) via the browser. A single prompt with three metrics + a breakdown can issue 6–10 concurrent jobs, quickly hitting per-user concurrency quotas (100 interactive jobs/user by default) and driving on-demand query cost. Back-end batching or cached aggregates are required before rolling out to larger audiences.
+```
+cd builder && npm run build
+git add dist && git commit -m "build" && git push
+```
 
----
-
-## Pre-Launch Security / Auth TODOs
-
-1. **Rotate the Supabase anon key or move to user auth before GA.** The builder currently ships an anon key that can create/update charts, dashboards, and conversations client-side. Ensure RLS locks every table to authenticated users or swap to Supabase Auth/SSO before inviting the broader org.
-2. **Require login for editing.** Even if read-only dashboards stay open, the chart builder/editor should sit behind a signed-in session so we can track ownership and enforce per-user permissions. Plan: gate `builder/` routes behind Supabase Auth (or another IdP) once the admin workflow is stable.
-
----
-
-## Why We’re Not Rebuilding Looker
-
-Looker bundles a much wider surface area (explore UI, governed drill paths, alerting/email delivery, fine-grained permission groups, etc.), but those features come with significant overhead (LookML learning curve, admin + licensing). Our scope is narrower: we need consistent metric definitions, a server-side query broker/caching layer, and a Claude-driven chart UX. By cherry-picking those core ideas (semantic layer + centralized BigQuery orchestration) and leaving the rest for later, we can iterate quickly without inheriting the full weight of a BI platform. If the org eventually needs the broader Looker feature set, we can revisit it, but for now a “Looker-lite” approach meets the revops use case.
+GitHub Pages auto-deploys on push to `main`. **Do not use `vercel --prod`** — GitHub Pages is the only deployment target.
 
 ---
 
 ## Testing
 
 ```bash
-cd builder && npx vitest run     # 77 unit tests (fast, no network)
-cd builder && npm test           # 25 AI eval tests (live, calls Anthropic API)
+cd builder && npx vitest run     # unit tests (fast, no network)
+cd builder && npm test           # AI eval tests (live, calls Anthropic API)
 ```
 
-Total: 102 tests. Unit tests cover `chartUtils.js`, `ai.js` validation, and `bigquery.js` SQL generation. AI eval tests send real prompts and assert the returned `echarts_type` and `metric_ids` are sensible.
+Unit tests cover `chartUtils.js`, `ai.js` validation, and `bigquery.js` SQL generation. AI eval tests send real prompts and assert the returned `echarts_type`, `metric_ids`, and `data_config` are correct.
+
+Add an eval test whenever a new chart scenario, edge case, or AI bug is fixed. The eval suite is the measurement instrument for prompt quality.
+
+---
+
+## Known Limitations
+
+- **Derived rate KPIs produce misleading values** — the "latest period" logic breaks when dependencies have different date columns. Derived metrics fall back to bar chart instead of KPI tile.
+- **YoY only for primitive metrics** — `fetchYoYData()` uses generic date-column detection. Revenue/derived metrics are not supported.
+- **Schema detection picks the first DATE column** — if a view has multiple date columns, the wrong one may be selected. Fix: use `chart_sql` instead, or add an explicit `date_column` column to the metric row.
+- **Viewer mode requires personal BigQuery OAuth** — every request runs in the browser using the viewer's token. Anyone without `bigquery.jobs.create` access sees the "Connect BigQuery" gate. Public read-only mode requires a backend proxy or service-account layer.
+- **Metric catalog scales linearly with prompt size** — the entire `live` metrics set (~50+ rows) plus view schemas is sent to Claude on each request. As the catalog grows past ~100 metrics, context cost and selection accuracy degrade. Long-term fix: semantic retrieval layer or 2-call Haiku architecture (researched, not yet implemented).
+- **One reply can spawn many BQ jobs** — grouped charts, derived metrics, and KPI tiles issue separate queries per metric and dependency. A single prompt with three metrics + a breakdown can issue 6–10 concurrent jobs.
+
+---
+
+## Pre-Launch Security / Auth TODOs
+
+1. **Rotate the Supabase anon key or move to user auth before GA.** The builder ships an anon key that can create/update charts, dashboards, and conversations client-side. Ensure RLS locks every table to authenticated users before inviting the broader org.
+2. **Require login for editing.** Gate `builder/` routes behind Supabase Auth once the admin workflow is stable.
+
+---
+
+## Why We're Not Rebuilding Looker
+
+Looker bundles a much wider surface area (explore UI, governed drill paths, alerting/email delivery, fine-grained permission groups, etc.), but those features come with significant overhead. Our scope: consistent metric definitions, a server-side query layer, and a Claude-driven chart UX. By cherry-picking those core ideas and leaving the rest for later, we iterate quickly without inheriting the full weight of a BI platform.

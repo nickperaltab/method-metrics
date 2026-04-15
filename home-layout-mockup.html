@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Layout Options</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: #e8eaed;
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 24px;
+  }
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    max-width: 1100px;
+  }
+  .option {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+  .option-label {
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e2e5e9;
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .app-shell {
+    display: flex;
+    height: 520px;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 200px;
+    min-width: 200px;
+    background: #f1f3f5;
+    border-right: 1px solid #e2e5e9;
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sidebar-logo {
+    padding: 0 16px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #059669;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 0 16px 12px;
+    padding: 5px 10px;
+  }
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    font-size: 12px;
+    color: #6b7280;
+    border-radius: 6px;
+    margin: 0 8px;
+  }
+  .sidebar-link.active {
+    color: #059669;
+    background: #ecfdf5;
+  }
+  .sidebar-divider {
+    height: 1px;
+    background: #e2e5e9;
+    margin: 8px 16px;
+  }
+  .sidebar-section {
+    padding: 4px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .sidebar-scorecard {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #374151;
+    margin: 0 8px;
+    border-radius: 6px;
+  }
+  .dot-green { color: #059669; font-size: 10px; }
+  .dot-yellow { color: #f59e0b; font-size: 10px; }
+  .admin-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 0 8px;
+    border-radius: 6px;
+  }
+
+  /* Main content */
+  .main {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    background: #f8f9fa;
+  }
+  .page-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 20px;
+  }
+
+  /* Option A — Two sections */
+  .review-banner {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .review-banner-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #c2410c;
+    margin-bottom: 10px;
+  }
+  .review-cards {
+    display: flex;
+    gap: 10px;
+  }
+  .review-card {
+    background: #fff;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    min-width: 130px;
+    cursor: pointer;
+  }
+  .review-card-sub {
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  .section-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 12px;
+  }
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .dashboard-card {
+    background: #fff;
+    border: 1px solid #e2e5e9;
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+  .dashboard-card:hover {
+    border-color: #059669;
+  }
+  .dashboard-card-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 3px;
+  }
+  .dashboard-card-meta {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+  .star { color: #f59e0b; font-size: 11px; margin-right: 4px; }
+
+  /* Option B — Flat list */
+  .dashboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dashboard-row {
+    background: #fff;
+    border: 1px solid #e2e5e9;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .dashboard-row:hover { border-color: #059669; }
+  .dashboard-row-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a1a1a;
+  }
+  .badge-review {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    padding: 2px 8px;
+  }
+  .badge-star {
+    color: #f59e0b;
+    font-size: 14px;
+  }
+  .badge-placeholder {
+    width: 14px;
+  }
+  .dashboard-row-meta {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  /* Search bar */
+  .search-bar {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e5e9;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #374151;
+    margin-bottom: 16px;
+    outline: none;
+  }
+  .search-bar:focus { border-color: #059669; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>Home Page — Proposed Layout</h1>
+
+<div class="options" style="grid-template-columns: 1fr;">
+
+  <!-- Proposed layout -->
+  <div class="option" style="max-width: 900px;">
+    <div class="option-label">Proposed Layout</div>
+    <div class="app-shell">
+      <div class="sidebar">
+        <span class="sidebar-logo">Method</span>
+        <div class="sidebar-link active">⊡ Home</div>
+        <div class="sidebar-link">✨ Chart Builder</div>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section">My Dashboards</div>
+        <div class="sidebar-scorecard"><span class="badge-star" style="font-size:11px">★</span> Weekly Syncs</div>
+        <div class="sidebar-scorecard"><span class="badge-star" style="font-size:11px">★</span> Sales Overview</div>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section">Method Approved</div>
+        <div class="sidebar-scorecard"><span class="dot-green">◉</span> Sales</div>
+        <div class="sidebar-scorecard"><span class="dot-green">◉</span> Marketing</div>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section">Admin</div>
+        <div class="admin-link">⊙ Trials</div>
+        <div class="admin-link">⊙ Syncs</div>
+        <div class="admin-link">⊙ Conversions</div>
+        <div class="admin-link">⊙ Cancellations</div>
+        <div class="admin-link">⊙ Funnel</div>
+        <div class="admin-link">⊙ Plan</div>
+        <div class="admin-link">≡ Metric Registry</div>
+        <div class="admin-link">◈ AI Insights</div>
+      </div>
+      <div class="main">
+        <div class="page-title">Home</div>
+        <input class="search-bar" placeholder="Search dashboards…" readonly>
+        <div class="section-header" style="margin-bottom:10px">Method Approved</div>
+        <div class="dashboard-list" style="margin-bottom:20px">
+          <div class="dashboard-row" style="">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Sales</span>
+            <span class="dashboard-row-meta">Scorecard</span>
+          </div>
+          <div class="dashboard-row" style="">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Marketing</span>
+            <span class="dashboard-row-meta">Scorecard</span>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-bottom:10px">AI Dashboards</div>
+        <div class="dashboard-list">
+          <div class="dashboard-row">
+            <span class="badge-star">★</span>
+            <span class="dashboard-row-name">Weekly Syncs</span>
+            <span class="dashboard-row-meta">Nic</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-star">★</span>
+            <span class="dashboard-row-name">Sales Overview</span>
+            <span class="dashboard-row-meta">Nic</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Marketing Q2</span>
+            <span class="badge-review">Review Requested</span>
+            <span class="dashboard-row-meta">Justin</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Trials by Channel</span>
+            <span class="badge-review">Review Requested</span>
+            <span class="dashboard-row-meta">Justin</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Churn Analysis</span>
+            <span class="dashboard-row-meta">Justin</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Trial Funnel</span>
+            <span class="dashboard-row-meta">Nic</span>
+          </div>
+          <div class="dashboard-row">
+            <span class="badge-placeholder"></span>
+            <span class="dashboard-row-name">Revenue MTD</span>
+            <span class="dashboard-row-meta">Justin</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

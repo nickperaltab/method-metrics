@@ -119,3 +119,24 @@ Once the view exists:
 
 **Source SQL:** The AdjustedBOM + TotalCustomersBOM CTEs from the existing Churn Rate chart_sql (metric 344) — that logic moves into the view.
 **Files:** BQ `v_customer_bom` view (new), Supabase metrics table (new BOM metric + update 344), `builder/src/config/scorecards/cancellations-breakdown-scorecard.js`
+
+---
+
+### Migrate Sales Scorecard Custom SQL to Semantic Layer
+**Status:** Open
+The Sales Scorecard (`builder/src/config/scorecards/sales-scorecard.js`) has ~10 inline custom SQL strings written before the semantic layer existed. The scorecard hook (`useScorecardData.js`) now respects `semantic_table` / `semantic_measure` / `semantic_date_col` fields on metrics and handles weekly/monthly/daily grain automatically. Most of the custom SQL can be retired by populating semantic layer fields on the existing metrics.
+
+**Migration map:**
+| Custom SQL constant | Action | Notes |
+|---|---|---|
+| `WEEKLY_CHURN_COUNT_SQL` | Delete, use metric 59 + `timeBucket: 'week'` | **Quick win** — metric 59 already has semantic layer (`v_cancellations`, `COUNT(DISTINCT CompanyAccount)`, `CancellationDate`). No Supabase change needed. |
+| `WEEKLY_NEW_NET_SAAS_SQL` | Add semantic fields to metric 365 | `semantic_table=v_new_net_saas, semantic_measure=SUM(SaaSAmount), semantic_date_col=TxnDate` |
+| `WEEKLY_TOTAL_DEP_SQL` | Add semantic fields to metric 333 | `semantic_table=v_total_dep_revenue, semantic_measure=SUM(SaaSAmount), semantic_date_col=TxnDate` |
+| `WEEKLY_TOTAL_NET_SAAS_SQL` | Fix + semantic on metric 337 | Metric 337 currently has NO chart_sql AND NO semantic_table — silently broken. `semantic_table=v_total_net_saas, semantic_measure=SUM(SaaSAmount + SaaSExpense), semantic_date_col=TxnDate` |
+| `WEEKLY_NEW_DEP_SQL` | Add semantic fields to metric 329 | Needs `semantic_filters=[{column: 'is_new_dep', operator: '=', value: TRUE}]` in addition to table/measure |
+| `FORECAST_WEEKLY` / `FORECAST_WEEKLY_CAST` / `FORECAST_WEEKLY_MAX` helpers | Add semantic fields to 10 metrics | 289, 290, 291, 292, 325, 326, 294, 295, 330, 334 — all point to `method_forecast` with the appropriate column. Pattern already works for metrics 285, 286, 353, 358. |
+| `WEEKLY_CONVERSION_RATE_SQL` | **Stays custom** | Joins `Account` table with 1-month-lagged `SignupDate` shift and `method_forecast`. Not expressible as a single semantic measure. |
+
+**Benefits:** Retire ~9 of 10 custom SQL strings, fix the silently-broken metric 337, make these metrics reusable by the chat builder and other scorecards, consolidate metric definitions to one place (Supabase).
+
+**Files:** `builder/src/config/scorecards/sales-scorecard.js` (delete constants + switch to `timeBucket: 'week'`), Supabase `metrics` table (populate semantic fields on ~14 metrics).
