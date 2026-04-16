@@ -4,6 +4,13 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ---
 
+### Clean Up Customer Segments — Remove Hardcoded Segments from BQ
+**Status:** Open
+`v_customer_segments` has a `Segment` CASE column and we created 4 separate metrics (374-377) with hardcoded filters. This is the "sprawling segments" anti-pattern. Should be: one base view with raw fields (entity, user count, has_dep), one metric with dimensions, and segmentation via query-level filters — same as how Trials breaks down by channel without a separate view per channel. Also need to support range filters (e.g. `TotalUsers BETWEEN 2 AND 3`) in `buildSemanticSql` or add a `UserTier` bucketed dimension.
+**Files:** BQ view `v_customer_segments`, Supabase metrics 373-377, `builder/src/config/scorecards/customer-segments-scorecard.js`, `builder/src/lib/bigquery.js` (buildSemanticSql)
+
+---
+
 ### Home Page Visual Redesign
 **Status:** Open
 The current Home page rows look utilitarian — individual bordered cards, always-visible action buttons, loud orange "REVIEW REQUESTED" badge. Needs a polish pass before wider sharing.
