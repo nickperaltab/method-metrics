@@ -24,15 +24,25 @@ export default function RawTable({ config, dataMap }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
 
   const rawData = dataMap.get(`${config.metricId}:raw`);
 
   const cols = config.columns || Object.keys(rawData?.rows?.[0] || {});
 
-  const sorted = useMemo(() => {
+  const filtered = useMemo(() => {
     if (!rawData?.rows?.length) return [];
-    if (!sortCol) return rawData.rows;
-    return [...rawData.rows].sort((a, b) => {
+    if (!search) return rawData.rows;
+    const q = search.toLowerCase();
+    return rawData.rows.filter(row =>
+      cols.some(col => String(row[col] ?? '').toLowerCase().includes(q))
+    );
+  }, [rawData, search, cols]);
+
+  const sorted = useMemo(() => {
+    if (!filtered.length) return [];
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
       const av = a[sortCol], bv = b[sortCol];
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
@@ -43,7 +53,7 @@ export default function RawTable({ config, dataMap }) {
       const as = String(av).toLowerCase(), bs = String(bv).toLowerCase();
       return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
     });
-  }, [rawData, sortCol, sortDir]);
+  }, [filtered, sortCol, sortDir]);
 
   if (!rawData?.rows?.length) {
     return (
@@ -69,14 +79,25 @@ export default function RawTable({ config, dataMap }) {
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12,
       }}>
         <div style={{
           fontSize: 13, fontWeight: 600, color: '#374151',
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap',
         }}>
-          {config.label || 'Records'} ({sorted.length})
+          {config.label || 'Records'} ({sorted.length}{search ? ` of ${rawData.rows.length}` : ''})
         </div>
+        <input
+          type="text"
+          placeholder="Search…"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(0); }}
+          style={{
+            padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 4,
+            fontSize: 12, color: '#374151', outline: 'none', maxWidth: 220, flex: 1,
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        />
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6b7280' }}>
             <button
