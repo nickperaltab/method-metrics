@@ -6,7 +6,7 @@
 
 export default {
   id: 'customers',
-  title: 'Customers',
+  title: 'Accounts',
   group: 'customer',
   status: 'pending',
   views: {

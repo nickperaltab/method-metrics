@@ -101,7 +101,7 @@ export default {
       label: 'All Customers (Current Month)',
       metricId: 373,
       columns: ['EntityFullName', 'AccountCount', 'TotalUsers', 'HasDEP', 'Segment'],
-      limit: 200,
+      limit: 4000,
     },
   ],
 };
