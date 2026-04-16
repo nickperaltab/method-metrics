@@ -96,9 +96,12 @@ export default {
 
     // ── Customer List ───────────────────────────────────────────
     {
+      type: 'rawTable',
       title: 'Customer List',
+      label: 'All Customers (Current Month)',
       metricId: 373,
-      layout: 'raw-table',
+      columns: ['EntityFullName', 'AccountCount', 'TotalUsers', 'HasDEP', 'Segment'],
+      limit: 200,
     },
   ],
 };
