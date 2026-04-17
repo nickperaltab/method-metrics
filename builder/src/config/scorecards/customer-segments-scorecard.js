@@ -34,7 +34,10 @@ export default {
           label: 'Total Customers Over Time',
           chartType: 'line', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 373, label: 'Total Customers', color: '#2563eb' }],
+          metrics: [
+            { id: 373, label: 'Total Customers', color: '#2563eb' },
+            { id: 377, label: 'Customers with DEP', color: '#059669' },
+          ],
         },
       ],
     },
