@@ -7,8 +7,7 @@ export default {
   id: 'customer-segments',
   title: 'Customers',
   description: 'Customer counts by product segment. A "customer" is a billing entity — companies with multiple accounts (e.g. franchises) are grouped as one. User count is the sum of paid users across all accounts.',
-  group: 'customer',
-  status: 'pending',
+  status: 'approved',
   hideGrain: true,
   views: {
     v_customer_segments: { dateCol: 'Month' },
