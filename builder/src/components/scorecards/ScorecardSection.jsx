@@ -40,12 +40,19 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
   return (
     <div style={{ marginBottom: 48 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{
-          fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          {section.title}
-        </h2>
+        <div>
+          <h2 style={{
+            fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {section.title}
+          </h2>
+          {section.description && (
+            <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 4, fontFamily: "'DM Sans', sans-serif" }}>
+              {section.description}
+            </div>
+          )}
+        </div>
         {onGrain && (
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             {GRAIN_OPTIONS.map(opt => (

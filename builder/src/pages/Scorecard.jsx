@@ -172,12 +172,19 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 32,
       }}>
-        <h1 style={{
-          fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          {config.title}
-        </h1>
+        <div>
+          <h1 style={{
+            fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {config.title}
+          </h1>
+          {config.description && (
+            <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 4, maxWidth: 700, fontFamily: "'DM Sans', sans-serif" }}>
+              {config.description}
+            </div>
+          )}
+        </div>
         <ScoreCardFilters
           lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
         />
@@ -190,8 +197,8 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           dataMap={dataMap}
           onMetricClick={handleMetricClick}
           filterLastNMonths={filterLastNMonths}
-          grain={i === 0 ? grain : null}
-          onGrain={i === 0 ? setGrain : null}
+          grain={i === 0 && !config.hideGrain ? grain : null}
+          onGrain={i === 0 && !config.hideGrain ? setGrain : null}
         />
       ))}
 

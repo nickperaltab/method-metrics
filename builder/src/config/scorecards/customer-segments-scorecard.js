@@ -1,18 +1,15 @@
 /**
- * Customer Segments Scorecard
- * Entity-level (not account-level) segmentation by license tier × DEP status.
- *
- * Customer = EntityRecordID (groups franchise/multi-account companies as 1).
- * User count = SUM(UserPaidCount) across all accounts (historical, changes monthly).
- * DEP = any account in entity had a DEP transaction that month.
- * Segments are mutually exclusive: Team AI Plus > 4+ no DEP > 2-3 no DEP > Solo no DEP.
+ * Customers Scorecard
+ * Entity-level segmentation by license tier × DEP status.
  */
 
 export default {
   id: 'customer-segments',
-  title: 'Customer Segments',
+  title: 'Customers',
+  description: 'Customer counts by product segment. A "customer" is a billing entity — companies with multiple accounts (e.g. franchises) are grouped as one. User count is the sum of paid users across all accounts.',
   group: 'customer',
   status: 'pending',
+  hideGrain: true,
   views: {
     v_customer_segments: { dateCol: 'Month' },
   },
@@ -20,6 +17,7 @@ export default {
     // ── Overview ────────────────────────────────────────────────
     {
       title: 'Overview',
+      description: 'Total customer count across all segments. Each customer appears in exactly one segment.',
       kpis: [
         { metricId: 373, label: 'Total Customers', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true },
@@ -44,7 +42,8 @@ export default {
 
     // ── Solo no DEP ─────────────────────────────────────────────
     {
-      title: 'Solo no DEP (1 user)',
+      title: 'Solo no DEP',
+      description: '1 paid user, no DEP. Smallest tier — individual users on base SaaS only.',
       charts: [
         {
           label: 'Solo no DEP by Month',
@@ -57,7 +56,8 @@ export default {
 
     // ── Small Team no DEP ───────────────────────────────────────
     {
-      title: 'Small Team no DEP (2-3 users)',
+      title: 'Small Team no DEP',
+      description: '2–3 paid users, no DEP. Small teams on base SaaS only.',
       charts: [
         {
           label: 'Small Team no DEP by Month',
@@ -70,7 +70,8 @@ export default {
 
     // ── Team no DEP ─────────────────────────────────────────────
     {
-      title: 'Team no DEP (4+ users)',
+      title: 'Team no DEP',
+      description: '4+ paid users, no DEP. Larger teams on base SaaS only.',
       charts: [
         {
           label: 'Team no DEP by Month',
@@ -83,7 +84,8 @@ export default {
 
     // ── Team AI Plus ────────────────────────────────────────────
     {
-      title: 'Team AI Plus (DEP)',
+      title: 'Team AI Plus',
+      description: 'Customers billed for DEP (any user count). DEP is identified by "Enhancement Plan" or "Premium App" billing line items.',
       charts: [
         {
           label: 'Team AI Plus by Month',
@@ -98,7 +100,8 @@ export default {
     {
       type: 'rawTable',
       title: 'Customer List',
-      label: 'All Customers (Current Month)',
+      description: 'All customers for the most recent month. Click column headers to sort. Use search to filter.',
+      label: 'All Customers',
       metricId: 373,
       columns: ['EntityFullName', 'AccountCount', 'TotalUsers', 'HasDEP', 'Segment'],
       limit: 4000,
