@@ -3,19 +3,19 @@
 --
 -- Customer = EntityRecordID (groups multiple accounts under one entity)
 -- TotalUsers = SUM(UserPaidCount) across all accounts in the entity (historical, changes monthly)
--- HasDEP = TRUE if ANY account in the entity had a DEP transaction that month
+-- HasDEP = TRUE if ANY account in the entity had a non-zero DEP line item that month
+--   - Accounts with +$325 and -$325 refund → still DEP (individual lines are non-zero)
+--   - Accounts with a single $0 DEP line → NOT DEP (effectively paused/cancelled)
 -- Segment = mutually exclusive: Team AI Plus > 4+ no DEP > 2-3 no DEP > Solo no DEP
 --
 -- IMPORTANT: Does NOT filter IsConversionException. Migrated accounts (QBDT→QBO)
--- are real paying customers and should be counted. IsConversionException only applies
--- to funnel metrics (trials, conversions), not revenue/customer counts.
+-- are real paying customers. IsConversionException only applies to funnel metrics.
 --
--- Verified 2026-04-17 against Looker dashboard:
---   Dec 2025: 298 DEP (exact match)
---   Jan 2026: 309 DEP (Looker shows 308, off by 1 — Looker undercounts)
---   Feb 2026: 314 DEP (Looker shows 313, off by 1 — Looker undercounts)
---   Mar 2026: 316 DEP (exact match)
---   All match raw BQ transaction data exactly.
+-- Verified 2026-04-17 against Looker dashboard (exact match all months):
+--   Dec 2025: 298 DEP ✓
+--   Jan 2026: 308 DEP ✓
+--   Feb 2026: 313 DEP ✓
+--   Mar 2026: 316 DEP ✓
 
 CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_segments` AS
 WITH monthly_accounts AS (
@@ -24,7 +24,7 @@ WITH monthly_accounts AS (
     DATE_TRUNC(t.TxnDate, MONTH) AS Month,
     t.CompanyAccount,
     MAX(t.UserPaidCount) AS UserPaidCount,
-    MAX(CASE WHEN t.AccountFullName LIKE '%Premium App%' OR t.AccountFullName LIKE '%Enhancement Plan%' THEN 1 ELSE 0 END) AS has_dep_txn
+    MAX(CASE WHEN (t.AccountFullName LIKE '%Premium App%' OR t.AccountFullName LIKE '%Enhancement Plan%') AND t.SaaSAmount != 0 THEN 1 ELSE 0 END) AS has_dep_txn
   FROM `project-for-method-dw.revenue.TransLineFlattened` t
   WHERE t.Partner != 'Method Integration'
     AND t.TxnDate >= '2024-01-01'
