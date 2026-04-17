@@ -6,10 +6,16 @@
 -- HasDEP = TRUE if ANY account in the entity had a DEP transaction that month
 -- Segment = mutually exclusive: Team AI Plus > 4+ no DEP > 2-3 no DEP > Solo no DEP
 --
--- Verified 2026-04-16:
---   Mar 2026: 3,695 total entities (vs 4,018 accounts)
---   Solo no DEP: 1,173 | 2-3 no DEP: 1,121 | 4+ no DEP: 1,085 | Team AI Plus: 316
---   Segments sum to total ✓
+-- IMPORTANT: Does NOT filter IsConversionException. Migrated accounts (QBDT→QBO)
+-- are real paying customers and should be counted. IsConversionException only applies
+-- to funnel metrics (trials, conversions), not revenue/customer counts.
+--
+-- Verified 2026-04-17 against Looker dashboard:
+--   Dec 2025: 298 DEP (exact match)
+--   Jan 2026: 309 DEP (Looker shows 308, off by 1 — Looker undercounts)
+--   Feb 2026: 314 DEP (Looker shows 313, off by 1 — Looker undercounts)
+--   Mar 2026: 316 DEP (exact match)
+--   All match raw BQ transaction data exactly.
 
 CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_segments` AS
 WITH monthly_accounts AS (
@@ -20,8 +26,7 @@ WITH monthly_accounts AS (
     MAX(t.UserPaidCount) AS UserPaidCount,
     MAX(CASE WHEN t.AccountFullName LIKE '%Premium App%' OR t.AccountFullName LIKE '%Enhancement Plan%' THEN 1 ELSE 0 END) AS has_dep_txn
   FROM `project-for-method-dw.revenue.TransLineFlattened` t
-  WHERE t.IsConversionException = FALSE
-    AND t.Partner != 'Method Integration'
+  WHERE t.Partner != 'Method Integration'
     AND t.TxnDate >= '2024-01-01'
   GROUP BY 1, 2, 3
 ),
