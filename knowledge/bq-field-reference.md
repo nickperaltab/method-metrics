@@ -30,7 +30,9 @@
 
 **Billing pattern:** Monthly, per user. Rate varies (e.g., $145/user, $325 flat). Every discount line always has a corresponding revenue line (verified: 0 discount-only months).
 
-**DEP customer = had a DEP transaction this month.** When billing stops, they're no longer DEP.
+**DEP customer = had a non-zero DEP line item this month.** When billing stops, they're no longer DEP.
+
+**Edge case — refunds:** An account charged +$325 and refunded -$325 in the same month still counts as DEP because each individual line is non-zero. This matches Looker's per-line evaluation. Affects ~1-2 accounts/month. If business logic changes to "net DEP > 0", update `v_customer_segments` to use `SUM(dep_amount) != 0` instead of `MAX(non-zero line)`.
 
 **DEP is per-account, not per-company.** A franchise can have some accounts on DEP and some not (e.g., Mobility City: 1/38 on DEP).
 
@@ -82,6 +84,8 @@ WHERE IsConversionException = FALSE
   AND Partner != 'Method Integration'
 ```
 
+For churn calculations, also add `IsChurnException = FALSE` (separate flag from `IsConversionException` — not currently applied everywhere; audit before using on churn metrics).
+
 For paying customers only, also add:
 ```sql
   AND FirstSaaSInvoiceTxnDate IS NOT NULL
@@ -98,3 +102,29 @@ Accounts with names like `packagingoptionsusaRestore20190718` are database backu
 - `Account` = one row per account. Use for entity-level attributes (signup date, cancellation, attribution). `LicenseCount` here is static/current only.
 
 To get **historical** user counts, use `UserPaidCount` from `TransLineFlattened` grouped by month — NOT `LicenseCount` from `Account`.
+
+## Additional Trans-Level Fields
+
+These columns live on the parent invoice/credit memo (repeated across line items in `TransLineFlattened`). Aggregate with `MAX` per transaction when you don't want them multiplied by line count.
+
+| Field | Type | Values | Use |
+|-------|------|--------|-----|
+| `BOMCustomerGrouping` | STRING | None / Trailer / Customer / Lost | Status at **Beginning** of the month this invoice was generated. Pre-computed retention state. |
+| `EOMCustomerGrouping` | STRING | None / Trailer / Customer / Lost | Status at **End** of the month. Combined with BOM, this encodes the month's transition (e.g. `Customer → Lost` = churn). Could replace some of our EntityRecordID-join retention logic — audit before using. |
+| `IsNewPayerThisMonth` | BOOLEAN | — | Pre-computed "became paying account this month" flag, derived from BOM/EOM. Compare against our `FirstSaaSInvoiceTxnDate` derivation; if they match, this is a cheaper primitive. |
+| `SaaSPayType` (on Trans) | STRING | Monthly / Prepay / Unknown | Pay type **at time of invoice** (not current). Differs from `Account.AccountSaaSPayType`, which is current only. |
+| `InvoiceGrouping` | STRING | SaaS / PS | Direct flag to separate SaaS revenue from Professional Services. Avoids whitelisting `AccountFullName`. |
+| `PlatformToggle` | STRING | Classic / New / Unknown | Derived from line items. Enables Classic-vs-New segmentation at transaction level. |
+| `AgeAtBOM` | INTEGER | months | Account age at the beginning of the month. Unlocks cohort analysis by tenure without computing it yourself. |
+| `PackPaidCount` | INTEGER | — | Packs on this invoice. Repeated across line items — use `MAX` per transaction, not `SUM`. |
+| `UserPaidCount` | INTEGER | — | Paid users on this invoice. Repeated across line items — use `MAX` per transaction, not `SUM`. |
+| `SalesRep` | STRING | — | Sales rep on the invoice/credit memo. |
+
+### Line-level (Trans.Line.*)
+
+| Field | Use |
+|-------|-----|
+| `Line.SaaSExpense` | Bad-debt write-offs / retention credit memos. Negative impact on net SaaS. Needed if we want "net revenue after write-offs" metrics. |
+| `Line.PSExpense` | Same, for PS. |
+| `Line.LiabilityPortion` | Prepay liability accounting (cash into liability, drawn down as invoices apply). Only relevant if we ever report cash-basis vs accrual. |
+| `Line.SaaSDiscountType` | `Prepay` or `Other`. Lets us separate prepay discounts from other discounts without string-matching item names. |
