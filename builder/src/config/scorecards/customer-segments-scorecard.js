@@ -6,7 +6,7 @@
 export default {
   id: 'customer-segments',
   title: 'Customers',
-  description: 'Customer counts by product segment. A "customer" is a billing entity — companies with multiple accounts (e.g. franchises) are grouped as one. User count is the sum of paid users across all accounts.',
+  description: 'Customers grouped by billing entity. Franchises with multiple accounts count as one customer.',
   status: 'approved',
   hideGrain: true,
   views: {
@@ -16,7 +16,7 @@ export default {
     // ── Overview ────────────────────────────────────────────────
     {
       title: 'Overview',
-      description: 'Total customer count across all segments. Each customer appears in exactly one segment.',
+      description: 'Each customer falls into exactly one segment. DEP customers are always Team AI Plus regardless of user count.',
       kpis: [
         { metricId: 373, label: 'Total Customers', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true },
