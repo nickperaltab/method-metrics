@@ -15,7 +15,7 @@ const ADMIN_ITEMS = [
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
-  const { currentUser, switchUser } = useUser();
+  const { currentUser } = useUser();
   const [myDashboards, setMyDashboards] = useState([]);
   const [approvedDashboards, setApprovedDashboards] = useState([]);
   const [stars, setStars] = useState([]);

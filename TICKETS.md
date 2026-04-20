@@ -4,35 +4,6 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ---
 
-### Clean Up Customer Segments — Remove Hardcoded Segments from BQ
-**Status:** Open
-`v_customer_segments` has a `Segment` CASE column and we created 4 separate metrics (374-377) with hardcoded filters. This is the "sprawling segments" anti-pattern. Should be: one base view with raw fields (entity, user count, has_dep), one metric with dimensions, and segmentation via query-level filters — same as how Trials breaks down by channel without a separate view per channel. Also need to support range filters (e.g. `TotalUsers BETWEEN 2 AND 3`) in `buildSemanticSql` or add a `UserTier` bucketed dimension.
-**Files:** BQ view `v_customer_segments`, Supabase metrics 373-377, `builder/src/config/scorecards/customer-segments-scorecard.js`, `builder/src/lib/bigquery.js` (buildSemanticSql)
-
----
-
-### Home Page Visual Redesign
-**Status:** Open
-The current Home page rows look utilitarian — individual bordered cards, always-visible action buttons, loud orange "REVIEW REQUESTED" badge. Needs a polish pass before wider sharing.
-**Direction:** Refined editorial list — hairline dividers instead of individual card borders, action buttons (delete, request review) hidden until row hover, Review Requested badge toned down to muted text, better section spacing and typography.
-**Files:** `builder/src/pages/Home.jsx`
-
----
-
-### Channel Forecast & Trajectory Metrics Are Empty Shells
-**Status:** Open — needs Justin
-Metrics 305 (Trials Forecast by Channel), 307 (Trials Channel Trajectory), 306 (Syncs Forecast by Channel), 308 (Syncs Channel Trajectory) exist in Supabase but have no `chart_sql`, no `formula`, and no `view_name`. They're placeholders.
-These would show budget/forecast/trajectory broken down by attribution channel — useful for the PLAN scorecards once built.
-**Owner:** Justin to define SQL or confirm if these should be derived from channel views.
-
----
-
-### Conversions Budget Not Yet Built
-**Status:** Open
-Metric 279 (Conversions Budget, queued) is a shell. No budget number for conversions exists yet. Once Justin defines it in `method_forecast`, the Conversions PLAN scorecard can be completed.
-
----
-
 ## Bugs
 
 ### "All" Range Only Shows ~13 Months
@@ -82,6 +53,21 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 ---
 
 ## Improvements
+
+### Clean Up Customer Segments — Remove Hardcoded Segments from BQ
+**Status:** Open
+`v_customer_segments` has a `Segment` CASE column and we created 4 separate metrics (374-377) with hardcoded filters. This is the "sprawling segments" anti-pattern. Should be: one base view with raw fields (entity, user count, has_dep), one metric with dimensions, and segmentation via query-level filters — same as how Trials breaks down by channel without a separate view per channel. Also need to support range filters (e.g. `TotalUsers BETWEEN 2 AND 3`) in `buildSemanticSql` or add a `UserTier` bucketed dimension.
+**Files:** BQ view `v_customer_segments`, Supabase metrics 373-377, `builder/src/config/scorecards/customer-segments-scorecard.js`, `builder/src/lib/bigquery.js` (buildSemanticSql)
+
+---
+
+### Home Page Visual Redesign
+**Status:** Open
+The current Home page rows look utilitarian — individual bordered cards, always-visible action buttons, loud orange "REVIEW REQUESTED" badge. Needs a polish pass before wider sharing.
+**Direction:** Refined editorial list — hairline dividers instead of individual card borders, action buttons (delete, request review) hidden until row hover, Review Requested badge toned down to muted text, better section spacing and typography.
+**Files:** `builder/src/pages/Home.jsx`
+
+---
 
 ### Identity via Google OAuth (remove manual user picker)
 **Status:** Open
@@ -147,3 +133,53 @@ The Sales Scorecard (`builder/src/config/scorecards/sales-scorecard.js`) has ~10
 **Benefits:** Retire ~9 of 10 custom SQL strings, fix the silently-broken metric 337, make these metrics reusable by the chat builder and other scorecards, consolidate metric definitions to one place (Supabase).
 
 **Files:** `builder/src/config/scorecards/sales-scorecard.js` (delete constants + switch to `timeBucket: 'week'`), Supabase `metrics` table (populate semantic fields on ~14 metrics).
+
+---
+
+### Channel Forecast & Trajectory Metrics Are Empty Shells
+**Status:** Open
+Metrics 305 (Trials Forecast by Channel), 307 (Trials Channel Trajectory), 306 (Syncs Forecast by Channel), 308 (Syncs Channel Trajectory) exist in Supabase but have no `chart_sql`, no `formula`, and no `view_name`. They're placeholders.
+These would show budget/forecast/trajectory broken down by attribution channel — useful for the PLAN scorecards once built.
+**Approach:** Derive from existing channel views (Trials/Syncs by Attribution Channel) joined to `method_forecast` allocations. Same pattern as the non-channel forecast/trajectory metrics already in the registry.
+
+---
+
+### Conversions Budget Not Yet Built
+**Status:** Open
+Metric 279 (Conversions Budget, queued) is a shell. No budget number for conversions exists yet. The Conversions PLAN scorecard can't be completed until it's populated.
+**Approach:** Add a conversions column to `method_forecast` and wire metric 279 to it, same shape as the existing forecast metrics (285, 286, etc.).
+
+---
+
+## New Metric Candidates
+
+Metrics we've identified as worth building but haven't scoped yet. Move to Improvements once a concrete implementation plan exists.
+
+### NRR (Net Revenue Retention)
+**Source:** FAQ in the Looker Studio — Revenue doc references NRR as an existing SaaSAnalytics calculation.
+**Approach hint:** Uses `Customer!PerPayExpiryPeriod1/2` fields from the NRR spreadsheet that don't exist in BQ directly — derive via calculated field: if `AccountFullName` contains "Prepay Expiry" include that line's `SaaSAmount`, else 0. Then apply the standard period-over-period comparison at `CompanyAccount` level using the `EntityRecordID` join pattern in `knowledge/routes/revenue-retention.md`.
+**Reference:** Looker Studio — Revenue doc, FAQ "How about NRR calculations?"
+
+---
+
+### Retention State Transitions (BOM → EOM matrix)
+**Idea:** Use `BOMCustomerGrouping` and `EOMCustomerGrouping` on `TransLineFlattened` directly to produce a transition matrix: `Customer → Lost` (churn), `Trailer → Customer` (conversion), `Customer → Customer` (retained), etc. Source data already encodes these; may be simpler than the current EntityRecordID-join retention logic, or at least a useful cross-check.
+**First step:** Spike — compare BOM/EOM-derived cancellation count vs current `v_cancellations` output for 3 months. If they match, this becomes the primitive; if not, understand why and document.
+
+---
+
+### Cohort Analysis by Account Age
+**Idea:** Use `AgeAtBOM` on `TransLineFlattened` to slice churn / expansion / retention by tenure bucket (0–6mo, 6–12mo, 1–2yr, 2yr+). Unlocks "do we lose customers in their first year or later?" without computing tenure ourselves.
+**Overlap:** Related to the `AgeBucket` work proposed in the Cancellations Bucketed Breakdowns ticket — could be unified.
+
+---
+
+### Platform Split (Classic vs New)
+**Idea:** Use `PlatformToggle` on `TransLineFlattened` to segment revenue, customers, churn by platform. Supports the ongoing Classic → New migration narrative.
+**Primitive candidate:** Add `PlatformToggle` as a `semantic_dimensions` entry on existing revenue/customer metrics rather than creating separate metrics per platform.
+
+---
+
+### SaaS Write-offs / Bad Debt Tracking
+**Idea:** `Line.SaaSExpense` captures bad-debt and retention credit-memo write-offs. Currently not surfaced anywhere. Useful for finance visibility and for computing "net revenue after write-offs."
+**First step:** Spike on monthly magnitude — if it's tiny and stable, low priority; if it's material, add as a first-class metric.

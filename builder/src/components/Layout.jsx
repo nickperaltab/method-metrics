@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
-import UserPicker from './UserPicker';
 
 export default function Layout({ children, bqConnected, userEmail, onConnect }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#ffffff', color: '#374151', fontFamily: "'DM Sans', sans-serif" }}>
-      <UserPicker />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Compact top bar — just BQ status */}

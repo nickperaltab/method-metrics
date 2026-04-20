@@ -28,6 +28,29 @@ export async function fetchUsers() {
   return res.json();
 }
 
+export async function fetchUserByEmail(email) {
+  if (!email) return null;
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=*&limit=1`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to lookup user (${res.status})`);
+  const rows = await res.json();
+  return rows[0] || null;
+}
+
+export async function upsertUserByEmail(email, name) {
+  if (!email) return null;
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/users?on_conflict=email`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation,resolution=merge-duplicates' },
+    body: JSON.stringify({ email, name: name || email.split('@')[0], role: 'viewer' }),
+  });
+  if (!res.ok) throw new Error(`Upsert user failed: ${res.status}`);
+  const rows = await res.json();
+  return rows[0] || null;
+}
+
 export async function fetchMetrics() {
   const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/metrics?select=*&order=id`, { headers });
   if (!res.ok) throw new Error(`Failed to load metrics (${res.status})`);

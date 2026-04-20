@@ -15,7 +15,10 @@ Populated nightly by the SaaS Analytics Engine API (`/api/revtobigquery`). Sourc
 | `SaaSAmount` | FLOAT | The aggregate revenue field. Includes all SaaS components (MethodNew, Classic, DEP, discounts, portals, emails). Use `SUM(SaaSAmount)` for total revenue. |
 | `AccountFullName` | STRING | Transaction type identifier. Values like `Subscriptions:MethodNew`, `Subscriptions:Classic`, `Subscriptions:Prepay Expiry Income`, etc. Useful for debugging and whitelist filtering, NOT for filtering revenue totals. |
 | `TxnDate` | DATE | Transaction date. Data starts 2021-12-01. |
-| `SaaSPayType` | STRING | `Monthly` or `Prepay`. |
+| `SaaSPayType` | STRING | `Monthly` or `Prepay`. At-transaction value (not current). |
+| `BOMCustomerGrouping` | STRING | Status at **Beginning** of month: `None` / `Trailer` / `Customer` / `Lost`. Pre-computed retention state. |
+| `EOMCustomerGrouping` | STRING | Status at **End** of month: same values. Combined with BOM, encodes the month's transition (e.g. `Customer → Lost` = churn). |
+| `RecordID` + `TxnType` | INT64 + STRING | Uniqueness key. `RecordID` alone is **not unique** across invoices and credit memos — the same ID can exist in both. |
 
 ## Critical Rules
 
@@ -67,3 +70,11 @@ company_level AS (
 | Downgrades | $20,448 | $20,448 | EXACT |
 | Expansions | $18,579 | $18,579 | EXACT |
 | New ARR | $28,728 | $28,728 | EXACT |
+
+## Known Data Integrity Issues
+
+1. **Hard-deleted invoices/credit memos remain in BigQuery.** If an invoice is deleted in Alocet **before** it syncs to QuickBooks, Alocet performs a hard delete — no soft-delete flag, no trace. If BigQuery already synced the invoice, it stays there forever; the nightly sync only picks up soft-deletes. Fix requires manual `DELETE FROM revenue.Trans WHERE RecordID=X AND TxnType='Invoice'` via BQ console when discovered. Known gap; not auto-detected.
+
+2. **Small QuickBooks-SyncType revenue leak.** Some revenue exists for accounts with `SyncType = 'QuickBooks'` (ambiguous — neither QBO nor QBDT). Amounts are small (~$140 in Aug 2024, $93 in Oct). Spreadsheet formulas ignore these; BQ includes them. Won't be fixed in the source.
+
+3. **Historical vs current fields.** Several fields on `Account` are current-only (e.g. `LicenseCount`, `IsActive`). For historical analysis use transaction-level equivalents from `TransLineFlattened` — see `bq-field-reference.md`.

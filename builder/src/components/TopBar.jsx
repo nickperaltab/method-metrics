@@ -24,7 +24,7 @@ function routerNavStyle({ isActive }) {
 }
 
 export default function TopBar({ connected, userEmail, onConnect }) {
-  const { currentUser, switchUser } = useUser();
+  const { currentUser } = useUser();
 
   return (
     <div style={styles.bar}>
@@ -38,7 +38,6 @@ export default function TopBar({ connected, userEmail, onConnect }) {
         {currentUser && (
           <span style={styles.userInfo}>
             <span style={styles.userName}>{currentUser.name}</span>
-            <button onClick={switchUser} style={styles.switchBtn}>switch</button>
           </span>
         )}
         {connected
