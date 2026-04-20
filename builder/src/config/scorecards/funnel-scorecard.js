@@ -52,6 +52,7 @@ export default {
     // ── Trial-to-Conversion Rate ──────────────────────────────────────
     {
       title: 'Trial-to-Conversion Rate',
+      description: 'Share of trials that become paying customers. Formula: Conversions ÷ Trials.',
       kpis: [
         { metricId: 302, label: 'Trial-to-Conversion Rate', format: 'percent',
           valueSelector: 'current_or_latest', showDelta: true },
@@ -67,6 +68,7 @@ export default {
     // ── Sync-to-Conversion Rate ──────────────────────────────────
     {
       title: 'Sync-to-Conversion Rate',
+      description: 'Share of synced trials that become paying customers. Formula: Conversions ÷ Syncs.',
       kpis: [
         { metricId: 301, label: 'Sync-to-Conversion Rate', format: 'percent',
           valueSelector: 'current_or_latest', showDelta: true },
