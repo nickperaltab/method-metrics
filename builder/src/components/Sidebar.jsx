@@ -11,7 +11,6 @@ const NAV_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
-  { path: '/admin/registry', label: 'Metric Registry', icon: '\u2261' },
   { path: '/admin/insights', label: 'AI Insights', icon: '\u25C8' },
 ];
 
@@ -167,6 +166,17 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
+          {/* Metric Registry — top-level admin link */}
+          {isAdmin(currentUser) && (
+            <>
+              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+              <NavLink to="/admin/registry" style={linkStyle}>
+                <span style={{ fontSize: 16 }}>{'\u2261'}</span>
+                Metric Registry
+              </NavLink>
+            </>
+          )}
+
           {/* Admin — collapsible, with Funnel/Plan sub-headings */}
           {isAdmin(currentUser) && (() => {
             const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
@@ -175,10 +185,9 @@ export default function Sidebar({ collapsed, onToggle }) {
             const customer = Object.values(SCORECARDS).filter(sc => sc.group === 'customer');
             return (
               <>
-                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
                 <div
                   onClick={() => setAdminOpen(o => !o)}
-                  style={{ ...sectionLabel, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16, userSelect: 'none' }}
+                  style={{ ...sectionLabel, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16, userSelect: 'none', marginTop: 8 }}
                 >
                   Admin
                   <span style={{ fontSize: 10, transition: 'transform .15s', display: 'inline-block', transform: adminOpen ? 'rotate(90deg)' : 'none' }}>›</span>
