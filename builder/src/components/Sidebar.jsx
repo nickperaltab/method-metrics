@@ -150,9 +150,10 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
-          {/* Method Approved scorecards */}
-          {(() => {
-            const approved = Object.values(SCORECARDS).filter(sc => !sc.group);
+          {/* Method Approved scorecards (starred only) */}
+          {scStars.length > 0 && (() => {
+            const approved = Object.values(SCORECARDS).filter(sc => !sc.group && scStars.includes(sc.id));
+            if (approved.length === 0) return null;
             return (
               <>
                 <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
