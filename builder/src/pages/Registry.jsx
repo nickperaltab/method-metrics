@@ -1,7 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchMetrics, SUPABASE_URL, headers } from '../lib/supabase';
+import { useUser } from '../contexts/UserContext';
+import { isAdmin } from '../lib/permissions';
 import Dialog from '../components/Dialog';
 import DependencyView from '../components/DependencyView';
+
+function formatMetricForCopy(m) {
+  const lines = [];
+  lines.push(`# ${m.name} (id: ${m.id})`);
+  if (m.status) lines.push(`Status: ${m.status}${m.verified_at ? ' (verified)' : ''}`);
+  if (m.metric_type) lines.push(`Type: ${m.metric_type}`);
+  if (m.description) lines.push(`\n${m.description}`);
+  if (m.formula) lines.push(`\nFormula: ${m.formula}`);
+  if (m.depends_on?.length) lines.push(`Depends on: [${m.depends_on.join(', ')}]`);
+  if (m.semantic_table) {
+    lines.push(`\nSource: ${m.semantic_table}`);
+    if (m.semantic_measure) lines.push(`Measure: ${m.semantic_measure}`);
+    if (m.semantic_date_col) lines.push(`Date column: ${m.semantic_date_col}`);
+    if (m.semantic_filters?.length) lines.push(`Filters: ${m.semantic_filters.join(' AND ')}`);
+    if (m.semantic_dimensions?.length) lines.push(`Dimensions: [${m.semantic_dimensions.join(', ')}]`);
+  }
+  if (m.view_name && m.view_name !== m.semantic_table) lines.push(`View: ${m.view_name}`);
+  if (m.chart_sql) lines.push(`\nSQL:\n${m.chart_sql}`);
+  return lines.join('\n');
+}
 
 async function updateMetric(id, updates) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${Number(id)}`, {
@@ -23,7 +45,10 @@ async function deleteMetrics(ids) {
 }
 
 export default function Registry() {
+  const { currentUser } = useUser();
+  const admin = isAdmin(currentUser);
   const [metrics, setMetrics] = useState([]);
+  const [copiedId, setCopiedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('live');
   const [search, setSearch] = useState('');
@@ -168,17 +193,18 @@ export default function Registry() {
         <table style={s.table}>
           <thead>
             <tr>
-              <th style={s.th}><input type="checkbox" onChange={e => {
+              {admin && <th style={s.th}><input type="checkbox" onChange={e => {
                 if (e.target.checked) setSelected(new Set(sorted.map(m => m.id)));
                 else setSelected(new Set());
-              }} /></th>
+              }} /></th>}
+              <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
               <th style={s.th} onClick={() => toggleSort('id')}>ID {sortCol === 'id' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th} onClick={() => toggleSort('name')}>Name {sortCol === 'name' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th}>Type</th>
               {tab === 'live' && <th style={{ ...s.th, textAlign: 'center' }}>Approved</th>}
               <th style={s.th}>Description</th>
-              {tab === 'queued' && <th style={s.th}>Priority</th>}
-              {tab === 'queued' && <th style={s.th}>Assigned</th>}
+              {admin && tab === 'queued' && <th style={s.th}>Priority</th>}
+              {admin && tab === 'queued' && <th style={s.th}>Assigned</th>}
             </tr>
           </thead>
           <tbody>
@@ -187,7 +213,7 @@ export default function Registry() {
               { items: derived, label: 'Derived', color: '#2563eb' },
             ].map(group => group.items.length > 0 && (
               <React.Fragment key={group.label}>
-                <tr><td colSpan={tab === 'queued' ? 7 : 6} style={s.groupRow}>
+                <tr><td colSpan={(admin ? 2 : 1) + 4 + (tab === 'live' ? 1 : 0) + (admin && tab === 'queued' ? 2 : 0)} style={s.groupRow}>
                   <span style={{ color: group.color }}>{group.label}</span>
                   <span style={s.groupCount}>{group.items.length}</span>
                 </td></tr>
@@ -197,8 +223,29 @@ export default function Registry() {
                       style={{ ...s.row, background: expandedId === m.id ? '#f1f3f5' : 'transparent' }}
                       onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
                     >
-                      <td style={s.td} onClick={e => e.stopPropagation()}>
+                      {admin && <td style={s.td} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleSelect(m.id)} />
+                      </td>}
+                      <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(formatMetricForCopy(m));
+                              setCopiedId(m.id);
+                              setTimeout(() => setCopiedId(null), 1500);
+                            } catch (err) {
+                              console.error('Copy failed:', err);
+                            }
+                          }}
+                          title="Copy metric definition"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '2px 6px', fontSize: 13,
+                            color: copiedId === m.id ? '#059669' : '#9ca3af',
+                          }}
+                        >
+                          {copiedId === m.id ? '✓' : '⎘'}
+                        </button>
                       </td>
                       <td style={{ ...s.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6b7280' }}>{m.id}</td>
                       <td style={{ ...s.td, fontWeight: 600, color: '#1a1a1a' }}>{m.name}</td>
@@ -215,16 +262,20 @@ export default function Registry() {
                           }
                         </td>
                       )}
-                      <td style={s.td} onClick={e => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          value={m.description || ''}
-                          onChange={e => setMetrics(prev => prev.map(x => x.id === m.id ? { ...x, description: e.target.value } : x))}
-                          onBlur={e => handleSaveField(m.id, 'description', e.target.value)}
-                          style={s.inlineInput}
-                        />
+                      <td style={s.td} onClick={admin ? (e => e.stopPropagation()) : undefined}>
+                        {admin ? (
+                          <input
+                            type="text"
+                            value={m.description || ''}
+                            onChange={e => setMetrics(prev => prev.map(x => x.id === m.id ? { ...x, description: e.target.value } : x))}
+                            onBlur={e => handleSaveField(m.id, 'description', e.target.value)}
+                            style={s.inlineInput}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 13, color: '#374151' }}>{m.description || '—'}</span>
+                        )}
                       </td>
-                      {tab === 'queued' && (
+                      {admin && tab === 'queued' && (
                         <td style={s.td} onClick={e => e.stopPropagation()}>
                           <select
                             value={m.priority || 'medium'}
@@ -237,7 +288,7 @@ export default function Registry() {
                           </select>
                         </td>
                       )}
-                      {tab === 'queued' && (
+                      {admin && tab === 'queued' && (
                         <td style={s.td} onClick={e => e.stopPropagation()}>
                           <select
                             value={m.assigned_to || ''}

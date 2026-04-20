@@ -6,25 +6,106 @@ import { fetchMyDashboards, fetchAllDashboards, fetchApprovedDashboardsList, fet
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
 
+const HAIRLINE = '#eceef1';
+
 const s = {
-  layout: { padding: '32px 24px', maxWidth: 1000, margin: '0 auto' },
-  pageTitle: { fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 24 },
-  sectionTitle: { fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 },
-  list: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 32 },
-  row: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#fff', border: '1px solid #e2e5e9', borderRadius: 8, cursor: 'pointer' },
-  rowName: { flex: 1, fontSize: 13, fontWeight: 500, color: '#1a1a1a' },
-  rowMeta: { fontSize: 11, color: '#9ca3af' },
-  badge: { fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: 10, padding: '2px 8px' },
-  starBtn: { background: 'none', border: 'none', fontSize: 15, cursor: 'pointer', padding: '2px 4px', lineHeight: 1 },
-  actionBtn: { background: '#fff', border: '1px solid #e2e5e9', color: '#6b7280', cursor: 'pointer', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", padding: '3px 8px', borderRadius: 4 },
-  search: { width: '100%', padding: '8px 12px', border: '1px solid #e2e5e9', borderRadius: 6, fontSize: 13, background: '#fff', color: '#374151', marginBottom: 20, outline: 'none', boxSizing: 'border-box' },
-  empty: { fontSize: 13, color: '#9ca3af', padding: '8px 0', fontFamily: "'JetBrains Mono', monospace" },
+  layout: { padding: '40px 24px 80px', maxWidth: 960, margin: '0 auto' },
+  pageTitle: { fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 36, letterSpacing: '-0.01em' },
+
+  section: { marginBottom: 44 },
+  sectionHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 },
+  sectionTitle: { fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#8a9099', fontFamily: "'JetBrains Mono', monospace" },
+  sectionCount: { fontSize: 10, color: '#b4b9c0', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.08em' },
+
+  list: { borderTop: `1px solid ${HAIRLINE}` },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 4px',
+    borderBottom: `1px solid ${HAIRLINE}`,
+    cursor: 'pointer',
+    transition: 'background-color 120ms ease',
+    position: 'relative',
+  },
+  rowName: { flex: 1, fontSize: 14, fontWeight: 500, color: '#1a1a1a', letterSpacing: '-0.005em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  rowMeta: { fontSize: 11, color: '#9ca3af', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.02em' },
+
+  starBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: 14,
+    cursor: 'pointer',
+    padding: '2px 2px',
+    lineHeight: 1,
+    width: 22,
+    textAlign: 'center',
+    transition: 'color 120ms ease',
+  },
+
+  // Muted "Review Requested" — quiet amber text, no background
+  reviewTag: {
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '.08em',
+    textTransform: 'uppercase',
+    color: '#b45309',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+
+  actionsWrap: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'center',
+    transition: 'opacity 120ms ease',
+  },
+  actionBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#6b7280',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: "'JetBrains Mono', monospace",
+    letterSpacing: '.02em',
+    padding: '3px 6px',
+    borderRadius: 3,
+  },
+  actionBtnDanger: { color: '#b42318' },
+  actionBtnReview: { color: '#b45309' },
+
+  search: {
+    width: '100%',
+    padding: '10px 0',
+    border: 'none',
+    borderBottom: `1px solid ${HAIRLINE}`,
+    fontSize: 13,
+    background: 'transparent',
+    color: '#1a1a1a',
+    marginBottom: 4,
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
+  },
+
+  empty: { fontSize: 12, color: '#9ca3af', padding: '16px 0', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.02em' },
+
+  chipRow: { display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', paddingTop: 4 },
+  chip: { fontSize: 12, color: '#6b7280', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'color 120ms ease' },
+  chipStar: { color: '#cfd4da', fontSize: 12, lineHeight: 1, transition: 'color 120ms ease' },
 };
 
 const ALL_SCORECARDS = Object.values(SCORECARDS).filter(sc => !sc.group);
 const SCORECARD_STARS_KEY = 'method_scorecard_stars';
+const SCORECARD_STARS_INIT_KEY = 'method_scorecard_stars_initialized';
 
 export function getScorecardStars() {
+  // On first access, default-star all Method Approved scorecards for new users
+  if (!localStorage.getItem(SCORECARD_STARS_INIT_KEY)) {
+    const defaultStars = ALL_SCORECARDS.map(sc => sc.id);
+    localStorage.setItem(SCORECARD_STARS_KEY, JSON.stringify(defaultStars));
+    localStorage.setItem(SCORECARD_STARS_INIT_KEY, '1');
+    return defaultStars;
+  }
   return JSON.parse(localStorage.getItem(SCORECARD_STARS_KEY) || '[]');
 }
 
@@ -38,6 +119,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null);
+  const [hoverId, setHoverId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,6 +228,9 @@ export default function Home() {
     return aS - bS;
   });
 
+  const starredScorecards = sortedScorecards.filter(sc => scStars.includes(sc.id));
+  const unstarredScorecards = sortedScorecards.filter(sc => !scStars.includes(sc.id));
+
   const filtered = dashboards
     .filter(db => !search || db.name?.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -154,109 +239,148 @@ export default function Home() {
       return aS - bS;
     });
 
+  const rowHover = (id) => ({
+    backgroundColor: hoverId === id ? '#f7f8f9' : 'transparent',
+  });
+
   return (
     <div style={s.layout}>
       {dialog && <Dialog {...dialog} />}
 
       <div style={s.pageTitle}>Home</div>
 
-      {/* Method Approved scorecards */}
-      <div style={s.sectionTitle}>Method Approved</div>
-      <div style={{ ...s.list, marginBottom: scStars.length > 0 ? 8 : 32 }}>
-        {sortedScorecards.filter(sc => scStars.includes(sc.id)).map(sc => (
-          <div
-            key={sc.id}
-            style={s.row}
-            onClick={() => navigate(`/scorecards/${sc.id}`)}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
-          >
-            <button
-              style={{ ...s.starBtn, color: '#f59e0b' }}
-              onClick={e => toggleScStar(e, sc.id)}
-              aria-label="Unstar"
-            >★</button>
-            <span style={s.rowName}>{sc.title}</span>
-            <span style={s.rowMeta}>Scorecard</span>
+      {/* Method Approved */}
+      <div style={s.section}>
+        <div style={s.sectionHead}>
+          <span style={s.sectionTitle}>Method Approved</span>
+          <span style={s.sectionCount}>{ALL_SCORECARDS.length}</span>
+        </div>
+
+        {starredScorecards.length > 0 && (
+          <div style={s.list}>
+            {starredScorecards.map(sc => (
+              <div
+                key={sc.id}
+                style={{ ...s.row, ...rowHover(`sc:${sc.id}`) }}
+                onClick={() => navigate(`/scorecards/${sc.id}`)}
+                onMouseEnter={() => setHoverId(`sc:${sc.id}`)}
+                onMouseLeave={() => setHoverId(null)}
+              >
+                <button
+                  style={{ ...s.starBtn, color: '#f59e0b' }}
+                  onClick={e => toggleScStar(e, sc.id)}
+                  aria-label="Unstar"
+                >★</button>
+                <span style={s.rowName}>{sc.title}</span>
+                <span style={s.rowMeta}>scorecard</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
-        {sortedScorecards.filter(sc => !scStars.includes(sc.id)).map(sc => (
-          <span
-            key={sc.id}
-            style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-            onClick={() => navigate(`/scorecards/${sc.id}`)}
-          >
-            <span
-              style={{ color: '#d1d5db', cursor: 'pointer', fontSize: 13 }}
-              onClick={e => toggleScStar(e, sc.id)}
-              title="Star to pin"
-            >☆</span>
-            {sc.title}
-          </span>
-        ))}
+        )}
+
+        {unstarredScorecards.length > 0 && (
+          <div style={{ ...s.chipRow, marginTop: starredScorecards.length > 0 ? 16 : 0 }}>
+            {unstarredScorecards.map(sc => (
+              <span
+                key={sc.id}
+                style={s.chip}
+                onClick={() => navigate(`/scorecards/${sc.id}`)}
+                onMouseEnter={e => { e.currentTarget.style.color = '#1a1a1a'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#6b7280'; }}
+              >
+                <span
+                  style={s.chipStar}
+                  onClick={e => toggleScStar(e, sc.id)}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#f59e0b'; e.stopPropagation(); }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#cfd4da'; }}
+                  title="Star to pin"
+                >☆</span>
+                {sc.title}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* AI Dashboards */}
-      <div style={s.sectionTitle}>AI Dashboards</div>
-      <input
-        style={s.search}
-        placeholder="Search dashboards…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
-      {loading ? (
-        <div style={s.empty}>Loading...</div>
-      ) : filtered.length === 0 ? (
-        <div style={s.empty}>No dashboards found.</div>
-      ) : (
-        <div style={s.list}>
-          {filtered.map(db => {
-            const isStarred = dbStars.includes(db.id);
-            const isMine = canDelete(currentUser, db);
-            return (
-              <div
-                key={db.id}
-                style={s.row}
-                onClick={() => navigate(`/dashboards/${db.id}`)}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#059669'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e5e9'; }}
-              >
-                <button
-                  style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
-                  onClick={e => toggleDbStar(e, db)}
-                  aria-label={isStarred ? 'Unstar' : 'Star'}
-                >
-                  {isStarred ? '★' : '☆'}
-                </button>
-                <span
-                  style={s.rowName}
-                  onClick={isMine ? e => handleRename(e, db) : undefined}
-                  title={isMine ? 'Click to rename' : ''}
-                >
-                  {db.name}
-                </span>
-                {db.is_approved && <span style={s.badge}>Review Requested</span>}
-                <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
-                {isMine && (
-                  <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>
-                    delete
-                  </button>
-                )}
-                {isMine && admin && (
-                  <button
-                    style={{ ...s.actionBtn, color: db.is_approved ? '#6b7280' : '#c2410c', borderColor: db.is_approved ? '#e2e5e9' : '#fed7aa' }}
-                    onClick={e => handleToggleApproval(e, db)}
-                  >
-                    {db.is_approved ? 'unrequest' : 'request review'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      <div style={s.section}>
+        <div style={s.sectionHead}>
+          <span style={s.sectionTitle}>AI Dashboards</span>
+          <span style={s.sectionCount}>{loading ? '—' : filtered.length}</span>
         </div>
-      )}
+
+        <input
+          style={s.search}
+          placeholder="Search dashboards"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+
+        {loading ? (
+          <div style={s.empty}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div style={s.empty}>No dashboards found.</div>
+        ) : (
+          <div style={s.list}>
+            {filtered.map(db => {
+              const isStarred = dbStars.includes(db.id);
+              const isMine = canDelete(currentUser, db);
+              const isHover = hoverId === `db:${db.id}`;
+              const showActions = isHover && (isMine || (isMine && admin));
+              return (
+                <div
+                  key={db.id}
+                  style={{ ...s.row, ...rowHover(`db:${db.id}`) }}
+                  onClick={() => navigate(`/dashboards/${db.id}`)}
+                  onMouseEnter={() => setHoverId(`db:${db.id}`)}
+                  onMouseLeave={() => setHoverId(null)}
+                >
+                  <button
+                    style={{ ...s.starBtn, color: isStarred ? '#f59e0b' : (isHover ? '#9ca3af' : '#d1d5db') }}
+                    onClick={e => toggleDbStar(e, db)}
+                    aria-label={isStarred ? 'Unstar' : 'Star'}
+                  >
+                    {isStarred ? '★' : '☆'}
+                  </button>
+
+                  <span
+                    style={s.rowName}
+                    onClick={isMine ? e => handleRename(e, db) : undefined}
+                    title={isMine ? 'Click to rename' : ''}
+                  >
+                    {db.name}
+                  </span>
+
+                  {db.is_approved && <span style={s.reviewTag}>Review Requested</span>}
+
+                  <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
+
+                  {(isMine || (isMine && admin)) && (
+                    <div style={{ ...s.actionsWrap, opacity: isHover ? 1 : 0, pointerEvents: isHover ? 'auto' : 'none' }}>
+                      {isMine && admin && (
+                        <button
+                          style={{ ...s.actionBtn, ...(db.is_approved ? {} : s.actionBtnReview) }}
+                          onClick={e => handleToggleApproval(e, db)}
+                        >
+                          {db.is_approved ? 'unrequest' : 'request review'}
+                        </button>
+                      )}
+                      {isMine && (
+                        <button
+                          style={{ ...s.actionBtn, ...s.actionBtnDanger }}
+                          onClick={e => handleDelete(e, db)}
+                        >
+                          delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

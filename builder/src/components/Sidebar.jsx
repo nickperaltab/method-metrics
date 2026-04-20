@@ -166,16 +166,12 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
-          {/* Metric Registry — top-level admin link */}
-          {isAdmin(currentUser) && (
-            <>
-              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-              <NavLink to="/admin/registry" style={linkStyle}>
-                <span style={{ fontSize: 16 }}>{'\u2261'}</span>
-                Metric Registry
-              </NavLink>
-            </>
-          )}
+          {/* Metric Registry — visible to all, read-only for non-admins */}
+          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+          <NavLink to="/admin/registry" style={linkStyle}>
+            <span style={{ fontSize: 16 }}>{'\u2261'}</span>
+            Metric Registry
+          </NavLink>
 
           {/* Admin — collapsible, with Funnel/Plan sub-headings */}
           {isAdmin(currentUser) && (() => {
