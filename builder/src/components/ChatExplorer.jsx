@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import posthog from '../lib/posthog';
 import ChatInterface from './ChatInterface';
 import SaveChartModal from './SaveChartModal';
 import { useBqData } from '../hooks/useBqData';
@@ -211,6 +212,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     if (!lastSpec) return;
     setCurrentTimeRange(months);
     setLoading(true);
+    posthog.capture('time_range_changed', { months, echarts_type: lastSpec.echartsType, metric_ids: lastSpec.metricIds });
     try {
       const built = await buildChartFromSpec(lastSpec, months);
       if (built) {
@@ -240,6 +242,12 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
     setShowSaveModal(false);
     try {
       await updateChart(editingChartInfo.id, { gwSpec: { ...lastSpec }, updatedBy: userEmail || 'anonymous' });
+      posthog.capture('chart_updated', {
+        chart_id: editingChartInfo.id,
+        chart_name: editingChartInfo.name,
+        echarts_type: lastSpec.echartsType,
+        metric_ids: lastSpec.metricIds,
+      });
       if (modalMode && onChartSaved) {
         onChartSaved(editingChartInfo.id);
       } else {
@@ -261,12 +269,23 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
         gwSpec: { ...lastSpec },
       });
 
+      if (saved && saved.length > 0) {
+        posthog.capture('chart_saved', {
+          chart_id: String(saved[0].id),
+          chart_name: name,
+          echarts_type: lastSpec.echartsType,
+          metric_ids: lastSpec.metricIds,
+          added_to_dashboard: !!(dashboardId || addToDashboardId || newDashboardName),
+        });
+      }
+
       let targetDashboardId = dashboardId || addToDashboardId;
       if (newDashboardName) {
         const created = await createDashboard({ name: newDashboardName, createdBy: userEmail || 'anonymous', createdByUser: currentUser?.id });
         if (created && created.length > 0) {
           targetDashboardId = created[0].id;
           setDashboards(prev => [created[0], ...prev]);
+          posthog.capture('dashboard_created', { dashboard_id: created[0].id, dashboard_name: newDashboardName });
         }
       }
       if (targetDashboardId && saved && saved.length > 0) {
@@ -338,6 +357,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
 
       if (result.error) {
         const errText = result.suggestion ? `${result.error}. ${result.suggestion}` : result.error;
+        posthog.capture('chart_generation_failed', { error: result.error, prompt_length: prompt.length });
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: errText,
@@ -652,6 +672,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       }
 
       if (!chartData || chartData.empty) {
+        posthog.capture('chart_generation_failed', { error: 'no_data', prompt_length: prompt.length });
         setMessages(prev => [...prev, { role: 'assistant', content: 'I wasn\'t able to load data for that request. Try rephrasing or ask about a different metric.' }]);
         setLoading(false);
         return;
@@ -672,6 +693,14 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       const newSpec = { metricIds: result.metricIds, echartsType, dataConfig, showLabels: result.showLabels, colors: result.colors };
       setLastSpec(newSpec);
       setCurrentTimeRange(dataConfig.lastNMonths != null ? dataConfig.lastNMonths : null);
+      posthog.capture('chart_generated', {
+        echarts_type: echartsType,
+        metric_ids: result.metricIds,
+        metric_count: result.metricIds.length,
+        time_bucket: dataConfig.timeBucket,
+        has_group_by: !!dataConfig.groupByDimension,
+        prompt_length: prompt.length,
+      });
 
       let assistantMsg;
       if (echartsType === 'table') {
@@ -754,6 +783,7 @@ export default function ChatExplorer({ metrics, bqConnected, userEmail, userAvat
       }
       setConversationId(conv.id);
       setMessages(conv.messages || []);
+      posthog.capture('conversation_loaded', { conversation_id: conv.id });
       if (conv.current_chart_spec) {
         setLastSpec(conv.current_chart_spec);
         setCurrentTimeRange(conv.current_chart_spec.dataConfig?.lastNMonths || null);

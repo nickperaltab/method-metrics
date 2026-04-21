@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { saveFeedback } from '../lib/supabase';
+import posthog from '../lib/posthog';
 
 const styles = {
   row: {
@@ -71,6 +72,12 @@ export default function FeedbackButtons({ userEmail, source, messageIndex, chart
       await saveFeedback({ userEmail, source, messageIndex, chartId, sentiment: s, notes: n || null, chartSpec });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      posthog.capture('chart_feedback_submitted', {
+        sentiment: s,
+        has_notes: !!(n && n.trim()),
+        source,
+        chart_id: chartId,
+      });
     } catch { /* best-effort */ }
     setSaving(false);
   };

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { SCORECARDS } from '../config/scorecards';
+import posthog from '../lib/posthog';
 import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
 import Chart from '../components/scorecards/Chart';
@@ -110,6 +111,10 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
   const { dataMap, loading, freshness, refreshedAt, needsBq } = useScorecardData(config, metrics, bqConnected);
+
+  useEffect(() => {
+    if (config?.id) posthog.capture('scorecard_opened', { scorecard_id: config.id });
+  }, [config?.id]);
   const [inspected, setInspected] = useState(null);
   const [filterLastNMonths, setFilterLastNMonths] = useState('all');
   const [grain, setGrain] = useState('month');

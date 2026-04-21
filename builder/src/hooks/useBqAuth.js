@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { initBqAuth, connectBq, disconnectBq } from '../lib/bigquery';
+import posthog from '../lib/posthog';
 
 export function useBqAuth() {
   const [connected, setConnected] = useState(false);
@@ -36,6 +37,8 @@ export function useBqAuth() {
         const data = await res.json();
         setUserEmail(data.email);
         setUserAvatar(data.picture);
+        posthog.identify(data.email, { email: data.email });
+        posthog.capture('bq_connected', { email: data.email });
       }
     } catch { /* ignore */ }
   }
@@ -51,6 +54,8 @@ export function useBqAuth() {
     disconnectBq();
     setConnected(false);
     setUserEmail(null);
+    posthog.capture('bq_disconnected');
+    posthog.reset();
   }, []);
 
   return { connected, userEmail, userAvatar, connect, disconnect };
