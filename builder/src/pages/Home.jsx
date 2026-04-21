@@ -249,10 +249,10 @@ export default function Home() {
 
       <div style={s.pageTitle}>Home</div>
 
-      {/* Method Approved */}
+      {/* Scorecards */}
       <div style={s.section}>
         <div style={s.sectionHead}>
-          <span style={s.sectionTitle}>Method Approved</span>
+          <span style={s.sectionTitle}>Scorecards</span>
           <span style={s.sectionCount}>{ALL_SCORECARDS.length}</span>
         </div>
 
@@ -351,28 +351,16 @@ export default function Home() {
                     {db.name}
                   </span>
 
-                  {db.is_approved && <span style={s.reviewTag}>Review Requested</span>}
-
                   <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
 
-                  {(isMine || (isMine && admin)) && (
+                  {isMine && (
                     <div style={{ ...s.actionsWrap, opacity: isHover ? 1 : 0, pointerEvents: isHover ? 'auto' : 'none' }}>
-                      {isMine && admin && (
-                        <button
-                          style={{ ...s.actionBtn, ...(db.is_approved ? {} : s.actionBtnReview) }}
-                          onClick={e => handleToggleApproval(e, db)}
-                        >
-                          {db.is_approved ? 'unrequest' : 'request review'}
-                        </button>
-                      )}
-                      {isMine && (
-                        <button
-                          style={{ ...s.actionBtn, ...s.actionBtnDanger }}
-                          onClick={e => handleDelete(e, db)}
-                        >
-                          delete
-                        </button>
-                      )}
+                      <button
+                        style={{ ...s.actionBtn, ...s.actionBtnDanger }}
+                        onClick={e => handleDelete(e, db)}
+                      >
+                        delete
+                      </button>
                     </div>
                   )}
                 </div>
