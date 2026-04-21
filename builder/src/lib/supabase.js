@@ -1,11 +1,21 @@
 export const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
+// Shared headers. Mutated by setCurrentUserEmail() when UserContext resolves.
+// RLS policies on `metrics` read the x-method-email header to decide admin access.
 export const headers = {
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${SUPABASE_KEY}`,
   'Content-Type': 'application/json',
 };
+
+export function setCurrentUserEmail(email) {
+  if (email) {
+    headers['x-method-email'] = email;
+  } else {
+    delete headers['x-method-email'];
+  }
+}
 
 // Fetch with 15s timeout to prevent indefinite hangs
 async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {

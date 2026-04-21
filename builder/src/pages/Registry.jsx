@@ -50,7 +50,8 @@ export default function Registry() {
   const [metrics, setMetrics] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('live');
+  const [tab, _setTab] = useState('live');
+  const setTab = (t) => _setTab((t === 'queued' && !admin) ? 'live' : t);
   const [search, setSearch] = useState('');
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
@@ -166,7 +167,7 @@ export default function Registry() {
       <div style={s.controls}>
         <div style={s.tabs}>
           <button style={tab === 'live' ? s.tabActive : s.tab} onClick={() => setTab('live')}>Live</button>
-          <button style={tab === 'queued' ? s.tabActive : s.tab} onClick={() => setTab('queued')}>Queued</button>
+          {admin && <button style={tab === 'queued' ? s.tabActive : s.tab} onClick={() => setTab('queued')}>Queued</button>}
           <button style={tab === 'deps' ? s.tabActive : s.tab} onClick={() => setTab('deps')}>Dependencies</button>
         </div>
         {tab !== 'deps' && (
@@ -228,6 +229,7 @@ export default function Registry() {
                       </td>}
                       <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                         <button
+                          disabled={m.status !== 'live'}
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(formatMetricForCopy(m));
@@ -237,11 +239,13 @@ export default function Registry() {
                               console.error('Copy failed:', err);
                             }
                           }}
-                          title="Copy metric definition"
+                          title={m.status === 'live' ? 'Copy metric definition' : 'Only live metrics can be copied'}
                           style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
+                            background: 'none', border: 'none',
+                            cursor: m.status === 'live' ? 'pointer' : 'not-allowed',
                             padding: '2px 6px', fontSize: 13,
-                            color: copiedId === m.id ? '#059669' : '#9ca3af',
+                            color: copiedId === m.id ? '#059669' : (m.status === 'live' ? '#9ca3af' : '#d1d5db'),
+                            opacity: m.status === 'live' ? 1 : 0.5,
                           }}
                         >
                           {copiedId === m.id ? '✓' : '⎘'}
