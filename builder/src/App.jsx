@@ -10,6 +10,7 @@ import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
 import AdminInsights from './pages/AdminInsights';
 import Scorecard from './pages/Scorecard';
+import McpToken from './pages/McpToken';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
@@ -102,6 +103,7 @@ export default function App() {
               metricsLoading ? <Loading /> :
               <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
             } />
+            <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />
             <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
