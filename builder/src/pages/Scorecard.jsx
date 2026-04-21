@@ -5,6 +5,7 @@ import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
+import StaleIndicator from '../components/StaleIndicator';
 
 const DATE_PRESETS = [
   { label: '3M', value: 3 },
@@ -108,7 +109,7 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, gr
 export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
-  const { dataMap, loading } = useScorecardData(config, metrics, bqConnected);
+  const { dataMap, loading, freshness, refreshedAt, needsBq } = useScorecardData(config, metrics, bqConnected);
   const [inspected, setInspected] = useState(null);
   const [filterLastNMonths, setFilterLastNMonths] = useState('all');
   const [grain, setGrain] = useState('month');
@@ -127,7 +128,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     );
   }
 
-  if (!bqConnected) {
+  if (needsBq && dataMap.size === 0) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
         <h2 style={{ fontSize: 20, color: '#1a1a1a', marginBottom: 8 }}>{config.title}</h2>
@@ -189,6 +190,8 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
         />
       </div>
+
+      <StaleIndicator freshness={freshness} refreshedAt={refreshedAt} />
 
       {ungrouped.map((section, i) => (
         <ScorecardSection
