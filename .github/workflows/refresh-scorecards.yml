@@ -1,0 +1,53 @@
+name: Refresh Scorecard Snapshots
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 10:00 UTC — refine after checking BQ ETL completion time
+  workflow_dispatch:
+    inputs:
+      scorecard:
+        description: 'Scorecard ID (or ALL)'
+        required: false
+        default: 'marketing-scorecard'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: builder/package-lock.json
+      - name: Install
+        run: cd builder && npm ci
+      - name: Check BQ ETL freshness
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          cd builder
+          node -e "
+            import('./scripts/refresh-snapshots/bq-client.js').then(async ({createBqClient, makeQuery}) => {
+              const q = makeQuery(createBqClient());
+              const { rows } = await q(\`
+                SELECT table_id, TIMESTAMP_MILLIS(last_modified_time) AS lm
+                FROM \\\`project-for-method-dw.revenue.__TABLES__\\\`
+                WHERE table_id IN ('v_trials','v_syncs')
+              \`);
+              const cutoff = new Date(Date.now() - 18*3600*1000);
+              const stale = rows.filter(r => new Date(r.lm) < cutoff);
+              if (stale.length) {
+                console.error('ETL freshness check FAILED. Stale tables:', stale);
+                process.exit(1);
+              }
+              console.log('ETL freshness OK. Latest updates:', rows);
+            });
+          "
+      - name: Refresh
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY_SCORECARD: ${{ github.event.inputs.scorecard || 'marketing-scorecard' }}
+        run: cd builder && node scripts/refresh-snapshots/index.js
