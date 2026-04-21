@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import posthog from './lib/posthog';
+import { setCurrentUserEmail } from './lib/supabase';
 import Layout from './components/Layout';
 import Explorer from './components/Explorer';
 import DashboardView from './components/DashboardView';
@@ -67,8 +68,13 @@ function SignInGate({ onConnect }) {
 }
 
 export default function App() {
-  const { metrics, loading: metricsLoading } = useMetrics();
   const { connected, userEmail, userAvatar, connect } = useBqAuth();
+
+  // Set RLS identity header synchronously so useMetrics's fetch below
+  // includes x-method-email from its first call onward.
+  setCurrentUserEmail(userEmail || null);
+
+  const { metrics, loading: metricsLoading } = useMetrics(userEmail);
 
   // Gate the app behind OAuth. No email → sign-in screen.
   if (!connected || !userEmail) {

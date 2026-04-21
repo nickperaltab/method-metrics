@@ -149,14 +149,14 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
-          {/* Method Approved scorecards (starred only) */}
+          {/* Scorecards (starred only) */}
           {scStars.length > 0 && (() => {
             const approved = Object.values(SCORECARDS).filter(sc => !sc.group && scStars.includes(sc.id));
             if (approved.length === 0) return null;
             return (
               <>
                 <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-                <div style={sectionLabel}>Method Approved</div>
+                <div style={sectionLabel}>Scorecards</div>
                 {approved.map(sc => (
                   <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
                     {sc.title}
