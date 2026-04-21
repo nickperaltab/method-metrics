@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
-import { fetchMyDashboards, fetchAllDashboards, fetchApprovedDashboardsList, fetchStars, starDashboard, unstarDashboard, deleteDashboard, setApproved, updateDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchStars, starDashboard, unstarDashboard, deleteDashboard, updateDashboard } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
 import posthog from '../lib/posthog';
@@ -125,29 +125,18 @@ export default function Home() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [all, starIds] = await Promise.all([
-        admin
-          ? fetchAllDashboards()
-          : Promise.all([
-              currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
-              fetchApprovedDashboardsList(),
-            ]).then(([mine, approved]) => {
-              const merged = [...mine];
-              for (const d of approved) {
-                if (!merged.some(x => x.id === d.id)) merged.push(d);
-              }
-              return merged;
-            }),
+      const [mine, starIds] = await Promise.all([
+        currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
         currentUser ? fetchStars(currentUser.id) : Promise.resolve([]),
       ]);
-      setDashboards(all);
+      setDashboards(mine);
       setDbStars(starIds);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [currentUser, admin]);
+  }, [currentUser]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -214,12 +203,6 @@ export default function Home() {
       },
       onCancel: () => setDialog(null),
     });
-  }, [load]);
-
-  const handleToggleApproval = useCallback(async (e, db) => {
-    e.stopPropagation();
-    await setApproved('dashboards', db.id, !db.is_approved);
-    await load();
   }, [load]);
 
   // Sort starred to top
@@ -327,7 +310,6 @@ export default function Home() {
               const isStarred = dbStars.includes(db.id);
               const isMine = canDelete(currentUser, db);
               const isHover = hoverId === `db:${db.id}`;
-              const showActions = isHover && (isMine || (isMine && admin));
               return (
                 <div
                   key={db.id}
