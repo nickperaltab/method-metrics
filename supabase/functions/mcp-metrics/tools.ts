@@ -17,8 +17,7 @@ import {
 } from './catalog.ts';
 import { runQuery } from './bq.ts';
 import { fetchSnapshot } from './snapshots.ts';
-// Shared pure SQL builders (browser+Node+Deno safe, no React deps).
-import { buildSemanticSql, buildSemanticGroupedSql } from '../../../builder/src/lib/sql/semantic.js';
+import { buildSemanticSql, buildSemanticGroupedSql } from './sql.ts';
 
 export interface ToolContext {
   tokenId: string;
@@ -216,7 +215,7 @@ export const TOOLS: ToolDef[] = [
       }
 
       const sql = a.group_by
-        ? buildSemanticGroupedSql(metric, a.time_bucket, a.last_n_months, a.group_by, a.end_date_rule)
+        ? buildSemanticGroupedSql(metric, a.group_by, a.time_bucket, a.last_n_months, a.end_date_rule)
         : buildSemanticSql(metric, a.time_bucket, a.last_n_months, a.end_date_rule);
 
       const { rows, bytesBilled } = await runQuery(sql);
