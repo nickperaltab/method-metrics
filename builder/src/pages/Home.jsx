@@ -5,6 +5,7 @@ import { isAdmin, canDelete } from '../lib/permissions';
 import { fetchMyDashboards, fetchAllDashboards, fetchApprovedDashboardsList, fetchStars, starDashboard, unstarDashboard, deleteDashboard, setApproved, updateDashboard } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
+import posthog from '../lib/posthog';
 
 const HAIRLINE = '#eceef1';
 
@@ -262,7 +263,7 @@ export default function Home() {
               <div
                 key={sc.id}
                 style={{ ...s.row, ...rowHover(`sc:${sc.id}`) }}
-                onClick={() => navigate(`/scorecards/${sc.id}`)}
+                onClick={() => { posthog.capture('home_scorecard_clicked', { scorecard_id: sc.id }); navigate(`/scorecards/${sc.id}`); }}
                 onMouseEnter={() => setHoverId(`sc:${sc.id}`)}
                 onMouseLeave={() => setHoverId(null)}
               >
@@ -284,7 +285,7 @@ export default function Home() {
               <span
                 key={sc.id}
                 style={s.chip}
-                onClick={() => navigate(`/scorecards/${sc.id}`)}
+                onClick={() => { posthog.capture('home_scorecard_clicked', { scorecard_id: sc.id }); navigate(`/scorecards/${sc.id}`); }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#1a1a1a'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#6b7280'; }}
               >
@@ -331,7 +332,7 @@ export default function Home() {
                 <div
                   key={db.id}
                   style={{ ...s.row, ...rowHover(`db:${db.id}`) }}
-                  onClick={() => navigate(`/dashboards/${db.id}`)}
+                  onClick={() => { posthog.capture('home_dashboard_clicked', { dashboard_id: db.id }); navigate(`/dashboards/${db.id}`); }}
                   onMouseEnter={() => setHoverId(`db:${db.id}`)}
                   onMouseLeave={() => setHoverId(null)}
                 >

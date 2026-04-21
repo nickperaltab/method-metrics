@@ -6,6 +6,7 @@ import { useMetrics } from '../hooks/useMetrics';
 import { isAdmin, canDelete } from '../lib/permissions';
 import Dialog from './Dialog';
 import OverflowMenu from './OverflowMenu';
+import posthog from '../lib/posthog';
 
 export default function DashboardList({ userEmail }) {
   const navigate = useNavigate();
@@ -144,6 +145,7 @@ export default function DashboardList({ userEmail }) {
   }, [load]);
 
   const handleShare = useCallback(async (db) => {
+    posthog.capture('dashboard_share_clicked', { dashboard_id: db.id, surface: 'dashboard_list' });
     const url = dashboardShareUrl(db.id);
     try {
       await navigator.clipboard.writeText(url);
@@ -169,6 +171,7 @@ export default function DashboardList({ userEmail }) {
 
   const handleDuplicate = useCallback(async (db) => {
     if (!currentUser) return;
+    posthog.capture('dashboard_duplicate_clicked', { dashboard_id: db.id, surface: 'dashboard_list' });
     try {
       const copy = await duplicateDashboard(db.id, currentUser);
       if (copy?.id) {

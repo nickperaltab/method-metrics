@@ -4,6 +4,7 @@ import { useUser } from '../contexts/UserContext';
 import { isAdmin } from '../lib/permissions';
 import Dialog from '../components/Dialog';
 import DependencyView from '../components/DependencyView';
+import posthog from '../lib/posthog';
 
 function formatMetricForCopy(m) {
   const lines = [];
@@ -266,6 +267,7 @@ export default function Registry() {
                           onCopy={async () => {
                             try {
                               await navigator.clipboard.writeText(formatMetricForCopy(m));
+                              posthog.capture('metric_copy_clicked', { metric_id: m.id, location: 'row' });
                               setCopiedId(m.id);
                               setTimeout(() => setCopiedId(null), 1500);
                             } catch (err) {
@@ -377,6 +379,7 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete }) {
               onCopy={async () => {
                 try {
                   await navigator.clipboard.writeText(formatMetricForCopy(m));
+                  posthog.capture('metric_copy_clicked', { metric_id: m.id, location: 'expand' });
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1500);
                 } catch (err) {

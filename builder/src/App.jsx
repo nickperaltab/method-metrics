@@ -1,5 +1,6 @@
-import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import posthog from './lib/posthog';
 import Layout from './components/Layout';
 import Explorer from './components/Explorer';
 import DashboardView from './components/DashboardView';
@@ -16,6 +17,16 @@ import { useBqAuth } from './hooks/useBqAuth';
 const Loading = () => (
   <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
 );
+
+function PosthogPageview() {
+  const location = useLocation();
+  useEffect(() => {
+    posthog.capture('$pageview', {
+      $pathname: location.pathname + (location.search || ''),
+    });
+  }, [location.pathname, location.search]);
+  return null;
+}
 
 function SignInGate({ onConnect }) {
   return (
@@ -66,6 +77,7 @@ export default function App() {
   return (
     <UserProvider email={userEmail}>
       <HashRouter>
+        <PosthogPageview />
         <Layout bqConnected={connected} userEmail={userEmail} onConnect={connect}>
           <Routes>
             <Route path="/" element={<Home />} />

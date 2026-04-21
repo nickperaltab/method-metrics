@@ -8,6 +8,7 @@ import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
 import OverflowMenu from './OverflowMenu';
+import posthog from '../lib/posthog';
 import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView, duplicateDashboard, dashboardShareUrl } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq, fetchDrillData } from '../lib/bigquery';
 import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
@@ -640,6 +641,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
   const handleShare = useCallback(async () => {
     if (!dashboard) return;
+    posthog.capture('dashboard_share_clicked', { dashboard_id: dashboard.id, surface: 'dashboard_view' });
     const url = dashboardShareUrl(dashboard.id);
     try {
       await navigator.clipboard.writeText(url);
@@ -665,13 +667,14 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
 
   const handleDuplicate = useCallback(async () => {
     if (!dashboard || !currentUser) return;
+    posthog.capture('dashboard_duplicate_clicked', { dashboard_id: dashboard.id, surface: 'dashboard_view', shared: isSharedView });
     try {
       const copy = await duplicateDashboard(dashboard.id, currentUser);
       if (copy?.id) navigate(`/dashboards/${copy.id}`);
     } catch (e) {
       setError(`Duplicate failed: ${e.message}`);
     }
-  }, [dashboard, currentUser, navigate]);
+  }, [dashboard, currentUser, navigate, isSharedView]);
 
   const handleToggleApproval = useCallback(async () => {
     if (!dashboard) return;
@@ -769,7 +772,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           ) : (
             <>
               {isMine && (
-                <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
+                <button style={styles.btnSecondary} onClick={() => { posthog.capture('add_chart_clicked', { dashboard_id: dashboard?.id }); setShowAddModal(true); }}>+ Add Chart</button>
               )}
               {isMine && (
                 <OverflowMenu items={[
