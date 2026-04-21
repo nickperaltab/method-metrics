@@ -6,7 +6,16 @@ export function createBqClient() {
   let creds;
   try { creds = JSON.parse(keyJson); }
   catch { throw new Error('GCP_SA_KEY is not valid JSON'); }
-  return new BigQuery({ projectId: creds.project_id, credentials: creds });
+  return new BigQuery({
+    projectId: creds.project_id,
+    credentials: creds,
+    // Drive scope required for BQ views that federate over Google Sheets
+    // (e.g. forecast/budget metrics backed by Looker daily forecast sheet)
+    scopes: [
+      'https://www.googleapis.com/auth/bigquery',
+      'https://www.googleapis.com/auth/drive',
+    ],
+  });
 }
 
 /**
