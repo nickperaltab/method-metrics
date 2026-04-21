@@ -6,6 +6,7 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ## Shipped
 
+- 2026-04-21 — Ticket 1: Permissions & destructive-action cleanup. Non-admins no longer see queued metrics, can't copy non-live definitions, and can't UPDATE/INSERT/DELETE on `metrics`. Enforcement at DB layer via RLS (reads `x-method-email` header). Migration doc: `docs/migrations/2026-04-21-metrics-rls.md`. Known limitation: header is client-asserted; upgrade to Edge Function proxy or Supabase Auth if external users are ever added.
 - 2026-04-20 — Scorecard snapshot cache, Phase 1 (marketing-scorecard). Nightly refresh via GitHub Actions; frontend reads snapshot first, falls back to live BQ if >48h stale. Plan: `docs/superpowers/plans/2026-04-20-scorecard-snapshot-cache.md`. Rollback runbook in same plan.
 
 ---
