@@ -173,6 +173,79 @@ export async function createDashboard({ name, createdBy, createdByUser, layout }
   return res.json();
 }
 
+/**
+ * Duplicate a dashboard under the current user. Also clones each referenced
+ * saved_chart so edits on the copy don't affect the original.
+ */
+export async function duplicateDashboard(dashboardId, currentUser) {
+  const srcRes = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${dashboardId}`,
+    { headers }
+  );
+  if (!srcRes.ok) throw new Error(`Load source dashboard failed: ${srcRes.status}`);
+  const [src] = await srcRes.json();
+  if (!src) throw new Error('Source dashboard not found');
+
+  const srcLayout = Array.isArray(src.layout) ? src.layout : [];
+  const chartIds = srcLayout.map(item => item.i).filter(Boolean);
+
+  const chartsRes = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/saved_charts?id=in.(${chartIds.join(',')})`,
+    { headers }
+  );
+  if (!chartsRes.ok) throw new Error(`Load charts failed: ${chartsRes.status}`);
+  const srcCharts = await chartsRes.json();
+
+  const chartIdMap = {};
+  for (const c of srcCharts) {
+    const newId = crypto.randomUUID();
+    chartIdMap[c.id] = newId;
+    const cloneBody = {
+      id: newId,
+      name: c.name,
+      description: c.description || null,
+      created_by: currentUser.email,
+      created_by_user: currentUser.id,
+      metric_ids: c.metric_ids,
+      gw_spec: c.gw_spec,
+      is_approved: false,
+    };
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/saved_charts`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(cloneBody),
+    });
+    if (!r.ok) throw new Error(`Clone chart failed: ${r.status}`);
+  }
+
+  const newLayout = srcLayout.map(item => ({ ...item, i: chartIdMap[item.i] || item.i }));
+  const dbBody = {
+    name: `${src.name} (copy)`,
+    created_by: currentUser.email,
+    created_by_user: currentUser.id,
+    layout: newLayout,
+    is_approved: false,
+  };
+  const dbRes = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/dashboards`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(dbBody),
+  });
+  if (!dbRes.ok) throw new Error(`Create dashboard copy failed: ${dbRes.status}`);
+  const [newDashboard] = await dbRes.json();
+  return newDashboard;
+}
+
+/**
+ * Generate a shareable URL for a dashboard. The ?view=shared query param
+ * tells the page to render in view-only mode.
+ */
+export function dashboardShareUrl(dashboardId) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const basePath = typeof window !== 'undefined' ? window.location.pathname.replace(/\/$/, '') : '';
+  return `${origin}${basePath}/#/dashboards/${dashboardId}?view=shared`;
+}
+
 export async function updateDashboard(id, updates) {
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/dashboards?id=eq.${id}`,

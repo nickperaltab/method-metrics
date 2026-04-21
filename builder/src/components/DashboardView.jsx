@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -7,7 +7,8 @@ import '../styles/grid-overrides.css';
 import EChart from './EChart';
 import DataTableView from './DataTableView';
 import KpiCard from './KpiCard';
-import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView } from '../lib/supabase';
+import OverflowMenu from './OverflowMenu';
+import { fetchDashboard, updateDashboard, loadChartsByIds, deleteDashboard, setApproved, fetchStars, starDashboard, unstarDashboard, fetchMyCharts, fetchApprovedCharts, fetchDashboards, computeChartUsageCounts, recordView, duplicateDashboard, dashboardShareUrl } from '../lib/supabase';
 import { fetchAggregatedData, fetchChartData, fetchGroupedData, fetchKpiData, fetchYoYData, clearAllCaches, queryBq, fetchDrillData } from '../lib/bigquery';
 import { fetchChartDatasets, fetchPivotData } from '../lib/chartDataBuilder';
 import FeedbackButtons from './FeedbackButtons';
@@ -177,6 +178,8 @@ const TYPE_LABELS = { line: 'line chart', bar: 'bar chart', stacked_bar: 'stacke
 export default function DashboardView({ userEmail, userAvatar, metrics = [], bqConnected }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isSharedView = searchParams.get('view') === 'shared';
   const { currentUser } = useUser();
   const containerRef = useRef(null);
   const [dashboard, setDashboard] = useState(null);
@@ -635,6 +638,41 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
     });
   }, [dashboard, navigate]);
 
+  const handleShare = useCallback(async () => {
+    if (!dashboard) return;
+    const url = dashboardShareUrl(dashboard.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setDialog({
+        type: 'info',
+        title: 'Share link copied',
+        message: 'Anyone with the link will see a read-only copy of this dashboard.',
+        confirmLabel: 'OK',
+        onConfirm: () => setDialog(null),
+        onCancel: () => setDialog(null),
+      });
+    } catch {
+      setDialog({
+        type: 'info',
+        title: 'Share link',
+        message: url,
+        confirmLabel: 'OK',
+        onConfirm: () => setDialog(null),
+        onCancel: () => setDialog(null),
+      });
+    }
+  }, [dashboard]);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!dashboard || !currentUser) return;
+    try {
+      const copy = await duplicateDashboard(dashboard.id, currentUser);
+      if (copy?.id) navigate(`/dashboards/${copy.id}`);
+    } catch (e) {
+      setError(`Duplicate failed: ${e.message}`);
+    }
+  }, [dashboard, currentUser, navigate]);
+
   const handleToggleApproval = useCallback(async () => {
     if (!dashboard) return;
     try {
@@ -706,31 +744,41 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
               <span style={{ fontSize: 13, color: titleHovered ? '#6b7280' : 'transparent', transition: 'color .15s' }}>&#9998;</span>
             )}
           </span>
-          {dashboard?.is_approved && (
-            <span style={styles.approvedBadge}>Method Approved</span>
-          )}
-          <button
-            style={{ ...styles.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
-            onClick={handleStar}
-            title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            {isStarred ? '\u2605' : '\u2606'}
-          </button>
-        </div>
-        <div style={styles.actions}>
-          {isMine && admin && (
+          {!isSharedView && (
             <button
-              style={dashboard?.is_approved ? styles.btnDanger : styles.btnSecondary}
-              onClick={handleToggleApproval}
+              style={{ ...styles.starBtn, color: isStarred ? '#f59e0b' : '#d1d5db' }}
+              onClick={handleStar}
+              title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
             >
-              {dashboard?.is_approved ? 'Remove Approval' : 'Mark Approved'}
+              {isStarred ? '\u2605' : '\u2606'}
             </button>
           )}
-          {isMine && (
-            <button style={styles.btnDelete} onClick={handleDelete}>Delete</button>
+          {isSharedView && (
+            <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              \u2014 shared view
+            </span>
           )}
-          {isMine && (
-            <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
+        </div>
+        <div style={styles.actions}>
+          {isSharedView ? (
+            currentUser && (
+              <button style={styles.btnSecondary} onClick={handleDuplicate}>
+                Duplicate to my dashboards
+              </button>
+            )
+          ) : (
+            <>
+              {isMine && (
+                <button style={styles.btnSecondary} onClick={() => setShowAddModal(true)}>+ Add Chart</button>
+              )}
+              {isMine && (
+                <OverflowMenu items={[
+                  { label: 'Share', onClick: handleShare },
+                  { label: 'Duplicate', onClick: handleDuplicate, disabled: !currentUser },
+                  { label: 'Delete', onClick: handleDelete, danger: true },
+                ]} />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -766,8 +814,8 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
           cols={COLS}
           rowHeight={ROW_HEIGHT}
           width={containerWidth}
-          isDraggable={isMine}
-          isResizable={isMine}
+          isDraggable={isMine && !isSharedView}
+          isResizable={isMine && !isSharedView}
           onLayoutChange={handleLayoutChange}
           onDragStop={handleLayoutSave}
           onResizeStop={handleLayoutSave}
@@ -781,7 +829,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
               <div key={item.i} style={styles.gridItem}>
                 <div style={styles.chartHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    {isMine && (
+                    {isMine && !isSharedView && (
                       <span className="drag-handle" style={{ cursor: 'grab', color: '#d1d5db', fontSize: 14, padding: '0 2px', flexShrink: 0 }}>{'\u2630'}</span>
                     )}
                     {chart?.created_by_avatar && (
@@ -793,7 +841,7 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     )}
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
-                  {isMine && (
+                  {isMine && !isSharedView && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <button
                         style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
