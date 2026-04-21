@@ -186,9 +186,6 @@ export default function Charts() {
         <button style={ownerFilter === 'mine' ? s.chipActive : s.chip} onClick={() => setOwnerFilter(ownerFilter === 'mine' ? null : 'mine')}>
           My Charts ({myCharts.length})
         </button>
-        <button style={ownerFilter === 'approved' ? s.chipActive : s.chip} onClick={() => setOwnerFilter(ownerFilter === 'approved' ? null : 'approved')}>
-          Method Approved ({approvedCharts.length})
-        </button>
       </div>
 
       {/* Metric filter chips */}
@@ -246,20 +243,6 @@ export default function Charts() {
                     >
                       {chart.name || 'Untitled'}
                     </span>
-                    {chart.is_approved && (
-                      <span
-                        style={{ ...s.badge, cursor: isMine && admin ? 'pointer' : 'default' }}
-                        onClick={() => isMine && admin && handleToggleApproval(chart)}
-                        title={isMine && admin ? 'Click to remove approval' : ''}
-                      >Method Approved</span>
-                    )}
-                    {!chart.is_approved && isMine && admin && (
-                      <span
-                        style={{ ...s.badgeInactive, cursor: 'pointer' }}
-                        onClick={() => handleToggleApproval(chart)}
-                        title="Click to mark approved"
-                      >+ approve</span>
-                    )}
                     <div
                       style={{ ...s.descRow, cursor: isMine ? 'pointer' : 'default' }}
                       onClick={() => isMine && handleEditDescription(chart)}

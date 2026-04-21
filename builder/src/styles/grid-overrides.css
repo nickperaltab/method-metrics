@@ -1,0 +1,6 @@
+/* Override react-grid-layout defaults.
+ * Default placeholder is red which reads as error. Use neutral blue. */
+.react-grid-item.react-grid-placeholder {
+  background: #2563eb;
+  opacity: 0.12;
+}

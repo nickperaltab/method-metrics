@@ -180,9 +180,6 @@ export default function DashboardList({ userEmail }) {
         <button style={ownerFilter === 'mine' ? s.chipActive : s.chip} onClick={() => setOwnerFilter(ownerFilter === 'mine' ? null : 'mine')}>
           My Dashboards ({myDashboards.length})
         </button>
-        <button style={ownerFilter === 'approved' ? s.chipActive : s.chip} onClick={() => setOwnerFilter(ownerFilter === 'approved' ? null : 'approved')}>
-          Method Approved ({approvedDashboards.length})
-        </button>
       </div>
 
       {/* Table */}
@@ -222,20 +219,6 @@ export default function DashboardList({ userEmail }) {
                     >
                       {db.name}
                     </span>
-                    {db.is_approved && (
-                      <span
-                        style={{ ...s.badge, cursor: isMine && admin ? 'pointer' : 'default' }}
-                        onClick={e => isMine && admin ? handleToggleApproval(e, db) : null}
-                        title={isMine && admin ? 'Click to remove approval' : ''}
-                      >Method Approved</span>
-                    )}
-                    {!db.is_approved && isMine && admin && (
-                      <span
-                        style={{ ...s.badgeInactive, cursor: 'pointer' }}
-                        onClick={e => handleToggleApproval(e, db)}
-                        title="Click to mark approved"
-                      >+ approve</span>
-                    )}
                   </td>
                   <td style={s.td}>{db.created_by?.split('@')[0] || '\u2014'}</td>
                   <td style={{ ...s.td, textAlign: 'center' }}>{(db.layout || []).length}</td>
