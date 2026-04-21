@@ -1,4 +1,16 @@
 import { validateIdentifier, validateInt, escapeBqString } from './sanitize.js';
+import { buildEndDateClause } from './sql/semantic.js';
+
+// Re-export pure SQL builders for backwards compat with existing imports.
+export {
+  wrapChartSql,
+  buildBatchSql,
+  splitBatchResults,
+  buildSemanticSql,
+  buildSemanticGroupedSql,
+  buildEndDateClause,
+  buildViewAggSql,
+} from './sql/index.js';
 
 const BQ_CLIENT_ID = '546732685010-nojjfak7esmun2taour8r5pakrsrg3aq.apps.googleusercontent.com';
 const BQ_PROJECT = 'project-for-method-dw';
@@ -137,150 +149,6 @@ export async function queryBqWithRetry(sql, { maxRetries = 2, retryOnEmpty = fal
   throw lastError;
 }
 
-/**
- * Wrap a chart_sql query with a time-range filter.
- * Extracted from fetchChartData() to avoid duplication in batch path.
- */
-export function wrapChartSql(sql, lastNMonths) {
-  if (lastNMonths == null || lastNMonths < 0) return sql;
-  const months = validateInt(lastNMonths, 'lastNMonths');
-  const dateExpr = months === 0
-    ? `FORMAT_DATE('%Y-%m', DATE_TRUNC(CURRENT_DATE(), MONTH))`
-    : `FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH))`;
-  return `SELECT * FROM (${sql}) sub WHERE period >= ${dateExpr}`;
-}
-
-/**
- * Build SQL dynamically from semantic metric fields.
- * semantic_measure and semantic_filters are admin-only raw SQL expressions
- * (same trust model as chart_sql). semantic_table and semantic_date_col
- * are validated as identifiers.
- */
-export function buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule) {
-  validateIdentifier(metric.semantic_table, 'semantic_table');
-  validateIdentifier(metric.semantic_date_col, 'semantic_date_col');
-
-  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${metric.semantic_table}\``;
-  const dateCol = metric.semantic_date_col;
-  const bucket = timeBucket || 'month';
-
-  let periodExpr;
-  if (bucket === 'week') {
-    periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${dateCol}, WEEK(MONDAY)))`;
-  } else if (bucket === 'quarter') {
-    periodExpr = `CONCAT(FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, QUARTER)), '-Q', CAST(CEIL(EXTRACT(MONTH FROM DATE_TRUNC(${dateCol}, QUARTER)) / 3.0) AS STRING))`;
-  } else if (bucket === 'day') {
-    periodExpr = `FORMAT_DATE('%Y-%m-%d', ${dateCol})`;
-  } else if (bucket === 'year') {
-    periodExpr = `FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, YEAR))`;
-  } else {
-    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, MONTH))`;
-  }
-
-  const wheres = [...(metric.semantic_filters || [])];
-
-  if (lastNMonths != null && lastNMonths >= 0) {
-    const months = validateInt(lastNMonths, 'lastNMonths');
-    if (months === 0) {
-      wheres.push(`${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
-    } else {
-      wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
-    }
-  }
-
-  const endClause = buildEndDateClause(dateCol, endDateRule);
-  if (endClause) wheres.push(endClause);
-
-  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
-  return `SELECT ${periodExpr} AS period, ${metric.semantic_measure} AS value FROM ${table} ${whereClause} GROUP BY 1 ORDER BY 1`;
-}
-
-/**
- * Build grouped SQL from semantic metric fields.
- * Produces SELECT period, dimension, measure FROM table WHERE ... GROUP BY 1,2 ORDER BY 1,2.
- * dimension must be in metric.semantic_dimensions — throws otherwise.
- */
-export function buildSemanticGroupedSql(metric, dimension, timeBucket, lastNMonths, endDateRule) {
-  const allowed = metric.semantic_dimensions || [];
-  if (!allowed.includes(dimension)) {
-    throw new Error(`"${dimension}" is not an approved dimension for metric ${metric.id}. Allowed: [${allowed.join(', ')}]`);
-  }
-  validateIdentifier(metric.semantic_table, 'semantic_table');
-  validateIdentifier(metric.semantic_date_col, 'semantic_date_col');
-  validateIdentifier(dimension, 'dimension');
-
-  const table = `\`${BQ_PROJECT}.${BQ_DATASET}.${metric.semantic_table}\``;
-  const dateCol = metric.semantic_date_col;
-  const bucket = timeBucket || 'month';
-
-  let periodExpr;
-  if (bucket === 'week') {
-    periodExpr = `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(${dateCol}, WEEK(MONDAY)))`;
-  } else if (bucket === 'quarter') {
-    periodExpr = `CONCAT(FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, QUARTER)), '-Q', CAST(CEIL(EXTRACT(MONTH FROM DATE_TRUNC(${dateCol}, QUARTER)) / 3.0) AS STRING))`;
-  } else if (bucket === 'day') {
-    periodExpr = `FORMAT_DATE('%Y-%m-%d', ${dateCol})`;
-  } else if (bucket === 'year') {
-    periodExpr = `FORMAT_DATE('%Y', DATE_TRUNC(${dateCol}, YEAR))`;
-  } else {
-    periodExpr = `FORMAT_DATE('%Y-%m', DATE_TRUNC(${dateCol}, MONTH))`;
-  }
-
-  const wheres = [...(metric.semantic_filters || [])];
-  if (lastNMonths != null && lastNMonths >= 0) {
-    const months = validateInt(lastNMonths, 'lastNMonths');
-    if (months === 0) {
-      wheres.push(`${dateCol} >= DATE_TRUNC(CURRENT_DATE(), MONTH)`);
-    } else {
-      wheres.push(`${dateCol} >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL ${months} MONTH), MONTH)`);
-    }
-  }
-  const endClause = buildEndDateClause(dateCol, endDateRule);
-  if (endClause) wheres.push(endClause);
-
-  const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
-  return `SELECT ${periodExpr} AS period, ${dimension} AS dimension, ${metric.semantic_measure} AS value FROM ${table} ${whereClause} GROUP BY 1, 2 ORDER BY 1, 2`;
-}
-
-/**
- * Build a single UNION ALL query from multiple {key, sql} pairs.
- * Each sub-query gets a '_key' discriminator column.
- * All sub-queries MUST return {period, value} columns.
- * Adds ORDER BY _key, period to preserve row ordering.
- *
- * @param {{ key: string|number, sql: string }[]} queries
- * @returns {string} Combined SQL, or '' if empty
- */
-export function buildBatchSql(queries) {
-  if (queries.length === 0) return '';
-  const parts = queries.map(q =>
-    `SELECT '${q.key}' AS _key, sub.* FROM (${q.sql}) sub`
-  );
-  return parts.join('\nUNION ALL\n') + '\nORDER BY _key, period';
-}
-
-/**
- * Split combined batch result rows back into per-key groups.
- * Uses keyMap to restore original key types (numeric for metric IDs, string for custom SQL).
- * Strips the _key column from individual rows.
- *
- * @param {Object[]} rows - Rows with _key, period, value columns
- * @param {Map} keyMap - Maps stringified key back to original key (e.g., '56' -> 56)
- * @returns {Map<string|number, Object[]>} originalKey -> rows (without _key)
- */
-export function splitBatchResults(rows, keyMap) {
-  const map = new Map();
-  for (const row of rows) {
-    const strKey = row._key;
-    const originalKey = keyMap.get(strKey) ?? keyMap.get(Number(strKey)) ?? strKey;
-    const clean = { ...row };
-    delete clean._key;
-    if (!map.has(originalKey)) map.set(originalKey, []);
-    map.get(originalKey).push(clean);
-  }
-  return map;
-}
-
 export const ATT_COL_MAP = {
   SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
   Social: 'Att_Social', Email: 'Att_Email', Referral: 'Att_Referral_Link',
@@ -325,24 +193,6 @@ export function clearAggCache() {
 export function clearAllCaches() {
   clearViewCache();
   clearAggCache();
-}
-
-export function buildEndDateClause(column, rule) {
-  if (!rule) return null;
-  if (rule === 'yesterday') {
-    return `${column} <= DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)`;
-  }
-  if (rule === 'previous_sunday') {
-    return `${column} <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)`;
-  }
-  const match = /^days_ago_(\d+)$/.exec(rule);
-  if (match) {
-    const days = Number(match[1]);
-    if (!Number.isNaN(days)) {
-      return `${column} <= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)`;
-    }
-  }
-  return null;
 }
 
 export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yearFilter) {

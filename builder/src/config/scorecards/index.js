@@ -1,16 +1,16 @@
-import salesScorecard from './sales-scorecard';
-import marketingScorecard from './marketing-scorecard';
-import trialsBreakdown from './trials-breakdown-scorecard';
-import syncsBreakdown from './syncs-breakdown-scorecard';
-import conversionsBreakdown from './conversions-breakdown-scorecard';
-import funnelScorecard from './funnel-scorecard';
-import cancellationsBreakdown from './cancellations-breakdown-scorecard';
-import trialsPlan from './trials-plan-scorecard';
-import syncsPlan from './syncs-plan-scorecard';
-import churnPlan from './churn-plan-scorecard';
-import depRevenue from './dep-revenue-scorecard';
-import customers from './customers-scorecard';
-import customerSegments from './customer-segments-scorecard';
+import salesScorecard from './sales-scorecard.js';
+import marketingScorecard from './marketing-scorecard.js';
+import trialsBreakdown from './trials-breakdown-scorecard.js';
+import syncsBreakdown from './syncs-breakdown-scorecard.js';
+import conversionsBreakdown from './conversions-breakdown-scorecard.js';
+import funnelScorecard from './funnel-scorecard.js';
+import cancellationsBreakdown from './cancellations-breakdown-scorecard.js';
+import trialsPlan from './trials-plan-scorecard.js';
+import syncsPlan from './syncs-plan-scorecard.js';
+import churnPlan from './churn-plan-scorecard.js';
+import depRevenue from './dep-revenue-scorecard.js';
+import customers from './customers-scorecard.js';
+import customerSegments from './customer-segments-scorecard.js';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
