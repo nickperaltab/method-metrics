@@ -25,6 +25,38 @@ function formatMetricForCopy(m) {
   return lines.join('\n');
 }
 
+function CopyButton({ metric, copied, onCopy, size = 20, withLabel = false }) {
+  const canCopy = metric.status === 'live';
+  const color = copied ? '#059669' : (canCopy ? '#6b7280' : '#d1d5db');
+  return (
+    <button
+      disabled={!canCopy}
+      onClick={canCopy ? onCopy : undefined}
+      title={canCopy ? 'Copy metric definition' : 'Only live metrics can be copied'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: 'none', border: 'none',
+        cursor: canCopy ? 'pointer' : 'not-allowed',
+        padding: 4,
+        color,
+        opacity: canCopy ? 1 : 0.5,
+      }}
+    >
+      {copied ? (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+      {withLabel && <span style={{ fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}>{copied ? 'Copied' : 'Copy definition'}</span>}
+    </button>
+  );
+}
+
 async function updateMetric(id, updates) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/metrics?id=eq.${Number(id)}`, {
     method: 'PATCH',
@@ -198,9 +230,9 @@ export default function Registry() {
                 if (e.target.checked) setSelected(new Set(sorted.map(m => m.id)));
                 else setSelected(new Set());
               }} /></th>}
-              <th style={{ ...s.th, width: 40, textAlign: 'center' }}></th>
-              <th style={s.th} onClick={() => toggleSort('id')}>ID {sortCol === 'id' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
+              <th style={{ ...s.th, width: 48, textAlign: 'center' }}></th>
               <th style={s.th} onClick={() => toggleSort('name')}>Name {sortCol === 'name' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
+              <th style={{ ...s.th, width: 60 }} onClick={() => toggleSort('id')}>ID {sortCol === 'id' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th}>Type</th>
               {tab === 'live' && <th style={{ ...s.th, textAlign: 'center' }}>Approved</th>}
               <th style={s.th}>Description</th>
@@ -228,9 +260,10 @@ export default function Registry() {
                         <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleSelect(m.id)} />
                       </td>}
                       <td style={{ ...s.td, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                        <button
-                          disabled={m.status !== 'live'}
-                          onClick={async () => {
+                        <CopyButton
+                          metric={m}
+                          copied={copiedId === m.id}
+                          onCopy={async () => {
                             try {
                               await navigator.clipboard.writeText(formatMetricForCopy(m));
                               setCopiedId(m.id);
@@ -239,20 +272,10 @@ export default function Registry() {
                               console.error('Copy failed:', err);
                             }
                           }}
-                          title={m.status === 'live' ? 'Copy metric definition' : 'Only live metrics can be copied'}
-                          style={{
-                            background: 'none', border: 'none',
-                            cursor: m.status === 'live' ? 'pointer' : 'not-allowed',
-                            padding: '2px 6px', fontSize: 13,
-                            color: copiedId === m.id ? '#059669' : (m.status === 'live' ? '#9ca3af' : '#d1d5db'),
-                            opacity: m.status === 'live' ? 1 : 0.5,
-                          }}
-                        >
-                          {copiedId === m.id ? '✓' : '⎘'}
-                        </button>
+                        />
                       </td>
-                      <td style={{ ...s.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6b7280' }}>{m.id}</td>
                       <td style={{ ...s.td, fontWeight: 600, color: '#1a1a1a' }}>{m.name}</td>
+                      <td style={{ ...s.td, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9ca3af' }}>{m.id}</td>
                       <td style={s.td}>
                         <span style={{ fontSize: 11, color: m.metric_type === 'derived' ? '#2563eb' : '#059669' }}>
                           {(m.metric_type || 'primitive').charAt(0).toUpperCase() + (m.metric_type || 'primitive').slice(1)}
@@ -325,36 +348,88 @@ export default function Registry() {
 
 function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete }) {
   const [notes, setNotes] = useState(m.notes || '');
+  const [copied, setCopied] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   const deps = (m.depends_on || []);
   const sqlText = m.view_definition || m.chart_sql || '';
+  const bqUrl = m.view_name
+    ? `https://console.cloud.google.com/bigquery?project=project-for-method-dw&ws=!1m5!1m4!4m3!1sproject-for-method-dw!2srevenue!3s${m.view_name}`
+    : null;
 
   return (
     <div style={s.panel}>
-      {m.view_name && (
-        <div style={s.panelSection}>
-          <div style={s.panelLabel}>BQ View</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#059669' }}>revenue.{m.view_name}</div>
+      {m.description && (
+        <div style={{ marginBottom: 14, fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+          {m.description}
         </div>
       )}
 
       {sqlText && (
         <div style={s.panelSection}>
-          <div style={s.panelLabel}>SQL Definition</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={s.panelLabel}>Definition</div>
+            <CopyButton
+              metric={m}
+              copied={copied}
+              size={20}
+              withLabel
+              onCopy={async () => {
+                try {
+                  await navigator.clipboard.writeText(formatMetricForCopy(m));
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                } catch (err) {
+                  console.error('Copy failed:', err);
+                }
+              }}
+            />
+          </div>
           <pre style={s.sqlBlock}>{sqlText}</pre>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 24 }}>
-        <div style={{ ...s.panelSection, flex: 1 }}>
-          <div style={s.panelLabel}>Depends On</div>
-          <div>{deps.length > 0 ? deps.map(id => <span key={id} style={s.pill}>{id}</span>) : <span style={s.dim}>None</span>}</div>
+      <button
+        type="button"
+        onClick={() => setShowMore(v => !v)}
+        style={{
+          background: 'none', border: 'none', color: '#6b7280',
+          padding: '4px 0', fontSize: 12, cursor: 'pointer',
+          fontFamily: "'DM Sans', sans-serif",
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}
+      >
+        <span>{showMore ? '▾' : '▸'}</span>
+        <span>More details</span>
+      </button>
+
+      {showMore && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e5e9' }}>
+          {m.view_name && (
+            <div style={s.panelSection}>
+              <div style={s.panelLabel}>BQ View</div>
+              <a
+                href={bqUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#059669', textDecoration: 'underline' }}
+              >
+                revenue.{m.view_name}
+              </a>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ ...s.panelSection, flex: 1 }}>
+              <div style={s.panelLabel}>Depends On</div>
+              <div>{deps.length > 0 ? deps.map(id => <span key={id} style={s.pill}>{id}</span>) : <span style={s.dim}>None</span>}</div>
+            </div>
+            <div style={{ ...s.panelSection, flex: 1 }}>
+              <div style={s.panelLabel}>Supported Grains</div>
+              <div>{(m.supported_grains || ['monthly']).map(g => <span key={g} style={s.pill}>{g}</span>)}</div>
+            </div>
+          </div>
         </div>
-        <div style={{ ...s.panelSection, flex: 1 }}>
-          <div style={s.panelLabel}>Supported Grains</div>
-          <div>{(m.supported_grains || ['monthly']).map(g => <span key={g} style={s.pill}>{g}</span>)}</div>
-        </div>
-      </div>
+      )}
 
       <div style={s.panelSection}>
         <div style={s.panelLabel}>Notes</div>
