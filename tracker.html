@@ -301,6 +301,21 @@ const HEADERS = {
   'Prefer': 'return=representation',
 };
 
+// Tracker is admin-only. RLS reads x-method-email to decide write access.
+// Prompt once, persist in localStorage.
+function ensureAdminEmail() {
+  let email = localStorage.getItem('method_admin_email');
+  if (!email) {
+    email = prompt('Enter your Method admin email (for metric-edit permissions):');
+    if (email) {
+      localStorage.setItem('method_admin_email', email.trim());
+      email = email.trim();
+    }
+  }
+  if (email) HEADERS['x-method-email'] = email;
+}
+ensureAdminEmail();
+
 let allMetrics = [];
 let filteredMetrics = [];
 let expandedId = null;

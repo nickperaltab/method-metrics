@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { fetchUserByEmail, upsertUserByEmail } from '../lib/supabase';
+import { fetchUserByEmail, upsertUserByEmail, setCurrentUserEmail } from '../lib/supabase';
 
 const UserContext = createContext(null);
 
@@ -8,6 +8,9 @@ export function UserProvider({ children, email }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Propagate email to Supabase headers so RLS can identify the caller
+    setCurrentUserEmail(email || null);
+
     if (!email) {
       setCurrentUser(null);
       setLoading(false);
