@@ -6,6 +6,8 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ## Shipped
 
+- 2026-04-21 — Ticket 3 partial: Killed user-dashboard/chart approval UI. Home's "Method Approved" section renamed to "Scorecards"; "Review Requested" tag and "request review" button gone; "Method Approved" filter chip + badge removed from Charts and DashboardList. Neutral blue drag placeholder replaces red (react-grid-layout default). `is_approved` column + `setApproved()` left in DB for revivability. NOT shipped in this PR: Share feature, edit-chart modal, overflow menu — deferred pending product decisions.
+- 2026-04-21 — Ticket 2: Registry card simplification. Name is the lead column; ID demoted to lighter secondary. In-row copy button bumped to 20px with clipboard SVG. Expand panel reorganized: description + prominent Copy-definition button at top; collapsible "More details" hides BQ view link / deps / supported grains. BQ view text is now a real link to the Google Cloud console.
 - 2026-04-21 — Ticket 1: Permissions & destructive-action cleanup. Non-admins no longer see queued metrics, can't copy non-live definitions, and can't UPDATE/INSERT/DELETE on `metrics`. Enforcement at DB layer via RLS (reads `x-method-email` header). Migration doc: `docs/migrations/2026-04-21-metrics-rls.md`. Known limitation: header is client-asserted; upgrade to Edge Function proxy or Supabase Auth if external users are ever added.
 - 2026-04-20 — Scorecard snapshot cache, Phase 1 (marketing-scorecard). Nightly refresh via GitHub Actions; frontend reads snapshot first, falls back to live BQ if >48h stale. Plan: `docs/superpowers/plans/2026-04-20-scorecard-snapshot-cache.md`. Rollback runbook in same plan.
 
