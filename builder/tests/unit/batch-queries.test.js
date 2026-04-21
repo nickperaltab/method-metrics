@@ -5,7 +5,7 @@ if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 }
 
-const { buildBatchSql, splitBatchResults } = await import('../../src/lib/bigquery.js');
+const { buildBatchSql, splitBatchResults } = await import('../../src/lib/sql/index.js');
 
 describe('buildBatchSql', () => {
   it('wraps each query with a _key discriminator', () => {
