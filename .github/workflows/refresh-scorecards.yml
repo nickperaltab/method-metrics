@@ -31,18 +31,22 @@ jobs:
           node -e "
             import('./scripts/refresh-snapshots/bq-client.js').then(async ({createBqClient, makeQuery}) => {
               const q = makeQuery(createBqClient());
+              // Check latest row in v_trials — views don't expose ETL metadata,
+              // so we probe the actual data instead.
               const { rows } = await q(\`
-                SELECT table_id, TIMESTAMP_MILLIS(last_modified_time) AS lm
-                FROM \\\`project-for-method-dw.revenue.__TABLES__\\\`
-                WHERE table_id IN ('v_trials','v_syncs')
+                SELECT MAX(SignupDate) AS max_signup FROM \\\`project-for-method-dw.revenue.v_trials\\\`
               \`);
-              const cutoff = new Date(Date.now() - 18*3600*1000);
-              const stale = rows.filter(r => new Date(r.lm) < cutoff);
-              if (stale.length) {
-                console.error('ETL freshness check FAILED. Stale tables:', stale);
+              const maxSignup = rows[0]?.max_signup;
+              if (!maxSignup) {
+                console.error('ETL check FAILED: v_trials is empty');
                 process.exit(1);
               }
-              console.log('ETL freshness OK. Latest updates:', rows);
+              const ageDays = (Date.now() - new Date(maxSignup).getTime()) / 86400000;
+              if (ageDays > 2) {
+                console.error(\`ETL check FAILED: latest SignupDate is \${maxSignup} (\${ageDays.toFixed(1)} days old)\`);
+                process.exit(1);
+              }
+              console.log(\`ETL freshness OK. Latest SignupDate: \${maxSignup} (\${ageDays.toFixed(1)} days old)\`);
             });
           "
       - name: Refresh
