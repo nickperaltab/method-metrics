@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, deleteDashboard, setApproved, updateDashboard, fetchStars, starDashboard, unstarDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchApprovedDashboardsList, createDashboard, deleteDashboard, setApproved, updateDashboard, fetchStars, starDashboard, unstarDashboard, duplicateDashboard, dashboardShareUrl } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useMetrics } from '../hooks/useMetrics';
 import { isAdmin, canDelete } from '../lib/permissions';
 import Dialog from './Dialog';
+import OverflowMenu from './OverflowMenu';
 
 export default function DashboardList({ userEmail }) {
   const navigate = useNavigate();
@@ -142,11 +143,42 @@ export default function DashboardList({ userEmail }) {
     });
   }, [load]);
 
-  const handleToggleApproval = useCallback(async (e, db) => {
-    e.stopPropagation();
-    try { await setApproved('dashboards', db.id, !db.is_approved); await load(); }
-    catch (e) { setError(`Update failed: ${e.message}`); }
-  }, [load]);
+  const handleShare = useCallback(async (db) => {
+    const url = dashboardShareUrl(db.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setDialog({
+        type: 'info',
+        title: 'Share link copied',
+        message: 'Anyone with the link will see a read-only copy of this dashboard.',
+        confirmLabel: 'OK',
+        onConfirm: () => setDialog(null),
+        onCancel: () => setDialog(null),
+      });
+    } catch {
+      setDialog({
+        type: 'info',
+        title: 'Share link',
+        message: url,
+        confirmLabel: 'OK',
+        onConfirm: () => setDialog(null),
+        onCancel: () => setDialog(null),
+      });
+    }
+  }, []);
+
+  const handleDuplicate = useCallback(async (db) => {
+    if (!currentUser) return;
+    try {
+      const copy = await duplicateDashboard(db.id, currentUser);
+      if (copy?.id) {
+        await load();
+        navigate(`/dashboards/${copy.id}`);
+      }
+    } catch (e) {
+      setError(`Duplicate failed: ${e.message}`);
+    }
+  }, [currentUser, load, navigate]);
 
   const admin = isAdmin(currentUser);
 
@@ -234,7 +266,11 @@ export default function DashboardList({ userEmail }) {
                   </td>
                   <td style={{ ...s.td, textAlign: 'center' }}>
                     {isMine && (
-                      <button style={{ ...s.actionBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={e => handleDelete(e, db)}>delete</button>
+                      <OverflowMenu items={[
+                        { label: 'Share', onClick: () => handleShare(db) },
+                        { label: 'Duplicate', onClick: () => handleDuplicate(db), disabled: !currentUser },
+                        { label: 'Delete', onClick: (e) => handleDelete(e, db), danger: true },
+                      ]} />
                     )}
                   </td>
                 </tr>
