@@ -4,7 +4,19 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ---
 
+## Shipped
+
+- 2026-04-20 — Scorecard snapshot cache, Phase 1 (marketing-scorecard). Nightly refresh via GitHub Actions; frontend reads snapshot first, falls back to live BQ if >48h stale. Plan: `docs/superpowers/plans/2026-04-20-scorecard-snapshot-cache.md`. Rollback runbook in same plan.
+
+---
+
 ## Bugs
+
+### section.tables Columns Not Fetched (Scorecard Data)
+**Status:** Open (pre-existing, surfaced during snapshot-cache work)
+`collectMetricIds` in `builder/src/lib/sql/plan.js` and the old hook do not iterate `section.tables`. Table-column metrics (e.g. 354, 355, 358, 359, 360 in Marketing Scorecard) only render data if the metric ID also appears in a KPI or chart in the same section. Otherwise the cell is empty.
+**Fix:** Extend `collectMetricIds` to walk `section.tables[].columns[].metricId`. Add test case. Re-run snapshot refresh — expected key count will jump.
+**Files:** `builder/src/lib/sql/plan.js`, `builder/tests/unit/sql-plan.test.js`
 
 ### "All" Range Only Shows ~13 Months
 **Status:** Open
