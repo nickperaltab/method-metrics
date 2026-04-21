@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "@google-cloud/bigquery": "npm:@google-cloud/bigquery@7",
+    "zod": "npm:zod@3",
+    "zod-to-json-schema": "npm:zod-to-json-schema@3"
+  }
+}
