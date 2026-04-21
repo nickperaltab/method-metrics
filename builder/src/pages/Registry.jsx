@@ -236,7 +236,6 @@ export default function Registry() {
               <th style={{ ...s.th, width: 60 }} onClick={() => toggleSort('id')}>ID {sortCol === 'id' ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}</th>
               <th style={s.th}>Type</th>
               {tab === 'live' && <th style={{ ...s.th, textAlign: 'center' }}>Approved</th>}
-              <th style={s.th}>Description</th>
               {admin && tab === 'queued' && <th style={s.th}>Priority</th>}
               {admin && tab === 'queued' && <th style={s.th}>Assigned</th>}
             </tr>
@@ -247,7 +246,7 @@ export default function Registry() {
               { items: derived, label: 'Derived', color: '#2563eb' },
             ].map(group => group.items.length > 0 && (
               <React.Fragment key={group.label}>
-                <tr><td colSpan={(admin ? 2 : 1) + 4 + (tab === 'live' ? 1 : 0) + (admin && tab === 'queued' ? 2 : 0)} style={s.groupRow}>
+                <tr><td colSpan={(admin ? 2 : 1) + 3 + (tab === 'live' ? 1 : 0) + (admin && tab === 'queued' ? 2 : 0)} style={s.groupRow}>
                   <span style={{ color: group.color }}>{group.label}</span>
                   <span style={s.groupCount}>{group.items.length}</span>
                 </td></tr>
@@ -291,19 +290,6 @@ export default function Registry() {
                           }
                         </td>
                       )}
-                      <td style={s.td} onClick={admin ? (e => e.stopPropagation()) : undefined}>
-                        {admin ? (
-                          <input
-                            type="text"
-                            value={m.description || ''}
-                            onChange={e => setMetrics(prev => prev.map(x => x.id === m.id ? { ...x, description: e.target.value } : x))}
-                            onBlur={e => handleSaveField(m.id, 'description', e.target.value)}
-                            style={s.inlineInput}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 13, color: '#374151' }}>{m.description || '—'}</span>
-                        )}
-                      </td>
                       {admin && tab === 'queued' && (
                         <td style={s.td} onClick={e => e.stopPropagation()}>
                           <select
@@ -332,8 +318,8 @@ export default function Registry() {
                       )}
                     </tr>
                     {expandedId === m.id && (
-                      <tr><td colSpan={tab === 'queued' ? 7 : 6} style={{ padding: 0 }}>
-                        <ExpandPanel metric={m} onUpdate={reload} onSaveField={handleSaveField} onDelete={handleDeleteMetric} />
+                      <tr><td colSpan={(admin ? 2 : 1) + 3 + (tab === 'live' ? 1 : 0) + (admin && tab === 'queued' ? 2 : 0)} style={{ padding: 0 }}>
+                        <ExpandPanel metric={m} onUpdate={reload} onSaveField={handleSaveField} onDelete={handleDeleteMetric} admin={admin} />
                       </td></tr>
                     )}
                   </React.Fragment>
@@ -348,8 +334,9 @@ export default function Registry() {
   );
 }
 
-function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete }) {
+function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete, admin }) {
   const [notes, setNotes] = useState(m.notes || '');
+  const [description, setDescription] = useState(m.description || '');
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -361,11 +348,24 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete }) {
 
   return (
     <div style={s.panel}>
-      {m.description && (
+      {admin ? (
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          onBlur={() => description !== (m.description || '') && onSaveField(m.id, 'description', description)}
+          placeholder="Add a short description..."
+          style={{
+            width: '100%', background: 'transparent', border: 'none', outline: 'none',
+            fontSize: 14, color: '#374151', lineHeight: 1.5, padding: 0, marginBottom: 14,
+            resize: 'none', fontFamily: "'DM Sans', sans-serif", minHeight: 22,
+          }}
+          rows={1}
+        />
+      ) : m.description ? (
         <div style={{ marginBottom: 14, fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
           {m.description}
         </div>
-      )}
+      ) : null}
 
       {sqlText && (
         <div style={s.panelSection}>

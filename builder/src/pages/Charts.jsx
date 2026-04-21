@@ -19,7 +19,7 @@ export default function Charts() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState(null);
   const [dialog, setDialog] = useState(null);
-  const [ownerFilter, setOwnerFilter] = useState(null); // null = all, 'mine', 'approved'
+  const [ownerFilter, setOwnerFilter] = useState('mine'); // default to My Charts
   const [metricFilter, setMetricFilter] = useState(new Set());
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
