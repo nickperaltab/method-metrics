@@ -96,3 +96,19 @@ export function computeDelta(timeSeries) {
   const deltaPercent = (delta / Math.abs(prior)) * 100;
   return { delta, deltaPercent };
 }
+
+/**
+ * Given the grouped payload stored by storeGrouped (shape:
+ * { labels: string[], seriesMap: { [dimensionValue]: number[] } })
+ * and a single-key dimensionFilter ({ [dim]: value }), return a plain
+ * { labels, data } series filtered to the matching dimensionValue, or
+ * null if the grouped payload is missing / the value isn't present.
+ */
+export function resolveFilteredKpiSeries(grouped, dimensionFilter) {
+  if (!grouped || !grouped.seriesMap || !dimensionFilter) return null;
+  const value = Object.values(dimensionFilter)[0];
+  if (value == null) return null;
+  const data = grouped.seriesMap[value];
+  if (!data) return null;
+  return { labels: grouped.labels || [], data };
+}
