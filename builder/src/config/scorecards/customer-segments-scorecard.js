@@ -13,6 +13,7 @@ export default {
   hideGrain: true,
   views: {
     v_customers: { dateCol: 'Month' },
+    v_customer_mrr: { dateCol: 'Month' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────
@@ -110,6 +111,47 @@ export default {
           showLabels: true,
           metrics: [{ id: 373, label: 'Team AI Plus', color: '#059669',
                       dimensionFilter: { Segment: 'Team AI Plus' } }],
+        },
+      ],
+    },
+
+    // ── Retention ───────────────────────────────────────────────
+    {
+      title: 'Retention',
+      description: 'Monthly MRR movements and retention rates. Cancellations and downgrades erode MRR; expansions recover it. GRR excludes expansions (pure retention); NRR includes them (net of all movements).',
+      kpis: [
+        { metricId: 382, label: 'Gross MRR Retention %', format: 'percent',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 383, label: 'Net MRR Retention %', format: 'percent',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 378, label: 'Start MRR', format: 'currency',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 379, label: 'Cancellations', format: 'currency',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 380, label: 'Downgrades', format: 'currency',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 381, label: 'Expansions', format: 'currency',
+          valueSelector: 'current_or_latest', showDelta: true },
+      ],
+      charts: [
+        {
+          label: 'GRR & NRR Over Time',
+          chartType: 'line', valueFormat: 'percent',
+          showLabels: true,
+          metrics: [
+            { id: 382, label: 'GRR %', color: '#2563eb' },
+            { id: 383, label: 'NRR %', color: '#059669' },
+          ],
+        },
+        {
+          label: 'MRR Movements by Month',
+          chartType: 'bar', valueFormat: 'currency',
+          showLabels: false,
+          metrics: [
+            { id: 381, label: 'Expansions', color: '#22c55e' },
+            { id: 379, label: 'Cancellations', color: '#ef4444' },
+            { id: 380, label: 'Downgrades', color: '#f59e0b' },
+          ],
         },
       ],
     },
