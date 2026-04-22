@@ -62,6 +62,10 @@ Two kinds of columns live in a semantic view:
 
 If you want a numeric field to be chartable as a dimension, add a *bucketed* column to the BQ view instead (e.g. `AgeBucket`: `0–6mo / 6–12mo / 1–2yr / 2yr+`) and add that to `semantic_dimensions`.
 
+### Entity-Grain Rollup (`v_customers`)
+
+`v_customers` is at `Month × EntityRecordID` grain. An entity can own multiple `CompanyAccount` rows with different `AttributionChannel`, `SignupCountry`, `Vertical`, or `SyncType` values. When rolling CompanyAccount → EntityRecordID, the **earliest-signup account** wins for those four dimensions. Consequence: entity-grain channel/country/vertical/sync-type counts do **not** reconcile to account-grain counts from `v_accounts`. `Segment` / `UserTier` / `HasDEP` are fully defined at entity grain and are not affected.
+
 ## How SQL Gets Built
 
 `buildSemanticSql(metric, timeBucket, lastNMonths, endDateRule)` in `builder/src/lib/bigquery.js`:
