@@ -1,6 +1,6 @@
 import React from 'react';
 import KpiTile from './KpiTile';
-import { resolveKpiValue, computeDelta } from './utils';
+import { resolveKpiValue, computeDelta, resolveFilteredKpiSeries } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
 
 export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
@@ -8,10 +8,17 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 200 }}>
       {kpis.map((kpi) => {
         let value;
-        let series = dataMap.get(kpi.metricId);
+        let series;
+
+        if (kpi.dimensionFilter) {
+          const dim = Object.keys(kpi.dimensionFilter)[0];
+          const grouped = dataMap.get(`${kpi.metricId}:grouped:${dim}`);
+          series = resolveFilteredKpiSeries(grouped, kpi.dimensionFilter);
+        } else {
+          series = dataMap.get(kpi.metricId);
+        }
 
         if (kpi.formulaOverride) {
-          // Compute from override formula using dep values from dataMap
           const depValues = {};
           for (const depId of kpi.depsOverride || []) {
             const depSeries = dataMap.get(depId);
@@ -23,7 +30,7 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
         }
 
         const noData = value == null;
-        if (noData) console.warn(`[KPI] ${kpi.label} (${kpi.metricId}): No data. series=`, series, `selector=${kpi.valueSelector}`);
+        if (noData) console.warn(`[KPI] ${kpi.label} (${kpi.metricId}): No data. series=`, series, `selector=${kpi.valueSelector}`, `dimensionFilter=`, kpi.dimensionFilter);
 
         let deltaPercent = null;
         let deltaInfo = null;
@@ -41,7 +48,7 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
 
         return (
           <KpiTile
-            key={kpi.metricId}
+            key={`${kpi.metricId}-${kpi.label}`}
             label={kpi.label}
             value={value}
             format={kpi.format}
