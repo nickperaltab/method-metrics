@@ -200,7 +200,34 @@ export function buildScorecardQueryPlan(config, metrics) {
     }
   }
 
+  // Expand grouped requests: for derived metrics, fetch each dependency grouped.
+  // The loader computes the derivative per (period, dim_value) from those grouped deps.
+  const expandedGrouped = [];
+  const seenExpanded = new Set();
+  const derivedGroupedRequests = []; // for expectedKeys tracking
   for (const g of c.groupedCharts) {
+    const metric = metricsMap.get(g.metricId);
+    if (!metric) continue;
+    const pushFetch = (id, dim, lastN) => {
+      const k = `${id}:${dim}`;
+      if (seenExpanded.has(k)) return;
+      seenExpanded.add(k);
+      expandedGrouped.push({ metricId: id, dimension: dim, lastNMonths: lastN });
+    };
+    if (metric.semantic_table) {
+      pushFetch(g.metricId, g.dimension, g.lastNMonths);
+    } else if (metric.formula && Array.isArray(metric.depends_on)) {
+      // Derivative: register grouped fetches for each dependency.
+      // The derivative's own grouped result is computed in load.js.
+      derivedGroupedRequests.push({ metricId: g.metricId, dimension: g.dimension });
+      expectedKeys.add(`${g.metricId}:grouped:${g.dimension}`);
+      for (const depId of metric.depends_on) {
+        pushFetch(depId, g.dimension, g.lastNMonths);
+      }
+    }
+  }
+
+  for (const g of expandedGrouped) {
     const metric = metricsMap.get(g.metricId);
     if (!metric?.semantic_table) continue;
     const key = `${g.metricId}:grouped:${g.dimension}`;
@@ -257,5 +284,5 @@ export function buildScorecardQueryPlan(config, metrics) {
 
   for (const d of derived) expectedKeys.add(String(d.id));
 
-  return { queries, derived, expectedKeys: [...expectedKeys] };
+  return { queries, derived, expectedKeys: [...expectedKeys], derivedGroupedRequests };
 }
