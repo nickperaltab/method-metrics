@@ -221,9 +221,16 @@ function storeGrouped(map, dataKey, rows) {
     setKey(map, dataKey, null);
     return;
   }
-  const labels = [...new Set(rows.map(r => r.period))].sort();
+  // Drop rows with null/empty dimension value — those can't be attributed to a
+  // series and would render as a spurious flat line at 0.
+  const filtered = rows.filter(r => r.dimension != null && r.dimension !== '');
+  if (filtered.length === 0) {
+    setKey(map, dataKey, null);
+    return;
+  }
+  const labels = [...new Set(filtered.map(r => r.period))].sort();
   const seriesMap = {};
-  for (const row of rows) {
+  for (const row of filtered) {
     if (!seriesMap[row.dimension]) seriesMap[row.dimension] = {};
     seriesMap[row.dimension][row.period] = Number(row.value) || 0;
   }
