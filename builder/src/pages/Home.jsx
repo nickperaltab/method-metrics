@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
-import { fetchMyDashboards, fetchDashboardsByIds, fetchStars, starDashboard, unstarDashboard, deleteDashboard, updateDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchDashboardsByIds, fetchStars, starDashboard, unstarDashboard, deleteDashboard, updateDashboard, duplicateDashboard, dashboardShareUrl } from '../lib/supabase';
+import OverflowMenu from '../components/OverflowMenu';
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
 import posthog from '../lib/posthog';
@@ -344,13 +345,33 @@ export default function Home() {
                   <span style={s.rowMeta}>{db.created_by?.split('@')[0] || '—'}</span>
 
                   {isMine && (
-                    <div style={{ ...s.actionsWrap, opacity: isHover ? 1 : 0, pointerEvents: isHover ? 'auto' : 'none' }}>
-                      <button
-                        style={{ ...s.actionBtn, ...s.actionBtnDanger }}
-                        onClick={e => handleDelete(e, db)}
-                      >
-                        delete
-                      </button>
+                    <div
+                      style={{ opacity: isHover ? 1 : 0, transition: 'opacity .12s', pointerEvents: isHover ? 'auto' : 'none' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <OverflowMenu items={[
+                        { label: 'Share', onClick: async () => {
+                          const url = dashboardShareUrl(db.id);
+                          try { await navigator.clipboard.writeText(url); }
+                          catch { /* ignore */ }
+                          setDialog({
+                            type: 'info',
+                            title: 'Share link copied',
+                            message: 'Anyone with the link gets a read-only view.',
+                            confirmLabel: 'OK',
+                            onConfirm: () => setDialog(null),
+                            onCancel: () => setDialog(null),
+                          });
+                        } },
+                        { label: 'Duplicate', onClick: async () => {
+                          if (!currentUser) return;
+                          try {
+                            const copy = await duplicateDashboard(db.id, currentUser);
+                            if (copy?.id) navigate(`/dashboards/${copy.id}`);
+                          } catch (e) { /* swallow for now */ }
+                        }, disabled: !currentUser },
+                        { label: 'Delete', onClick: (e) => handleDelete(e, db), danger: true },
+                      ]} />
                     </div>
                   )}
                 </div>
