@@ -153,6 +153,15 @@ export default {
             { id: 380, label: 'Downgrades', color: '#f59e0b' },
           ],
         },
+      ],
+    },
+
+    // ── Retention by Segment ────────────────────────────────────
+    {
+      title: 'Retention by Segment',
+      description: 'GRR and NRR broken out by customer segment. Each segment weighted by its Start MRR.',
+      layout: 'column',
+      charts: [
         {
           label: 'GRR % by Segment',
           chartType: 'line', valueFormat: 'percent',

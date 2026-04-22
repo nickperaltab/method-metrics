@@ -78,9 +78,11 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: section.kpis
-          ? '220px 1fr 1fr'
-          : `repeat(${Math.min((section.charts || []).length, 2)}, 1fr)`,
+        gridTemplateColumns: section.layout === 'column'
+          ? '1fr'
+          : section.kpis
+            ? '220px 1fr 1fr'
+            : `repeat(${Math.min((section.charts || []).length, 2)}, 1fr)`,
         gap: 24,
         alignItems: 'stretch',
       }}>
