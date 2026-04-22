@@ -145,6 +145,51 @@ export async function loadScorecardData({ config, metrics, query, onProgress, si
     }
   }
 
+  // Compute grouped derivatives: for each (derived metric × dimension) requested,
+  // use the grouped payloads of its deps and evaluate the formula at (period × dim_value).
+  const derivedById = new Map(plan.derived.map(d => [d.id, d]));
+  for (const req of plan.derivedGroupedRequests || []) {
+    const d = derivedById.get(req.metricId);
+    if (!d) continue;
+    try {
+      const depGrouped = {};
+      for (const depId of d.depends_on) {
+        depGrouped[depId] = dataMap.get(`${depId}:grouped:${req.dimension}`);
+      }
+      const labelSet = new Set();
+      const dimSet = new Set();
+      for (const g of Object.values(depGrouped)) {
+        if (!g?.seriesMap) continue;
+        (g.labels || []).forEach(l => labelSet.add(l));
+        Object.keys(g.seriesMap).forEach(d => dimSet.add(d));
+      }
+      if (labelSet.size === 0 || dimSet.size === 0) {
+        setKey(dataMap, `${req.metricId}:grouped:${req.dimension}`, null);
+        continue;
+      }
+      const labels = [...labelSet].sort();
+      const seriesMap = {};
+      for (const dimValue of dimSet) {
+        const arr = [];
+        for (const lbl of labels) {
+          const vals = {};
+          for (const depId of d.depends_on) {
+            const g = depGrouped[depId];
+            if (!g?.seriesMap?.[dimValue]) { vals[depId] = 0; continue; }
+            const idx = (g.labels || []).indexOf(lbl);
+            vals[depId] = idx >= 0 ? (g.seriesMap[dimValue][idx] || 0) : 0;
+          }
+          arr.push(Math.round(evaluateFormula(d.formula, vals) * 100) / 100);
+        }
+        seriesMap[dimValue] = arr;
+      }
+      setKey(dataMap, `${req.metricId}:grouped:${req.dimension}`, { labels, seriesMap });
+    } catch (e) {
+      setKey(dataMap, `${req.metricId}:grouped:${req.dimension}`, null);
+      errors.push({ data_key: `${req.metricId}:grouped:${req.dimension}`, message: e.message });
+    }
+  }
+
   return { dataMap, errors, plan };
 }
 

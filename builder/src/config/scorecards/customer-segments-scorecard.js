@@ -153,6 +153,20 @@ export default {
             { id: 380, label: 'Downgrades', color: '#f59e0b' },
           ],
         },
+        {
+          label: 'GRR % by Segment',
+          chartType: 'line', valueFormat: 'percent',
+          showLabels: false,
+          groupByDimension: 'Segment',
+          metrics: [{ id: 382, label: 'GRR %' }],
+        },
+        {
+          label: 'NRR % by Segment',
+          chartType: 'line', valueFormat: 'percent',
+          showLabels: false,
+          groupByDimension: 'Segment',
+          metrics: [{ id: 383, label: 'NRR %' }],
+        },
       ],
     },
 
