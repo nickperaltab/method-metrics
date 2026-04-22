@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin } from '../lib/permissions';
-import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars } from '../lib/supabase';
+import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars, fetchUsers } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import { getScorecardStars } from '../pages/Home';
 
@@ -15,12 +15,19 @@ const ADMIN_ITEMS = [
 ];
 
 export default function Sidebar({ collapsed, onToggle }) {
-  const { currentUser } = useUser();
+  const { currentUser, realUser, impersonating, startImpersonating, stopImpersonating } = useUser();
   const [myDashboards, setMyDashboards] = useState([]);
   const [approvedDashboards, setApprovedDashboards] = useState([]);
   const [stars, setStars] = useState([]);
   const [scStars, setScStars] = useState(() => getScorecardStars());
   const [adminOpen, setAdminOpen] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const realIsAdmin = realUser?.role === 'admin';
+
+  useEffect(() => {
+    if (!realIsAdmin) return;
+    fetchUsers().then(setAllUsers).catch(() => {});
+  }, [realIsAdmin]);
 
   const loadData = useCallback(() => {
     if (!currentUser) return;
@@ -236,6 +243,36 @@ export default function Sidebar({ collapsed, onToggle }) {
         {currentUser && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e5e9' }}>
             <span style={{ fontSize: 13, color: '#374151' }}>{currentUser.name}</span>
+            {realIsAdmin && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#9ca3af', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>
+                  View as
+                </div>
+                <select
+                  value={impersonating ? currentUser.email : ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) stopImpersonating();
+                    else startImpersonating(val);
+                  }}
+                  style={{
+                    width: '100%', fontSize: 12, padding: '4px 6px',
+                    background: '#ffffff', border: '1px solid #e2e5e9',
+                    borderRadius: 4, color: '#374151',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  <option value="">Me ({realUser.name || realUser.email})</option>
+                  {allUsers
+                    .filter(u => u.email !== realUser.email)
+                    .map(u => (
+                      <option key={u.id} value={u.email}>
+                        {u.name || u.email} ({u.role})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </aside>
