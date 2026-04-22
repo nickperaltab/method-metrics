@@ -841,18 +841,10 @@ export default function DashboardView({ userEmail, userAvatar, metrics = [], bqC
                     <span style={styles.chartTitle}>{chart?.name || `Chart ${item.i}`}</span>
                   </div>
                   {isMine && !isSharedView && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button
-                        style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
-                        onClick={() => { setEditChartId(item.i); setShowChatModal(true); }}
-                        title="Edit chart"
-                      >
-                        &#9998;
-                      </button>
-                      <button style={styles.removeBtn} onClick={() => handleRemoveChart(item.i)} title="Remove">
-                        &#10005;
-                      </button>
-                    </div>
+                    <OverflowMenu items={[
+                      { label: 'Edit chart', onClick: () => { setEditChartId(item.i); setShowChatModal(true); } },
+                      { label: 'Remove from dashboard', onClick: () => handleRemoveChart(item.i), danger: true },
+                    ]} />
                   )}
                 </div>
                 <div style={styles.chartBody}>
