@@ -391,6 +391,8 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
       .map(m => {
         let raw;
         if (m.dimensionFilter && typeof m.dimensionFilter === 'object') {
+          // Grouped fetch is month-grain only (see plan.js buildScorecardQueryPlan).
+          // Weekly/daily keys don't exist for dimensionFilter metrics today.
           const dim = Object.keys(m.dimensionFilter)[0];
           const grouped = dataMap.get(`${m.id}:grouped:${dim}`);
           raw = resolveFilteredKpiSeries(grouped, m.dimensionFilter);
