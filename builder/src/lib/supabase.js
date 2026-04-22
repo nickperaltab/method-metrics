@@ -319,6 +319,16 @@ export async function loadChartsByIds(ids) {
 
 // Dashboard stars
 // Ownership-aware queries
+export async function fetchDashboardsByIds(ids) {
+  if (!ids || ids.length === 0) return [];
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/dashboards?id=in.(${ids.join(',')})&order=name`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`Failed to load dashboards by ids (${res.status})`);
+  return res.json();
+}
+
 export async function fetchMyDashboards(userId) {
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/dashboards?created_by_user=eq.${userId}&order=name`,

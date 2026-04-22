@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin, canDelete } from '../lib/permissions';
-import { fetchMyDashboards, fetchStars, starDashboard, unstarDashboard, deleteDashboard, updateDashboard } from '../lib/supabase';
+import { fetchMyDashboards, fetchDashboardsByIds, fetchStars, starDashboard, unstarDashboard, deleteDashboard, updateDashboard } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import Dialog from '../components/Dialog';
 import posthog from '../lib/posthog';
@@ -129,7 +129,14 @@ export default function Home() {
         currentUser ? fetchMyDashboards(currentUser.id) : Promise.resolve([]),
         currentUser ? fetchStars(currentUser.id) : Promise.resolve([]),
       ]);
-      setDashboards(mine);
+      // Pull any starred dashboards that aren't mine so favorites from
+      // shared dashboards surface on Home.
+      const mineIds = new Set(mine.map(d => d.id));
+      const missingStarIds = starIds.filter(id => !mineIds.has(id));
+      const extraStarred = missingStarIds.length > 0
+        ? await fetchDashboardsByIds(missingStarIds).catch(() => [])
+        : [];
+      setDashboards([...mine, ...extraStarred]);
       setDbStars(starIds);
     } catch (e) {
       console.error(e);
