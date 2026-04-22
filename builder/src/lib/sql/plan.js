@@ -35,7 +35,17 @@ export function collectMetricIds(config) {
       continue;
     }
     for (const kpi of section.kpis || []) {
-      if (typeof kpi.metricId === 'number') ids.add(kpi.metricId);
+      if (typeof kpi.metricId !== 'number') continue;
+      ids.add(kpi.metricId);
+      if (kpi.dimensionFilter && typeof kpi.dimensionFilter === 'object') {
+        for (const dim of Object.keys(kpi.dimensionFilter)) {
+          groupedCharts.push({
+            metricId: kpi.metricId,
+            dimension: dim,
+            lastNMonths: section.lastNMonths ?? 13,
+          });
+        }
+      }
     }
     for (const chart of section.charts || []) {
       for (const m of chart.metrics || []) {
@@ -65,11 +75,20 @@ export function collectMetricIds(config) {
       }
     }
   }
+  const seenGrouped = new Set();
+  const dedupedGrouped = [];
+  for (const g of groupedCharts) {
+    const key = `${g.metricId}:${g.dimension}`;
+    if (seenGrouped.has(key)) continue;
+    seenGrouped.add(key);
+    dedupedGrouped.push(g);
+  }
+
   return {
     ids: [...ids],
     customSqls,
     weeklyMetrics: [...weeklyMetrics],
-    groupedCharts,
+    groupedCharts: dedupedGrouped,
     yoyMetrics: [...yoyMetrics],
     rawTableSections,
   };

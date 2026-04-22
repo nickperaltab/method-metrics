@@ -49,6 +49,44 @@ describe('collectMetricIds', () => {
     expect(out.rawTableSections).toHaveLength(1);
     expect(out.ids).toContain(54);
   });
+
+  it('captures grouped fetch need from KPI dimensionFilter', () => {
+    const out = collectMetricIds({
+      sections: [{
+        kpis: [
+          { metricId: 373, label: 'Total' },
+          { metricId: 373, label: 'Solo', dimensionFilter: { Segment: 'Solo no DEP' } },
+          { metricId: 373, label: 'Team AI+', dimensionFilter: { Segment: 'Team AI Plus' } },
+        ],
+      }],
+    });
+    // One grouped entry per distinct (metricId, dimension) pair, regardless of how many tiles filter on it
+    expect(out.groupedCharts).toContainEqual({ metricId: 373, dimension: 'Segment', lastNMonths: 13 });
+    expect(out.groupedCharts.filter(g => g.metricId === 373 && g.dimension === 'Segment')).toHaveLength(1);
+  });
+
+  it('coalesces KPI dimensionFilter with chart groupByDimension on the same metric+dim', () => {
+    // Both a KPI with dimensionFilter and a chart with groupByDimension reference 373/Segment.
+    // The result should contain exactly ONE grouped entry (deduped), not two.
+    const out = collectMetricIds({
+      sections: [
+        { kpis: [{ metricId: 373, dimensionFilter: { Segment: 'Solo no DEP' } }] },
+        { charts: [{ groupByDimension: 'Segment', metrics: [{ id: 373 }] }] },
+      ],
+    });
+    // Without KPI dimensionFilter support this is 1 (chart only).
+    // Once Task 2 adds KPI support without dedup it becomes 2 — this assertion catches that.
+    // The correct implementation deduplicates back to 1 AND the KPI contributes the entry.
+    // To distinguish "chart-only" from "properly coalesced", assert the entry has lastNMonths: 13
+    // (KPIs default to 13 while the chart here has no lastNMonths so also defaults to 13 — same).
+    // Real discriminator: with only the KPI section (no chart) we must still get a grouped entry.
+    const kpiOnly = collectMetricIds({
+      sections: [{ kpis: [{ metricId: 373, dimensionFilter: { Segment: 'Solo no DEP' } }] }],
+    });
+    expect(kpiOnly.groupedCharts.filter(g => g.metricId === 373 && g.dimension === 'Segment')).toHaveLength(1);
+    // And combined, chart + KPI = still exactly 1 (deduped)
+    expect(out.groupedCharts.filter(g => g.metricId === 373 && g.dimension === 'Segment')).toHaveLength(1);
+  });
 });
 
 describe('buildScorecardQueryPlan', () => {
