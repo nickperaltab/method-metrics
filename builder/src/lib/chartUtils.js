@@ -268,6 +268,35 @@ export function applyStyleRulesToDatasets(datasets, styleRules) {
   return clones;
 }
 
+function deriveAxisLabels(labels, datasets, dataConfig, valueFormat) {
+  // X: derive from label format or dataConfig hints
+  let xLabel = dataConfig?.xAxisLabel;
+  if (!xLabel) {
+    const first = String(labels?.[0] || '');
+    if (/^\d{4}-\d{2}$/.test(first)) xLabel = 'Month';
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(first)) {
+      xLabel = dataConfig?.timeBucket === 'week' ? 'Week' : (dataConfig?.timeBucket === 'day' ? 'Day' : 'Date');
+    } else if (/^\d{4}-Q\d$/.test(first)) xLabel = 'Quarter';
+    else if (/^\d{4}$/.test(first)) xLabel = 'Year';
+  }
+
+  // Y: pick from config → valueFormat → single-dataset label
+  let yLabel = dataConfig?.yAxisLabel;
+  if (!yLabel) {
+    if (valueFormat === 'percent') yLabel = 'Percent';
+    else if (valueFormat === 'currency') yLabel = 'Amount';
+    else if (datasets?.length === 1) yLabel = datasets[0]?.label || '';
+  }
+  return { xLabel: xLabel || '', yLabel: yLabel || '' };
+}
+
+const axisNameStyle = {
+  color: '#9ca3af',
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 10,
+  fontWeight: 400,
+};
+
 /** Build a full ECharts option from chart type + aggregated data */
 export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { showLabels = false, colors: customColors = null, valueFormat = null } = {}) {
   const processedDatasets = applyStyleRulesToDatasets(datasets, dataConfig?.styleRules);
@@ -275,6 +304,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   const displayLabels = formatDateLabels(labels);
   const isDateAxis = labels.length > 0 && /^\d{4}-\d{2}/.test(String(labels[0]));
   const showLegend = processedDatasets.length > 1;
+  const { xLabel, yLabel } = deriveAxisLabels(labels, processedDatasets, dataConfig, valueFormat);
 
   const baseTooltip = {
     trigger: 'axis',
@@ -283,7 +313,13 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     textStyle: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
   };
 
-  const baseGrid = { left: 60, right: 24, top: showLegend ? 40 : 16, bottom: 60, containLabel: false };
+  const baseGrid = {
+    left: yLabel ? 72 : 60,
+    right: 24,
+    top: showLegend ? 40 : 16,
+    bottom: xLabel ? 70 : 60,
+    containLabel: false,
+  };
 
   const baseLegend = showLegend ? {
     show: true,
@@ -295,6 +331,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   const categoryAxis = {
     type: 'category',
     data: displayLabels,
+    name: xLabel,
+    nameLocation: 'middle',
+    nameGap: 34,
+    nameTextStyle: axisNameStyle,
     axisLine: { lineStyle: { color: '#e2e5e9' } },
     axisTick: { lineStyle: { color: '#e2e5e9' } },
     axisLabel: {
@@ -307,6 +347,10 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   const valueAxis = {
     type: 'value',
+    name: yLabel,
+    nameLocation: 'middle',
+    nameGap: 50,
+    nameTextStyle: axisNameStyle,
     axisLine: { lineStyle: { color: '#e2e5e9' } },
     axisTick: { lineStyle: { color: '#e2e5e9' } },
     axisLabel: {
