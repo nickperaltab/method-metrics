@@ -121,17 +121,17 @@ export default {
       description: 'Monthly MRR movements and retention rates. Cancellations and downgrades erode MRR; expansions recover it. GRR excludes expansions (pure retention); NRR includes them (net of all movements).',
       kpis: [
         { metricId: 382, label: 'Gross MRR Retention %', format: 'percent',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
         { metricId: 383, label: 'Net MRR Retention %', format: 'percent',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
         { metricId: 378, label: 'Start MRR', format: 'currency',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
         { metricId: 379, label: 'Cancellations', format: 'currency',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
         { metricId: 380, label: 'Downgrades', format: 'currency',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
         { metricId: 381, label: 'Expansions', format: 'currency',
-          valueSelector: 'current_or_latest', showDelta: true },
+          valueSelector: 'latest' },
       ],
       charts: [
         {
