@@ -51,6 +51,15 @@ export function collectMetricIds(config) {
       for (const m of chart.metrics || []) {
         if (typeof m.id === 'number') ids.add(m.id);
         if (m.customSql) customSqls.push({ key: String(m.id), sql: m.customSql });
+        if (m.dimensionFilter && typeof m.dimensionFilter === 'object' && typeof m.id === 'number') {
+          for (const dim of Object.keys(m.dimensionFilter)) {
+            groupedCharts.push({
+              metricId: m.id,
+              dimension: dim,
+              lastNMonths: chart.lastNMonths ?? 13,
+            });
+          }
+        }
       }
       if (chart.timeBucket === 'week') {
         for (const m of chart.metrics || []) {

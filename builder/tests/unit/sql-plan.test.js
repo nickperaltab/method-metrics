@@ -65,6 +65,29 @@ describe('collectMetricIds', () => {
     expect(out.groupedCharts.filter(g => g.metricId === 373 && g.dimension === 'Segment')).toHaveLength(1);
   });
 
+  it('captures grouped fetch need from chart-metric dimensionFilter', () => {
+    const out = collectMetricIds({
+      sections: [{
+        charts: [{
+          metrics: [
+            { id: 373, dimensionFilter: { Segment: 'Solo no DEP' } },
+          ],
+        }],
+      }],
+    });
+    expect(out.groupedCharts).toContainEqual({ metricId: 373, dimension: 'Segment', lastNMonths: 13 });
+  });
+
+  it('dedups KPI and chart-metric dimensionFilter on the same (metric, dim)', () => {
+    const out = collectMetricIds({
+      sections: [{
+        kpis:   [{ metricId: 373, dimensionFilter: { Segment: 'Solo no DEP' } }],
+        charts: [{ metrics: [{ id: 373, dimensionFilter: { Segment: 'Team AI Plus' } }] }],
+      }],
+    });
+    expect(out.groupedCharts.filter(g => g.metricId === 373 && g.dimension === 'Segment')).toHaveLength(1);
+  });
+
   it('coalesces KPI dimensionFilter with chart groupByDimension on the same metric+dim', () => {
     // Both a KPI with dimensionFilter and a chart with groupByDimension reference 373/Segment.
     // The result should contain exactly ONE grouped entry (deduped), not two.

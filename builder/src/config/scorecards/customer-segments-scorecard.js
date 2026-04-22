@@ -1,6 +1,8 @@
 /**
- * Customers Scorecard
- * Entity-level segmentation by license tier × DEP status.
+ * Customers Scorecard (entity grain)
+ * Backed by metric 373 "Customers" on v_customers with Segment as a dimension.
+ * Per-segment sections filter metric 373 via dimensionFilter; the Overview
+ * adds a stacked bar + line grouped by Segment (Justin's Slack asks #1 and #2).
  */
 
 export default {
@@ -10,7 +12,7 @@ export default {
   status: 'approved',
   hideGrain: true,
   views: {
-    v_customer_segments: { dateCol: 'Month' },
+    v_customers: { dateCol: 'Month' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────
@@ -20,24 +22,34 @@ export default {
       kpis: [
         { metricId: 373, label: 'Total Customers', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 374, label: 'Solo no DEP', format: 'number',
-          valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 375, label: 'Small Team no DEP', format: 'number',
-          valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 376, label: 'Team no DEP', format: 'number',
-          valueSelector: 'current_or_latest', showDelta: true },
-        { metricId: 377, label: 'Team AI Plus', format: 'number',
-          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 373, label: 'Solo no DEP', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true,
+          dimensionFilter: { Segment: 'Solo no DEP' } },
+        { metricId: 373, label: 'Small Team no DEP', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true,
+          dimensionFilter: { Segment: '2-3 no DEP' } },
+        { metricId: 373, label: 'Team no DEP', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true,
+          dimensionFilter: { Segment: '4+ no DEP' } },
+        { metricId: 373, label: 'Team AI Plus', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true,
+          dimensionFilter: { Segment: 'Team AI Plus' } },
       ],
       charts: [
         {
-          label: 'Total Customers Over Time',
+          label: 'Customers by Segment',
+          chartType: 'bar', valueFormat: 'number',
+          stacked: true,
+          showLabels: false,
+          groupByDimension: 'Segment',
+          metrics: [{ id: 373, label: 'Customers' }],
+        },
+        {
+          label: 'Customers by Segment Over Time',
           chartType: 'line', valueFormat: 'number',
           showLabels: true,
-          metrics: [
-            { id: 373, label: 'Total Customers', color: '#2563eb' },
-            { id: 377, label: 'Customers with DEP', color: '#059669' },
-          ],
+          groupByDimension: 'Segment',
+          metrics: [{ id: 373, label: 'Customers' }],
         },
       ],
     },
@@ -51,7 +63,8 @@ export default {
           label: 'Solo no DEP by Month',
           chartType: 'bar', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 374, label: 'Solo no DEP', color: '#6b7280' }],
+          metrics: [{ id: 373, label: 'Solo no DEP', color: '#6b7280',
+                      dimensionFilter: { Segment: 'Solo no DEP' } }],
         },
       ],
     },
@@ -65,7 +78,8 @@ export default {
           label: 'Small Team no DEP by Month',
           chartType: 'bar', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 375, label: '2-3 no DEP', color: '#3b82f6' }],
+          metrics: [{ id: 373, label: '2-3 no DEP', color: '#3b82f6',
+                      dimensionFilter: { Segment: '2-3 no DEP' } }],
         },
       ],
     },
@@ -79,7 +93,8 @@ export default {
           label: 'Team no DEP by Month',
           chartType: 'bar', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 376, label: '4+ no DEP', color: '#7c3aed' }],
+          metrics: [{ id: 373, label: '4+ no DEP', color: '#7c3aed',
+                      dimensionFilter: { Segment: '4+ no DEP' } }],
         },
       ],
     },
@@ -93,7 +108,8 @@ export default {
           label: 'Team AI Plus by Month',
           chartType: 'bar', valueFormat: 'number',
           showLabels: true,
-          metrics: [{ id: 377, label: 'Team AI Plus', color: '#059669' }],
+          metrics: [{ id: 373, label: 'Team AI Plus', color: '#059669',
+                      dimensionFilter: { Segment: 'Team AI Plus' } }],
         },
       ],
     },

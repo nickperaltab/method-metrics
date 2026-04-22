@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import EChart from '../EChart';
-import { resolveKpiValue } from './utils';
+import { resolveKpiValue, resolveFilteredKpiSeries } from './utils';
 
 /**
  * Aggregate a monthly time-series into quarters.
@@ -389,7 +389,14 @@ export default function Chart({ config, dataMap, onMetricClick, filterLastNMonth
     const metricsData = config.metrics
       .filter(m => m.renderAs !== 'referenceLine')
       .map(m => {
-        const raw = getMetricData(m.id);
+        let raw;
+        if (m.dimensionFilter && typeof m.dimensionFilter === 'object') {
+          const dim = Object.keys(m.dimensionFilter)[0];
+          const grouped = dataMap.get(`${m.id}:grouped:${dim}`);
+          raw = resolveFilteredKpiSeries(grouped, m.dimensionFilter);
+        } else {
+          raw = getMetricData(m.id);
+        }
         const data = effectiveGrain === 'quarter'
           ? filterToWindow(aggregateToQuarters(raw, config.valueFormat === 'percent'), null, config.dateFrom)
           : filterToWindow(raw, effectiveLastNMonths, config.dateFrom);
