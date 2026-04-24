@@ -75,6 +75,13 @@ These are the API field names. In BQ TransLineFlattened, the equivalent is `SUM(
 
 This handles CompanyAccount renames (one entity has up to 69 different names over time) by using the stable EntityRecordID for the temporal join, then reporting at customer level.
 
+### Two views, two cohort windows
+
+- **v_customer_mrr** — 1-month P1/P2 shift. Powers monthly MRR movements. Do NOT use for board-deck retention.
+- **v_customer_annual_mrr** — 12-month P1/P2 shift. Powers the board-deck Pre-FX GRR/NRR. Validated 2026-04-24: Feb 2026 Start=$708,044.58, Cancel=$93,174.01, Down=$61,141.53, Exp=$86,313.03, GRR=78.21% — penny-exact match to Annual Summary and to annual-grr.sql.
+
+The two views are structurally identical — only difference is `INTERVAL 1 MONTH` vs `INTERVAL 12 MONTH` in the P1→P2 join. This mirrors the spreadsheet pattern where "monthly" and "annual" timeframes live in separate files.
+
 ### Annual verification (validated 2026-03-27 — EXACT MATCH)
 
 Verified against Nov Annual.xlsx and Dec Annual.xlsx (straight from BigQuery):
