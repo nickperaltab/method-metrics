@@ -45,21 +45,14 @@ Visit **https://nickperaltab.github.io/method-metrics/builder/#/mcp-token**
 
 > Generating a new token revokes any previous one you had. If you switch machines, just mint a new one.
 
-### 3. Add to Claude (pick one)
-
-**Option A — Claude Desktop (recommended for most people)**
+### 3. Add to Claude Desktop
 
 1. Quit Claude Desktop (⌘Q).
 2. Open `~/Library/Application Support/Claude/claude_desktop_config.json` (create it with `{}` if missing).
-3. Paste the config block from the page (or merge into existing `mcpServers`).
+3. Paste the config block from the token page (or merge into existing `mcpServers`).
 4. Save and reopen Claude Desktop.
 
-**Option B — claude.ai custom connector (Enterprise web)**
-
-1. claude.ai → Settings → Connectors → **Add custom connector**.
-2. Name: `Method Metrics`
-3. URL: `https://agkubdpgnpwudzpzcvhs.supabase.co/functions/v1/mcp-metrics`
-4. Auth: Bearer token → paste your token from step 2.
+> **Note on claude.ai:** The org-level "Custom connector" UI in claude.ai requires OAuth, which our server doesn't currently implement. Use Claude Desktop for now. (Or tell Nic if you want OAuth added — it's about a day of work.)
 
 ### 4. Try it
 > *"Use method-metrics to show me the Marketing Scorecard."*
