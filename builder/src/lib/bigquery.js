@@ -128,7 +128,15 @@ export async function queryBq(sql) {
       disconnectBq();
       throw new Error('BQ session expired — please reconnect');
     }
-    throw new Error(`BQ ${res.status}`);
+    // Pull the specific message out of the error body so 403 / quota /
+    // invalid-table / etc. are debuggable from the console.
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body?.error?.message ? `: ${body.error.message}` : '';
+    } catch {}
+    console.error(`[bq] ${res.status}${detail}`, { sql });
+    throw new Error(`BQ ${res.status}${detail}`);
   }
   const data = await res.json();
   if (!data.rows) return { rows: [], schema: data.schema?.fields || [] };
