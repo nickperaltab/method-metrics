@@ -35,6 +35,7 @@ jobs:
         run: |
           cd builder
           npm ci
+          npm run lint
           VITE_BASE=/method-metrics/builder/ npm run build
 
       - name: Prepare deploy directory
