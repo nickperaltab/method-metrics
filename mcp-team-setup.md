@@ -32,20 +32,19 @@ A connection between Claude and our internal metrics warehouse. You type questio
 
 ## Setup (~2 min, self-service)
 
-### 1. Get on the allowlist
-Ping Nic with your Method email. Nic adds you (one row in a table).
-
-### 2. Generate your token
+### 1. Generate your token
 Visit **https://nickperaltab.github.io/method-metrics/builder/#/mcp-token**
 
-- You'll be signed in automatically via Google (same session as the Metrics Hub).
+- Sign in with your `@method.me` Google account (same as the Metrics Hub).
 - Click **Generate my token**.
 - A fresh `mcp_…` string appears. **Copy it now** — it isn't shown again.
 - A pre-filled Claude Desktop config block is also shown with a copy button.
 
+> Anyone with a verified `@method.me` Google account can mint. Non-Method emails need to be allowlisted manually — ping Nic.
+
 > Generating a new token revokes any previous one you had. If you switch machines, just mint a new one.
 
-### 3. Add to Claude Desktop
+### 2. Add to Claude Desktop
 
 1. Quit Claude Desktop (⌘Q).
 2. Open `~/Library/Application Support/Claude/claude_desktop_config.json` (create it with `{}` if missing).
@@ -54,7 +53,7 @@ Visit **https://nickperaltab.github.io/method-metrics/builder/#/mcp-token**
 
 > **Note on claude.ai:** The org-level "Custom connector" UI in claude.ai requires OAuth, which our server doesn't currently implement. Use Claude Desktop for now. (Or tell Nic if you want OAuth added — it's about a day of work.)
 
-### 4. Try it
+### 3. Try it
 > *"Use method-metrics to show me the Marketing Scorecard."*
 
 If it works you'll get a summary with data age. If not, see Troubleshooting.
@@ -75,7 +74,7 @@ Claude figures out which tool to call on its own, but these patterns work:
 
 ## Troubleshooting
 
-**Page says "not allowlisted"** — Nic hasn't added your email yet; ping him with the exact email shown on the page.
+**Page says "not allowlisted"** — Your Google account isn't on `@method.me`. If you're a contractor or external collaborator, ping Nic to allowlist your specific email.
 
 **"method-metrics" doesn't appear in Claude after restart** — Fully quit (⌘Q). First launch downloads `mcp-remote` via npx; give it 30–60 seconds.
 
@@ -104,8 +103,8 @@ Claude figures out which tool to call on its own, but these patterns work:
 
 > 📊 **New: ask Claude about our metrics**
 >
-> I've wired up Claude Desktop / claude.ai to our metrics warehouse. Ask things like *"How are marketing trials trending?"* or *"Show me the Sales Scorecard"* and get live answers.
+> I've wired up Claude Desktop to our metrics warehouse. Ask things like *"How are marketing trials trending?"* or *"Show me the Marketing Scorecard"* and get live answers.
 >
-> To connect: DM me your Method email so I can allowlist you, then go to **https://nickperaltab.github.io/method-metrics/builder/#/mcp-token** and follow the steps on the page. ~2 minutes.
+> To connect: visit **https://nickperaltab.github.io/method-metrics/builder/#/mcp-token**, sign in with your Method Google account, click **Generate**, and paste the config block into Claude Desktop. ~2 minutes.
 >
 > Read-only. Data refreshes nightly.

@@ -84,11 +84,14 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  // Allowlist check — case-insensitive on the normalized email.
+  // Allowlist check — accepts either an exact email match
+  // (e.g. 'contractor@example.com') OR a domain-only row
+  // (e.g. '@method.me' covers all verified addresses on that domain).
+  const domain = '@' + id.email.split('@')[1];
   const { data: allowRow } = await sb
     .from('mcp_allowlist')
     .select('id')
-    .ilike('email', id.email)
+    .or(`email.ilike.${id.email},email.eq.${domain}`)
     .maybeSingle();
   if (!allowRow) return json({ error: 'not_allowlisted', email: id.email }, 403);
 
