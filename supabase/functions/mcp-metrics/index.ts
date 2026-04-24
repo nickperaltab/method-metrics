@@ -17,25 +17,58 @@ import { verifyBearer } from './auth.ts';
 import { handleRpc, type JsonRpcRequest } from './rpc.ts';
 import type { ToolContext } from './tools.ts';
 
+const RESOURCE_SERVER = `${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-metrics`;
+const AUTH_SERVER = `${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-oauth`;
+const RESOURCE_METADATA_URL = `${RESOURCE_SERVER}/.well-known/oauth-protected-resource`;
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'WWW-Authenticate',
 };
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
+    headers: { ...CORS_HEADERS, 'content-type': 'application/json', ...extraHeaders },
   });
+}
+
+// RFC 9728 Protected Resource Metadata. MCP clients fetch this to discover
+// which OAuth authorization server protects this resource.
+function resourceMetadata(): Response {
+  return jsonResponse({
+    resource: RESOURCE_SERVER,
+    authorization_servers: [AUTH_SERVER],
+    bearer_methods_supported: ['header'],
+    scopes_supported: ['mcp'],
+  });
+}
+
+// Per RFC 9728 §5.1, the WWW-Authenticate header on a 401 must point clients
+// at the resource metadata document so they can discover the auth server.
+function unauthorized(reason?: string): Response {
+  const wwwAuth = `Bearer realm="${RESOURCE_SERVER}", resource_metadata="${RESOURCE_METADATA_URL}"`;
+  return jsonResponse({ error: 'unauthorized', reason }, 401, { 'WWW-Authenticate': wwwAuth });
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
+
+  const url = new URL(req.url);
+  // Supabase routes by function slug; runtime sees /mcp-metrics/<route>.
+  const path = url.pathname.replace(/^\/mcp-metrics/, '') || '/';
+
+  // Public discovery endpoint — no auth required (per RFC 9728).
+  if (req.method === 'GET' && path === '/.well-known/oauth-protected-resource') {
+    return resourceMetadata();
+  }
+
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
 
   const auth = await verifyBearer(req);
-  if (!auth.ok) return jsonResponse({ error: 'unauthorized', reason: auth.reason }, 401);
+  if (!auth.ok) return unauthorized(auth.reason);
 
   let body: JsonRpcRequest | JsonRpcRequest[];
   try {
