@@ -29,18 +29,20 @@ export function _setBqToken(token) {
 
 export async function initBqAuth(onSuccess, onFail) {
   const stored = localStorage.getItem('bq_access_token');
-  if (!stored) return;
+  if (!stored) { onFail?.(); return; }
 
-  // Validate the token is still alive
+  // Validate the stored token against BigQuery directly — userinfo is more lenient
+  // than the BQ API (accepts some stale tokens), so checking userinfo can leave the
+  // app showing "BQ Connected" while BQ itself returns 401 on the first query.
   try {
-    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${stored}` },
-    });
+    const res = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${BQ_PROJECT}`,
+      { headers: { Authorization: `Bearer ${stored}` } }
+    );
     if (res.ok) {
       bqToken = stored;
       onSuccess?.(stored);
     } else {
-      // Token expired — clear it
       localStorage.removeItem('bq_access_token');
       bqToken = null;
       onFail?.();
