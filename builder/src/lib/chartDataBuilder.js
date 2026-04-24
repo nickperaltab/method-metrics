@@ -3,6 +3,10 @@ import { applyLastNMonths } from './chartUtils';
 import { evaluateFormula } from './sanitize.js';
 import schemaCache from './schemaCache';
 
+// BQ auth errors must propagate so the app can re-render to the sign-in gate,
+// not get swallowed into queryDetails (which renders as a generic "no data" message).
+const isBqAuthError = (e) => /session expired|Not connected to BigQuery/i.test(e?.message || '');
+
 /**
  * Get the date column for a view from schema cache.
  */
@@ -66,7 +70,10 @@ export async function fetchChartDatasets({
                   sAgg.labels.forEach((l, idx) => { sCounts[l] = sAgg.data[idx]; });
                   subDepData[subDepId] = sCounts;
                 }
-              } catch { subDepData[subDepId] = {}; }
+              } catch (e) {
+                if (isBqAuthError(e)) throw e;
+                subDepData[subDepId] = {};
+              }
             }
             const subLabels = new Set();
             for (const c of Object.values(subDepData)) Object.keys(c).forEach(k => subLabels.add(k));
@@ -78,7 +85,10 @@ export async function fetchChartDatasets({
             }
             depAggregated[depId] = counts;
           }
-        } catch { depAggregated[depId] = {}; }
+        } catch (e) {
+          if (isBqAuthError(e)) throw e;
+          depAggregated[depId] = {};
+        }
       }
 
       const allLabels = new Set();
@@ -128,6 +138,7 @@ export async function fetchChartDatasets({
         });
         queryDetails.push({ metricName: label, metricId: metric.id, sql: grouped.sql, dateColumn: metric.semantic_date_col || xField, labels: grouped.labels, data: [], groupedBy: groupByDimension });
       } catch (e) {
+        if (isBqAuthError(e)) throw e;
         console.error(`Grouped query failed for metric ${metric.id} by ${groupByDimension}:`, e);
         queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: xField, labels: [], data: [] });
       }
@@ -146,6 +157,7 @@ export async function fetchChartDatasets({
         }
         queryDetails.push({ metricName: label, metricId: metric.id, sql: agg.sql, dateColumn: dateCol, labels: agg.multiSeries ? [] : agg.labels, data: agg.multiSeries ? [] : agg.data });
       } catch (e) {
+        if (isBqAuthError(e)) throw e;
         queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
       }
     }
@@ -236,6 +248,7 @@ export async function fetchPivotData({ metricIds, metrics, dataConfig }) {
       metricLabels.push({ label, metric, derived: false });
       queryDetails.push({ metricName: label, metricId: metric.id, sql, dateColumn: dateCol, labels: [], data: [] });
     } catch (e) {
+      if (isBqAuthError(e)) throw e;
       queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
     }
   }
@@ -275,7 +288,10 @@ export async function fetchPivotData({ metricIds, metrics, dataConfig }) {
           dep.view_name, dateCol, depYField, groupByDimension, channelFilter, lastNMonths
         );
         snapshots[depLabel] = { snapshot, sql, metricId: dep.id };
-      } catch { snapshots[depLabel] = { snapshot: {}, sql: 'ERROR', metricId: dep.id }; }
+      } catch (e) {
+        if (isBqAuthError(e)) throw e;
+        snapshots[depLabel] = { snapshot: {}, sql: 'ERROR', metricId: dep.id };
+      }
     }
 
     const rowSnapshot = {};
