@@ -1,5 +1,5 @@
 import { validateIdentifier, validateInt, escapeBqString } from './sanitize.js';
-import { buildEndDateClause } from './sql/semantic.js';
+import { buildEndDateClause, buildSemanticSql } from './sql/semantic.js';
 
 // Re-export pure SQL builders for backwards compat with existing imports.
 export {
