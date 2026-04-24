@@ -14,6 +14,7 @@ export default {
   views: {
     v_customers: { dateCol: 'Month' },
     v_customer_mrr: { dateCol: 'Month' },
+    v_customer_annual_mrr: { dateCol: 'Month' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────
@@ -118,39 +119,39 @@ export default {
     // ── Retention ───────────────────────────────────────────────
     {
       title: 'Retention',
-      description: 'Monthly MRR movements and retention rates. Cancellations and downgrades erode MRR; expansions recover it. GRR excludes expansions (pure retention); NRR includes them (net of all movements).',
+      description: 'Annual Pre-FX retention rates and the 12-month cohort movements behind them. Each month compares to the same month 12 months prior. Matches the Annual Summary column from the board deck.',
       kpis: [
-        { metricId: 382, label: 'Gross MRR Retention %', format: 'percent',
+        { metricId: 388, label: 'Annual GRR %', format: 'percent',
           valueSelector: 'latest' },
-        { metricId: 383, label: 'Net MRR Retention %', format: 'percent',
+        { metricId: 389, label: 'Annual NRR %', format: 'percent',
           valueSelector: 'latest' },
-        { metricId: 378, label: 'Start MRR', format: 'currency',
+        { metricId: 384, label: 'Start MRR (12m ago)', format: 'currency',
           valueSelector: 'latest' },
-        { metricId: 379, label: 'Cancellations', format: 'currency',
+        { metricId: 385, label: 'Cancellations', format: 'currency',
           valueSelector: 'latest' },
-        { metricId: 380, label: 'Downgrades', format: 'currency',
+        { metricId: 386, label: 'Downgrades', format: 'currency',
           valueSelector: 'latest' },
-        { metricId: 381, label: 'Expansions', format: 'currency',
+        { metricId: 387, label: 'Expansions', format: 'currency',
           valueSelector: 'latest' },
       ],
       charts: [
         {
-          label: 'GRR & NRR Over Time',
+          label: 'Annual GRR & NRR Over Time',
           chartType: 'line', valueFormat: 'percent',
           showLabels: true,
           metrics: [
-            { id: 382, label: 'GRR %', color: '#2563eb' },
-            { id: 383, label: 'NRR %', color: '#059669' },
+            { id: 388, label: 'GRR %', color: '#2563eb' },
+            { id: 389, label: 'NRR %', color: '#059669' },
           ],
         },
         {
-          label: 'MRR Movements by Month',
+          label: '12-Month MRR Movements',
           chartType: 'bar', valueFormat: 'currency',
           showLabels: false,
           metrics: [
-            { id: 381, label: 'Expansions', color: '#22c55e' },
-            { id: 379, label: 'Cancellations', color: '#ef4444' },
-            { id: 380, label: 'Downgrades', color: '#f59e0b' },
+            { id: 387, label: 'Expansions', color: '#22c55e' },
+            { id: 385, label: 'Cancellations', color: '#ef4444' },
+            { id: 386, label: 'Downgrades', color: '#f59e0b' },
           ],
         },
       ],
@@ -159,22 +160,22 @@ export default {
     // ── Retention by Segment ────────────────────────────────────
     {
       title: 'Retention by Segment',
-      description: 'GRR and NRR broken out by customer segment. Each segment weighted by its Start MRR.',
+      description: 'Annual GRR and NRR broken out by customer segment. Each segment weighted by its Start MRR 12 months ago.',
       layout: 'column',
       charts: [
         {
-          label: 'GRR % by Segment',
+          label: 'Annual GRR % by Segment',
           chartType: 'line', valueFormat: 'percent',
           showLabels: false,
           groupByDimension: 'Segment',
-          metrics: [{ id: 382, label: 'GRR %' }],
+          metrics: [{ id: 388, label: 'GRR %' }],
         },
         {
-          label: 'NRR % by Segment',
+          label: 'Annual NRR % by Segment',
           chartType: 'line', valueFormat: 'percent',
           showLabels: false,
           groupByDimension: 'Segment',
-          metrics: [{ id: 383, label: 'NRR %' }],
+          metrics: [{ id: 389, label: 'NRR %' }],
         },
       ],
     },
