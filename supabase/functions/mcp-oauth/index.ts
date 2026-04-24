@@ -282,26 +282,38 @@ async function googleCallback(req: Request): Promise<Response> {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const googleErr = url.searchParams.get('error');
+  console.log('[oauth/google-callback] start', { hasCode: !!code, hasState: !!state, googleErr });
 
-  if (!state) return htmlError('Sign-in failed', 'Missing state parameter from Google.');
+  if (!state) {
+    console.error('[oauth/google-callback] missing state');
+    return htmlError('Sign-in failed', 'Missing state parameter from Google.');
+  }
 
-  const { data: pending } = await sb()
+  const { data: pending, error: pendingErr } = await sb()
     .from('oauth_pending_authorizations')
     .select('*')
     .eq('state', state)
     .maybeSingle();
-  if (!pending) return htmlError('Sign-in failed', 'Authorization request expired or unknown. Start over.');
+  if (pendingErr) console.error('[oauth/google-callback] pending lookup error', pendingErr);
+  if (!pending) {
+    console.error('[oauth/google-callback] no pending row for state', state);
+    return htmlError('Sign-in failed', 'Authorization request expired or unknown. Start over.');
+  }
+  console.log('[oauth/google-callback] pending found', { client_id: pending.client_id, resource: pending.resource });
 
   // Pending row consumed regardless of outcome — single use.
   await sb().from('oauth_pending_authorizations').delete().eq('state', state);
 
   if (new Date(pending.expires_at).getTime() < Date.now()) {
+    console.error('[oauth/google-callback] pending expired', pending.expires_at);
     return errorRedirect(pending.redirect_uri, 'access_denied', 'Authorization expired', pending.client_state);
   }
   if (googleErr) {
+    console.error('[oauth/google-callback] google returned error', googleErr);
     return errorRedirect(pending.redirect_uri, 'access_denied', `Google error: ${googleErr}`, pending.client_state);
   }
   if (!code) {
+    console.error('[oauth/google-callback] missing code from Google');
     return errorRedirect(pending.redirect_uri, 'invalid_request', 'Missing code from Google', pending.client_state);
   }
 
@@ -319,19 +331,24 @@ async function googleCallback(req: Request): Promise<Response> {
   });
   const tokenJson = await tokenRes.json() as GoogleTokenResponse;
   if (!tokenRes.ok || !tokenJson.access_token) {
-    console.error('[oauth/google-callback] token exchange failed', tokenJson);
+    console.error('[oauth/google-callback] google token exchange failed', { status: tokenRes.status, body: tokenJson });
     return errorRedirect(pending.redirect_uri, 'server_error', tokenJson.error_description ?? 'Google token exchange failed', pending.client_state);
   }
+  console.log('[oauth/google-callback] got google access_token');
 
   const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${tokenJson.access_token}` },
   });
   const userJson = await userRes.json() as GoogleUserInfo;
   if (!userRes.ok || !userJson.email || userJson.verified_email === false) {
+    console.error('[oauth/google-callback] userinfo failed', { status: userRes.status, body: userJson });
     return errorRedirect(pending.redirect_uri, 'access_denied', 'Could not verify Google email', pending.client_state);
   }
   const email = userJson.email.toLowerCase();
+  console.log('[oauth/google-callback] got email', email);
+
   if (!(await emailAllowed(email))) {
+    console.error('[oauth/google-callback] email not allowlisted', email);
     return errorRedirect(pending.redirect_uri, 'access_denied', `Email ${email} is not allowlisted for the Metrics MCP. Contact Nic if this is unexpected.`, pending.client_state);
   }
 
@@ -353,6 +370,7 @@ async function googleCallback(req: Request): Promise<Response> {
     console.error('[oauth/google-callback] code insert failed', insErr);
     return errorRedirect(pending.redirect_uri, 'server_error', undefined, pending.client_state);
   }
+  console.log('[oauth/google-callback] code minted, redirecting back');
 
   const back = new URL(pending.redirect_uri);
   back.searchParams.set('code', authCode);
