@@ -84,6 +84,18 @@ Key columns:
 - `live` — solved, verified, approved. Visible to AI, queryable in chart builder.
 - `queued` — not yet solved. Invisible to AI.
 
+### Semantic-layer invariants
+
+When creating or editing a metric that uses the semantic layer, set ALL THREE of these together — not just `semantic_table`:
+
+- `semantic_table` (e.g. `v_customer_annual_mrr`)
+- `view_name` — same value as `semantic_table`
+- `view_definition` — cached DDL from `project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS`
+
+Why: queries work with just `semantic_table`, but the Registry UI silently hides the SQL panel (`Registry.jsx:344` reads `view_definition`) and the BQ Console link (line 411 reads `view_name`). The metric *looks* incomplete vs. siblings with no error to indicate the schema gap. Real incident on 2026-04-24: metrics 378–387 (monthly + annual MRR movements) shipped with only `semantic_table` and showed up sparser in the Registry.
+
+If you add a metric and the Definition panel doesn't appear in the Registry, this is the cause.
+
 ## BQ Views
 
 ~24 views total across primitives, breakdowns, derived rates, and Justin's revenue/MRR views. All in `project-for-method-dw.revenue.*`.
