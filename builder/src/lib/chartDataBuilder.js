@@ -158,12 +158,19 @@ export async function fetchChartDatasets({
         queryDetails.push({ metricName: label, metricId: metric.id, sql: agg.sql, dateColumn: dateCol, labels: agg.multiSeries ? [] : agg.labels, data: agg.multiSeries ? [] : agg.data });
       } catch (e) {
         if (isBqAuthError(e)) throw e;
+        console.error(`Chart query failed for metric ${metric.id} (${label}):`, e);
         queryDetails.push({ metricName: label, metricId: metric.id, sql: `ERROR: ${e.message}`, dateColumn: dateCol, labels: [], data: [] });
       }
     }
   }
 
-  if (rawDatasets.length === 0) return { empty: true, labels: [], datasets: [], queryDetails };
+  if (rawDatasets.length === 0) {
+    // All metric queries produced no data. If any threw a BQ error, surface it
+    // so the user isn't left staring at a generic "no data" message.
+    const firstErr = queryDetails.find(q => typeof q.sql === 'string' && q.sql.startsWith('ERROR: '));
+    if (firstErr) throw new Error(firstErr.sql.replace(/^ERROR: /, ''));
+    return { empty: true, labels: [], datasets: [], queryDetails };
+  }
 
   // Merge labels (union) and align datasets
   const allLabelsSet = new Set();
