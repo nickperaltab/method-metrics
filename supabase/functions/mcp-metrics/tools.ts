@@ -56,6 +56,10 @@ function detailMetric(m: MetricRow) {
     id: m.id,
     name: m.name,
     description: m.description,
+    // notes holds methodology, caveats, cohort-timing gotchas, and comparisons
+    // to sibling metrics. Essential context for answering 'why is this different
+    // from that?' questions accurately — return it in the detail view.
+    notes: m.notes,
     type: m.metric_type,
     status: m.status,
     formula: m.formula,
