@@ -520,7 +520,14 @@ Deno.serve(async (req) => {
   const path = url.pathname.replace(/^\/mcp-oauth/, '') || '/';
 
   try {
-    if (req.method === 'GET' && path === '/.well-known/oauth-authorization-server') return metadata();
+    // Both RFC 8414 (oauth-authorization-server) and OIDC discovery
+    // (openid-configuration) return the same metadata here. Some MCP clients
+    // (including claude.ai) probe the OIDC path first, so serving both avoids
+    // a 404 that aborts the whole connect flow.
+    if (req.method === 'GET' && (
+      path === '/.well-known/oauth-authorization-server' ||
+      path === '/.well-known/openid-configuration'
+    )) return metadata();
     if (req.method === 'POST' && path === '/register') return await register(req);
     if (req.method === 'GET' && path === '/authorize') return await authorize(req);
     if (req.method === 'GET' && path === '/google-callback') return await googleCallback(req);
