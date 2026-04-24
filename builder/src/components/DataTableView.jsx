@@ -155,15 +155,15 @@ function PivotTable({ pivotData, columns, noTotal }) {
 }
 
 export default function DataTableView({ labels, datasets, title, pivotData, columns, noTotal }) {
-  if (pivotData && columns) {
-    return <PivotTable pivotData={pivotData} columns={columns} noTotal={noTotal} />;
-  }
+  // Hooks must run in the same order on every render — early-return AFTER them,
+  // not before, or React tracks call order inconsistently across renders.
   const [sortCol, setSortCol] = useState(null); // null = period, 0..n = dataset index
   const [sortDir, setSortDir] = useState('asc');
 
-  const displayLabels = useMemo(() => formatDateLabels(labels), [labels]);
+  const displayLabels = useMemo(() => formatDateLabels(labels || []), [labels]);
 
   const rows = useMemo(() => {
+    if (!labels || !datasets) return [];
     const base = labels.map((raw, i) => ({
       idx: i,
       period: displayLabels[i],
@@ -187,9 +187,14 @@ export default function DataTableView({ labels, datasets, title, pivotData, colu
   }, [labels, displayLabels, datasets, sortCol, sortDir]);
 
   const totals = useMemo(() =>
-    datasets.map(ds => ds.data.reduce((sum, v) => sum + (v ?? 0), 0)),
+    (datasets || []).map(ds => ds.data.reduce((sum, v) => sum + (v ?? 0), 0)),
     [datasets]
   );
+
+  // Pivot branch: rendered after hooks have run so React's hook-order is stable.
+  if (pivotData && columns) {
+    return <PivotTable pivotData={pivotData} columns={columns} noTotal={noTotal} />;
+  }
 
   function handleSort(col) {
     if (sortCol === col) {

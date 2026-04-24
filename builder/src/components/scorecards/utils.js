@@ -24,10 +24,11 @@ export function formatValue(value, format) {
       return `${(Number(value) * 100).toFixed(2)}%`;
     case 'currency':
       return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    case 'delta':
+    case 'delta': {
       const v = Number(value);
       const sign = v > 0 ? '+' : '';
       return `${sign}${v.toFixed(2)}%`;
+    }
     case 'currency_delta': {
       const cv = Number(value);
       const csign = cv > 0 ? '+' : '';
