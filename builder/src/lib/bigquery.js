@@ -31,26 +31,41 @@ export async function initBqAuth(onSuccess, onFail) {
   const stored = localStorage.getItem('bq_access_token');
   if (!stored) { onFail?.(); return; }
 
-  // Validate the stored token against BigQuery directly — userinfo is more lenient
-  // than the BQ API (accepts some stale tokens), so checking userinfo can leave the
-  // app showing "BQ Connected" while BQ itself returns 401 on the first query.
+  // Validate the stored token against BigQuery's /queries endpoint (same path
+  // that queryBq uses — it's the only BQ endpoint with browser CORS support).
+  // userinfo is too lenient and accepts partially-stale tokens, leaving the app
+  // showing "BQ Connected" while BQ itself returns 401 on the first real query.
   try {
     const res = await fetch(
-      `https://bigquery.googleapis.com/bigquery/v2/projects/${BQ_PROJECT}`,
-      { headers: { Authorization: `Bearer ${stored}` } }
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${BQ_PROJECT}/queries`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${stored}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'SELECT 1', useLegacySql: false }),
+      }
     );
     if (res.ok) {
       bqToken = stored;
       onSuccess?.(stored);
     } else {
+      // Surface WHY the token was rejected so the user can tell expired vs
+      // revoked vs missing scope vs project-permission apart.
+      let reason = `BQ validation failed (${res.status})`;
+      try {
+        const body = await res.json();
+        const msg = body?.error?.message;
+        if (msg) reason += `: ${msg}`;
+      } catch {}
+      console.warn('[bq-auth]', reason);
       localStorage.removeItem('bq_access_token');
       bqToken = null;
-      onFail?.();
+      onFail?.(reason);
     }
-  } catch {
+  } catch (e) {
+    console.warn('[bq-auth] network error validating token:', e);
     localStorage.removeItem('bq_access_token');
     bqToken = null;
-    onFail?.();
+    onFail?.(e?.message || 'Network error');
   }
 }
 
