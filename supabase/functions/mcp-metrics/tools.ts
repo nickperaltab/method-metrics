@@ -204,6 +204,18 @@ export const TOOLS: ToolDef[] = [
       };
       const metric = await catalogGetMetric(a.id);
       if (!metric) return { content: { error: `No metric with id ${a.id}` } };
+      // Gate ad-hoc querying to verified metrics only. Queued/draft metrics
+      // exist (and may show up in scorecard snapshots that were pre-baked
+      // before promotion gating), but we don't surface their values via
+      // query_metric until they're approved. Snapshots remain available via
+      // get_dashboard, which uses pre-computed payloads.
+      if (metric.status !== 'live') {
+        return { content: {
+          error: `Metric ${a.id} (${metric.name}) is status='${metric.status}' — not approved for ad-hoc queries yet. ` +
+                 `Pre-built scorecards may still display its snapshot value via get_dashboard. ` +
+                 `Ping the metrics owner to verify and promote to 'live'.`,
+        } };
+      }
       if (!metric.semantic_table || !metric.semantic_measure || !metric.semantic_date_col) {
         return { content: {
           error: `Metric ${a.id} (${metric.name}) does not have semantic fields set and can't be queried via query_metric. Use a different tool or check the metric definition.`,
