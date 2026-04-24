@@ -21,6 +21,7 @@ export interface MetricRow {
   id: number;
   name: string;
   description: string | null;
+  notes: string | null;
   metric_type: string | null;
   status: string | null;
   view_name: string | null;
@@ -35,7 +36,7 @@ export interface MetricRow {
 }
 
 const METRIC_COLUMNS = [
-  'id', 'name', 'description', 'metric_type', 'status',
+  'id', 'name', 'description', 'notes', 'metric_type', 'status',
   'view_name', 'formula', 'depends_on',
   'semantic_table', 'semantic_measure', 'semantic_date_col',
   'semantic_filters', 'semantic_dimensions',
