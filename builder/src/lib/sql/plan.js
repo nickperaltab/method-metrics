@@ -126,6 +126,11 @@ export function buildScorecardQueryPlan(config, metrics) {
   const c = collectMetricIds(config);
   const allIds = addDerivedDeps(c.ids, metricsMap);
 
+  // Scorecards can opt into a longer fetch window (or unlimited) by setting
+  // `historyMonths` on the config. Default 13 keeps existing scorecards' fetch
+  // size unchanged. `null` disables the date filter — fetch all available data.
+  const historyMonths = config.historyMonths === undefined ? 13 : config.historyMonths;
+
   const primitives = [];
   const derived = [];
   for (const id of allIds) {
@@ -146,14 +151,14 @@ export function buildScorecardQueryPlan(config, metrics) {
     if (metric.semantic_table && metric.semantic_measure && metric.semantic_date_col) {
       queries.push({
         data_key: String(metric.id),
-        sql: buildSemanticSql(metric, 'month', 13, null),
+        sql: buildSemanticSql(metric, 'month', historyMonths, null),
         kind: 'primary_month',
         meta: { metric_id: metric.id, mode: 'semantic' },
       });
     } else if (metric.chart_sql) {
       queries.push({
         data_key: String(metric.id),
-        sql: wrapChartSql(metric.chart_sql, 13),
+        sql: wrapChartSql(metric.chart_sql, historyMonths),
         kind: 'primary_month',
         meta: { metric_id: metric.id, mode: 'chart_sql' },
       });
@@ -161,7 +166,7 @@ export function buildScorecardQueryPlan(config, metrics) {
       const dateCol = resolveDateCol(config, metric.view_name);
       queries.push({
         data_key: String(metric.id),
-        sql: buildViewAggSql(metric.view_name, dateCol, 'month', 13),
+        sql: buildViewAggSql(metric.view_name, dateCol, 'month', historyMonths),
         kind: 'primary_view',
         meta: { metric_id: metric.id, mode: 'view', view_name: metric.view_name, dateCol },
       });
@@ -172,7 +177,7 @@ export function buildScorecardQueryPlan(config, metrics) {
     expectedKeys.add(cs.key);
     queries.push({
       data_key: cs.key,
-      sql: wrapChartSql(cs.sql, 13),
+      sql: wrapChartSql(cs.sql, historyMonths),
       kind: 'custom',
     });
   }
