@@ -58,7 +58,7 @@ docs/
 - Authorized JS origins for OAuth: `https://nickperaltab.github.io`, `http://localhost:*`
 - Inline editing saves via PATCH to Supabase REST API
 - Breakdown lenses generate SQL dynamically from primitive schema definitions
-- `view_definition` column in Supabase = cached copy of BQ view SQL (sync manually when views change)
+- View DDL displayed in the Registry/Inspector is fetched live from BigQuery `INFORMATION_SCHEMA.VIEWS` via `useViewDefinition` (`builder/src/lib/useViewDefinition.js`). The legacy `view_definition` column on `metrics` is no longer read; it remains in the schema for historical/archival rows but should not be relied on (it drifted whenever a BQ view was updated without re-syncing). Drop the column when convenient.
 
 ## Semantic Layer
 
@@ -70,7 +70,7 @@ Metrics can have human-readable field definitions stored directly on the `metric
 
 Key columns:
 - `view_name` — which BQ view this metric queries
-- `view_definition` — cached SQL from BQ INFORMATION_SCHEMA
+- `view_definition` — *deprecated* legacy cached DDL column. The Registry/Inspector now fetches live DDL from BQ via `useViewDefinition`; this column is no longer read and should not be populated for new metrics.
 - `chart_sql` — pre-written query for pre-aggregated views (returns `{period, value}` pairs); used for revenue/MRR metrics that can't use generic GROUP BY
 - `depends_on` — integer[] of metric IDs this depends on
 - `primitive_metric_id` — FK to parent metric (for breakdowns)
@@ -86,15 +86,12 @@ Key columns:
 
 ### Semantic-layer invariants
 
-When creating or editing a metric that uses the semantic layer, set ALL THREE of these together — not just `semantic_table`:
+When creating or editing a metric that uses the semantic layer, set both:
 
 - `semantic_table` (e.g. `v_customer_annual_mrr`)
-- `view_name` — same value as `semantic_table`
-- `view_definition` — cached DDL from `project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS`
+- `view_name` — same value as `semantic_table` (drives the BQ Console link)
 
-Why: queries work with just `semantic_table`, but the Registry UI silently hides the SQL panel (`Registry.jsx:344` reads `view_definition`) and the BQ Console link (line 411 reads `view_name`). The metric *looks* incomplete vs. siblings with no error to indicate the schema gap. Real incident on 2026-04-24: metrics 378–387 (monthly + annual MRR movements) shipped with only `semantic_table` and showed up sparser in the Registry.
-
-If you add a metric and the Definition panel doesn't appear in the Registry, this is the cause.
+The DDL panel is fetched live from BigQuery via `useViewDefinition` (see `builder/src/lib/useViewDefinition.js`), so populating the legacy `view_definition` column is no longer required.
 
 ## BQ Views
 
