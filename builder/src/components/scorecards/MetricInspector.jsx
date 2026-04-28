@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatValue } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
 import { buildSemanticSql } from '../../lib/bigquery';
+import { useViewDefinition } from '../../lib/useViewDefinition';
 
 /**
  * Build a human-readable formula replacing {id} with metric names,
@@ -360,7 +361,9 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
   if (hasSemantic) {
     try { generatedSql = buildSemanticSql(metric, 'month', 12, null); } catch { /* ignore */ }
   }
-  const sql = generatedSql || metric.chart_sql || metric.view_definition;
+  const inlineSql = generatedSql || metric.chart_sql;
+  const liveDdl = useViewDefinition(inlineSql ? null : metric.view_name);
+  const sql = inlineSql || liveDdl.sql;
   const sqlPreview = sql && sql.length > 200 ? sql.slice(0, 200) + '...' : sql;
 
   return (

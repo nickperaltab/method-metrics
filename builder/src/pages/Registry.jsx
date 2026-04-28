@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { fetchMetrics, SUPABASE_URL, headers } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { isAdmin } from '../lib/permissions';
+import { useViewDefinition } from '../lib/useViewDefinition';
 import Dialog from '../components/Dialog';
 import DependencyView from '../components/DependencyView';
 import posthog from '../lib/posthog';
@@ -341,7 +342,18 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete, admin }) {
   const [showMore, setShowMore] = useState(false);
 
   const deps = (m.depends_on || []);
-  const sqlText = m.view_definition || m.chart_sql || '';
+  const liveDdl = useViewDefinition(m.view_name);
+  const sqlText = liveDdl.sql || m.chart_sql || '';
+  const sqlPlaceholder = m.view_name && !liveDdl.sql
+    ? liveDdl.loading
+      ? 'Loading view definition from BigQuery…'
+      : liveDdl.needsAuth
+        ? 'Connect to BigQuery to view the live definition.'
+        : liveDdl.error
+          ? `Couldn't fetch view definition: ${liveDdl.error}`
+          : null
+    : null;
+  const showSqlSection = Boolean(sqlText || sqlPlaceholder);
   const bqUrl = m.view_name
     ? `https://console.cloud.google.com/bigquery?project=project-for-method-dw&ws=!1m5!1m4!4m3!1sproject-for-method-dw!2srevenue!3s${m.view_name}`
     : null;
@@ -367,7 +379,7 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete, admin }) {
         </div>
       ) : null}
 
-      {sqlText && (
+      {showSqlSection && (
         <div style={s.panelSection}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={s.panelLabel}>Definition</div>
@@ -388,7 +400,7 @@ function ExpandPanel({ metric: m, onUpdate, onSaveField, onDelete, admin }) {
               }}
             />
           </div>
-          <pre style={s.sqlBlock}>{sqlText}</pre>
+          <pre style={s.sqlBlock}>{sqlText || sqlPlaceholder}</pre>
         </div>
       )}
 

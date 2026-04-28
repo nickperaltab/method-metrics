@@ -196,6 +196,36 @@ export function clearViewCache() {
   Object.keys(viewCache).forEach(k => delete viewCache[k]);
 }
 
+const viewDefCache = new Map();
+
+export function clearViewDefCache() {
+  viewDefCache.clear();
+}
+
+/**
+ * Fetch a view's DDL live from INFORMATION_SCHEMA. Returns a CREATE OR REPLACE
+ * VIEW statement so the displayed shape matches knowledge/verified-queries.
+ * Returns null when the view does not exist in the dataset.
+ */
+export async function fetchViewDefinition(viewName) {
+  validateIdentifier(viewName, 'viewName');
+  if (viewDefCache.has(viewName)) return viewDefCache.get(viewName);
+  const sql = `
+    SELECT view_definition
+    FROM \`${BQ_PROJECT}.${BQ_DATASET}.INFORMATION_SCHEMA.VIEWS\`
+    WHERE table_name = '${escapeBqString(viewName)}'
+  `;
+  const result = await queryBq(sql);
+  if (!result.rows.length) {
+    viewDefCache.set(viewName, null);
+    return null;
+  }
+  const body = result.rows[0].view_definition;
+  const ddl = `CREATE OR REPLACE VIEW \`${BQ_PROJECT}.${BQ_DATASET}.${viewName}\` AS\n${body}`;
+  viewDefCache.set(viewName, ddl);
+  return ddl;
+}
+
 /**
  * Fetch pre-aggregated data from a BQ view.
  * Instead of SELECT * and client-side aggregation, this builds a proper
