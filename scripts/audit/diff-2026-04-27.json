@@ -1,0 +1,296 @@
+[
+  {
+    "id": 373,
+    "name": "Customers",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Customer Base"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "number"
+      }
+    }
+  },
+  {
+    "id": 378,
+    "name": "Monthly Start MRR",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-03-27T00:00:00+00:00"
+      },
+      "name": {
+        "before": "Start MRR",
+        "after": "Monthly Start MRR"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 379,
+    "name": "Monthly Cancellations ($)",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-03-27T00:00:00+00:00"
+      },
+      "name": {
+        "before": "Cancellations ($)",
+        "after": "Monthly Cancellations ($)"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 380,
+    "name": "Monthly Downgrades ($)",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-03-27T00:00:00+00:00"
+      },
+      "name": {
+        "before": "Downgrades ($)",
+        "after": "Monthly Downgrades ($)"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 381,
+    "name": "Monthly Expansions ($)",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-03-27T00:00:00+00:00"
+      },
+      "name": {
+        "before": "Expansions ($)",
+        "after": "Monthly Expansions ($)"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 382,
+    "name": "Monthly GRR %",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly Retention"
+      },
+      "name": {
+        "before": "Gross MRR Retention %",
+        "after": "Monthly GRR %"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "percent"
+      },
+      "formula_display": {
+        "before": null,
+        "after": "(Start MRR \u2212 Cancellations \u2212 Downgrades) \u00f7 Start MRR \u00d7 100"
+      }
+    }
+  },
+  {
+    "id": 383,
+    "name": "Monthly NRR %",
+    "changes": {
+      "assigned_to": {
+        "before": null,
+        "after": "Nic"
+      },
+      "display_group": {
+        "before": null,
+        "after": "Monthly Retention"
+      },
+      "name": {
+        "before": "Net MRR Retention %",
+        "after": "Monthly NRR %"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "percent"
+      },
+      "formula_display": {
+        "before": null,
+        "after": "(Start MRR \u2212 Cancellations \u2212 Downgrades + Expansions) \u00f7 Start MRR \u00d7 100"
+      }
+    }
+  },
+  {
+    "id": 384,
+    "name": "Annual Start MRR",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-04-24T00:00:00+00:00"
+      },
+      "depends_on": {
+        "before": null,
+        "after": []
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 385,
+    "name": "Annual Cancellations ($)",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-04-24T00:00:00+00:00"
+      },
+      "depends_on": {
+        "before": null,
+        "after": []
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 386,
+    "name": "Annual Downgrades ($)",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-04-24T00:00:00+00:00"
+      },
+      "depends_on": {
+        "before": null,
+        "after": []
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 387,
+    "name": "Annual Expansions ($)",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual MRR Movement"
+      },
+      "verified_at": {
+        "before": null,
+        "after": "2026-04-24T00:00:00+00:00"
+      },
+      "depends_on": {
+        "before": null,
+        "after": []
+      },
+      "metric_format": {
+        "before": null,
+        "after": "currency"
+      }
+    }
+  },
+  {
+    "id": 388,
+    "name": "Annual GRR %",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual Retention"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "percent"
+      },
+      "formula_display": {
+        "before": null,
+        "after": "(Annual Start \u2212 Annual Cancel \u2212 Annual Down) \u00f7 Annual Start \u00d7 100"
+      }
+    }
+  },
+  {
+    "id": 389,
+    "name": "Annual NRR %",
+    "changes": {
+      "display_group": {
+        "before": null,
+        "after": "Annual Retention"
+      },
+      "metric_format": {
+        "before": null,
+        "after": "percent"
+      },
+      "formula_display": {
+        "before": null,
+        "after": "(Annual Start \u2212 Annual Cancel \u2212 Annual Down + Annual Exp) \u00f7 Annual Start \u00d7 100"
+      }
+    }
+  }
+]
