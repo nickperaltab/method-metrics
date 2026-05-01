@@ -152,10 +152,13 @@ export default function SaasDataExport({ bqConnected }) {
         <strong>Notes</strong>
         <ul style={{ margin: '8px 0 0 18px', padding: 0 }}>
           <li><code>RefNumber</code> is left blank (not synced to BigQuery).</li>
-          <li><code>IsPartnerManaged</code> is hardcoded to a known list — currently only <em>Mobility City Franchises</em>. Add more here when needed, or wait for a sync.</li>
-          <li><code>UncategorizedPortion</code> is set to 0 (always 0 in source data so far).</li>
-          <li><code>CustomerGrouping</code> is computed period-relative from the account dates, mirroring the API exactly. Verified within ~1% on April 2026.</li>
-          <li>The <em>Marketing Metrics</em> tab is built by Excel formulas in the template — it recomputes on file open.</li>
+          <li><code>IsPartnerManaged</code> = <code>Account.Channel = 'Managed'</code> (the source flag <em>DeveloperChargedForAccount</em> lands in BQ only as the Channel category).</li>
+          <li><code>Currency</code> derived from the QB company prefix in <code>AccountFullName</code> (<em>US-Sales</em> / <em>CAN-Sales</em>) — equivalent to the AR-account name on the original invoice.</li>
+          <li><code>UncategorizedPortion</code> computed as the residual of <code>Amount</code> minus all classified buckets — surfaces non-zero if BQ encounters an unfamiliar GL account.</li>
+          <li><code>CustomerGrouping</code> computed period-relative from the account dates, mirroring the API exactly.</li>
+          <li>Classic vs New SaaS split is done at the line level by GL-account pattern, matching the API's classifier (one invoice can have both Classic and New lines).</li>
+          <li>The <em>Marketing Metrics</em> tab is built by Excel formulas in the template — recomputes on file open.</li>
+          <li>Date filtering is by UTC date due to BQ schema (TLF.TxnDate is DATE, not TIMESTAMP). Expect a ~1% boundary skew vs files generated with the source's ET timestamps.</li>
         </ul>
       </div>
     </div>
