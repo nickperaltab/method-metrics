@@ -158,7 +158,6 @@ export default function SaasDataExport({ bqConnected }) {
           <li><code>CustomerGrouping</code> computed period-relative from the account dates, mirroring the API exactly.</li>
           <li>Classic vs New SaaS split is done at the line level by GL-account pattern, matching the API's classifier (one invoice can have both Classic and New lines).</li>
           <li>The <em>Marketing Metrics</em> tab is built by Excel formulas in the template — recomputes on file open.</li>
-          <li>Date filtering is by UTC date due to BQ schema (TLF.TxnDate is DATE, not TIMESTAMP). Expect a ~1% boundary skew vs files generated with the source's ET timestamps.</li>
         </ul>
       </div>
     </div>
