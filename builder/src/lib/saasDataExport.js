@@ -62,12 +62,13 @@ export function customerGroupingForInvoice(account, fromDateUTC, toDateUTC) {
 }
 
 // ---------------------------------------------------------------------------
-// IsPartnerManaged — sourced flag in the API. Hardcoded list until synced.
-// Verified against April 2026: only Mobility City Franchises was True.
+// IsPartnerManaged: BQ stores the source flag (DeveloperChargedForAccount) as
+// `Account.Channel = 'Managed'`. See BigQueryRowMapperService.cs:36 in the
+// API repo: `account.Channel = (bool)row["IsPartnerManaged"] ? "Managed" : "Referred"`.
 // ---------------------------------------------------------------------------
-const PARTNER_MANAGED_SET = new Set([
-  'Mobility City Franchises',
-]);
+function isPartnerManaged(channel) {
+  return channel === 'Managed';
+}
 
 // ---------------------------------------------------------------------------
 // BigQuery extraction
@@ -82,6 +83,16 @@ function bqDateLiteral(d) {
 }
 
 // Aggregate Invoices/CreditMemos at TxnRecordID level.
+//
+// Classic vs New SaaS split happens at LINE level by AccountFullName pattern,
+// not by invoice-level PlatformToggle (an invoice can have both Classic and
+// New lines). Mirrors CommonService.ClassifiyTxnLine in the API.
+//
+// Currency = the QB AR-account name. The actual ARAccountRef isn't in TLF, but
+// every income/expense line carries the QB company prefix in AccountFullName
+// (`Operating Revenue:US-Sales:US-Method:...` vs `CAN-Sales:CAN-Method:...`),
+// which is functionally identical: invoices billed via the Canadian QB entity
+// always use CAN-Accounts Receivable, US ones use US-Accounts Receivable.
 async function fetchTxns(txnType, fromDate, toDate) {
   const sql = `
     WITH agg AS (
@@ -92,24 +103,41 @@ async function fetchTxns(txnType, fromDate, toDate) {
         ANY_VALUE(InvoiceGrouping)                                   AS InvoiceGrouping,
         ANY_VALUE(PlatformToggle)                                    AS PlatformToggle,
         ANY_VALUE(SaaSPayType)                                       AS SaaSPayType,
-        SUM(IF(PlatformToggle='Classic', SaaSAmount, 0))             AS SaaSIncomeAmountClassic,
-        SUM(IF(PlatformToggle='New',     SaaSAmount, 0))             AS SaaSIncomeAmountNew,
+        SUM(CASE
+          WHEN AccountFullName LIKE '%Subscriptions:Classic%'    THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Portals%'   THEN SaaSAmount
+          ELSE 0 END)                                                AS SaaSIncomeAmountClassic,
+        SUM(CASE
+          WHEN AccountFullName LIKE '%:Subscriptions:Dedicated Enhancement Plan%' THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Emails%'                     THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Prepay Expiry Income%'       THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:MethodNew%'                  THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Partner Apps%'               THEN SaaSAmount
+          ELSE 0 END)                                                AS SaaSIncomeAmountNew,
         SUM(SaaSExpense)                                             AS SaasExpense,
         SUM(PSBeforeDiscount)                                        AS PSIncomeAmount,
         SUM(PSExpense)                                               AS PSExpenseAmount,
         SUM(LiabilityPortion)                                        AS LiabilityPortion,
         SUM(IF(SaaSDiscountType='Prepay', SaaSDiscount, 0))          AS DiscountPrepayPortion,
         SUM(IF(SaaSDiscountType='Other',  SaaSDiscount, 0)) + SUM(PSDiscount) AS DiscountOtherPortion,
-        0                                                            AS UncategorizedPortion,
+        -- Uncategorized = any line Amount that BQ didn't allocate to one of
+        -- the known buckets. In April 2026 this is 0 across the board, but
+        -- we compute it instead of hardcoding so unexpected GL accounts
+        -- surface as a non-zero value rather than silently disappear.
+        -- Note: SaaSAmount and PSAmount in TLF are already net-of-discount
+        -- (SaaSAmount = SaaSBeforeDiscount + SaaSDiscount). Subtracting
+        -- SaaSDiscount/PSDiscount on top would double-count.
+        SUM(Amount
+            - COALESCE(SaaSAmount, 0) - COALESCE(SaaSExpense, 0)
+            - COALESCE(PSAmount, 0)   - COALESCE(PSExpense, 0)
+            - COALESCE(LiabilityPortion, 0))   AS UncategorizedPortion,
         MAX(PackPaidCount)                                           AS PackPaidCount,
         MAX(UserPaidCount)                                           AS UserPaidCount,
         ANY_VALUE(SalesRep)                                          AS Rep,
-        -- Currency in the published file is the AR-account name on the QB
-        -- invoice header (only ever 'US-Accounts Receivable' or
-        -- 'CAN-Accounts Receivable'). That value isn't in TLF (which has
-        -- only Income/Expense/Liability lines, never the AR side), so we
-        -- approximate from SyncTypeRegion: CA → CAN, everything else → US.
-        IF(ANY_VALUE(SyncTypeRegion) = 'CA', 'CAN-Accounts Receivable', 'US-Accounts Receivable') AS Currency
+        IF(MAX(IF(AccountFullName LIKE '%CAN-Sales:%', 1, 0)) = 1
+           AND MAX(IF(AccountFullName LIKE '%US-Sales:%', 1, 0)) = 0,
+           'CAN-Accounts Receivable',
+           'US-Accounts Receivable')                                 AS Currency
       FROM \`project-for-method-dw.revenue.TransLineFlattened\`
       WHERE TxnType = '${txnType}'
         AND TxnDate >= ${bqDateLiteral(fromDate)}
@@ -124,46 +152,93 @@ async function fetchTxns(txnType, fromDate, toDate) {
 }
 
 // One row per CompanyAccount, with all per-period dollar aggregates and the
-// static account fields. Pack/User counts use MAX-per-invoice then SUM-across.
+// static account fields.
+//
+// SaaSIncomeAmount on this sheet is NET of discounts (the API's account
+// rollup adds DiscountOther/Prepay/Uncategorized into the SaaS bucket when
+// InvoiceGrouping='SaaS', and into PS when InvoiceGrouping='PS'). See
+// GetInvoicesService.cs:847-873.
+//
+// Pack/User counts: API assigns (=, not +=) per SaaS invoice — i.e. the LAST
+// invoice processed wins. We approximate with MAX, which matches for the
+// common case (one SaaS invoice per customer per month) and is deterministic.
+//
+// IsPartnerManaged: BQ stores it as Account.Channel='Managed' (the BQ sync
+// reads CustomerMethodAccount.DeveloperChargedForAccount and uses it ONLY to
+// derive Channel — so 'Managed' ⇔ DeveloperChargedForAccount=true).
 async function fetchAccounts(fromDate, toDate) {
   const sql = `
     WITH per_invoice AS (
       SELECT
         CompanyAccount,
         TransRecordID,
+        ANY_VALUE(InvoiceGrouping) AS InvoiceGrouping,
+        ANY_VALUE(TxnType)         AS TxnType,
+        SUM(CASE
+          WHEN AccountFullName LIKE '%Subscriptions:Classic%'  THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Portals%' THEN SaaSAmount
+          ELSE 0 END)              AS classic_saas,
+        SUM(CASE
+          WHEN AccountFullName LIKE '%:Subscriptions:Dedicated Enhancement Plan%' THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Emails%'                     THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Prepay Expiry Income%'       THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:MethodNew%'                  THEN SaaSAmount
+          WHEN AccountFullName LIKE '%:Subscriptions:Partner Apps%'               THEN SaaSAmount
+          ELSE 0 END)              AS new_saas,
+        SUM(SaaSExpense)           AS saas_expense,
+        SUM(PSBeforeDiscount)      AS ps_income,
+        SUM(PSExpense)             AS ps_expense,
+        SUM(LiabilityPortion)      AS liab,
+        SUM(IF(SaaSDiscountType='Prepay', SaaSDiscount, 0))           AS disc_prepay,
+        SUM(IF(SaaSDiscountType='Other',  SaaSDiscount, 0)) + SUM(PSDiscount) AS disc_other,
+        -- Note: SaaSAmount and PSAmount in TLF are already net-of-discount
+        -- (SaaSAmount = SaaSBeforeDiscount + SaaSDiscount). Subtracting
+        -- SaaSDiscount/PSDiscount on top would double-count.
+        SUM(Amount
+            - COALESCE(SaaSAmount, 0) - COALESCE(SaaSExpense, 0)
+            - COALESCE(PSAmount, 0)   - COALESCE(PSExpense, 0)
+            - COALESCE(LiabilityPortion, 0))    AS uncat,
         MAX(PackPaidCount) AS pack_max,
         MAX(UserPaidCount) AS user_max
       FROM \`project-for-method-dw.revenue.TransLineFlattened\`
       WHERE TxnDate >= ${bqDateLiteral(fromDate)}
         AND TxnDate <  ${bqDateLiteral(toDate)}
-        AND TxnType = 'Invoice'
       GROUP BY CompanyAccount, TransRecordID
-    ),
-    pack_user AS (
-      SELECT CompanyAccount,
-             SUM(pack_max) AS PackPaidCount,
-             SUM(user_max) AS UserPaidCount
-      FROM per_invoice
-      GROUP BY CompanyAccount
     ),
     period_agg AS (
       SELECT
         CompanyAccount,
-        SUM(SaaSAmount)                                              AS SaaSIncomeAmount,
-        SUM(SaaSExpense)                                             AS SaasExpense,
-        SUM(PSBeforeDiscount)                                        AS PSIncomeAmount,
-        SUM(PSExpense)                                               AS PSExpenseAmount,
-        SUM(LiabilityPortion)                                        AS LiabilityPortion,
-        COUNT(DISTINCT IF(InvoiceGrouping='SaaS' AND TxnType='Invoice', TransRecordID, NULL)) AS SaaSInvoiceCount,
-        ANY_VALUE(SaaSPayType)                                       AS SaaSPayTypePeriod,
-        ANY_VALUE(SyncType)                                          AS SyncType,
-        ANY_VALUE(Channel)                                           AS Channel,
-        ANY_VALUE(Platform)                                          AS Platform,
-        ANY_VALUE(BOMCustomerGrouping)                               AS BOMCustomerGrouping,
-        ANY_VALUE(EOMCustomerGrouping)                               AS EOMCustomerGrouping,
-        ANY_VALUE(AgeAtBOM)                                          AS AgeAtBOM,
-        MAX(SalesRep)                                                AS MethodRep,
-        ANY_VALUE(Offering)                                          AS Offering
+        -- BQ TLF stores CreditMemo amounts already negated relative to Excel
+        -- (QB convention), so the API's TxnTypePlusMinus multiplier isn't
+        -- needed here -- plain SUM gives the same Invoice minus CreditMemo
+        -- net. Discounts are pulled into SaaS or PS based on InvoiceGrouping,
+        -- mirroring GetInvoicesService.cs:868/872.
+        SUM(classic_saas + new_saas)
+          + SUM(IF(InvoiceGrouping='SaaS', disc_other + disc_prepay + uncat, 0))   AS SaaSIncomeAmount,
+        SUM(saas_expense)                                                          AS SaasExpense,
+        SUM(ps_income)
+          + SUM(IF(InvoiceGrouping='PS', disc_other + disc_prepay + uncat, 0))     AS PSIncomeAmount,
+        SUM(ps_expense)                                                            AS PSExpenseAmount,
+        SUM(liab)                                                                  AS LiabilityPortion,
+        COUNT(DISTINCT IF(InvoiceGrouping='SaaS' AND TxnType='Invoice', TransRecordID, NULL))
+                                                                                   AS SaaSInvoiceCount,
+        MAX(IF(TxnType='Invoice', pack_max, NULL))                                 AS PackPaidCount,
+        MAX(IF(TxnType='Invoice', user_max, NULL))                                 AS UserPaidCount
+      FROM per_invoice
+      GROUP BY CompanyAccount
+    ),
+    period_meta AS (
+      SELECT
+        CompanyAccount,
+        ANY_VALUE(SaaSPayType)         AS SaaSPayTypePeriod,
+        ANY_VALUE(SyncType)            AS SyncType,
+        ANY_VALUE(Channel)             AS Channel,
+        ANY_VALUE(Platform)            AS Platform,
+        ANY_VALUE(BOMCustomerGrouping) AS BOMCustomerGrouping,
+        ANY_VALUE(EOMCustomerGrouping) AS EOMCustomerGrouping,
+        ANY_VALUE(AgeAtBOM)            AS AgeAtBOM,
+        MAX(SalesRep)                  AS MethodRep,
+        ANY_VALUE(Offering)            AS Offering
       FROM \`project-for-method-dw.revenue.TransLineFlattened\`
       WHERE TxnDate >= ${bqDateLiteral(fromDate)}
         AND TxnDate <  ${bqDateLiteral(toDate)}
@@ -171,15 +246,17 @@ async function fetchAccounts(fromDate, toDate) {
     )
     SELECT
       a.CompanyAccount,
-      pa.BOMCustomerGrouping, pa.EOMCustomerGrouping,
-      pa.SaaSPayTypePeriod, pa.SyncType, pa.Channel, pa.Platform, pa.AgeAtBOM,
+      pm.BOMCustomerGrouping, pm.EOMCustomerGrouping,
+      pm.SaaSPayTypePeriod, pm.SyncType,
+      COALESCE(pm.Channel, a.Channel) AS Channel,
+      pm.Platform, pm.AgeAtBOM,
       pa.SaaSIncomeAmount, pa.SaasExpense, pa.SaaSInvoiceCount,
-      pu.PackPaidCount, pu.UserPaidCount,
+      pa.PackPaidCount, pa.UserPaidCount,
       pa.PSIncomeAmount, pa.PSExpenseAmount, pa.LiabilityPortion,
       a.Partner,
       a.IsActive, a.SignUpDate AS MethodSignUpDate,
       a.FirstSaaSInvoiceTxnDate, a.CancellationDate AS MethodCancellationDate,
-      pa.MethodRep, a.Offering,
+      pm.MethodRep, a.Offering,
       a.Att_Direct, a.Att_SEO, a.Att_OPN_Other_Peoples_Networks,
       a.Att_Pay_Per_Click, a.Att_Partners, a.Att_Email,
       a.Att_Remarketing, a.Att_Social, a.Att_Help_Center,
@@ -195,8 +272,8 @@ async function fetchAccounts(fromDate, toDate) {
       a.Custdatlastsaasamount, a.Custdatpreviouslastsaasamount,
       a.SaaSPayType AS SaaSPayTypeCurrent
     FROM \`project-for-method-dw.revenue.Account\` a
-    LEFT JOIN period_agg pa USING (CompanyAccount)
-    LEFT JOIN pack_user  pu USING (CompanyAccount)
+    LEFT JOIN period_agg  pa USING (CompanyAccount)
+    LEFT JOIN period_meta pm USING (CompanyAccount)
     -- include accounts with activity in period OR alive at any boundary
     WHERE pa.CompanyAccount IS NOT NULL
        OR (a.SignUpDate < ${bqDateLiteral(toDate)}
@@ -314,7 +391,7 @@ function writeAccountsSheet(sheet, accountRows, fromDateUTC, toDateUTC) {
     if (a.Partner === 'Method Integration' && allZero) continue;
 
     const partner = a.Partner ?? '';
-    const isPartnerManaged = partner ? PARTNER_MANAGED_SET.has(partner) : false;
+    const partnerManaged = isPartnerManaged(a.Channel);
 
     sheet.addRow([
       a.CompanyAccount ?? '',
@@ -334,7 +411,7 @@ function writeAccountsSheet(sheet, accountRows, fromDateUTC, toDateUTC) {
       Number(a.PSExpenseAmount) || 0,
       Number(a.LiabilityPortion) || 0,
       partner,
-      isPartnerManaged,
+      partnerManaged,
       String(a.IsActive ?? '').toLowerCase() === 'true',
       a.MethodSignUpDate ? new Date(a.MethodSignUpDate) : null,
       a.FirstSaaSInvoiceTxnDate ? new Date(a.FirstSaaSInvoiceTxnDate) : null,
