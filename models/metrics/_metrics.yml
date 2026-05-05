@@ -1,0 +1,31 @@
+# Top-level metrics file for cross-model advanced metrics.
+#
+# Per dbt latest-spec: simple metrics defined within a model serve as building
+# blocks; advanced metrics that reference simple metrics across DIFFERENT
+# semantic models go under the top-level `metrics:` key (this file).
+#
+# Single-model advanced metrics (those whose inputs all come from the same
+# semantic model) belong in that model's yml under its own `metrics:` block.
+#
+# Naming: this file uses the underscore-prefix convention (`_metrics.yml`)
+# to keep it sorting first alphabetically and to signal it's a top-level
+# config file rather than a model definition.
+
+metrics:
+  - name: sync_rate
+    type: ratio
+    label: Sync Rate
+    description: |
+      Fraction of trials that completed at least one sync. Numerator is the
+      count of sync events (`syncs`, defined on v_syncs); denominator is the
+      count of trial signups (`trials`, defined on v_trials). Canonical
+      Method "Sync Rate" metric (#300); upstream of Sync Rate vs Forecast
+      and Sync Rate Attainment.
+    numerator: syncs
+    denominator: trials
+    config:
+      meta:
+        metric_id: '300'
+        layer: metrics
+        owner: unassigned
+        depends_on: '55-54'

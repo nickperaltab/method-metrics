@@ -1,0 +1,85 @@
+# Semantic model on v_syncs (intermediate-layer view).
+#
+# v_syncs lives in BQ today as `project-for-method-dw.revenue.v_syncs` —
+# a SELECT from `revenue.Funnel` where EventType = 'Sync'.
+#
+# Grain: one row per sync event (NOT per account). An account that syncs
+# many times produces many rows. EntityRecordID identifies the account —
+# but it is NOT unique per row in this view (same account can have many
+# sync rows). Therefore EntityRecordID is declared as a `foreign` entity
+# (joins back to Account/v_trials), not primary. There is no single column
+# that uniquely identifies a row in v_syncs; the natural key would be
+# (EntityRecordID, SyncDate) — composite primaries aren't in latest-spec.
+#
+# This is the asymmetry vs. v_trials: trials is account-grained (one row
+# per account, EntityRecordID primary), syncs is event-grained (many rows
+# per account, EntityRecordID foreign). Honest representation of what the
+# data actually is.
+#
+# Renaming to `int_syncs` is also deferred to Phase 1.5 — see
+# docs/dbt-conventions-mapping.md, decision D3.
+
+models:
+  - name: v_syncs
+    description: |
+      One row per sync event recorded in the Funnel pipeline. Source:
+      revenue.Funnel filtered to EventType = 'Sync'. The filter and
+      projection live in the BQ-side DDL of v_syncs, not this dbt model —
+      this file is a passthrough that exists to let dbt attach the
+      semantic_model below.
+    config:
+      meta:
+        layer: intermediate
+        grain: sync_event
+        owner: nic
+
+    semantic_model:
+      enabled: true
+    agg_time_dimension: sync_date
+
+    columns:
+      - name: EntityRecordID
+        entity:
+          type: foreign
+          name: account
+
+      - name: CompanyAccount
+        entity:
+          type: foreign
+          name: company
+
+      - name: SyncDate
+        granularity: day
+        dimension:
+          type: time
+          name: sync_date
+
+      - name: SignupDate
+        granularity: day
+        dimension:
+          type: time
+          name: signup_date
+
+      - name: AttributionChannel
+        dimension:
+          type: categorical
+
+      - name: SignupCountry
+        dimension:
+          type: categorical
+
+      - name: Vertical
+        dimension:
+          type: categorical
+
+      - name: SyncType
+        dimension:
+          type: categorical
+
+    metrics:
+      - name: syncs
+        type: simple
+        label: Syncs
+        description: Count of sync events recorded in Funnel, grouped by SyncDate. Canonical "Syncs" metric (#55). Matches Supabase's COUNT(*) — counts events, not unique accounts (an account that syncs many times contributes many rows).
+        agg: count
+        expr: '*'

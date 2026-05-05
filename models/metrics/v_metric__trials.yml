@@ -1,0 +1,31 @@
+# Canonical metric definition for "Trials" (#54).
+#
+# v_metric__trials is the *materialized* form of the `trials` metric — a BQ
+# view returning (period, value) over the last 24 months. The Registry UI
+# reads from `INFORMATION_SCHEMA.VIEW_OPTIONS` to surface metric metadata.
+#
+# This file uses dbt-bigquery's NATIVE materialization config: `description`
+# becomes the BQ view's description, `labels` becomes the BQ view's labels.
+# `dbt run` generates the `CREATE OR REPLACE VIEW ... OPTIONS(...) AS SELECT`
+# at apply time — no custom Python deploy script needed (Option A from the
+# round-1 handoff). The corresponding .sql is just the SELECT body.
+
+models:
+  - name: v_metric__trials
+    description: |
+      Monthly trial-signup count, materialized for Registry UI and dashboard
+      consumption. Materialization of the "Trials" metric (#54), defined in
+      intermediate/v_trials.yml as a `simple` metric (COUNT(*) of v_trials
+      grouped by SignupDate).
+    config:
+      materialized: view
+      labels:
+        metric_id: '54'
+        layer: metrics
+        type: simple
+        status: live
+        owner: unassigned
+        verified_at: '2026-04-07'
+        source_table: v_trials
+        source_measure_safe: count_star
+        depends_on: ''

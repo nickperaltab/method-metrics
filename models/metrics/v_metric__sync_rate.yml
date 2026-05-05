@@ -1,0 +1,35 @@
+# Canonical metric definition for "Sync Rate" (#300).
+#
+# v_metric__sync_rate is the *materialized* form of the `sync_rate` ratio
+# metric defined in models/metrics/_metrics.yml (top-level cross-model file).
+# It returns (period, value) where value = SAFE_DIVIDE(syncs, trials) per
+# month over the last 24 months.
+#
+# Cross-model ratio metrics are NOT defined on a single semantic model — the
+# numerator (`syncs`) is from v_syncs, the denominator (`trials`) is from
+# v_trials. Hence the metric definition lives at the top level
+# (_metrics.yml), and this file carries only the materialization metadata.
+#
+# source_table is empty (the ratio is derived, not measured against a single
+# table); source_measure_safe is empty for the same reason. depends_on is
+# populated as 'numerator-denominator' = '55-54' (Syncs-Trials).
+
+models:
+  - name: v_metric__sync_rate
+    description: |
+      Monthly Sync Rate (syncs / trials), materialized for Registry UI and
+      dashboard consumption. Materialization of the "Sync Rate" metric
+      (#300), defined in models/metrics/_metrics.yml as a `ratio` metric
+      with numerator `syncs` (#55) and denominator `trials` (#54).
+    config:
+      materialized: view
+      labels:
+        metric_id: '300'
+        layer: metrics
+        type: ratio
+        status: live
+        owner: unassigned
+        verified_at: ''
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 55-54

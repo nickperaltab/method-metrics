@@ -1,0 +1,14 @@
+name: method_metrics
+version: 1.0.0
+
+profile: method_metrics
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  method_metrics:
+    +materialized: view

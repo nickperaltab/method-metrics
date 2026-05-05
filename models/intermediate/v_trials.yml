@@ -1,0 +1,74 @@
+# Semantic model on v_trials (intermediate-layer view).
+#
+# v_trials lives in BQ today as `project-for-method-dw.revenue.v_trials` —
+# a filtered SELECT from `revenue.Account` keeping rows where:
+#   - IsConversionException = FALSE
+#   - Partner != 'Method Integration'
+#   - SignupDate != DATE('0001-01-01')   (the "no trial" sentinel)
+#
+# Grain: one row per Method account that began a trial. EntityRecordID is
+# the primary entity (unique per row, sourced from Account.EntityRecordID).
+# CompanyAccount is a foreign key to the company-grain (a company can have
+# multiple Method accounts → multiple v_trials rows per company).
+#
+# Renaming to `int_trials` is deferred to Phase 1.5 (mechanical refactor,
+# no business impact) — see docs/dbt-conventions-mapping.md, decision D3.
+
+models:
+  - name: v_trials
+    description: |
+      One row per Method account that began a trial. Source: revenue.Account,
+      filtered to IsConversionException = FALSE, Partner != 'Method
+      Integration', SignupDate != DATE('0001-01-01'). The filter logic lives
+      in the BQ-side DDL of v_trials, not this dbt model — this file is a
+      passthrough that exists to let dbt attach the semantic_model below.
+    config:
+      meta:
+        layer: intermediate
+        grain: trial_account
+        owner: nic
+
+    semantic_model:
+      enabled: true
+    agg_time_dimension: signup_date
+
+    columns:
+      - name: EntityRecordID
+        entity:
+          type: primary
+          name: account
+
+      - name: CompanyAccount
+        entity:
+          type: foreign
+          name: company
+
+      - name: SignupDate
+        granularity: day
+        dimension:
+          type: time
+          name: signup_date
+
+      - name: AttributionChannel
+        dimension:
+          type: categorical
+
+      - name: SignupCountry
+        dimension:
+          type: categorical
+
+      - name: Vertical
+        dimension:
+          type: categorical
+
+      - name: SyncType
+        dimension:
+          type: categorical
+
+    metrics:
+      - name: trials
+        type: simple
+        label: Trials
+        description: Count of trial signups (Method accounts that began a trial), grouped by SignupDate. Canonical "Trials" metric (#54). Matches Supabase's COUNT(*) — equivalent to COUNT(DISTINCT EntityRecordID) at this grain since each account appears exactly once.
+        agg: count
+        expr: '*'

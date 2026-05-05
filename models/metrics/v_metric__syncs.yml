@@ -1,0 +1,25 @@
+# Canonical metric definition for "Syncs" (#55).
+#
+# Mirrors v_metric__trials.yml — see that file for the materialization
+# pattern. dbt-bigquery generates the CREATE OR REPLACE VIEW + OPTIONS at
+# `dbt run` time from the description and labels declared below.
+
+models:
+  - name: v_metric__syncs
+    description: |
+      Monthly sync-event count, materialized for Registry UI and dashboard
+      consumption. Materialization of the "Syncs" metric (#55), defined in
+      intermediate/v_syncs.yml as a `simple` metric (COUNT(*) of v_syncs
+      grouped by SyncDate).
+    config:
+      materialized: view
+      labels:
+        metric_id: '55'
+        layer: metrics
+        type: simple
+        status: live
+        owner: unassigned
+        verified_at: '2026-04-07'
+        source_table: v_syncs
+        source_measure_safe: count_star
+        depends_on: ''
