@@ -1,8 +1,13 @@
 # Handoff — dbt-shaped Metric Scaffold
 
-**Date:** 2026-05-04 (initial); 2026-05-05 (scaffold round 2 — three fixes applied + Option C verdict + Fusion adopted)
-**Status:** Scaffold v2 — all three fixes applied, Option C (foreign-only entity) validated end-to-end via `dbt compile` on Fusion. Five models, three metrics, two semantic models, all green. Ready for user review.
-**Next chat should:** read §10 (the round-2 verdict) before re-extending. The original §3–§5 instructions describe round 1; round 2 changed several things — see §10 for what's actually current.
+> ## ⚠️ DO NOT RUN `dbt run` — KNOWN PRODUCTION-BREAKING BUG
+>
+> The scaffold has a self-reference defect (round 2.5 audit, 2026-05-06).
+> Running `dbt run` would `CREATE OR REPLACE VIEW revenue.v_trials AS SELECT * FROM revenue.v_trials`, which overwrites the real filter logic with a circular passthrough. Same for `v_syncs`. **See §12 for full explanation and the rename fix.** Resolve §12 before any `dbt run`, `dbt build`, or CI hookup. `dbt parse` and `dbt compile` remain safe.
+
+**Date:** 2026-05-04 (initial); 2026-05-05 (scaffold round 2 — three fixes applied + Option C verdict + Fusion adopted); 2026-05-06 (round 2.5 self-reference bug surfaced, see §12)
+**Status:** Scaffold v2 — all three fixes applied, Option C (foreign-only entity) validated end-to-end via `dbt compile` on Fusion. Five models, three metrics, two semantic models, all green for parse/compile. **NOT safe to `dbt run` until §12 is resolved.**
+**Next chat should:** read §10 (round-2 verdict), §11 (round-2.5 follow-ups), and **§12 (the bug + fix options)** before doing anything else. Don't extend the pattern to more metrics until §12 is fixed — extending replicates the bug.
 
 ---
 
@@ -434,3 +439,86 @@ APPLIED  CREATE OR REPLACE VIEW revenue.v_syncs    (added EntityRecordID column)
 - The Phase 1 plan rewrite at `docs/superpowers/plans/2026-05-04-phase1-dbt-metric-migration.md` is unchanged from round 1. After round-3 pilot validates, that plan should be rewritten to assume the materialization pattern from §11.2 and the Fusion runtime from §11.3.
 
 *Round 2.5 written 2026-05-05 immediately after round 2 in the same session.*
+
+---
+
+## 12. ⚠️ Known bug — self-reference in intermediate models (2026-05-06)
+
+### The bug
+
+The scaffold's intermediate-layer .sql files are passthroughs into the same BQ view name they're named after:
+
+```sql
+-- models/intermediate/v_trials.sql
+{{ config(materialized='view') }}
+select * from `project-for-method-dw.revenue.v_trials`
+```
+
+The dbt model is named `v_trials`. With profile `dataset: revenue`, dbt will materialize this model as `revenue.v_trials` — the same view it's selecting from. So `dbt run` would execute:
+
+```sql
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_trials` AS
+SELECT * FROM `project-for-method-dw.revenue.v_trials`
+```
+
+Effects:
+- The real filter logic in `v_trials` (`IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`) is **gone**.
+- The view definition becomes self-referential.
+- Querying `v_trials` after this fails (BQ rejects circular view bodies at query time, or recurses to a depth error).
+- The Registry UI, AI chart builder, every saved chart, every dashboard that uses `v_trials` is **broken**.
+- Same defect on `v_syncs` (model name = view name = `revenue.v_syncs`).
+
+`v_metric__*` models do NOT have this bug — their target view names (`v_metric__trials`, `v_metric__syncs`, `v_metric__sync_rate`) don't collide with anything in BQ today.
+
+### Why parse/compile didn't catch it
+
+`dbt parse` and `dbt compile` validate yml structure and SQL templating but do not execute DDL. They don't notice that the resulting CREATE VIEW would self-reference. The bug is invisible until `dbt run`. This means **all the round-2 and round-2.5 "validates clean" verdicts are still correct for parse/compile — they just don't extend to `dbt run`**.
+
+### The discovery
+
+Hook blocked a `dbt run` attempt at the end of the 2026-05-05 / 2026-05-06 session with reasoning that surfaced the issue. Without the hook, the run would have executed and broken production. Lesson logged.
+
+### Fix options
+
+Three real choices, in order of cleanness:
+
+**(A) Rename intermediate models to `int_*`** — the canonical fix
+- `v_trials` → `int_trials`, `v_syncs` → `int_syncs` (the rename round-1 §D3 deferred to Phase 1.5)
+- The .sql passthrough then materializes as `revenue.int_trials` — a NEW view, no collision
+- Update every `{{ ref('v_trials') }}` and `{{ ref('v_syncs') }}` to `int_trials` / `int_syncs`
+- The semantic-model definitions stay attached, just on the renamed model
+- Pros: matches the conventions doc plan; "right end state" we already aligned on; smallest cognitive overhead long-term
+- Cons: bumps Phase 1.5's mechanical refactor into round 3; scope grows slightly
+
+**(B) Materialize dbt into a separate dataset (e.g., `revenue_dbt`)** — the schema-separation fix
+- Configure `dbt_project.yml` with `+schema: revenue_dbt` (or the equivalent BigQuery `dataset` override)
+- dbt materializes `v_trials` model as `revenue_dbt.v_trials` — different from `revenue.v_trials`
+- Pros: zero rename churn; preserves the `v_*` names everywhere
+- Cons: now two parallel datasets; a "which is canonical" question forever; Registry UI / chart builder need to know which to read; eventual cleanup is more work than the rename
+
+**(C) Disable the intermediate models in dbt + hard-code references in v_metric__\*.sql**
+- Add `+enabled: false` to `models.method_metrics.intermediate` in `dbt_project.yml`
+- Replace `{{ ref('v_trials') }}` in `v_metric__trials.sql` with hard-coded `\`project-for-method-dw.revenue.v_trials\``
+- Same for v_metric__syncs.sql
+- Semantic models defined on disabled models — unclear if dbt-fusion accepts (parse may error)
+- Pros: smallest diff
+- Cons: loses the dbt-native ref graph; more brittle; semantic_models likely break
+
+**Recommendation: (A).** It's the path of least long-term regret and was already on the roadmap. Round 3's first task should be the rename, before any pilot extension or `dbt run`.
+
+### Until the fix lands
+
+- Do not run `dbt run`, `dbt build`, or anything that materializes models
+- `dbt parse` and `dbt compile` are still safe — they don't execute DDL
+- The BQ view changes in §11.1 (EntityRecordID surfacing) are unaffected — those are real and live
+- The GitHub commit `522cba4f` stays as-is; the warning at the top of this doc is the safety net
+
+### Round 3 ordering (revised)
+
+1. **First task: implement fix (A)** — rename `v_trials` and `v_syncs` to `int_trials` / `int_syncs`, update all `ref()`s, re-validate `dbt compile`
+2. Then `dbt run` to actually materialize the three `v_metric__*` views in BQ — this is the genuine moment of truth
+3. Then the pilot picks from §11.4 (#373 Customers, #378 Monthly Start MRR)
+4. Then bulk-extend to the remaining 17 live metrics
+5. Then GRR/NRR last and most carefully
+
+*§12 written 2026-05-06 after the hook blocked `dbt run`. The hook was right; the fix is real work, not a hot patch.*
