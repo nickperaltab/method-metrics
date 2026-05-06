@@ -157,6 +157,47 @@ export default {
       ],
     },
 
+    // ── Monthly Retention ───────────────────────────────────────
+    {
+      title: 'Monthly Retention',
+      description: 'Month-over-month retention: each month compared to the immediately prior month. This is the customer-grain equivalent of the Looker NRR/GRR chart — same data source (TransLineFlattened), but rolls multi-account customers up to one record by EntityRecordID. A franchise with multiple billing accounts where one closes but others stay shows here as a Downgrade (the customer is smaller); the Looker chart shows it as a Churn (one account fully cancelled). Same dollars at risk; different classification. Customers whose entire prior-month SaaS was Prepay Expiry Income are excluded from both Start MRR and Cancellations (symmetric, CEO-confirmed methodology 2026-04-28). Headline GRR/NRR lands within ~10bp of the Looker chart.',
+      kpis: [
+        { metricId: 382, label: 'Monthly GRR %', format: 'percent',
+          valueSelector: 'latest', showDelta: true },
+        { metricId: 383, label: 'Monthly NRR %', format: 'percent',
+          valueSelector: 'latest', showDelta: true },
+        { metricId: 378, label: 'Start MRR (last month)', format: 'currency',
+          valueSelector: 'latest' },
+        { metricId: 379, label: 'Cancellations', format: 'currency',
+          valueSelector: 'latest' },
+        { metricId: 380, label: 'Downgrades', format: 'currency',
+          valueSelector: 'latest' },
+        { metricId: 381, label: 'Expansions', format: 'currency',
+          valueSelector: 'latest' },
+      ],
+      charts: [
+        {
+          label: 'Monthly GRR & NRR Over Time',
+          chartType: 'line', valueFormat: 'percent',
+          showLabels: true,
+          metrics: [
+            { id: 382, label: 'GRR %', color: '#2563eb' },
+            { id: 383, label: 'NRR %', color: '#059669' },
+          ],
+        },
+        {
+          label: 'Monthly MRR Movements',
+          chartType: 'bar', valueFormat: 'currency',
+          showLabels: false,
+          metrics: [
+            { id: 381, label: 'Expansions', color: '#22c55e' },
+            { id: 379, label: 'Cancellations', color: '#ef4444' },
+            { id: 380, label: 'Downgrades', color: '#f59e0b' },
+          ],
+        },
+      ],
+    },
+
     // ── Retention by Segment ────────────────────────────────────
     {
       title: 'Retention by Segment',

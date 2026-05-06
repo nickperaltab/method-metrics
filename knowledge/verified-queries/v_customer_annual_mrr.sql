@@ -4,19 +4,68 @@
 -- ============================================================
 -- Identical structure to v_customer_mrr, but compares P2 to P1 =
 -- 12 MONTHS prior instead of 1 month prior. Produces the annual
--- cohort values that match the CRO board deck "Pre-FX Gross ARR
--- Retention" numbers from the USD Rates KPI Deck Annual Summary.
+-- cohort values used by the Customer Segments scorecard.
 --
--- Verified 2026-04-24:
---   Feb 2026 expected (from annual-grr.sql, which matches
---   Annual Summary to 0.03pp): Start=$708,044.58,
---   Cancellations=$93,174.01, Downgrades=$61,141.53,
---   Expansions=$86,313.03, GRR=78.21%
+-- ------------------------------------------------------------
+-- METHODOLOGY (CEO-confirmed, 2026-04-28)
+-- ------------------------------------------------------------
+-- Prepay Expiry Income is a one-time write-off of unused prepay
+-- balance when Method's accounting closes out a long-dormant
+-- relationship (typically 1–3 years after the customer actually
+-- stopped paying). It is NOT subscription revenue and must not
+-- influence any retention primitive.
 --
--- Prepay-expiry exclusion: cancellations where ALL prior-period
--- non-zero SaaS lines are 'Prepay Expiry Income' are excluded
--- from Cancellations (and surfaced via OtherChurn). Matches
--- Justin's monthly-cancellations.sql lines 80-82 exactly.
+-- A customer whose ENTIRE Period-1 SaaS revenue was Prepay
+-- Expiry Income is excluded from BOTH StartMRR and Cancellations
+-- (symmetric exclusion). Their churn was already captured at the
+-- time they actually left, in whichever earlier cohort spanned
+-- their last actively-paying month.
+--
+-- This is the "engine methodology" — matches the SaaS Analytics
+-- Engine's `SaaS Totals` formula (denominator = Start − PreExpiry).
+-- It DIFFERS from the historical board-deck methodology, which
+-- left PE-only customers in StartMRR (asymmetric, inflating GRR
+-- by ~32bp).
+--
+-- ------------------------------------------------------------
+-- RECONCILIATION vs SaaS Analytics Engine
+-- ------------------------------------------------------------
+-- Source of truth for verification: the GetPeriodComparisonToExcel
+-- API (https://internal1.methodintegration.com/SaasAnalyticsSrv/
+-- api/GetPeriodComparisonToExcel) — see scripts/fetch_saas_analytics.py.
+--
+-- After this methodology change, BQ matches the engine to within
+-- ~2bp on Pre-FX GRR for any annual period (Feb 2026: BQ 77.91%
+-- vs engine 77.89%). Down/Exp/OtherChurn are penny-exact.
+--
+-- The residual ~$160 net Start/Cancel diff comes from a structural
+-- difference in customer identity:
+--   * Engine groups by CompanyAccount string (the customer's
+--     account name on each invoice).
+--   * BQ groups by EntityRecordID (stable numeric customer ID).
+--
+-- When a customer renames their CompanyAccount mid-cohort, the
+-- engine sees "old name cancelled $X + new name added $Y" and
+-- counts the old name as a cancellation. BQ correctly recognizes
+-- the same EntityRecordID continuing across the rename. On this
+-- specific point BQ is more correct — the engine docs themselves
+-- note "viewing NRR by Customer is more accurate, since it handles
+-- customers who close one account in order to switch to a new
+-- account."
+--
+-- Net effect: the engine slightly over-counts cancellations from
+-- renamed customers; BQ does not. Live with the 2bp residual.
+--
+-- ------------------------------------------------------------
+-- VERIFIED VALUES (post-methodology change, 2026-04-28)
+-- ------------------------------------------------------------
+-- Feb 2026 Pre-FX (sum of US + CAN, native currency):
+--   Start MRR (excl. PE):         $697,629
+--   Cancellations (excl. PE):     $93,002
+--   Downgrades:                   $61,141
+--   Expansions:                   $86,313
+--   Annual Pre-FX GRR:            77.91%
+--   (Engine equivalent: 77.89% — 2bp residual is rename handling)
 -- ============================================================
 
 CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_annual_mrr` AS
@@ -26,13 +75,21 @@ WITH entity_monthly AS (
     FORMAT_DATE('%Y-%m', TxnDate)                                              AS month_str,
     DATE_TRUNC(TxnDate, MONTH)                                                 AS Month,
     EntityRecordID,
-    ARRAY_AGG(CompanyAccount ORDER BY SaaSAmount DESC LIMIT 1)[OFFSET(0)]      AS company,
+    -- ORDER BY adds CompanyAccount ASC as a deterministic tie-breaker.
+    -- Without it, equal-revenue CompanyAccounts under one entity caused the
+    -- view to pick different "winning" names on different query plans, which
+    -- then broke the final JOIN ON Company.
+    ARRAY_AGG(CompanyAccount ORDER BY SaaSAmount DESC, CompanyAccount ASC LIMIT 1)[OFFSET(0)] AS company,
     SUM(SaaSAmount)                                                            AS total_saas,
     COUNTIF(SaaSAmount != 0)                                                   AS saas_lines,
     COUNTIF(SaaSAmount != 0 AND AccountFullName LIKE '%Prepay Expiry Income%') AS expiry_lines
   FROM `project-for-method-dw.revenue.TransLineFlattened`
   WHERE TxnDate >= '2021-12-01'
     AND FORMAT_DATE('%Y-%m', TxnDate) < FORMAT_DATE('%Y-%m', CURRENT_DATE())
+    -- Exclude internal Method accounts (m11/m18 prefixes) — matches Looker
+    -- and SaaS Analytics Engine filters.
+    AND CompanyAccount NOT LIKE 'm11%'
+    AND CompanyAccount NOT LIKE 'm18%'
   GROUP BY 1, 2, 3
 ),
 
@@ -99,6 +156,7 @@ company_level AS (
 ),
 
 -- Compute classification amounts at company level.
+-- StartMRR and Cancellations BOTH apply the all-PE exclusion (symmetric).
 company_classified AS (
   SELECT
     month_str,
@@ -106,7 +164,9 @@ company_classified AS (
     Company,
     p1_saas,
     p2_saas,
-    CASE WHEN p1_saas > 0 THEN p1_saas ELSE 0 END
+    CASE WHEN p1_saas > 0
+              AND NOT (p1_expiry_lines > 0 AND p1_expiry_lines = p1_saas_lines)
+         THEN p1_saas ELSE 0 END
       AS StartMRR,
     CASE WHEN p1_saas > 0 AND p2_saas = 0
               AND NOT (p1_expiry_lines > 0 AND p1_expiry_lines = p1_saas_lines)

@@ -77,10 +77,30 @@ This handles CompanyAccount renames (one entity has up to 69 different names ove
 
 ### Two views, two cohort windows
 
-- **v_customer_mrr** — 1-month P1/P2 shift. Powers monthly MRR movements. Do NOT use for board-deck retention.
-- **v_customer_annual_mrr** — 12-month P1/P2 shift. Powers the board-deck Pre-FX GRR/NRR. Validated 2026-04-24: Feb 2026 Start=$708,044.58, Cancel=$93,174.01, Down=$61,141.53, Exp=$86,313.03, GRR=78.21% — penny-exact match to Annual Summary and to annual-grr.sql.
+- **v_customer_mrr** — 1-month P1/P2 shift. Powers monthly MRR movements.
+- **v_customer_annual_mrr** — 12-month P1/P2 shift. Powers the Customer Segments scorecard's annual GRR/NRR. Updated 2026-04-28 to apply CEO-confirmed engine methodology (symmetric PE exclusion). Feb 2026 post-change: Start=$697.6K, GRR=77.91%, NRR=90.28%.
 
-The two views are structurally identical — only difference is `INTERVAL 1 MONTH` vs `INTERVAL 12 MONTH` in the P1→P2 join. This mirrors the spreadsheet pattern where "monthly" and "annual" timeframes live in separate files.
+The two views are structurally identical — only difference is `INTERVAL 1 MONTH` vs `INTERVAL 12 MONTH` in the P1→P2 join.
+
+### Prepay Expiry Income — methodology (CEO-confirmed 2026-04-28)
+
+PE Income is a one-time write-off of unused prepay balance, recognized 1–3 years after the customer actually stopped paying. It is NOT subscription revenue and must not influence retention primitives.
+
+A customer whose ENTIRE Period-1 SaaS revenue was Prepay Expiry Income is excluded from BOTH `StartMRR` and `Cancellations` (symmetric exclusion). Their actual churn was already captured in an earlier cohort (the one whose P1 spanned their last actively-paying month).
+
+This matches the SaaS Analytics Engine `SaaS Totals` formula (denominator = Start − PreExpiry). It DIFFERS from the historical board-deck reading, which left PE-only customers in StartMRR (asymmetric, inflated GRR by ~32bp).
+
+### Reconciliation against SaaS Analytics Engine
+
+Source of truth for verification: the `GetPeriodComparisonToExcel` API (https://internal1.methodintegration.com/SaasAnalyticsSrv/api/GetPeriodComparisonToExcel) — see `scripts/fetch_saas_analytics.py` and `scripts/diff_engine_vs_bq.py`.
+
+After the methodology change, BQ matches the engine to within ~2bp on Pre-FX GRR (Feb 2026: BQ 77.91% vs engine 77.89%). Down/Exp/OtherChurn match penny-exact.
+
+The residual ~$160–$1,000 net Start/Cancel diff is a structural difference in customer identity:
+- **Engine** groups by `CompanyAccount` string (the customer's account name on each invoice)
+- **BQ** groups by `EntityRecordID` (stable numeric customer ID)
+
+When a customer renames their CompanyAccount mid-cohort, the engine sees "old name cancelled $X + new name added $Y" and counts the old name as a cancellation. BQ correctly recognizes the same EntityRecordID continuing across the rename. On this specific point BQ is more correct — the engine docs themselves note "viewing NRR by Customer is more accurate, since it handles customers who close one account in order to switch to a new account."
 
 ### Annual verification (validated 2026-03-27 — EXACT MATCH)
 
