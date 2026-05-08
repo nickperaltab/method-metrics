@@ -480,31 +480,41 @@ Hook blocked a `dbt run` attempt at the end of the 2026-05-05 / 2026-05-06 sessi
 
 ### Fix options
 
-Three real choices, in order of cleanness:
+**(D) Inline the filter logic into the dbt model — the recommended fix** (added 2026-05-08)
+- Replace the passthrough body of `v_trials.sql` and `v_syncs.sql` with the **actual filter SQL** they currently have in BQ. The dbt model then OWNS the view definition.
+- `dbt run` does `CREATE OR REPLACE VIEW revenue.v_trials AS [actual filter logic]` — replaces the existing hand-managed view with a byte-identical-functionally dbt-managed one.
+- Pros:
+  - **This is the migration goal.** The whole point is "BQ views = dbt repo as source of truth." The passthrough was a half-step.
+  - Same names (`v_trials`, `v_syncs`) — zero downstream impact (Registry, chart builder, dashboards untouched)
+  - No new views, no rename churn
+  - Smallest diff to working state
+- Cons:
+  - Filter logic in dbt repo must EXACTLY match current BQ view body. Mitigated by:
+    - We already captured current DDL via `INFORMATION_SCHEMA.VIEWS`
+    - `dbt compile` lets us pre-diff the generated DDL against the current
+    - Pre/post `SELECT COUNT(*)` parity check on first run
+  - Ownership of view definition moves from "BQ console" to "dbt repo." Anyone editing the view going forward edits the .sql file, not the BQ console. (This is the migration goal, so this is a feature, not a bug.)
 
-**(A) Rename intermediate models to `int_*`** — the canonical fix
+**(A) Rename intermediate models to `int_*`** — convention-cleanup, no longer the recommended bug fix
 - `v_trials` → `int_trials`, `v_syncs` → `int_syncs` (the rename round-1 §D3 deferred to Phase 1.5)
-- The .sql passthrough then materializes as `revenue.int_trials` — a NEW view, no collision
-- Update every `{{ ref('v_trials') }}` and `{{ ref('v_syncs') }}` to `int_trials` / `int_syncs`
-- The semantic-model definitions stay attached, just on the renamed model
-- Pros: matches the conventions doc plan; "right end state" we already aligned on; smallest cognitive overhead long-term
-- Cons: bumps Phase 1.5's mechanical refactor into round 3; scope grows slightly
+- Was originally proposed as the bug fix because `int_trials` doesn't collide with `revenue.v_trials`. **But option D fixes the collision without renaming.**
+- Pros: matches the dbt naming convention (`int_*` for intermediate)
+- Cons: cosmetic-only; touches every `ref()` site; downstream dependents (`v_metric__*.sql`) need updating; doesn't earn its keep until someone wants the convention
+- Status: **deferred indefinitely.** Reopen if/when convention consistency starts mattering.
 
-**(B) Materialize dbt into a separate dataset (e.g., `revenue_dbt`)** — the schema-separation fix
-- Configure `dbt_project.yml` with `+schema: revenue_dbt` (or the equivalent BigQuery `dataset` override)
-- dbt materializes `v_trials` model as `revenue_dbt.v_trials` — different from `revenue.v_trials`
-- Pros: zero rename churn; preserves the `v_*` names everywhere
-- Cons: now two parallel datasets; a "which is canonical" question forever; Registry UI / chart builder need to know which to read; eventual cleanup is more work than the rename
+**(B) Materialize dbt into a separate dataset (e.g., `revenue_dbt`)**
+- Configure `dbt_project.yml` with `+schema: revenue_dbt`
+- Pros: zero rename churn; preserves `v_*` names
+- Cons: two parallel datasets forever; "which is canonical" question; eventual cleanup is harder than D
+- Status: rejected — D is cleaner.
 
-**(C) Disable the intermediate models in dbt + hard-code references in v_metric__\*.sql**
-- Add `+enabled: false` to `models.method_metrics.intermediate` in `dbt_project.yml`
-- Replace `{{ ref('v_trials') }}` in `v_metric__trials.sql` with hard-coded `\`project-for-method-dw.revenue.v_trials\``
-- Same for v_metric__syncs.sql
-- Semantic models defined on disabled models — unclear if dbt-fusion accepts (parse may error)
+**(C) Disable the intermediate models + hard-code references**
+- `+enabled: false` on intermediate; replace `ref()` with hard-coded BQ paths
 - Pros: smallest diff
-- Cons: loses the dbt-native ref graph; more brittle; semantic_models likely break
+- Cons: loses ref graph; semantic_model attachment likely breaks (semantic_model on disabled model is unclear behavior in Fusion)
+- Status: rejected — D is cleaner and preserves the semantic_model graph.
 
-**Recommendation: (A).** It's the path of least long-term regret and was already on the roadmap. Round 3's first task should be the rename, before any pilot extension or `dbt run`.
+**Recommendation: (D).** Replaces (A) which was the previous recommendation. Smaller diff, hits the migration goal, no new views, no downstream impact.
 
 ### Until the fix lands
 
@@ -513,12 +523,12 @@ Three real choices, in order of cleanness:
 - The BQ view changes in §11.1 (EntityRecordID surfacing) are unaffected — those are real and live
 - The GitHub commit `522cba4f` stays as-is; the warning at the top of this doc is the safety net
 
-### Round 3 ordering (revised)
+### Round 3 ordering (revised 2026-05-08)
 
-1. **First task: implement fix (A)** — rename `v_trials` and `v_syncs` to `int_trials` / `int_syncs`, update all `ref()`s, re-validate `dbt compile`
-2. Then `dbt run` to actually materialize the three `v_metric__*` views in BQ — this is the genuine moment of truth
+1. **First task: implement fix (D)** — copy current BQ view body of `v_trials` and `v_syncs` into the respective `models/intermediate/*.sql` files. Run `dbt compile`; manually diff the compiled DDL against the current view body to confirm functional equivalence. Sanity-check with `SELECT COUNT(*)` parity.
+2. Then `dbt run` — replaces existing `v_trials` and `v_syncs` with byte-identical-functionally dbt-managed versions, AND creates the three `v_metric__*` views fresh. Genuine moment of truth.
 3. Then the pilot picks from §11.4 (#373 Customers, #378 Monthly Start MRR)
 4. Then bulk-extend to the remaining 17 live metrics
 5. Then GRR/NRR last and most carefully
 
-*§12 written 2026-05-06 after the hook blocked `dbt run`. The hook was right; the fix is real work, not a hot patch.*
+*§12 written 2026-05-06 after the hook blocked `dbt run`. Recommendation revised 2026-05-08 from (A) the rename to (D) inline definition — (A) was a convention cleanup masquerading as a bug fix; (D) fixes the bug AND hits the migration goal in one step.*
