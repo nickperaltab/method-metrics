@@ -99,6 +99,21 @@ The DDL panel is fetched live from BigQuery via `useViewDefinition` (see `builde
 
 Change a primitive (`CREATE OR REPLACE VIEW v_trials AS ...`) → all breakdowns and derived rates update automatically.
 
+### Snapshot before changing any BQ view DDL
+
+**Always capture the pre-change query result before modifying a BQ view, then compare to the post-change result.** Don't just say "looks in range" or "row count matches expectations" — show a row-by-row diff against the actual previous values.
+
+Concretely, before any `CREATE OR REPLACE VIEW`:
+
+1. Run the canonical query against the current view (e.g. `SELECT period, COUNT(*) FROM v_trials GROUP BY period ORDER BY period DESC LIMIT N`) and save the output.
+2. Apply the change.
+3. Run the same query against the new view.
+4. Diff the two — report exact match or surface differences explicitly.
+
+If the change is structural (joins, filters change), use BigQuery time-travel (`FOR SYSTEM_TIME AS OF`) where possible to verify, but **do the snapshot step first** — time-travel windows are short and can be invalidated by the very `CREATE OR REPLACE` you're about to run.
+
+This applies to: any view DDL changes, any column addition/removal to a view, any filter or projection change. The "I made a small change so it's probably fine" framing has produced bad parity checks. Always compare to the actual prior values.
+
 ## AI Chart Builder (builder/)
 
 React app deployed to **GitHub Pages** (same repo, `dist/` output). Users type natural language prompts ("show me trials by month") and get interactive charts backed by live BigQuery queries.

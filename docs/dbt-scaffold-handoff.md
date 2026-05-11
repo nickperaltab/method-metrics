@@ -528,6 +528,51 @@ Round 3a was strictly the bug fix + first dbt run. Round 3b (pilot 2 more metric
 
 *Round 3a written 2026-05-08, same session as round 2.5.*
 
+---
+
+## 13. Round 3a follow-ups (2026-05-08, end of day)
+
+### 13.1 Pushed to main
+
+Commit `897d3323 fix(dbt): inline filter logic into v_trials/v_syncs models + first dbt run` pushed to `nickperaltab/method-metrics` `main`. Range `680ff369..897d3323`. 4 files, +168/-16 lines.
+
+### 13.2 Registry UI visibility confirmed via INFORMATION_SCHEMA
+
+Queried `revenue.INFORMATION_SCHEMA.TABLE_OPTIONS` exactly as the Registry UI would for its metric catalog. All three new metric views (`v_metric__trials`, `v_metric__syncs`, `v_metric__sync_rate`) return:
+
+- ✅ Full description (from dbt's `description` field, propagated via `+persist_docs`)
+- ✅ All 9 labels: `metric_id`, `layer`, `type`, `status`, `owner`, `verified_at`, `source_table`, `source_measure_safe`, `depends_on`
+
+Example for `v_metric__sync_rate`:
+```
+description: "Monthly Sync Rate (syncs / trials), materialized for Registry UI..."
+labels: metric_id=300, layer=metrics, type=ratio, status=live, depends_on=55-54
+```
+
+tracker.html could now build a metric catalog from BQ INFORMATION_SCHEMA alone for these 3 metrics — Supabase fallback no longer needed.
+
+### 13.3 Parity expectations — better verification + a new project rule
+
+Initial parity check compared `v_metric__trials` to `COUNT(*)` on the *new* `v_trials` — but didn't verify the *new* `v_trials` returns the same rows as the *old* `v_trials` would have. The user flagged this. Corrected with two stronger checks:
+
+1. **Row count vs underlying source filter:** `v_trials` = 110,740 = direct `COUNT(*)` on `Account` with the documented filter clause. Same for `v_syncs` = 66,491. Since `Account` and `Funnel` source tables are unchanged, this confirms the new `v_trials`/`v_syncs` definitions return identical rows to the pre-change versions.
+
+2. **Sync rate reconstructed from source tables:** for 10 months of data, `v_metric__sync_rate.value` matches a reconstructed-from-Account-and-Funnel sync rate to 6 decimal places (e.g., 2026-05 = 0.538462 in both). Exact equivalence.
+
+Time-travel (`FOR SYSTEM_TIME AS OF`) was the first attempt but the `CREATE OR REPLACE` reset BQ's time-travel window for the views, so we couldn't go back to pre-change state via that route. Lesson: capture pre-change snapshots BEFORE doing the DDL change, don't rely on time-travel after.
+
+**New rule added to CLAUDE.md (§ BQ Views → "Snapshot before changing any BQ view DDL")**: always run the canonical query against the current view, save the output, do the change, run again, diff. Don't say "looks in range" — show row-by-row equivalence against actual prior values.
+
+### 13.4 Where things sit now
+
+- Round 3a: ✅ complete and pushed
+- Round 3b (pilot Customers #373 + Monthly Start MRR #378): not started; next session
+- Phase 1 plan rewrite: still unchanged from round 1; should be revised after 3b validates
+- v_* → int_* rename: deferred to one-shot PR after all 20 metrics migrated (§12.5)
+- Production dashboards: unaffected. New BQ views are net-additive; replaced views are functionally identical to pre-change.
+
+*Round 3a follow-ups written 2026-05-08.*
+
 *Round 2.5 written 2026-05-05 immediately after round 2 in the same session.*
 
 ---
