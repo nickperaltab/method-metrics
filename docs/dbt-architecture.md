@@ -3,6 +3,7 @@
 **Status:** Working draft for the zoom-out session. Captures what's decided + flags every open question. The zoom-out session refines and locks decisions; this doc becomes the canonical architecture reference after.
 
 **Companion docs:**
+- [`docs/dbt-roadmap.md`](dbt-roadmap.md) — **forward-looking checklist** of phases, rounds, and what's done vs. pending
 - [`docs/primitives-vs-derivatives.md`](primitives-vs-derivatives.md) — the layer-cake framework (architectural primitives vs. derivatives, set conceptually)
 - [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md) — jaffle-shop layout vs. Method side-by-side
 - [`docs/dbt-scaffold-handoff.md`](dbt-scaffold-handoff.md) — round-by-round decision log
@@ -221,6 +222,71 @@ To be filled in during the zoom-out session. Examples:
 - The chart builder may continue reading from Supabase for some time even after BQ is canonical — that's fine.
 - GRR/NRR migration may stay manual longer than the others — protected by CEO methodology.
 - (others TBD)
+
+---
+
+## 6. Tooling boundaries — dbt vs Cube.dev vs the AI chart builder
+
+This section exists because "do we need Cube?" comes up. The short answer is **not in Phase 1**, but they're not alternatives — they stack.
+
+### 6.1 What each tool actually does
+
+**dbt** — how data is transformed and modeled *inside* the warehouse.
+- Source of truth lives in git (yml + sql files)
+- Generates BigQuery views/tables at compile time via `dbt run`
+- Builds metric *definitions* and *underlying data shape*
+- Does NOT serve a query API. Apps still talk to BQ directly.
+
+**Cube.dev** — a metric API service that sits *between* the warehouse and consuming apps.
+- Source of truth in Cube's config (similar in flavor to dbt's yml)
+- Runs as a service. Apps call Cube's REST/GraphQL/SQL API instead of BQ directly
+- Handles caching, pre-aggregations, query optimization
+- Typed metric query interface ("trials by month grouped by channel") — consumers don't write SQL
+
+**Method's AI chart builder** — a UX layer on top of one specific consumer.
+- Natural language → JSON config → SQL → BQ → chart
+- Alternative *for that one consumer* to what Cube would provide
+
+### 6.2 Side-by-side capability matrix
+
+| Need | dbt | Cube | AI chart builder |
+|---|---|---|---|
+| Define metrics in version-controlled files | ✓ | ✓ | partial (in dbt now) |
+| Generate underlying BQ views | ✓ | ✗ | ✗ |
+| Provide typed query API to apps | ✗ | ✓ | ✗ |
+| Caching / pre-aggregations | ✗ | ✓ | ✗ |
+| Natural language → chart | ✗ | ✗ | ✓ |
+| Lineage / data quality tests | ✓ | partial | ✗ |
+
+### 6.3 The stack, not the alternatives
+
+```
+[git: dbt files] → dbt run → [BigQuery views] → [optional: Cube API] → consumers
+                                                                       ├─ tracker UI
+                                                                       ├─ AI chart builder
+                                                                       └─ external apps (AC, ML, etc.)
+```
+
+dbt is the foundation. Cube is an optional service tier above it that earns its keep when there are multiple consumers each needing typed access to metrics. The AI chart builder is a UX layer that can read directly from BQ OR through Cube.
+
+### 6.4 When Cube earns its keep (the trigger conditions)
+
+Cube becomes worth adopting if AT LEAST ONE of these is true:
+
+1. **Multiple external apps need a typed metric API** — ActiveCampaign, HubSpot, ML pipelines, vendor integrations. A clean "give me Sync Rate by month, JSON please" endpoint that doesn't require SQL.
+2. **Query performance is a bottleneck** — caching / pre-aggregations needed to keep dashboards fast at scale.
+3. **Multiple in-house apps consuming metrics** — and you don't want each one re-implementing SQL generation.
+
+### 6.5 Decision for Phase 1: dbt only, revisit Cube in Phase 2
+
+For Method right now:
+- (1) ⚠️ Future possible (ActiveCampaign integration), not pressing today
+- (2) ❌ Not pressing at ~20 metrics + modest volume
+- (3) ❌ One serious consumer (chart builder); Supabase tracker becomes the second when it migrates
+
+**Phase 1 stays dbt-only.** BigQuery serves queries directly to the chart builder. AI chart builder handles the natural-language UX. Adding Cube means another service to operate, configure, and reason about — pay that complexity later when the trigger conditions actually fire.
+
+**Phase 2 reopens the question** if/when external API consumers materialize (most likely trigger: ActiveCampaign reverse-ETL or a Looker/Hex/Mode dashboard for non-engineering users). At that point Cube goes *on top of* the dbt models — no rework of what Phase 1 built; Cube just reads from the same BQ views dbt creates.
 
 ---
 

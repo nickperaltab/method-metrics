@@ -1,5 +1,9 @@
 # Handoff — dbt-shaped Metric Scaffold
 
+> 📍 **For "where are we, what's next" — see [`docs/dbt-roadmap.md`](dbt-roadmap.md).** This doc is the round-by-round decision log; the roadmap is the forward-looking checklist.
+
+
+
 > ## ⚠️ DO NOT RUN `dbt run` — KNOWN PRODUCTION-BREAKING BUG
 >
 > The scaffold has a self-reference defect (round 2.5 audit, 2026-05-06).
