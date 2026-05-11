@@ -438,6 +438,96 @@ APPLIED  CREATE OR REPLACE VIEW revenue.v_syncs    (added EntityRecordID column)
 - **§10.8 #2**: commit + push to `main` happens at the end of this round (after the user reviews).
 - The Phase 1 plan rewrite at `docs/superpowers/plans/2026-05-04-phase1-dbt-metric-migration.md` is unchanged from round 1. After round-3 pilot validates, that plan should be rewritten to assume the materialization pattern from §11.2 and the Fusion runtime from §11.3.
 
+---
+
+## 12. Round 3a — bug fix + first successful `dbt run` (2026-05-08)
+
+The scaffold from round 2.5 turned out to have a **self-reference bug** that would have destroyed `revenue.v_trials` and `revenue.v_syncs` if `dbt run` had executed it. A hook caught it. Resolved this round.
+
+### 12.1 The bug
+
+`models/intermediate/v_trials.sql` and `v_syncs.sql` were passthroughs: `SELECT * FROM project-for-method-dw.revenue.v_trials` and `... v_syncs`. dbt's default behavior materializes a model with the model's name into the configured dataset (`revenue`). So `dbt run` would have done:
+
+```sql
+CREATE OR REPLACE VIEW revenue.v_trials AS SELECT * FROM revenue.v_trials
+```
+
+That replaces the real filter logic (IsConversionException = FALSE etc.) with a self-referential passthrough — production-breaking.
+
+### 12.2 The fix — inline the filter logic (option D)
+
+Round 3a pulled the live BQ DDL from `INFORMATION_SCHEMA.VIEWS` and inlined it directly into the dbt model files. Now:
+
+- `models/intermediate/v_trials.sql` — full SELECT from `revenue.Account` with the actual WHERE clause + AttributionChannel CASE expression. dbt owns this view.
+- `models/intermediate/v_syncs.sql` — full SELECT from `revenue.Funnel` with the EventType = 'Sync' filter and full projection. dbt owns this view.
+
+Byte-for-byte equivalent to the previous hand-written BQ DDL. When dbt runs, the resulting `v_trials` and `v_syncs` views in BQ have identical bodies to what was there before — the only thing that changes is ownership.
+
+### 12.3 First successful `dbt run`
+
+```
+Succeeded model revenue.v_trials (view)
+Succeeded model revenue.v_syncs (view)
+Succeeded model revenue.v_metric__trials (view)
+Succeeded model revenue.v_metric__syncs (view)
+Succeeded model revenue.v_metric__sync_rate (view)
+Summary: 5 total | 5 success
+```
+
+24 seconds end-to-end. Five views now exist in BQ:
+- `revenue.v_trials`, `revenue.v_syncs` — dbt-owned versions of existing intermediates
+- `revenue.v_metric__trials`, `revenue.v_metric__syncs`, `revenue.v_metric__sync_rate` — net-new metric materializations
+
+### 12.4 Verification
+
+**Parity (most important):** for the 5 most recent months, `v_metric__trials.value` matches a direct `COUNT(*)` on `v_trials` exactly. Dbt produces the same numbers as the canonical Supabase definition (#54: `semantic_measure: COUNT(*)`).
+
+| period | dbt value | direct COUNT(*) | check |
+|---|---|---|---|
+| 2026-05-01 | 195 | 195 | ✓ |
+| 2026-04-01 | 549 | 549 | ✓ |
+| 2026-03-01 | 649 | 649 | ✓ |
+| 2026-02-01 | 664 | 664 | ✓ |
+| 2026-01-01 | 729 | 729 | ✓ |
+
+**Sync rate values:** 53–64% range for recent months. Matches Method's known historical sync rate ballpark.
+
+**BQ labels (`bq show`):** all 9 labels propagated correctly to `v_metric__trials` (metric_id, layer, type, status, owner, verified_at, source_table, source_measure_safe, depends_on). Same for the other two materialized metrics. Registry UI's INFORMATION_SCHEMA-driven catalog lookup will find them.
+
+**BQ descriptions:** initially missing — dbt-bigquery doesn't propagate model `description` to BQ relation description by default. Fixed by adding `+persist_docs: relation: true, columns: true` to `dbt_project.yml`. Re-ran `dbt run`; descriptions now present on all three materialized metric views.
+
+### 12.5 `v_*` → `int_*` rename — deferred (audit findings)
+
+Before pressing dbt run, the user asked whether to also rename `v_trials`/`v_syncs` → `int_trials`/`int_syncs` while replacing the views. Audited the scope:
+
+**Production code that references `v_trials` or `v_syncs` by name:**
+- `builder/src/lib/bigquery.js`
+- `builder/src/config/scorecards/trials-breakdown-scorecard.js`
+- `builder/src/config/scorecards/syncs-breakdown-scorecard.js`
+- `builder/src/config/scorecards/marketing-scorecard.js`
+- 10+ test files in `builder/tests/`
+- Supabase metrics rows #54 and #55 (both `view_name` and `semantic_table` columns)
+- 6+ doc files (plans, knowledge, specs)
+- `scripts/bq_views_backup_20260326.sql` (historical, leave alone)
+
+**Verdict:** scope too large to bundle with the bug fix. The rename is a dedicated 1–2 hour change with testing. Decision: keep yesterday's framing — rename happens **once** as a single PR after all 20 metrics are migrated to dbt. Don't piggyback it on the bug fix.
+
+### 12.6 Files edited / created in round 3a
+
+```
+EDITED   models/intermediate/v_trials.sql           (inlined filter; was passthrough)
+EDITED   models/intermediate/v_syncs.sql            (inlined filter; was passthrough)
+EDITED   dbt_project.yml                            (+persist_docs config)
+EDITED   docs/dbt-scaffold-handoff.md               (this section)
+APPLIED  dbt run                                    (5 BQ views materialized — see 12.3)
+```
+
+### 12.7 Round 3b — still pending
+
+Round 3a was strictly the bug fix + first dbt run. Round 3b (pilot 2 more metrics — #373 Customers, #378 Monthly Start MRR) is the next session's work. Both metrics use patterns the current scaffold hasn't exercised yet (count-distinct, SUM-with-ROUND), so they're the real generalization test. After 3b validates → round 4 = extend to all 20.
+
+*Round 3a written 2026-05-08, same session as round 2.5.*
+
 *Round 2.5 written 2026-05-05 immediately after round 2 in the same session.*
 
 ---
