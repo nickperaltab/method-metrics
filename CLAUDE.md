@@ -114,6 +114,23 @@ If the change is structural (joins, filters change), use BigQuery time-travel (`
 
 This applies to: any view DDL changes, any column addition/removal to a view, any filter or projection change. The "I made a small change so it's probably fine" framing has produced bad parity checks. Always compare to the actual prior values.
 
+### Define every metric before flipping it `live`
+
+A metric does not flip to `status: live` in dbt or Supabase until it has a filled-in entry in [`docs/metric-definitions.md`](docs/metric-definitions.md). The template + workflow live at the top of that file.
+
+**Why this rule exists:** SQL that compiles + parity-checks can still answer a different question than the metric's name implies. We caught this on Syncs and Sync Rate in May 2026 — both shipped with bit-identical values to historical, but the name suggests entity counts while the math computes event counts. A ~13% inflation hidden in plain sight. The definition doc forces a name-vs-math reconciliation before live.
+
+**The non-negotiable fields** for any metric going live:
+- "What it answers in one sentence" — plain-English business question
+- "Grain" — event / account / customer / period — and explicit if the name doesn't disambiguate
+- "Filters / exclusions" — every WHERE clause, with WHY
+- "Methodology source" — where the canonical definition came from (Excel file, Justin's verified-queries, CEO confirmation date)
+- "Parity-verified against" — source + date + values matched
+- "Owner" — who can answer "why this number?"
+- "Known caveats" — anything a consumer should know (pre-FX, in-progress month excluded, account vs customer grain, etc.)
+
+Metrics that fail the audit checklist in `metric-definitions.md` §3 (e.g. "does the math match the name?") flip to `status: under_review`, not `live`, until the owner resolves the ambiguity.
+
 ## AI Chart Builder (builder/)
 
 React app deployed to **GitHub Pages** (same repo, `dist/` output). Users type natural language prompts ("show me trials by month") and get interactive charts backed by live BigQuery queries.

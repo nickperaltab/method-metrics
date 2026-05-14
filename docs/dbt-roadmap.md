@@ -10,6 +10,7 @@
 - [`docs/dbt-architecture.md`](dbt-architecture.md) — target architecture + layer dictionary
 - [`docs/dbt-scaffold-handoff.md`](dbt-scaffold-handoff.md) — round-by-round decision log
 - [`docs/dbt-setup.md`](dbt-setup.md) — Fusion install + project setup
+- [`docs/metric-definitions.md`](metric-definitions.md) — **the canonical definition for every live metric.** A metric does not flip `live` until it has an entry here. See template + audit checklist at the top of that file.
 
 ---
 
