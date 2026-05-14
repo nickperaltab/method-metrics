@@ -6,6 +6,7 @@
 
 **Related docs:**
 - [`docs/dbt-layers-explained.md`](dbt-layers-explained.md) — **plain-English explanation of each dbt layer** (sources, staging, intermediate, marts/dim/fct, metrics). Read this if you're new to the project.
+- [`docs/dbt-marts-spec.md`](dbt-marts-spec.md) — **Phase 1.6 marts design spec** (driven by Method Monday, Looker replacement, AC integration, Claude/MCP use cases). Q1–Q9 product decisions to lock before implementation.
 - [`docs/dbt-architecture.md`](dbt-architecture.md) — target architecture + layer dictionary
 - [`docs/dbt-scaffold-handoff.md`](dbt-scaffold-handoff.md) — round-by-round decision log
 - [`docs/dbt-setup.md`](dbt-setup.md) — Fusion install + project setup
@@ -21,13 +22,13 @@
 | Phase 1 — Round 2.5 | EntityRecordID + dbt-native materialization | ✅ Done |
 | Phase 1 — Round 3a | Bug fix (self-reference) + first `dbt run` | ✅ Done |
 | Phase 1 — Round 3b | Pilot Customers + Monthly Start MRR | ⏳ Next |
-| Phase 1 — Zoom-out | Architecture decisions locked | 🟡 In progress |
-| Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics | ⏳ Planned |
+| Phase 1 — Zoom-out + Marts Spec | Architecture decisions + Phase 1.6 mart design locked | 🟡 In progress — see [marts spec](dbt-marts-spec.md) for Q1–Q9 to lock |
+| Phase 1.6 | Marts layer (`dim_customers`, `dim_accounts`, `fct_trials`/`syncs`/`conversions`/`mrr_movements`/`cancellations`) | ⏳ Pulled forward; ready after marts spec Q1–Q3 locked |
+| Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics on top of marts | ⏳ Planned (after Phase 1.6) |
 | Phase 1 — Round 5 | GRR/NRR migration (protected family) | ⏳ Planned |
-| Phase 1.5 | `v_*` → `int_*` rename (single one-shot PR) | ⏳ Deferred |
-| Phase 1.6 | Marts layer (`dim_customers`, `fct_trials`, `fct_syncs`) | ⏳ Deferred |
+| Phase 1.5 | `v_*` → `int_*` rename (single one-shot PR) | ⏳ Deferred until end of Phase 1 |
 | Phase 1.7 | Frontend migration (tracker.html, chart builder, AI catalog → BQ) | ⏳ Deferred |
-| Phase 2 | Evaluate Cube.dev IF external API consumers materialize | 🟦 Conditional |
+| Phase 2 | Evaluate Cube.dev / MetricFlow IF external API consumers materialize | 🟦 Conditional |
 
 ---
 
