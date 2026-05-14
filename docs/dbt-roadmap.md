@@ -5,6 +5,7 @@
 **Last updated:** 2026-05-08
 
 **Related docs:**
+- [`docs/dbt-layers-explained.md`](dbt-layers-explained.md) — **plain-English explanation of each dbt layer** (sources, staging, intermediate, marts/dim/fct, metrics). Read this if you're new to the project.
 - [`docs/dbt-architecture.md`](dbt-architecture.md) — target architecture + layer dictionary
 - [`docs/dbt-scaffold-handoff.md`](dbt-scaffold-handoff.md) — round-by-round decision log
 - [`docs/dbt-setup.md`](dbt-setup.md) — Fusion install + project setup

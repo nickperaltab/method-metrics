@@ -3,6 +3,7 @@
 **Status:** Working draft for the zoom-out session. Captures what's decided + flags every open question. The zoom-out session refines and locks decisions; this doc becomes the canonical architecture reference after.
 
 **Companion docs:**
+- [`docs/dbt-layers-explained.md`](dbt-layers-explained.md) — **plain-English explanation of each layer** (sources, staging, intermediate, marts/dim/fct, metrics). Start here if you're new to dbt.
 - [`docs/dbt-roadmap.md`](dbt-roadmap.md) — **forward-looking checklist** of phases, rounds, and what's done vs. pending
 - [`docs/primitives-vs-derivatives.md`](primitives-vs-derivatives.md) — the layer-cake framework (architectural primitives vs. derivatives, set conceptually)
 - [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md) — jaffle-shop layout vs. Method side-by-side
