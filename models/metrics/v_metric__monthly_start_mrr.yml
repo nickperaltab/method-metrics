@@ -1,0 +1,33 @@
+# Canonical metric definition for "Monthly Start MRR" (#378).
+#
+# The dollar value of MRR at the start of each month, summed across all
+# customers. Pre-FX (USD/CAD/UK at face value). Inherits the CEO-confirmed
+# symmetric Prepay Expiry Income exclusion methodology from v_customer_mrr
+# (see knowledge/verified-queries/v_customer_mrr.sql for methodology notes).
+#
+# Materialization of the canonical Supabase definition:
+#   - semantic_table:   v_customer_mrr
+#   - semantic_measure: ROUND(SUM(StartMRR), 2)
+#   - semantic_date_col: Month
+#   - filter:           none
+
+models:
+  - name: v_metric__monthly_start_mrr
+    description: |
+      Monthly Start MRR — the dollar value of MRR at the start of each
+      month, summed across customers (USD/CAD/UK pre-FX). Inherits the
+      CEO-confirmed symmetric Prepay Expiry Income exclusion methodology
+      from v_customer_mrr. Materialization of the "Monthly Start MRR"
+      metric (#378). The foundation for monthly GRR/NRR calculations.
+    config:
+      materialized: view
+      labels:
+        metric_id: '378'
+        layer: metrics
+        type: simple
+        status: live
+        owner: justin
+        verified_at: '2026-05-12'
+        source_table: v_customer_mrr
+        source_measure_safe: sum_startmrr
+        depends_on: ''

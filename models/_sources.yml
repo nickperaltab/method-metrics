@@ -1,0 +1,47 @@
+# Source declarations for Method's `revenue` BigQuery dataset.
+#
+# Includes raw tables (Account, Funnel, TransLineFlattened, method_forecast)
+# and BQ-managed intermediate views that are not yet dbt-managed
+# (v_customers, v_customer_mrr, etc.).
+#
+# The v_* intermediate views are intentionally declared as sources, NOT
+# models, until Phase 1.5 migrates them to dbt-managed `int_*` models.
+# Declaring them as sources here lets metric models use `{{ source(...) }}`
+# instead of hardcoded paths — gives us lineage and one-line refactor when
+# Phase 1.5 lands.
+
+version: 2
+
+sources:
+  - name: revenue
+    database: project-for-method-dw
+    schema: revenue
+    description: |
+      Method's revenue dataset in BigQuery. Source of truth for all metric
+      computations. Raw tables (Account, Funnel, TransLineFlattened) loaded
+      nightly by the Alocet pipeline. Intermediate views (v_customers,
+      v_customer_mrr, etc.) hand-managed in BQ today; will be migrated to
+      dbt-managed `int_*` models in Phase 1.5.
+
+    tables:
+      # ----- Raw source tables (Alocet-managed) -----
+      - name: Account
+        description: One row per Method account (entity-grained snapshot). Primary key columns RecordID (account level) and EntityRecordID (customer level — can repeat across rows when a customer has multiple accounts).
+      - name: Funnel
+        description: One row per lifecycle event (Sync, Conversion, etc.). EntityRecordID maps back to a customer.
+      - name: TransLineFlattened
+        description: One row per invoice line. Source of truth for all revenue computation. SaaSAmount is the canonical revenue column.
+      - name: method_forecast
+        description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
+
+      # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
+      - name: v_customers
+        description: One row per (customer-month) for active paying customers. Built from TransLineFlattened. Used by Customers metric (#373).
+      - name: v_customer_mrr
+        description: Monthly customer-grain MRR with movement columns (StartMRR, Cancellations, Downgrades, Expansions, NewMrr). Symmetric Prepay Expiry exclusion (CEO-confirmed methodology, 2026-04-28). Used by MRR family metrics (#378-381).
+      - name: v_customer_annual_mrr
+        description: Annual customer-grain MRR with movement columns. Used by annual MRR family metrics (#384-387).
+      - name: v_conversions
+        description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
+      - name: v_cancellations
+        description: One row per Account with CancellationDate set. Used by Churn metric (#59).

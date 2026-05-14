@@ -1,0 +1,30 @@
+# Canonical metric definition for "Customers" (#373).
+#
+# Counts the number of distinct active Method customers each month
+# (EntityRecordID grain — see knowledge/glossary.md "Customer vs Account").
+# Materialization of the canonical Supabase definition:
+#   - semantic_table:   v_customers
+#   - semantic_measure: COUNT(DISTINCT EntityRecordID)
+#   - semantic_date_col: Month
+#   - filter:           IsActive = TRUE
+
+models:
+  - name: v_metric__customers
+    description: |
+      Monthly count of active Method customers (paying entities). Counts
+      distinct EntityRecordIDs in v_customers where IsActive = TRUE.
+      Customer-grain (not account-grain) — a customer with multiple Method
+      accounts counts ONCE per month. Materialization of the "Customers"
+      metric (#373).
+    config:
+      materialized: view
+      labels:
+        metric_id: '373'
+        layer: metrics
+        type: simple
+        status: live
+        owner: nic
+        verified_at: '2026-05-12'
+        source_table: v_customers
+        source_measure_safe: count_distinct_entityrecordid
+        depends_on: ''

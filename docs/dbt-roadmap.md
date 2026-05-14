@@ -21,7 +21,7 @@
 | Phase 1 — Round 2 | Fix syntax (latest-spec) + add Sync Rate | ✅ Done |
 | Phase 1 — Round 2.5 | EntityRecordID + dbt-native materialization | ✅ Done |
 | Phase 1 — Round 3a | Bug fix (self-reference) + first `dbt run` | ✅ Done |
-| Phase 1 — Round 3b | Pilot Customers + Monthly Start MRR | ⏳ Next |
+| Phase 1 — Round 3b | Pilot Customers + Monthly Start MRR | ✅ Done (2026-05-12) |
 | Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics | ⏳ Planned |
 | Phase 1 — Round 5 | GRR/NRR migration (protected family) | ⏳ Planned |
 | **Phase 1 done = 20 metrics reliable in BQ** | All metrics dbt-managed with correct columns + catalog metadata | 🎯 Target state |
@@ -68,15 +68,20 @@ Goal: all 20 live metrics have dbt-managed definitions in git, with BQ INFORMATI
 - [x] Add pre-change snapshot rule to CLAUDE.md
 - [x] Push (commits `897d3323`, `e6592a13`)
 
-### ⏳ Round 3b — Pilot 2 more metrics (NEXT)
-- [ ] Scaffold `v_metric__customers` (#373) consuming `v_customers`
+### ✅ Round 3b — Pilot 2 more metrics (2026-05-12)
+- [x] Scaffold `v_metric__customers` (#373) consuming `v_customers` via `{{ source(...) }}`
   - Tests `count_distinct` aggregation pattern
-  - Decision (locked): use existing `v_customers` intermediate; defer `dim_customers` to Phase 1.6
-- [ ] Scaffold `v_metric__monthly_start_mrr` (#378) consuming `v_customer_mrr`
-  - Tests `sum` aggregation pattern with ROUND wrapper
-- [ ] Run `dbt run`, parity-check against pre-change BQ values (CLAUDE.md rule)
-- [ ] Report back: surface anything unexpected before Round 4
-- [ ] Update handoff doc with round-3b results
+  - Includes Supabase's `IsActive = TRUE` filter (was missed in initial review, caught + applied)
+- [x] Scaffold `v_metric__monthly_start_mrr` (#378) consuming `v_customer_mrr`
+  - Tests `SUM` with `ROUND` wrapper pattern
+  - Inherits CEO-confirmed Prepay Expiry methodology from upstream `v_customer_mrr`
+- [x] **NEW: `models/_sources.yml`** declaring revenue dataset sources (Account, Funnel, TransLineFlattened, method_forecast + BQ-managed `v_customers`, `v_customer_mrr`, etc.). Phase 1.5 will migrate the `v_*` intermediates to dbt-managed `int_*` models.
+- [x] `dbt compile` clean (7 models | 3 metrics | 2 semantic models | 7 success)
+- [x] `dbt run` succeeded — both new BQ views materialized in `revenue` dataset
+- [x] Parity-check: 23 / 23 spot-checked values match exactly (12 months Customers + 11 months Monthly Start MRR — penny-match)
+- [x] BQ catalog metadata propagated (description + 9 labels per view, queryable via `INFORMATION_SCHEMA.TABLE_OPTIONS`)
+
+**Patterns now proven:** `COUNT(*)`, `COUNT(DISTINCT)`, `SUM` with `ROUND`, semantic_filters as WHERE clauses, ratio metrics, source declarations via `{{ source(...) }}`. Round 4 has the full pattern toolkit.
 
 ### 🟡 Zoom-out architecture session (IN PROGRESS — questions being walked through)
 - [x] Q1: Source declarations (sources.yml) — **YES, add them in Round 4 setup**
