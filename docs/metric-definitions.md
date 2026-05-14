@@ -91,6 +91,10 @@ Run through every question for every metric before flipping `live`:
 
 These metrics are live in `revenue.v_metric__*` views, parity-verified, with full catalog metadata in BQ INFORMATION_SCHEMA.
 
+> **🔑 Funnel-metric grain (locked 2026-05-12):** Method's funnel metrics — **Trials (#54), Syncs (#55), Sync Rate (#300), Conversions (#56)** — are intentionally tracked at **account-grain**, NOT customer-grain. A customer with 2 Method accounts that both signed up for trials shows as 2 trials. This is by design for funnel reporting.
+> For customer-level analyses (unique companies, distinct customer counts), use **Customers (#373)** or — in the future — customer-grain marts (Phase 1.6).
+> See §6 for the data-vs-intent caveat on Syncs.
+
 ---
 
 ### #54 Trials
@@ -109,7 +113,7 @@ GROUP BY 1
 
 Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`.
 
-**Grain:** **account-level**. One row per Method account that began a trial. A customer with 2 trial accounts contributes 2 trials.
+**Grain:** **account-level** (by design — see §4 top note). One row per Method account that began a trial. A customer with 2 trial accounts contributes 2 trials. This is canonical for Method's funnel reporting, not a flaw.
 
 **Filters / exclusions:**
 - `IsConversionException = FALSE` — excludes accounts flagged as not real conversions (test accounts, exception cases)
@@ -125,7 +129,7 @@ Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversion
 **Status:** **live**
 
 **Known caveats:**
-- Account-grain, not customer-grain. A customer with 2 trial accounts counts twice. Use Customers (#373) for unique-customer counts.
+- Account-grain by design — customers with multiple accounts contribute multiple trials. This is intentional. Use Customers (#373) for unique-customer counts.
 - Current month is incomplete; partial values for the in-progress month.
 
 **Used by:**
@@ -137,7 +141,7 @@ Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversion
 
 ### #55 Syncs
 
-**What it answers in one sentence:** How many sync events were recorded in the Funnel pipeline in each month?
+**What it answers in one sentence:** How many sync milestone events were recorded in the Funnel pipeline in each month? (At account-grain by intent — see caveat below.)
 
 **The math:**
 ```sql
@@ -151,7 +155,7 @@ GROUP BY 1
 
 Where `v_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 
-**Grain:** **event-level**. One row per "Sync" event in Funnel. Most accounts have exactly one Sync event (a first-sync milestone), but ~9% have 2+ events (re-syncs after reconnect). So total Sync events ≈ unique syncing entities × 1.13.
+**Grain:** **account-grain by intent** (per §4 top note — Method tracks funnel metrics at account level). Each row in Funnel is a sync milestone event. See caveats for the data-vs-intent nuance.
 
 **Filters / exclusions:**
 - `EventType = 'Sync'` — filters Funnel to sync milestone events only (not all activity)
@@ -162,11 +166,12 @@ Where `v_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 
 **Owner:** Nic (funnel reporting owner)
 
-**Status:** **under_review** ⚠️ — see "Known caveats" below
+**Status:** **live** (per Nic confirmation 2026-05-12 that account-grain funnel tracking is canonical)
 
 **Known caveats:**
-- ⚠️ **Name vs math mismatch.** "Syncs" sounds like "unique syncing customers" but the math counts events. ~13% inflation from re-sync events. Audit flagged 2026-05-12.
-- Pending decision (see §6): either rename to "Sync Events" (honest count) OR refactor to `COUNT(DISTINCT EntityRecordID)` (entity count).
+- **Account-grain by intent — but Funnel's data keys events to `EntityRecordID`, not `RecordID`.** Funnel doesn't carry per-account identifiers. In practice this works out because most customers have one account, and Funnel events are tied to the lifecycle of an entity. A customer with 2 accounts will typically produce 1 sync event (one of their accounts hit the milestone), not 2.
+- ~13% inflation from re-sync events: 91% of entities have exactly 1 sync event, 9% have 2+ (re-syncs after disconnect/reconnect). Method accepts this as part of the metric definition — re-syncs count.
+- For an exact "count of unique entities that ever synced this month," use `COUNT(DISTINCT EntityRecordID)` instead — that's a different metric not currently in the live set.
 
 **Used by:**
 - Method Monday (Engagement section)
@@ -177,7 +182,7 @@ Where `v_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 
 ### #300 Sync Rate
 
-**What it answers in one sentence:** What fraction of trial accounts produced a sync event in each month? (Definitional ambiguity — see caveats.)
+**What it answers in one sentence:** What fraction of trial accounts produced a sync milestone in each month?
 
 **The math:**
 ```sql
@@ -191,7 +196,7 @@ FULL OUTER JOIN revenue.v_metric__trials t
 
 So: `SUM(sync events in month) / SUM(trial events in month)`.
 
-**Grain:** period-level (one value per month). Numerator and denominator are both event counts, not entity counts.
+**Grain:** **account-grain by intent** (per §4 top note). Period-level output (one value per month). Both numerator (Syncs) and denominator (Trials) are intended at account-grain — see Syncs (#55) caveats for the Funnel-data nuance.
 
 **Filters / exclusions:** inherits filters from Trials (#54) and Syncs (#55).
 
@@ -201,12 +206,12 @@ So: `SUM(sync events in month) / SUM(trial events in month)`.
 
 **Owner:** Nic (funnel reporting owner)
 
-**Status:** **under_review** ⚠️ — see "Known caveats"
+**Status:** **live** (per Nic confirmation 2026-05-12 that account-grain funnel tracking is canonical)
 
 **Known caveats:**
-- ⚠️ **Mathematically: event ratio, not entity ratio.** Computes `(sync events) / (trial events)`, not `(distinct synced entities) / (distinct trialed entities)`. The two are close because both have ~10-13% repeat-event inflation, but they're not identical.
-- If leadership thinks "Sync Rate = fraction of trial cohort that synced," the current implementation is approximate. A true "% who synced" would use COUNT(DISTINCT EntityRecordID) in both numerator and denominator.
-- Pending decision: confirm with Justin / leadership what "Sync Rate" should mean (see §6).
+- Account-grain by intent (denominator is account-grain Trials; numerator is Funnel-entity-grain Syncs — close enough for funnel reporting since most customers have one account).
+- ~13% inflation in numerator from re-sync events (see Syncs #55 caveats). This is part of the metric definition — re-syncs contribute to the rate.
+- "Sync Rate" here is "syncs per trial" volume ratio at account/event grain. Not the same as "% of unique customers who ever synced" — that's a different metric.
 
 **Used by:**
 - Method Monday (Conversion section)
@@ -330,35 +335,22 @@ For each, the current Supabase definition is the starting point. Migration is **
 
 ## 6. Open definition questions
 
-Things from the audit that need a business decision before the relevant metric flips `live`:
+Things from the audit that need a business decision before the relevant metric flips `live`.
 
-### Q1 — Sync Rate (#300) definition
+(Currently empty — Q1, Q2, Q3 below were resolved 2026-05-12.)
 
-**The ambiguity:** "Sync Rate" today computes `SUM(sync events) / SUM(trial events)`. This is close to but not identical to "% of trial cohort that completed a sync."
+### Resolved questions
 
-**Decision needed:**
-- **(a)** Keep current math (events ratio). Update the metric description to say "syncs per trial." Use this interpretation in Method Monday and other consumer-facing reporting.
-- **(b)** Refactor to `COUNT(DISTINCT entity_synced) / COUNT(DISTINCT entity_trialed)` (entity ratio). This is what most people mean by "Sync Rate." Values would drop by ~10% from today. Will need an explanation to anyone watching the dashboard.
+**Q1 — Sync Rate (#300) definition — RESOLVED 2026-05-12**
+Account-grain (event-ratio) is canonical. Nic confirmed Method tracks Sync Rate at account-grain, not customer-grain. The current `SUM(syncs) / SUM(trials)` is the right math. Metric flipped to `live`. Documented as the canonical interpretation in §4. The "% of unique customers who ever synced" interpretation is a different metric, not currently in the live set.
 
-**Owner to ask:** Justin (revenue) + leadership consumer of Method Monday.
+**Q2 — Syncs (#55) naming/math alignment — RESOLVED 2026-05-12**
+Same resolution. Sync events at account-grain are the canonical metric. The ~13% inflation from re-syncs is part of the definition by design — re-syncs count. Metric flipped to `live`.
 
-### Q2 — Syncs (#55) naming/math alignment
+**Q3 — Trials (#54) account vs customer grain — RESOLVED 2026-05-12**
+Account-grain is canonical for Method's funnel reporting. A customer with 2 trial accounts = 2 trials, by design. Already documented in §4.
 
-**The ambiguity:** "Syncs" today counts sync events. Most people probably interpret it as "unique customers who synced." ~13% inflation from re-syncs.
-
-**Decision needed:**
-- **(a)** Rename to "Sync Events" (the name matches the math). Add a new "Unique Syncing Customers" metric if leadership wants the entity count.
-- **(b)** Refactor Syncs to `COUNT(DISTINCT EntityRecordID)` — values drop ~13%. Add a new "Sync Events" metric if leadership wants the event count.
-
-**Owner to ask:** Justin + leadership.
-
-### Q3 — Trials (#54) account vs customer grain
-
-**The ambiguity:** Trials counts account-level signups. A customer with 2 trial accounts = 2 trials. Probably correct for funnel reporting, but worth confirming.
-
-**Decision needed:** Confirm with leadership that account-grain is what Method Monday expects, OR add a sibling "Unique Trialing Customers" metric.
-
-**Owner to ask:** Nic + Justin.
+**Net effect of resolutions:** All 5 currently dbt-managed metrics are now `status: live`. Funnel-grain is documented at the top of §4 so future metrics (Conversions #56, Churn #59, ratios) inherit the same convention.
 
 ---
 
