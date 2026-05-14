@@ -1,9 +1,31 @@
 # Method dbt Marts — Design Spec (Phase 1.6)
 
-**Status:** Working draft from design pass 2026-05-12. Locks the mart schema before implementation.
+**Status:** ⚠️ **SPECULATIVE / DEFERRED** (revised 2026-05-12 — see §0 below).
 **Author:** Drafted by Claude under Nic's direction in design pass conversation.
-**Reviewers needed:** Nic (PM, locks open product decisions), Justin (revenue/engineering, validates technical choices and MRR-family marts).
-**Implementation target:** Phase 1.6, after Round 3b ships.
+**Implementation target:** TBD. Re-evaluate AFTER all 20 live metrics ship to dbt (Round 5 done).
+
+## 0. Why this is deferred
+
+This spec was written as a top-down design pass for Phase 1.6 marts. On review, Nic identified that several of the "open questions" were inventing problems that already had answers (lifecycle stages defined in the metrics catalog, sync attribution working fine in existing scorecards) or designing capabilities ahead of need (MRR trend columns, NPS, support tickets — no upstream pipeline yet).
+
+The actual near-term priority is narrower: **make all 20 live metrics reliable in BQ for current consumers (Claude via MCP, chart builder, future reverse-ETL).** That's Round 3b → 4 → 5, all metric-layer work, no marts required.
+
+Marts STILL matter — they unlock composable cross-cutting queries (Voice of Customer, complex BI). But they should be designed against **real observed query patterns**, not speculatively. After all 20 metrics ship, we'll know what queries people actually run, and the mart design will be evidence-based instead of forward-looking guesses.
+
+**What to keep from this doc:**
+- §3 mart schemas as a starting reference (the customer/account/fact-table shapes are likely right)
+- §6 open questions Q1, Q3 — already answered (Q1: use the existing metrics-catalog definitions; Q3: use customer_id, account-level sync attribution isn't a real need)
+
+**What to discard:**
+- The whole "Voice of Customer / AC reverse-ETL / Looker replacement" framing as a Phase 1.6 driver — those are real future goals, but they shouldn't drive mart timing
+- §3 columns for NPS, support_tickets_30d, etc. — no data source yet
+- §6 questions Q2, Q4-Q9 — too speculative
+
+When Phase 1.6 actually starts, revisit this doc and prune to the parts that survive the "do real consumers need this?" filter.
+
+---
+
+
 
 **Related docs:**
 - [`docs/dbt-layers-explained.md`](dbt-layers-explained.md) — what marts/dims/facts are

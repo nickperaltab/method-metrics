@@ -22,11 +22,11 @@
 | Phase 1 — Round 2.5 | EntityRecordID + dbt-native materialization | ✅ Done |
 | Phase 1 — Round 3a | Bug fix (self-reference) + first `dbt run` | ✅ Done |
 | Phase 1 — Round 3b | Pilot Customers + Monthly Start MRR | ⏳ Next |
-| Phase 1 — Zoom-out + Marts Spec | Architecture decisions + Phase 1.6 mart design locked | 🟡 In progress — see [marts spec](dbt-marts-spec.md) for Q1–Q9 to lock |
-| Phase 1.6 | Marts layer (`dim_customers`, `dim_accounts`, `fct_trials`/`syncs`/`conversions`/`mrr_movements`/`cancellations`) | ⏳ Pulled forward; ready after marts spec Q1–Q3 locked |
-| Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics on top of marts | ⏳ Planned (after Phase 1.6) |
+| Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics | ⏳ Planned |
 | Phase 1 — Round 5 | GRR/NRR migration (protected family) | ⏳ Planned |
+| **Phase 1 done = 20 metrics reliable in BQ** | All metrics dbt-managed with correct columns + catalog metadata | 🎯 Target state |
 | Phase 1.5 | `v_*` → `int_*` rename (single one-shot PR) | ⏳ Deferred until end of Phase 1 |
+| Phase 1.6 | Marts layer (`dim_customers`, `dim_accounts`, `fct_*`) — designed from real query evidence | ⏳ Deferred to AFTER Phase 1 (see [marts spec](dbt-marts-spec.md) — currently speculative) |
 | Phase 1.7 | Frontend migration (tracker.html, chart builder, AI catalog → BQ) | ⏳ Deferred |
 | Phase 2 | Evaluate Cube.dev / MetricFlow IF external API consumers materialize | 🟦 Conditional |
 
