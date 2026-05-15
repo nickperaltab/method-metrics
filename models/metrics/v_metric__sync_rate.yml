@@ -28,7 +28,6 @@ models:
         layer: metrics
         type: ratio
         status: live
-        owner: unassigned
         verified_at: ''
         source_table: ''
         source_measure_safe: ''

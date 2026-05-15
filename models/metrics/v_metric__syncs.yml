@@ -18,7 +18,6 @@ models:
         layer: metrics
         type: simple
         status: live
-        owner: unassigned
         verified_at: '2026-04-07'
         source_table: v_syncs
         source_measure_safe: count_star

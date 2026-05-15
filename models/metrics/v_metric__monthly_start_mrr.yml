@@ -26,7 +26,6 @@ models:
         layer: metrics
         type: simple
         status: live
-        owner: justin
         verified_at: '2026-05-12'
         source_table: v_customer_mrr
         source_measure_safe: sum_startmrr

@@ -36,7 +36,6 @@ Justin's verified-queries file, etc.>
 **Parity-verified against:** <source + date + values matched>
   ↑ if not yet verified, say "TBD — needs solver run" and don't ship as live
 
-**Owner:** <person who can answer "why this number?" — Nic / Justin / etc.>
 
 **Status:** <live | queued | under_review>
 
@@ -60,13 +59,13 @@ Justin's verified-queries file, etc.>
 4. **Run `dbt run`, parity-check** against the snapshot.
 5. **Fill out the metric definition in this doc** (you're not done until this is done).
 6. **Audit the definition for "does the math match the name?"** — see §3 for the audit checklist.
-7. If the audit finds ambiguity, mark `under_review` and surface to the owner. Don't flip `live` until resolved.
+7. If the audit finds ambiguity, mark `under_review` and surface for review (typically Nic for product/funnel questions, Justin for revenue methodology). Don't flip `live` until resolved.
 8. Update Supabase `metrics` row to point at the new view + verified date.
 
 ### When creating a new metric from scratch
 
 1. Start by filling out the definition in this doc. **Don't write SQL first** — write the business question first.
-2. Get owner sign-off on the definition (especially the "what it answers" sentence and the methodology source).
+2. Get sign-off on the definition (especially the "what it answers" sentence and the methodology source) — typically a quick Justin review for revenue metrics, otherwise Nic decides.
 3. Implement the dbt model that matches the definition.
 4. Parity-verify against the source of truth (Excel, Justin's report, etc.).
 5. Flip to `live` after parity is verified.
@@ -124,7 +123,6 @@ Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversion
 
 **Parity-verified against:** Pre-migration BQ values for the 5 most recent months (Sep 2025 – May 2026), all penny-match (Round 3a, 2026-05-08).
 
-**Owner:** Nic (marketing/funnel reporting owner)
 
 **Status:** **live**
 
@@ -164,7 +162,6 @@ Where `v_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 
 **Parity-verified against:** Pre-migration BQ values (Round 3a, 2026-05-08), penny-match for 10+ months.
 
-**Owner:** Nic (funnel reporting owner)
 
 **Status:** **live** (per Nic confirmation 2026-05-12 that account-grain funnel tracking is canonical)
 
@@ -204,7 +201,6 @@ So: `SUM(sync events in month) / SUM(trial events in month)`.
 
 **Parity-verified against:** Reconstructed-from-source for 10 months — `SAFE_DIVIDE(SUM(syncs), SUM(trials))` matches `v_metric__sync_rate` to 6 decimal places (Round 3a, 2026-05-08).
 
-**Owner:** Nic (funnel reporting owner)
 
 **Status:** **live** (per Nic confirmation 2026-05-12 that account-grain funnel tracking is canonical)
 
@@ -247,7 +243,6 @@ Where `v_customers` is the existing BQ view that aggregates `TransLineFlattened`
 
 **Parity-verified against:** Pre-migration BQ values for 12 months (Jun 2025 – May 2026), all penny-match (Round 3b, 2026-05-12).
 
-**Owner:** Nic (PM / funnel reporting owner) — but defers to Justin on the underlying v_customers methodology.
 
 **Status:** **live**
 
@@ -291,7 +286,6 @@ Where `v_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P
 
 **Parity-verified against:** Pre-migration BQ values for 11 months (Jun 2025 – Apr 2026), all penny-match (Round 3b, 2026-05-12).
 
-**Owner:** Justin (revenue model owner)
 
 **Status:** **live**
 

@@ -23,7 +23,6 @@ models:
         layer: metrics
         type: simple
         status: live
-        owner: nic
         verified_at: '2026-05-12'
         source_table: v_customers
         source_measure_safe: count_distinct_entityrecordid

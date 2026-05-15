@@ -126,8 +126,9 @@ A metric does not flip to `status: live` in dbt or Supabase until it has a fille
 - "Filters / exclusions" — every WHERE clause, with WHY
 - "Methodology source" — where the canonical definition came from (Excel file, Justin's verified-queries, CEO confirmation date)
 - "Parity-verified against" — source + date + values matched
-- "Owner" — who can answer "why this number?"
 - "Known caveats" — anything a consumer should know (pre-FX, in-progress month excluded, account vs customer grain, etc.)
+
+(Note: there is no per-metric "owner" field. Nic is the PM for all 20 metrics. Justin is the methodology authority specifically on the revenue family (#378-389) because the CEO assigned him that responsibility — but that's a methodology question for ambiguous cases, not a generic ownership pattern.)
 
 Metrics that fail the audit checklist in `metric-definitions.md` §3 (e.g. "does the math match the name?") flip to `status: under_review`, not `live`, until the owner resolves the ambiguity.
 
