@@ -11,11 +11,11 @@
 models:
   - name: v_metric__customers
     description: |
-      Monthly count of active Method customers (paying entities). Counts
-      distinct EntityRecordIDs in v_customers where IsActive = TRUE.
-      Customer-grain (not account-grain) — a customer with multiple Method
-      accounts counts ONCE per month. Materialization of the "Customers"
-      metric (#373).
+      Monthly count of unique active Method customers — companies with
+      revenue activity in the month. Customer-grain — a company with
+      multiple Method accounts counts ONCE per month (unlike Trials,
+      which counts each account separately). Current month is incomplete;
+      partial values until month-end.
     config:
       materialized: view
       labels:

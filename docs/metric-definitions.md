@@ -72,6 +72,61 @@ Justin's verified-queries file, etc.>
 
 ---
 
+## 2a. How to write the BQ description (the thing consumers actually see)
+
+The `description:` field in each `models/metrics/v_metric__*.yml` propagates to BigQuery's `INFORMATION_SCHEMA.TABLE_OPTIONS` at `dbt run` time. **This is the English explanation that every consumer sees** — anyone querying via Claude/MCP, the BQ console, BI tools, reverse-ETL pipelines. It's the first (and often only) thing they read about the metric.
+
+### Who is this written for?
+
+Imagine the person querying is one of these, and write so each can use the metric correctly without asking anyone:
+
+- **A CRO or revenue leader** seeing a number in a dashboard, wondering "does this match the board deck?"
+- **A salesperson** asking Claude "how many trials did we get this month?"
+- **A marketing person** trying to figure out "is this just paid signups or all signups?"
+- **A new analyst** writing their first ad-hoc query
+
+These readers don't know about `intermediate/v_trials.yml`, "Registry UI", semantic_models, or what `simple` means in MetricFlow terminology. **No internal jargon. No file paths. No dbt vocabulary.**
+
+### The format (2-4 sentences, ~40-80 words)
+
+A good description has exactly these parts, in order:
+
+1. **What it counts/measures — one plain sentence.** Start with "Monthly count of…" or "Dollar value of…" or "Fraction of…". Use the metric name's plain meaning. No SQL.
+2. **The grain, explicitly.** "Account-grain — a customer with 2 accounts contributes 2 trials." Or "Customer-grain — one row per unique customer." Or "Pre-FX dollar values." This is the #1 source of confusion; it goes second so it's hard to miss.
+3. **One key caveat or pointer.** "Excludes test accounts." Or "Current month is incomplete." Or "For unique-customer counts, use Customers (#373)." Pick the one most likely to bite a consumer.
+4. *(optional)* **One sentence on consumer use** — "Appears in Method Monday's Acquisition section." Helps people understand the metric's role.
+
+### Examples — bad vs. good
+
+**Bad (current Trials description):**
+> "Monthly trial-signup count, materialized for Registry UI and dashboard consumption. Materialization of the 'Trials' metric (#54), defined in intermediate/v_trials.yml as a `simple` metric (COUNT(*) of v_trials grouped by SignupDate)."
+>
+> ❌ Mentions internal file path (`intermediate/v_trials.yml`)
+> ❌ Mentions dbt jargon ("`simple` metric")
+> ❌ Mentions internal UI ("Registry UI")
+> ❌ Doesn't mention the grain at all (an account-vs-customer landmine)
+> ❌ Doesn't point to the alternative for unique customers
+
+**Good (rewritten Trials description):**
+> "Monthly count of Method accounts that began a trial. Account-grain — a customer with 2 trial accounts contributes 2 trials, by design. Excludes test accounts, internal Method Integration partner rows, and the '0001-01-01' sentinel. For unique-customer counts, use Customers (#373)."
+>
+> ✓ Plain English, no jargon
+> ✓ Grain stated explicitly with a concrete example
+> ✓ Filters mentioned at a high level
+> ✓ Points to alternative metric to prevent misuse
+
+### Rules
+
+- **Never** mention dbt file paths, model names, or dbt-specific terminology (`simple`, `ratio`, `semantic_model`, etc.).
+- **Always** state the grain explicitly with a one-clause example ("A customer with X has Y").
+- **Always** mention the most likely confusion-causing caveat (FX, in-progress month, exclusions, account-vs-customer).
+- **Keep it short** (2-4 sentences, target ~50 words). The richer detail lives here in `metric-definitions.md`, not in BQ.
+- **No SQL.** The math is in the SQL file; consumers don't read SQL.
+
+The longer detail (full filter list with rationale, methodology source, parity-verified-against, etc.) stays in `metric-definitions.md` only — that's for the team building/maintaining metrics, not for consumers reading BQ.
+
+---
+
 ## 3. Audit checklist — "does the math match the name?"
 
 Run through every question for every metric before flipping `live`:

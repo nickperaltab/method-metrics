@@ -7,10 +7,11 @@
 models:
   - name: v_metric__syncs
     description: |
-      Monthly sync-event count, materialized for Registry UI and dashboard
-      consumption. Materialization of the "Syncs" metric (#55), defined in
-      intermediate/v_syncs.yml as a `simple` metric (COUNT(*) of v_syncs
-      grouped by SyncDate).
+      Monthly count of sync milestone events from Method's funnel pipeline.
+      Account-grain by intent — counts each time an account hits a sync
+      milestone. ~91% of accounts have one sync event; ~9% have 2+ from
+      re-syncs after disconnect/reconnect, which are counted by design.
+      Foundation for Sync Rate (#300).
     config:
       materialized: view
       labels:

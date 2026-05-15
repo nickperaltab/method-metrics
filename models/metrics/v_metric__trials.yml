@@ -13,10 +13,11 @@
 models:
   - name: v_metric__trials
     description: |
-      Monthly trial-signup count, materialized for Registry UI and dashboard
-      consumption. Materialization of the "Trials" metric (#54), defined in
-      intermediate/v_trials.yml as a `simple` metric (COUNT(*) of v_trials
-      grouped by SignupDate).
+      Monthly count of Method accounts that began a trial. Account-grain —
+      a customer with 2 trial accounts contributes 2 trials, by design.
+      Excludes test accounts, internal Method Integration partner rows,
+      and the '0001-01-01' sentinel value. For unique-customer counts,
+      use Customers (#373).
     config:
       materialized: view
       labels:

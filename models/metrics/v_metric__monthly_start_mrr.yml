@@ -14,11 +14,11 @@
 models:
   - name: v_metric__monthly_start_mrr
     description: |
-      Monthly Start MRR — the dollar value of MRR at the start of each
-      month, summed across customers (USD/CAD/UK pre-FX). Inherits the
-      CEO-confirmed symmetric Prepay Expiry Income exclusion methodology
-      from v_customer_mrr. Materialization of the "Monthly Start MRR"
-      metric (#378). The foundation for monthly GRR/NRR calculations.
+      Total MRR at the start of each month, in dollars summed across all
+      customers. Pre-FX — currencies (USD, CAD, UK) at face value, not
+      USD-converted. Excludes internal Method accounts. Uses CEO-confirmed
+      methodology that excludes one-time Prepay Expiry write-offs from
+      both StartMRR and Cancellations. Foundation for monthly GRR / NRR.
     config:
       materialized: view
       labels:

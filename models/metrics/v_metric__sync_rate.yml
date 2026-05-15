@@ -17,10 +17,11 @@
 models:
   - name: v_metric__sync_rate
     description: |
-      Monthly Sync Rate (syncs / trials), materialized for Registry UI and
-      dashboard consumption. Materialization of the "Sync Rate" metric
-      (#300), defined in models/metrics/_metrics.yml as a `ratio` metric
-      with numerator `syncs` (#55) and denominator `trials` (#54).
+      Monthly Sync Rate — sync milestone events divided by trial signups
+      that month, at account-grain. Today's typical range is 50-65%. Not
+      a clean "% of customers who synced" — both numerator and denominator
+      are account/event counts. For exact "fraction of unique trial cohort
+      that synced," a different metric would be needed.
     config:
       materialized: view
       labels:
