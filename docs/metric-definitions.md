@@ -39,7 +39,13 @@ Justin's verified-queries file, etc.>
 
 **Status:** <live | queued | under_review>
 
+**⚠️ Limitations / use-with-care:** *(leave blank if none)*
+- <hard warnings about how the metric can/cannot be used — directional-only, small-sample, noisy, externally-dependent, etc.>
+- e.g. "Use directionally only — Health Score algorithm not validated for absolute reporting; reliable for cohort comparison, not for single-point quotes"
+- The most important entry here goes into the BQ description as the "warning sentence" (see §2a)
+
 **Known caveats / things consumers should know:**
+- <smaller things — FX, in-progress month, exclusion details>
 - <e.g. "pre-FX — all currencies at face value">
 - <e.g. "current month is incomplete; values for in-progress month understate">
 
@@ -87,14 +93,17 @@ Imagine the person querying is one of these, and write so each can use the metri
 
 These readers don't know about `intermediate/v_trials.yml`, "Registry UI", semantic_models, or what `simple` means in MetricFlow terminology. **No internal jargon. No file paths. No dbt vocabulary.**
 
-### The format (2-4 sentences, ~40-80 words)
+### The format (2-5 sentences, ~50-100 words)
 
-A good description has exactly these parts, in order:
+A good description has these parts, in order. The first three are mandatory; the fourth is only for metrics with real use limitations; the fifth is optional context.
 
 1. **What it counts/measures — one plain sentence.** Start with "Monthly count of…" or "Dollar value of…" or "Fraction of…". Use the metric name's plain meaning. No SQL.
 2. **The grain, explicitly.** "Account-grain — a customer with 2 accounts contributes 2 trials." Or "Customer-grain — one row per unique customer." Or "Pre-FX dollar values." This is the #1 source of confusion; it goes second so it's hard to miss.
 3. **One key caveat or pointer.** "Excludes test accounts." Or "Current month is incomplete." Or "For unique-customer counts, use Customers (#373)." Pick the one most likely to bite a consumer.
-4. *(optional)* **One sentence on consumer use** — "Appears in Method Monday's Acquisition section." Helps people understand the metric's role.
+4. **⚠️ Limitation / "use with care" warning, when applicable.** For metrics that should only be used a certain way — directional-only, small-sample, lagged, externally-dependent, etc. Treat this like a warning label on medication: short, sharp, in front of the consumer.
+   - Examples: "Use directionally only — algorithm not validated for absolute reporting." • "Sample size <100; trust quarter-over-quarter, not month-over-month." • "Refreshed nightly; intra-day changes won't appear until tomorrow." • "Pulled from Forecast Sheet; if the Sheet is wrong, this is wrong." • "Aggregated only — do not export individual customer identifiers."
+   - Start the sentence with the warning, not the explanation. The point is to catch the eye of someone about to misuse the metric.
+5. *(optional)* **One sentence on consumer use** — "Appears in Method Monday's Acquisition section." Helps people understand the metric's role.
 
 ### Examples — bad vs. good
 
@@ -120,7 +129,8 @@ A good description has exactly these parts, in order:
 - **Never** mention dbt file paths, model names, or dbt-specific terminology (`simple`, `ratio`, `semantic_model`, etc.).
 - **Always** state the grain explicitly with a one-clause example ("A customer with X has Y").
 - **Always** mention the most likely confusion-causing caveat (FX, in-progress month, exclusions, account-vs-customer).
-- **Keep it short** (2-4 sentences, target ~50 words). The richer detail lives here in `metric-definitions.md`, not in BQ.
+- **Add a "use with care" warning if the metric has real limitations** (directional-only, noisy, small-sample, externally-dependent). This is what prevents misuse in board decks and customer-facing reports.
+- **Keep it short** (2-5 sentences, target ~50-100 words). The richer detail lives here in `metric-definitions.md`, not in BQ.
 - **No SQL.** The math is in the SQL file; consumers don't read SQL.
 
 The longer detail (full filter list with rationale, methodology source, parity-verified-against, etc.) stays in `metric-definitions.md` only — that's for the team building/maintaining metrics, not for consumers reading BQ.
