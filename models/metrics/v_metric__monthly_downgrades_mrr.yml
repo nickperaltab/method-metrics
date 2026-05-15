@@ -1,0 +1,21 @@
+# Canonical metric definition for "Monthly Downgrades ($)" (#380).
+
+models:
+  - name: v_metric__monthly_downgrades_mrr
+    description: |
+      Total MRR lost from customer downgrades each month (existing customers
+      paying less than the previous month, but not canceling), in dollars
+      summed across all customers. Pre-FX — currencies (USD, CAD, UK) at
+      face value, not USD-converted. Excludes internal Method accounts.
+      Inherits the v_customer_mrr Prepay Expiry methodology.
+    config:
+      materialized: view
+      labels:
+        metric_id: '380'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_customer_mrr
+        source_measure_safe: sum_downgrades
+        depends_on: ''

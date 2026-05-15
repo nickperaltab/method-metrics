@@ -1,0 +1,22 @@
+# Canonical metric definition for "Monthly Expansions ($)" (#381).
+
+models:
+  - name: v_metric__monthly_expansions_mrr
+    description: |
+      Total MRR gained from customer expansions each month (existing
+      customers paying more than the previous month), in dollars summed
+      across all customers. Pre-FX — currencies (USD, CAD, UK) at face
+      value, not USD-converted. Excludes internal Method accounts.
+      Inherits the v_customer_mrr Prepay Expiry methodology. Foundation
+      for monthly NRR.
+    config:
+      materialized: view
+      labels:
+        metric_id: '381'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_customer_mrr
+        source_measure_safe: sum_expansions
+        depends_on: ''

@@ -151,7 +151,7 @@ Run through every question for every metric before flipping `live`:
 
 ---
 
-## 4. Currently dbt-managed metrics (5)
+## 4. Currently dbt-managed metrics (8)
 
 These metrics are live in `revenue.v_metric__*` views, parity-verified, with full catalog metadata in BQ INFORMATION_SCHEMA.
 
@@ -366,7 +366,114 @@ Where `v_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P
 
 ---
 
-## 5. Live in Supabase but not yet dbt-managed (15)
+---
+
+### #379 Monthly Cancellations ($)
+
+**What it answers in one sentence:** How much MRR did Method lose from customer cancellations in each month?
+
+**The math:**
+```sql
+SELECT Month AS period, ROUND(SUM(Cancellations), 2) AS value
+FROM `project-for-method-dw.revenue.v_customer_mrr`
+WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+GROUP BY 1
+```
+
+**Grain:** period-level. Underlying aggregation is customer-month.
+
+**Filters / exclusions (inherited from `v_customer_mrr`):**
+- Internal Method accounts (CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%')
+- **Symmetric Prepay Expiry Income exclusion** (CEO-confirmed 2026-04-28)
+- TxnDate >= '2021-12-01'; excludes current incomplete month
+
+**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified pattern.
+
+**Parity-verified against:** Pre-migration BQ values for 6 months, all penny-match (Round 4, 2026-05-14).
+
+**Status:** **live**
+
+**Known caveats:**
+- Pre-FX. Each currency at face value.
+- Excludes one-time Prepay Expiry write-offs (per CEO methodology) — diverges from board-deck monthly retention by ~4-6bp.
+- Current month NOT shown.
+
+**Used by:**
+- Method Monday (Revenue / Retention section)
+- Monthly GRR (#382) as input
+- Monthly NRR (#383) as input
+
+---
+
+### #380 Monthly Downgrades ($)
+
+**What it answers in one sentence:** How much MRR did Method lose from existing customers paying less than the prior month (but not canceling) in each month?
+
+**The math:**
+```sql
+SELECT Month AS period, ROUND(SUM(Downgrades), 2) AS value
+FROM `project-for-method-dw.revenue.v_customer_mrr`
+WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+GROUP BY 1
+```
+
+**Grain:** period-level.
+
+**Filters / exclusions:** Same as #379 (inherited from v_customer_mrr).
+
+**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified.
+
+**Parity-verified against:** 6 months, penny-match (Round 4, 2026-05-14).
+
+**Status:** **live**
+
+**Known caveats:**
+- Pre-FX.
+- Distinction from Cancellations: downgrade = customer pays less; cancellation = customer pays zero. Both reduce MRR; tracked separately.
+- Current month NOT shown.
+
+**Used by:**
+- Method Monday (Revenue / Retention section)
+- Monthly GRR (#382) as input
+- Monthly NRR (#383) as input
+
+---
+
+### #381 Monthly Expansions ($)
+
+**What it answers in one sentence:** How much MRR did Method gain from existing customers paying more than the prior month in each month?
+
+**The math:**
+```sql
+SELECT Month AS period, ROUND(SUM(Expansions), 2) AS value
+FROM `project-for-method-dw.revenue.v_customer_mrr`
+WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+GROUP BY 1
+```
+
+**Grain:** period-level.
+
+**Filters / exclusions:** Same as #379 (inherited from v_customer_mrr).
+
+**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified.
+
+**Parity-verified against:** 6 months, penny-match (Round 4, 2026-05-14).
+
+**Status:** **live**
+
+**Known caveats:**
+- Pre-FX.
+- Existing customers ONLY — net-new customer revenue lives in a different metric (Start MRR contributes new customers separately).
+- Current month NOT shown.
+
+**Used by:**
+- Method Monday (Revenue / Retention section)
+- Monthly NRR (#383) as input — the "N" (net) part of NRR comes from expansions
+- (Not used in GRR — gross retention excludes expansion)
+
+---
+
+## 5. Live in Supabase but not yet dbt-managed (12)
 
 These metrics ship as live to Method consumers today (chart builder reads them from Supabase). Each needs migration to dbt — including the definition pass per this doc — before Phase 1 is complete.
 
@@ -378,9 +485,6 @@ For each, the current Supabase definition is the starting point. Migration is **
 | 59 | Churn | v_cancellations | TBD — define in Round 4 |
 | 301 | Sync-to-Conversion Rate | derived (#56, #55) | TBD — define in Round 4 |
 | 302 | Trial-to-Conversion Rate | derived (#56, #54) | TBD — define in Round 4 |
-| 379 | Monthly Cancellations ($) | v_customer_mrr | TBD — define in Round 4 |
-| 380 | Monthly Downgrades ($) | v_customer_mrr | TBD — define in Round 4 |
-| 381 | Monthly Expansions ($) | v_customer_mrr | TBD — define in Round 4 |
 | 384 | Annual Start MRR | v_customer_annual_mrr | TBD — define in Round 4 |
 | 385 | Annual Cancellations ($) | v_customer_annual_mrr | TBD — define in Round 4 |
 | 386 | Annual Downgrades ($) | v_customer_annual_mrr | TBD — define in Round 4 |
