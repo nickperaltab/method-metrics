@@ -1,5 +1,5 @@
--- v_customers — entity-grain customers primitive view.
--- Month × EntityRecordID grain. Parity-verified against v_customer_segments on 2026-04-22
+-- int_customers — entity-grain customers primitive view.
+-- Month × EntityRecordID grain. Parity-verified against int_customer_segments on 2026-04-22
 -- (zero row-count deltas on Month × Segment).
 --
 -- Columns:
@@ -13,7 +13,7 @@
 -- Channel/Country/Vertical/SyncType values. When rolling up to EntityRecordID, the
 -- earliest-signup (FirstSaaSInvoiceTxnDate) CompanyAccount wins. See docs/semantic-layer.md.
 
-CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customers` AS
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customers` AS
 WITH monthly_accounts AS (
   SELECT
     t.EntityRecordID,

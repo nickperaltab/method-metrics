@@ -1,8 +1,8 @@
 -- ============================================================
--- v_customer_annual_mrr — Annual GRR/NRR primitive foundation
+-- int_customer_annual_mrr — Annual GRR/NRR primitive foundation
 -- Grain: Month × EntityRecordID (12-month cohort comparison)
 -- ============================================================
--- Identical structure to v_customer_mrr, but compares P2 to P1 =
+-- Identical structure to int_customer_mrr, but compares P2 to P1 =
 -- 12 MONTHS prior instead of 1 month prior. Produces the annual
 -- cohort values used by the Customer Segments scorecard.
 --
@@ -68,7 +68,7 @@
 --   (Engine equivalent: 77.89% — 2bp residual is rename handling)
 -- ============================================================
 
-CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_annual_mrr` AS
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customer_annual_mrr` AS
 
 WITH entity_monthly AS (
   SELECT
@@ -215,7 +215,7 @@ SELECT
          THEN cc.NewMRR * SAFE_DIVIDE(ep.p2_saas, cc.p2_saas)
          ELSE 0 END
   AS NUMERIC) AS NewMRR,
-  -- Dimensions sourced from v_customers.
+  -- Dimensions sourced from int_customers.
   -- For existing customers (p1>0): use 12-month-prior dims (reflects the
   --   segment the customer was in at the start of the annual cohort).
   -- For new customers (p1=0): use current-month dims.
@@ -230,7 +230,7 @@ FROM entity_paired ep
 JOIN company_classified cc
   ON  ep.month_str = cc.month_str
   AND ep.Company   = cc.Company
-LEFT JOIN `project-for-method-dw.revenue.v_customers` vc_dim
+LEFT JOIN `project-for-method-dw.revenue.int_customers` vc_dim
   ON  vc_dim.EntityRecordID = ep.EntityRecordID
   AND vc_dim.Month = CASE
     WHEN ep.p1_saas > 0 THEN DATE_SUB(ep.Month, INTERVAL 12 MONTH)

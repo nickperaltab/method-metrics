@@ -77,8 +77,8 @@ This handles CompanyAccount renames (one entity has up to 69 different names ove
 
 ### Two views, two cohort windows
 
-- **v_customer_mrr** — 1-month P1/P2 shift. Powers monthly MRR movements.
-- **v_customer_annual_mrr** — 12-month P1/P2 shift. Powers the Customer Segments scorecard's annual GRR/NRR. Updated 2026-04-28 to apply CEO-confirmed engine methodology (symmetric PE exclusion). Feb 2026 post-change: Start=$697.6K, GRR=77.91%, NRR=90.28%.
+- **int_customer_mrr** — 1-month P1/P2 shift. Powers monthly MRR movements.
+- **int_customer_annual_mrr** — 12-month P1/P2 shift. Powers the Customer Segments scorecard's annual GRR/NRR. Updated 2026-04-28 to apply CEO-confirmed engine methodology (symmetric PE exclusion). Feb 2026 post-change: Start=$697.6K, GRR=77.91%, NRR=90.28%.
 
 The two views are structurally identical — only difference is `INTERVAL 1 MONTH` vs `INTERVAL 12 MONTH` in the P1→P2 join.
 

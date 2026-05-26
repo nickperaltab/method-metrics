@@ -2,14 +2,14 @@
 -- One row per paying company per month with status flags and dimensions.
 --
 -- IsCustomer: active paying customer at end of month (paid before month end, not cancelled yet)
--- IsNew: first payment was this month (matches v_conversions)
--- IsChurned: cancellation date falls in this month (matches v_cancellations)
+-- IsNew: first payment was this month (matches int_conversions)
+-- IsChurned: cancellation date falls in this month (matches int_cancellations)
 -- HasDEP: had a DEP transaction (Premium App or Enhancement Plan) this month
 --
 -- Verified 2026-04-14:
 --   Customers Mar 2026: 3,898 (= total conversions all-time - total churns all-time)
---   New Mar 2026: 109 (exact match with v_conversions)
---   Churned Mar 2026: 117 (exact match with v_cancellations)
+--   New Mar 2026: 109 (exact match with int_conversions)
+--   Churned Mar 2026: 117 (exact match with int_cancellations)
 --   DEP customers Mar 2026: 313
 --
 -- Note: "Customers" uses end-of-month semantics. A customer who churns mid-month

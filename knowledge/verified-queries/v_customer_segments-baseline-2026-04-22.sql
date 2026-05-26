@@ -1,4 +1,4 @@
--- Baseline v_customer_segments captured 2026-04-22 (before v_customers refactor).
+-- Baseline int_customer_segments captured 2026-04-22 (before int_customers refactor).
 -- Task 7 artifact — reference for parity gate (Task 9) and rollback (Task 15 reversal).
 
 WITH monthly_accounts AS (

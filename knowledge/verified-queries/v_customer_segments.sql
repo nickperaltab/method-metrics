@@ -1,4 +1,4 @@
--- v_customer_segments: Entity-level customer segmentation by license tier × DEP status
+-- int_customer_segments: Entity-level customer segmentation by license tier × DEP status
 -- One row per entity (customer) per month.
 --
 -- Customer = EntityRecordID (groups multiple accounts under one entity)
@@ -17,7 +17,7 @@
 --   Feb 2026: 313 DEP ✓
 --   Mar 2026: 316 DEP ✓
 
-CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_segments` AS
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customer_segments` AS
 WITH monthly_accounts AS (
   SELECT
     t.EntityRecordID,

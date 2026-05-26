@@ -106,15 +106,36 @@ function isAllowedRedirect(client: { redirect_uris: string[] }, uri: string): bo
   return client.redirect_uris.includes(uri);
 }
 
-// Allowlist gate — same logic as mint-mcp-token. Domain rows or exact match.
+// Temporary: writes rows to oauth_debug_log so we can see what the function
+// is actually doing — Supabase's HTTP access logs don't show console.log.
+// Remove once the flow is verified stable.
+async function debugLog(step: string, details?: unknown): Promise<void> {
+  try {
+    await sb().from('oauth_debug_log').insert({
+      step,
+      details: details === undefined ? null : JSON.parse(JSON.stringify(details)),
+    });
+  } catch (e) {
+    console.error('[debugLog] failed', e);
+  }
+}
+
+// Allowlist gate. Two separate queries because PostgREST's .or() syntax
+// breaks on values containing periods (which both emails and domains have).
 async function emailAllowed(email: string): Promise<boolean> {
-  const domain = '@' + email.split('@')[1];
-  const { data } = await sb()
+  const { data: exact } = await sb()
     .from('mcp_allowlist')
     .select('id')
-    .or(`email.ilike.${email},email.eq.${domain}`)
+    .ilike('email', email)
     .maybeSingle();
-  return !!data;
+  if (exact) return true;
+  const domain = '@' + email.split('@')[1];
+  const { data: domainRow } = await sb()
+    .from('mcp_allowlist')
+    .select('id')
+    .eq('email', domain)
+    .maybeSingle();
+  return !!domainRow;
 }
 
 // ── Endpoint: /.well-known/oauth-authorization-server (RFC 8414) ────────
@@ -282,10 +303,10 @@ async function googleCallback(req: Request): Promise<Response> {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const googleErr = url.searchParams.get('error');
-  console.log('[oauth/google-callback] start', { hasCode: !!code, hasState: !!state, googleErr });
+  await debugLog('callback_start', { hasCode: !!code, hasState: !!state, googleErr });
 
   if (!state) {
-    console.error('[oauth/google-callback] missing state');
+    await debugLog('callback_missing_state');
     return htmlError('Sign-in failed', 'Missing state parameter from Google.');
   }
 
@@ -294,26 +315,26 @@ async function googleCallback(req: Request): Promise<Response> {
     .select('*')
     .eq('state', state)
     .maybeSingle();
-  if (pendingErr) console.error('[oauth/google-callback] pending lookup error', pendingErr);
+  if (pendingErr) await debugLog('callback_pending_lookup_error', pendingErr);
   if (!pending) {
-    console.error('[oauth/google-callback] no pending row for state', state);
+    await debugLog('callback_no_pending', { state });
     return htmlError('Sign-in failed', 'Authorization request expired or unknown. Start over.');
   }
-  console.log('[oauth/google-callback] pending found', { client_id: pending.client_id, resource: pending.resource });
+  await debugLog('callback_pending_found', { client_id: pending.client_id, resource: pending.resource });
 
   // Pending row consumed regardless of outcome — single use.
   await sb().from('oauth_pending_authorizations').delete().eq('state', state);
 
   if (new Date(pending.expires_at).getTime() < Date.now()) {
-    console.error('[oauth/google-callback] pending expired', pending.expires_at);
+    await debugLog('callback_pending_expired', { expires_at: pending.expires_at });
     return errorRedirect(pending.redirect_uri, 'access_denied', 'Authorization expired', pending.client_state);
   }
   if (googleErr) {
-    console.error('[oauth/google-callback] google returned error', googleErr);
+    await debugLog('callback_google_returned_error', { googleErr });
     return errorRedirect(pending.redirect_uri, 'access_denied', `Google error: ${googleErr}`, pending.client_state);
   }
   if (!code) {
-    console.error('[oauth/google-callback] missing code from Google');
+    await debugLog('callback_missing_code');
     return errorRedirect(pending.redirect_uri, 'invalid_request', 'Missing code from Google', pending.client_state);
   }
 
@@ -331,24 +352,24 @@ async function googleCallback(req: Request): Promise<Response> {
   });
   const tokenJson = await tokenRes.json() as GoogleTokenResponse;
   if (!tokenRes.ok || !tokenJson.access_token) {
-    console.error('[oauth/google-callback] google token exchange failed', { status: tokenRes.status, body: tokenJson });
+    await debugLog('callback_google_token_failed', { status: tokenRes.status, body: tokenJson });
     return errorRedirect(pending.redirect_uri, 'server_error', tokenJson.error_description ?? 'Google token exchange failed', pending.client_state);
   }
-  console.log('[oauth/google-callback] got google access_token');
+  await debugLog('callback_google_token_ok');
 
   const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${tokenJson.access_token}` },
   });
   const userJson = await userRes.json() as GoogleUserInfo;
   if (!userRes.ok || !userJson.email || userJson.verified_email === false) {
-    console.error('[oauth/google-callback] userinfo failed', { status: userRes.status, body: userJson });
+    await debugLog('callback_userinfo_failed', { status: userRes.status, body: userJson });
     return errorRedirect(pending.redirect_uri, 'access_denied', 'Could not verify Google email', pending.client_state);
   }
   const email = userJson.email.toLowerCase();
-  console.log('[oauth/google-callback] got email', email);
+  await debugLog('callback_got_email', { email });
 
   if (!(await emailAllowed(email))) {
-    console.error('[oauth/google-callback] email not allowlisted', email);
+    await debugLog('callback_email_not_allowlisted', { email });
     return errorRedirect(pending.redirect_uri, 'access_denied', `Email ${email} is not allowlisted for the Metrics MCP. Contact Nic if this is unexpected.`, pending.client_state);
   }
 
@@ -367,10 +388,10 @@ async function googleCallback(req: Request): Promise<Response> {
     expires_at: codeExpires,
   });
   if (insErr) {
-    console.error('[oauth/google-callback] code insert failed', insErr);
+    await debugLog('callback_code_insert_failed', insErr);
     return errorRedirect(pending.redirect_uri, 'server_error', undefined, pending.client_state);
   }
-  console.log('[oauth/google-callback] code minted, redirecting back');
+  await debugLog('callback_code_minted', { redirect_uri: pending.redirect_uri });
 
   const back = new URL(pending.redirect_uri);
   back.searchParams.set('code', authCode);

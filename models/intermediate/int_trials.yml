@@ -17,11 +17,12 @@
 models:
   - name: int_trials
     description: |
-      One row per Method account that began a trial. Source: revenue.Account,
-      filtered to IsConversionException = FALSE, Partner != 'Method
-      Integration', SignupDate != DATE('0001-01-01'). The filter logic lives
-      in the BQ-side DDL of v_trials, not this dbt model — this file is a
-      passthrough that exists to let dbt attach the semantic_model below.
+      One row per Method account that began a trial. Account-grain — a customer
+      with 2 trial accounts contributes 2 rows. Excludes test accounts
+      (IsConversionException), internal Method Integration partner rows, and
+      the '0001-01-01' sentinel date. Carries CompanyAccount, AttributionChannel,
+      signup country/vertical/sync type, and per-attribution-touch (Att_*)
+      columns. The intermediate that backs the Trials (#54) metric.
     config:
       meta:
         layer: intermediate

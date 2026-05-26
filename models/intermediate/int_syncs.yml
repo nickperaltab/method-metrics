@@ -22,11 +22,12 @@
 models:
   - name: int_syncs
     description: |
-      One row per sync event recorded in the Funnel pipeline. Source:
-      revenue.Funnel filtered to EventType = 'Sync'. The filter and
-      projection live in the BQ-side DDL of v_syncs, not this dbt model —
-      this file is a passthrough that exists to let dbt attach the
-      semantic_model below.
+      One row per sync milestone event from Method's funnel pipeline.
+      Event-grain — ~91% of accounts have exactly 1 sync event; ~9% have 2+
+      from re-syncs after disconnect/reconnect. Carries EntityRecordID,
+      CompanyAccount, SyncDate, SignupDate, and attribution columns. Source:
+      revenue.Funnel filtered to EventType = 'Sync'. The intermediate that
+      backs the Syncs (#55) metric.
     config:
       meta:
         layer: intermediate

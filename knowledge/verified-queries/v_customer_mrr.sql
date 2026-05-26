@@ -1,5 +1,5 @@
 -- ============================================================
--- v_customer_mrr — Monthly GRR/NRR primitive foundation
+-- int_customer_mrr — Monthly GRR/NRR primitive foundation
 -- Grain: Month × EntityRecordID  (1-month P1/P2 cohort)
 -- ============================================================
 -- Per-row classification columns for every MRR event type.
@@ -30,7 +30,7 @@
 -- StartMRR. That artificially inflates monthly GRR by ~4–6bp.
 --
 -- This view (post-2026-04-28) uses the symmetric methodology
--- consistent with v_customer_annual_mrr and the SaaS Analytics
+-- consistent with int_customer_annual_mrr and the SaaS Analytics
 -- Engine's SaaS Totals formula. So:
 --
 --   Monthly GRR (this view, NEW): ~95–97% Pre-FX
@@ -49,7 +49,7 @@
 -- by CompanyAccount string. Customer renames cause small paired
 -- diffs that net to ~$100–$1000 on Start/Cancel; on this point BQ
 -- is more correct (engine treats renames as cancellations). See
--- v_customer_annual_mrr.sql for the full reconciliation note.
+-- int_customer_annual_mrr.sql for the full reconciliation note.
 --
 -- ------------------------------------------------------------
 -- VERIFIED VALUES (post-methodology change, 2026-04-28)
@@ -79,13 +79,13 @@
 --      StartMRR and Cancellations. (Justin's monthly-cancellations.sql lines
 --      80-82 implements only the Cancellation half — this view extends it
 --      to StartMRR per the CEO-confirmed methodology.)
---   4. Dimensions sourced from v_customers: existing customers use prior-month
+--   4. Dimensions sourced from int_customers: existing customers use prior-month
 --      dims (so churn/downgrade rows reflect the segment they were in before
---      the event); new customers use current-month dims. v_customers covers
+--      the event); new customers use current-month dims. int_customers covers
 --      2024-01-01+, so older rows have NULL dims — acceptable.
 -- ============================================================
 
-CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_mrr` AS
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customer_mrr` AS
 
 WITH entity_monthly AS (
   SELECT
@@ -244,11 +244,11 @@ SELECT
          THEN cc.NewMRR * SAFE_DIVIDE(ep.p2_saas, cc.p2_saas)
          ELSE 0 END
   AS NUMERIC) AS NewMRR,
-  -- Dimensions sourced from v_customers.
+  -- Dimensions sourced from int_customers.
   -- For existing customers (p1>0): use prior month so churn/downgrade rows
   --   get the segment they were in before the event.
   -- For new customers (p1=0): use current month.
-  -- v_customers only covers 2024-01-01+; older rows will have NULL dims.
+  -- int_customers only covers 2024-01-01+; older rows will have NULL dims.
   vc_dim.Segment,
   vc_dim.UserTier,
   vc_dim.HasDEP,
@@ -260,7 +260,7 @@ FROM entity_paired ep
 JOIN company_classified cc
   ON  ep.month_str = cc.month_str
   AND ep.Company   = cc.Company
-LEFT JOIN `project-for-method-dw.revenue.v_customers` vc_dim
+LEFT JOIN `project-for-method-dw.revenue.int_customers` vc_dim
   ON  vc_dim.EntityRecordID = ep.EntityRecordID
   AND vc_dim.Month = CASE
     WHEN ep.p1_saas > 0 THEN DATE_SUB(ep.Month, INTERVAL 1 MONTH)

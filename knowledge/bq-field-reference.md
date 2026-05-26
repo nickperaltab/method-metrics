@@ -32,7 +32,7 @@
 
 **DEP customer = had a non-zero DEP line item this month.** When billing stops, they're no longer DEP.
 
-**Edge case — refunds:** An account charged +$325 and refunded -$325 in the same month still counts as DEP because each individual line is non-zero. This matches Looker's per-line evaluation. Affects ~1-2 accounts/month. If business logic changes to "net DEP > 0", update `v_customer_segments` to use `SUM(dep_amount) != 0` instead of `MAX(non-zero line)`.
+**Edge case — refunds:** An account charged +$325 and refunded -$325 in the same month still counts as DEP because each individual line is non-zero. This matches Looker's per-line evaluation. Affects ~1-2 accounts/month. If business logic changes to "net DEP > 0", update `int_customer_segments` to use `SUM(dep_amount) != 0` instead of `MAX(non-zero line)`.
 
 **DEP is per-account, not per-company.** A franchise can have some accounts on DEP and some not (e.g., Mobility City: 1/38 on DEP).
 
@@ -47,8 +47,8 @@ Built from `revenue.Account` CROSS JOIN monthly spine.
 | Flag | Definition | Matches |
 |------|-----------|---------|
 | `IsCustomer` | Paid before end of month AND not cancelled yet | End-of-month semantics. Churned customers excluded from count that month. |
-| `IsNew` | `FirstSaaSInvoiceTxnDate` falls in this month | Exact match with `v_conversions` |
-| `IsChurned` | `CancellationDate` falls in this month (and was paying customer) | Exact match with `v_cancellations` |
+| `IsNew` | `FirstSaaSInvoiceTxnDate` falls in this month | Exact match with `int_conversions` |
+| `IsChurned` | `CancellationDate` falls in this month (and was paying customer) | Exact match with `int_cancellations` |
 | `HasDEP` | Had a DEP transaction (Premium App or Enhancement Plan) this month | Monthly check via LEFT JOIN |
 
 **Key identity:** `Customers(month) = Total Conversions(all time) - Total Churns(all time)`
@@ -74,7 +74,7 @@ CASE
   ELSE 'Unknown'
 END AS AttributionChannel
 ```
-All funnel views (v_trials, v_syncs, v_conversions) and entity views (v_accounts, v_total_dep_revenue) must use this same CASE logic.
+All funnel views (int_trials, int_syncs, int_conversions) and entity views (v_accounts, v_total_dep_revenue) must use this same CASE logic.
 
 ## Standard Filters
 

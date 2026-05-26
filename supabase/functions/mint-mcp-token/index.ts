@@ -84,15 +84,24 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  // Allowlist check — accepts either an exact email match
-  // (e.g. 'contractor@example.com') OR a domain-only row
-  // (e.g. '@method.me' covers all verified addresses on that domain).
-  const domain = '@' + id.email.split('@')[1];
-  const { data: allowRow } = await sb
+  // Allowlist check — exact email or domain-only row (e.g. '@method.me'
+  // covers all verified addresses on that domain). Two separate queries
+  // because PostgREST's .or() filter breaks on values containing periods.
+  const { data: exact } = await sb
     .from('mcp_allowlist')
     .select('id')
-    .or(`email.ilike.${id.email},email.eq.${domain}`)
+    .ilike('email', id.email)
     .maybeSingle();
+  let allowRow = exact;
+  if (!allowRow) {
+    const domain = '@' + id.email.split('@')[1];
+    const r = await sb
+      .from('mcp_allowlist')
+      .select('id')
+      .eq('email', domain)
+      .maybeSingle();
+    allowRow = r.data;
+  }
   if (!allowRow) return json({ error: 'not_allowlisted', email: id.email }, 403);
 
   // Revoke any existing non-revoked tokens for this user (one live token per user).
