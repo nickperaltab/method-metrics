@@ -1,0 +1,25 @@
+# Canonical metric definition for "Monthly GRR %" (#382).
+# CEO-confirmed methodology (2026-04-28). MUST NOT change without
+# explicit CEO + Justin sign-off.
+
+models:
+  - name: v_metric__monthly_grr
+    description: |
+      Monthly Gross Revenue Retention — fraction of last month's MRR
+      retained this month, excluding expansion. Formula: (StartMRR -
+      Cancellations - Downgrades) / StartMRR. Pre-FX. Typical values
+      95-97%. Uses CEO-confirmed symmetric Prepay Expiry exclusion;
+      diverges from board-deck monthly GRR by ~4-6bp because the deck
+      uses asymmetric methodology. For any number heading to the board,
+      reconcile against the deck first.
+    config:
+      materialized: view
+      labels:
+        metric_id: '382'
+        layer: metrics
+        type: derived
+        status: live
+        verified_at: '2026-05-14'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 378-379-380

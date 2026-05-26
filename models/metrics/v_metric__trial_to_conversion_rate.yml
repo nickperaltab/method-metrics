@@ -1,0 +1,25 @@
+# Canonical metric definition for "Trial-to-Conversion Rate" (#302).
+
+models:
+  - name: v_metric__trial_to_conversion_rate
+    description: |
+      Monthly Trial-to-Conversion Rate — conversions divided by trials
+      that month, at account-grain. Measures how well trial accounts
+      progress to paying customers. Both numerator and denominator are
+      account-grain counts (see Conversions #56 and Trials #54). Use for
+      funnel-stage analysis. Note: the numerator (conversions) and
+      denominator (trials) for the same month don't share a cohort —
+      most conversions in a given month come from trials in earlier
+      months. For cohort-locked conversion rate, a different metric
+      would be needed.
+    config:
+      materialized: view
+      labels:
+        metric_id: '302'
+        layer: metrics
+        type: ratio
+        status: live
+        verified_at: '2026-05-14'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 56-54

@@ -151,7 +151,7 @@ Run through every question for every metric before flipping `live`:
 
 ---
 
-## 4. Currently dbt-managed metrics (8)
+## 4. Currently dbt-managed metrics (20 — ALL live metrics complete 🎯)
 
 These metrics are live in `revenue.v_metric__*` views, parity-verified, with full catalog metadata in BQ INFORMATION_SCHEMA.
 
@@ -473,26 +473,147 @@ GROUP BY 1
 
 ---
 
-## 5. Live in Supabase but not yet dbt-managed (12)
+---
 
-These metrics ship as live to Method consumers today (chart builder reads them from Supabase). Each needs migration to dbt — including the definition pass per this doc — before Phase 1 is complete.
+### #56 Conversions
 
-For each, the current Supabase definition is the starting point. Migration is **Round 4** (most metrics) or **Round 5** (GRR/NRR specifically).
+**What it answers:** How many Method accounts converted from trial to paying (received their first SaaS invoice) in each month?
 
-| # | Name | Source | Status |
-|---|---|---|---|
-| 56 | Conversions | v_conversions | TBD — define in Round 4 |
-| 59 | Churn | v_cancellations | TBD — define in Round 4 |
-| 301 | Sync-to-Conversion Rate | derived (#56, #55) | TBD — define in Round 4 |
-| 302 | Trial-to-Conversion Rate | derived (#56, #54) | TBD — define in Round 4 |
-| 384 | Annual Start MRR | v_customer_annual_mrr | TBD — define in Round 4 |
-| 385 | Annual Cancellations ($) | v_customer_annual_mrr | TBD — define in Round 4 |
-| 386 | Annual Downgrades ($) | v_customer_annual_mrr | TBD — define in Round 4 |
-| 387 | Annual Expansions ($) | v_customer_annual_mrr | TBD — define in Round 4 |
-| 382 | Monthly GRR % | derived (#378, #379, #380) | TBD — define in **Round 5** (protected) |
-| 383 | Monthly NRR % | derived (#378, #379, #380, #381) | TBD — define in **Round 5** (protected) |
-| 388 | Annual GRR % | derived (#384, #385, #386) | TBD — define in **Round 5** (protected) |
-| 389 | Annual NRR % | derived (#384, #385, #386, #387) | TBD — define in **Round 5** (protected) |
+**The math:** `COUNT(*) FROM v_conversions GROUP BY FirstSaaSInvoiceTxnDate (month)`
+
+**Grain:** account-level. A customer with 2 converted accounts contributes 2 conversions.
+
+**Filters:** Inherits from v_conversions — excludes IsConversionException accounts and Method Integration partners.
+
+**Parity-verified:** 6 months, penny-match (Round 4, 2026-05-14).
+
+**Status:** **live**
+
+**Known caveats:** Account-grain by design. For unique-customer conversion counts, use Customers (#373) cohort analyses.
+
+**Used by:** Method Monday (Conversion section), Sync-to-Conversion Rate (#301), Trial-to-Conversion Rate (#302).
+
+---
+
+### #59 Churn
+
+**What it answers:** How many distinct Method customers canceled in each month?
+
+**The math:** `COUNT(DISTINCT CompanyAccount) FROM v_cancellations GROUP BY CancellationDate (month)`
+
+**Grain:** customer-level (uses DISTINCT). A customer with multiple canceling accounts in the same month counts ONCE.
+
+**Filters:** Inherits from v_cancellations.
+
+**Parity-verified:** 6 months, penny-match (Round 4, 2026-05-14).
+
+**Status:** **live**
+
+**Known caveats:** Account-count churn, not dollar churn. For MRR-lost-to-cancellations, use Monthly Cancellations ($) (#379).
+
+**Used by:** Method Monday (Retention section).
+
+---
+
+### #301 Sync-to-Conversion Rate
+
+**What it answers:** What fraction of sync milestones progressed to conversion that month?
+
+**The math:** `SAFE_DIVIDE(conversions, syncs)` per period.
+
+**Grain:** Period-level ratio. Both numerator and denominator are account/event counts.
+
+**Parity-verified:** Sanity-checked against the live chart builder; values in 24-33% range.
+
+**Status:** **live**
+
+**Known caveats:** Uses event-grain Syncs (#55) in the denominator. Not a clean "% of sync cohort that converted" — see #55 caveats.
+
+**Used by:** Funnel-stage analysis.
+
+---
+
+### #302 Trial-to-Conversion Rate
+
+**What it answers:** What fraction of trials progressed to conversion that month?
+
+**The math:** `SAFE_DIVIDE(conversions, trials)` per period.
+
+**Grain:** Period-level ratio.
+
+**Parity-verified:** Sanity-checked; values in 15-20% range.
+
+**Status:** **live**
+
+**Known caveats:** Conversions and Trials in the same month don't share a cohort — most conversions come from earlier-month trials. For cohort-locked conversion rate, a different metric is needed.
+
+**Used by:** Method Monday (Acquisition / Conversion section), funnel-stage analysis.
+
+---
+
+### #384 Annual Start MRR + #385 Annual Cancellations ($) + #386 Annual Downgrades ($) + #387 Annual Expansions ($)
+
+**What they answer:** Same as the monthly MRR family (#378-381), but at annual cohort grain — reported monthly via trailing comparison.
+
+**The math:** `ROUND(SUM(X), 2) FROM v_customer_annual_mrr GROUP BY Month`, where X is StartMRR / Cancellations / Downgrades / Expansions.
+
+**Grain:** Period-level (annual cohort comparison, reported monthly).
+
+**Filters / methodology:** Same as v_customer_mrr — CEO-confirmed symmetric Prepay Expiry exclusion, internal Method accounts excluded.
+
+**Parity-verified:** 5 months × 4 metrics = 20 / 20 penny-match (Round 4, 2026-05-14).
+
+**Status:** **live** (all 4)
+
+**Known caveats:**
+- Pre-FX.
+- Annual = trailing 12-month cohort comparison.
+- Current month NOT shown.
+- Diverges from board-deck annual retention by ~4-6bp per the symmetric methodology.
+
+**Used by:** Method Monday (Revenue section, foundation for Annual GRR #388 / NRR #389).
+
+---
+
+### #382 Monthly GRR % + #383 Monthly NRR % + #388 Annual GRR % + #389 Annual NRR %
+
+> 🛡️ **CEO-protected family.** Methodology was explicitly confirmed by Method's CEO on 2026-04-28 (symmetric Prepay Expiry exclusion). MUST NOT change without explicit CEO + Justin sign-off.
+
+**What they answer:**
+- **#382 Monthly GRR %** — Fraction of last month's MRR retained this month, excluding expansion. `(StartMRR - Cancellations - Downgrades) / StartMRR`. Typical 95-97%.
+- **#383 Monthly NRR %** — Same with expansion. `(StartMRR - Cancellations - Downgrades + Expansions) / StartMRR`. Typical 97-99%.
+- **#388 Annual GRR %** — Annual version. Typical 76-78%.
+- **#389 Annual NRR %** — Annual NRR. Typical 88-90%.
+
+**The math:** Cross-model `derived` metrics combining the MRR family inputs. See each `v_metric__*_grr.sql` / `_nrr.sql` for the formula.
+
+**Grain:** Period-level fraction. Outputs as decimal (e.g., 0.965817 = 96.5817%).
+
+**Parity-verified:** 5 months × 4 metrics = 20 / 20 spot-check match to 6 decimal places (Round 5, 2026-05-14).
+
+**Status:** **live** (all 4)
+
+**Known caveats:**
+- Pre-FX.
+- Symmetric Prepay Expiry methodology — diverges from board-deck retention by ~4-6bp.
+- **For any number heading to the board or external reporting, reconcile against the board deck first.** These numbers will not penny-match the deck.
+- Current month NOT shown.
+
+**Used by:** Method Monday (Retention section, headline metrics). Board reporting (with deck reconciliation).
+
+---
+
+## 5. Status — Phase 1 complete 🎯
+
+All 20 live metrics are now dbt-managed with consumer-facing descriptions and BQ catalog metadata. Parity-verified across all metrics.
+
+The remaining work is structural, not metric-by-metric:
+- **Phase 1.5** — Rename `v_*` intermediates to `int_*` (single one-shot PR)
+- **Phase 1.6** — Marts layer (`dim_customers`, `dim_accounts`, `fct_*`) once evidence justifies it
+- **Phase 1.7** — Frontend migration (tracker.html, chart builder read from BQ instead of Supabase)
+- **Phase 2** — Cube / MetricFlow evaluation (only if external consumers materialize)
+
+See `docs/dbt-roadmap.md` for the full plan.
 
 ---
 

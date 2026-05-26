@@ -1,0 +1,21 @@
+# Canonical metric definition for "Sync-to-Conversion Rate" (#301).
+
+models:
+  - name: v_metric__sync_to_conversion_rate
+    description: |
+      Monthly Sync-to-Conversion Rate — conversions divided by syncs that
+      month, at account-grain. Measures how well synced accounts progress
+      to paying customers. Both numerator and denominator are account/event
+      counts (see Conversions #56 and Syncs #55). Use for funnel-stage
+      analysis, not as a clean "% of unique sync cohort that converted."
+    config:
+      materialized: view
+      labels:
+        metric_id: '301'
+        layer: metrics
+        type: ratio
+        status: live
+        verified_at: '2026-05-14'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 56-55

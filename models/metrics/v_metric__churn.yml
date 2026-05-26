@@ -1,0 +1,22 @@
+# Canonical metric definition for "Churn" (#59).
+
+models:
+  - name: v_metric__churn
+    description: |
+      Monthly count of distinct Method customers that canceled, grouped by
+      cancellation month. Customer-grain — uses COUNT(DISTINCT CompanyAccount)
+      so a customer with multiple canceling accounts in the same month
+      counts ONCE. Excludes test accounts and internal Method Integration
+      partner rows. Note: this is account-count churn, not dollar churn —
+      see Monthly Cancellations ($) (#379) for MRR lost.
+    config:
+      materialized: view
+      labels:
+        metric_id: '59'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_cancellations
+        source_measure_safe: count_distinct_companyaccount
+        depends_on: ''

@@ -1,0 +1,21 @@
+# Canonical metric definition for "Annual Cancellations ($)" (#385).
+
+models:
+  - name: v_metric__annual_cancellations_mrr
+    description: |
+      Total MRR lost from customer cancellations measured at annual cohort
+      grain, in dollars summed across all customers. Pre-FX — currencies
+      (USD, CAD, UK) at face value, not USD-converted. Excludes internal
+      Method accounts. Uses CEO-confirmed Prepay Expiry methodology.
+      Foundation for annual GRR (#388).
+    config:
+      materialized: view
+      labels:
+        metric_id: '385'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_customer_annual_mrr
+        source_measure_safe: sum_cancellations
+        depends_on: ''

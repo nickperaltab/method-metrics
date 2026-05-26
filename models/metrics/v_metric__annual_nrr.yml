@@ -1,0 +1,24 @@
+# Canonical metric definition for "Annual NRR %" (#389).
+# CEO-confirmed methodology. MUST NOT change without explicit CEO sign-off.
+
+models:
+  - name: v_metric__annual_nrr
+    description: |
+      Annual Net Revenue Retention — fraction of last year's MRR retained
+      this year-end cohort INCLUDING expansion from existing customers.
+      Formula: (Annual StartMRR - Annual Cancellations - Annual Downgrades
+      + Annual Expansions) / Annual StartMRR. Pre-FX. Typical values
+      88-90%. Lower than monthly NRR because more churn accumulates over
+      12 months. Uses CEO-confirmed methodology; reconcile against board
+      deck before external use.
+    config:
+      materialized: view
+      labels:
+        metric_id: '389'
+        layer: metrics
+        type: derived
+        status: live
+        verified_at: '2026-05-14'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 384-385-386-387

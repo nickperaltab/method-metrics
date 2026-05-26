@@ -1,0 +1,21 @@
+# Canonical metric definition for "Conversions" (#56).
+
+models:
+  - name: v_metric__conversions
+    description: |
+      Monthly count of Method accounts that converted from trial to paying
+      (i.e., received their first SaaS invoice). Account-grain — a customer
+      with 2 accounts that both converted contributes 2 conversions, by
+      design. Excludes test accounts and internal Method Integration
+      partner rows. Foundation for Conversion Rate metrics (#301, #302).
+    config:
+      materialized: view
+      labels:
+        metric_id: '56'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_conversions
+        source_measure_safe: count_star
+        depends_on: ''

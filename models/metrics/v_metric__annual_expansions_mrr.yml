@@ -1,0 +1,21 @@
+# Canonical metric definition for "Annual Expansions ($)" (#387).
+
+models:
+  - name: v_metric__annual_expansions_mrr
+    description: |
+      Total MRR gained from existing-customer expansions at annual cohort
+      grain (customers paying more than the prior year), in dollars summed
+      across all customers. Pre-FX — currencies (USD, CAD, UK) at face
+      value, not USD-converted. Existing customers only — net-new customer
+      revenue is tracked separately. Foundation for annual NRR (#389).
+    config:
+      materialized: view
+      labels:
+        metric_id: '387'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_customer_annual_mrr
+        source_measure_safe: sum_expansions
+        depends_on: ''

@@ -1,0 +1,23 @@
+# Canonical metric definition for "Annual GRR %" (#388).
+# CEO-confirmed methodology. MUST NOT change without explicit CEO sign-off.
+
+models:
+  - name: v_metric__annual_grr
+    description: |
+      Annual Gross Revenue Retention — fraction of last year's MRR retained
+      this year-end cohort, excluding expansion. Formula: (Annual StartMRR
+      - Annual Cancellations - Annual Downgrades) / Annual StartMRR.
+      Pre-FX. Typical values 76-78%. Lower than monthly GRR because more
+      churn accumulates over 12 months. Uses CEO-confirmed methodology;
+      reconcile against board deck before external use.
+    config:
+      materialized: view
+      labels:
+        metric_id: '388'
+        layer: metrics
+        type: derived
+        status: live
+        verified_at: '2026-05-14'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: 384-385-386

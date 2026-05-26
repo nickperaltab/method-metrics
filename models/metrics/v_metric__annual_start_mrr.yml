@@ -1,0 +1,25 @@
+# Canonical metric definition for "Annual Start MRR" (#384).
+# Annual cohort view of the monthly MRR family. Same methodology as the
+# monthly family (CEO-confirmed symmetric Prepay Expiry exclusion),
+# applied at annual cohort grain via v_customer_annual_mrr.
+
+models:
+  - name: v_metric__annual_start_mrr
+    description: |
+      Total MRR at the start of each annual cohort, summed across all
+      customers. Pre-FX — currencies (USD, CAD, UK) at face value, not
+      USD-converted. Excludes internal Method accounts. Uses CEO-confirmed
+      methodology that excludes one-time Prepay Expiry write-offs.
+      Foundation for annual GRR / NRR (#388 / #389). Annual cohort
+      reported monthly (trailing comparison).
+    config:
+      materialized: view
+      labels:
+        metric_id: '384'
+        layer: metrics
+        type: simple
+        status: live
+        verified_at: '2026-05-14'
+        source_table: v_customer_annual_mrr
+        source_measure_safe: sum_startmrr
+        depends_on: ''
