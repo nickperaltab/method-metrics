@@ -31,7 +31,7 @@ describe('snapshot contract — dataMap entry shapes', () => {
 
   it('grouped entry: { labels, seriesMap: { [dim]: (number|null)[] } }', async () => {
     const metrics = [makeMetric(54, {
-      semantic_table: 'v_trials',
+      semantic_table: 'int_trials',
       semantic_measure: 'COUNT(*)',
       semantic_date_col: 'SignupDate',
       semantic_filters: [],
@@ -62,7 +62,7 @@ describe('snapshot contract — dataMap entry shapes', () => {
 
   it('raw_table entry: { rows: Object[], columns: string[] }', async () => {
     const metrics = [makeMetric(54, {
-      semantic_table: 'v_trials',
+      semantic_table: 'int_trials',
       semantic_measure: 'COUNT(*)',
       semantic_date_col: 'SignupDate',
       semantic_filters: [],

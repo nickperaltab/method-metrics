@@ -1,6 +1,6 @@
 /**
  * Customers Scorecard (entity grain)
- * Backed by metric 373 "Customers" on v_customers with Segment as a dimension.
+ * Backed by metric 373 "Customers" on int_customers with Segment as a dimension.
  * Per-segment sections filter metric 373 via dimensionFilter; the Overview
  * adds a stacked bar + line grouped by Segment (Justin's Slack asks #1 and #2).
  */
@@ -12,9 +12,9 @@ export default {
   status: 'approved',
   hideGrain: true,
   views: {
-    v_customers: { dateCol: 'Month' },
-    v_customer_mrr: { dateCol: 'Month' },
-    v_customer_annual_mrr: { dateCol: 'Month' },
+    int_customers: { dateCol: 'Month' },
+    int_customer_mrr: { dateCol: 'Month' },
+    int_customer_annual_mrr: { dateCol: 'Month' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────

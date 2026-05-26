@@ -10,7 +10,7 @@
 SELECT
   DATE_TRUNC(SignupDate, MONTH) AS period,
   COUNT(*) AS value
-FROM {{ ref('v_trials') }}
+FROM {{ ref('int_trials') }}
 WHERE SignupDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ORDER BY 1

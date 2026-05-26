@@ -75,11 +75,11 @@ A marts yml file pairs data tests with `semantic_models:` blocks that name `enti
 project-for-method-dw.revenue.*   ← all BQ views in one dataset
   Account                         ← source (accumulating snapshot, lifecycle dates as cols)
   TransLineFlattened              ← source (atomic revenue lines)
-  v_trials, v_syncs,              ← intermediate (filters of Account by date col)
-    v_conversions, v_cancellations
-  v_customer_mrr,                 ← intermediate (per-customer-month MRR)
-    v_customer_annual_mrr
-  v_customers, AccountWithRevenue ← intermediate
+  int_trials, int_syncs,              ← intermediate (filters of Account by date col)
+    int_conversions, int_cancellations
+  int_customer_mrr,                 ← intermediate (per-customer-month MRR)
+    int_customer_annual_mrr
+  int_customers, AccountWithRevenue ← intermediate
   v_metric__*  (Phase 1 adds 20)  ← metrics layer (period, value)
 
 method-metrics/                   ← repo
@@ -107,7 +107,7 @@ Metric metadata is split: SQL definitions in BQ views, business metadata in Supa
 | **Project config** | `dbt_project.yml` | (none) | Could add a stub if we adopt dbt CLI |
 | **Source declarations** | `models/staging/__sources.yml` | (implicit — `revenue.Account`, `revenue.TransLineFlattened`) | A `_sources.yml` would let dbt-agent-skills index them |
 | **Staging models** | `models/staging/stg_*.sql` + `.yml` | (skipped — raw is pre-cleaned in Alocet/BQ pipeline) | Can stay skipped; just be explicit |
-| **Intermediate models** | `models/intermediate/int_*.sql` | `revenue.v_trials`, `v_syncs`, `v_conversions`, `v_cancellations`, `v_customer_mrr`, `v_customer_annual_mrr`, `v_customers`, `AccountWithRevenue` | **Unnamed** as intermediate today. Renaming `v_*` → `int_*` is a mechanical refactor, no business impact |
+| **Intermediate models** | `models/intermediate/int_*.sql` | `revenue.int_trials`, `int_syncs`, `int_conversions`, `int_cancellations`, `int_customer_mrr`, `int_customer_annual_mrr`, `int_customers`, `AccountWithRevenue` | **Unnamed** as intermediate today. Renaming `v_*` → `int_*` is a mechanical refactor, no business impact |
 | **Marts (facts)** | `models/marts/<entity>.sql` | (none yet — Phase 1.6) | `fct_trials`, `fct_syncs` planned |
 | **Marts (dims)** | `models/marts/<entity>.sql` | (none yet — Phase 1.6) | `dim_customers` planned |
 | **Time spine** | `models/marts/metricflow_time_spine.sql` | (none — embedded in CTEs) | If we adopt MetricFlow, this is needed |
@@ -143,7 +143,7 @@ Tradeoffs:
 
 ### D3. Should Phase 1 also rename `v_*` intermediates to `int_*`?
 
-**Path A (current Phase 1):** keep `v_trials` etc. as-is; metric views reference them by current name. Rename in Phase 1.5.
+**Path A (current Phase 1):** keep `int_trials` etc. as-is; metric views reference them by current name. Rename in Phase 1.5.
 **Path B:** rename intermediates first, metric views reference `int_trials` from day one.
 
 **Recommendation:** **Path A.** The intermediate rename is a no-business-impact refactor. Doing it inside Phase 1 doubles the diff and the risk surface. Phase 1.5 (already in the roadmap) handles it cleanly.

@@ -4,8 +4,8 @@
  */
 
 const VIEWS = {
-  v_trials: { dateCol: 'SignupDate' },
-  v_syncs: { dateCol: 'SyncDate' },
+  int_trials: { dateCol: 'SignupDate' },
+  int_syncs: { dateCol: 'SyncDate' },
 };
 
 export default {

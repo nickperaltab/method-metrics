@@ -1,6 +1,6 @@
 /**
  * Conversions Dashboard
- * Overview + dimension breakdowns, all driven from semantic layer (v_conversions).
+ * Overview + dimension breakdowns, all driven from semantic layer (int_conversions).
  */
 
 export default {
@@ -9,7 +9,7 @@ export default {
   status: 'approved',
   group: 'funnel',
   views: {
-    v_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
+    int_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────

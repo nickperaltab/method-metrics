@@ -3,8 +3,8 @@ import { buildMetricContext, buildSchemaContext, validateColumns, normalizeStyle
 
 describe('buildMetricContext', () => {
   const metrics = [
-    { id: 54, name: 'Trials', metric_type: 'primitive', view_name: 'v_trials', status: 'live' },
-    { id: 55, name: 'Syncs', metric_type: 'primitive', view_name: 'v_syncs', status: 'live' },
+    { id: 54, name: 'Trials', metric_type: 'primitive', view_name: 'int_trials', status: 'live' },
+    { id: 55, name: 'Syncs', metric_type: 'primitive', view_name: 'int_syncs', status: 'live' },
     { id: 20, name: 'Conversion Rate', metric_type: 'derived', view_name: null, status: 'live', formula: 'SAFE_DIVIDE({56},{54}) * 100', depends_on: [56, 54] },
     { id: 63, name: 'Trials Monthly', metric_type: 'breakdown', view_name: null, status: 'live' },
     { id: 99, name: 'Draft Metric', metric_type: 'primitive', view_name: 'v_draft', status: 'review' },
@@ -45,19 +45,19 @@ describe('buildMetricContext', () => {
 describe('buildSchemaContext', () => {
   it('formats schema map into readable lines', () => {
     const schemaMap = {
-      v_trials: [
+      int_trials: [
         { name: 'SignupDate', type: 'DATE' },
         { name: 'CompanyAccount', type: 'STRING' },
         { name: 'Channel', type: 'STRING' },
       ],
-      v_syncs: [
+      int_syncs: [
         { name: 'SyncDate', type: 'DATE' },
         { name: 'SyncType', type: 'STRING' },
       ],
     };
     const ctx = buildSchemaContext(schemaMap);
-    expect(ctx).toContain('v_trials: SignupDate(DATE), CompanyAccount(STRING), Channel(STRING)');
-    expect(ctx).toContain('v_syncs: SyncDate(DATE), SyncType(STRING)');
+    expect(ctx).toContain('int_trials: SignupDate(DATE), CompanyAccount(STRING), Channel(STRING)');
+    expect(ctx).toContain('int_syncs: SyncDate(DATE), SyncType(STRING)');
   });
 
   it('handles empty schema map', () => {
@@ -68,15 +68,15 @@ describe('buildSchemaContext', () => {
 
 describe('validateColumns', () => {
   const schemaMap = {
-    v_trials: [
+    int_trials: [
       { name: 'SignupDate', type: 'DATE' },
       { name: 'CompanyAccount', type: 'STRING' },
       { name: 'AttributionChannel', type: 'STRING' },
       { name: 'SignupCountry', type: 'STRING' },
     ],
   };
-  const metric54 = { id: 54, view_name: 'v_trials' };
-  const metric55 = { id: 55, view_name: 'v_syncs' };
+  const metric54 = { id: 54, view_name: 'int_trials' };
+  const metric55 = { id: 55, view_name: 'int_syncs' };
 
   it('nulls out group_by_dimension when approvedDimensions is empty', () => {
     const dc = { group_by_dimension: 'SignupCountry', x_field: 'SignupDate' };
@@ -237,8 +237,8 @@ describe('applyPromptOverrides', () => {
     { metric_id: 55, column_name: 'AttributionChannel' },
     { metric_id: 55, column_name: 'SyncType' },
   ];
-  const metric54 = { id: 54, view_name: 'v_trials' };
-  const metric55 = { id: 55, view_name: 'v_syncs' };
+  const metric54 = { id: 54, view_name: 'int_trials' };
+  const metric55 = { id: 55, view_name: 'int_syncs' };
 
   it('sets group_by_dimension for "by channel"', () => {
     const dc = { group_by_dimension: null };

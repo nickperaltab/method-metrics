@@ -10,7 +10,7 @@
 SELECT
   DATE_TRUNC(SyncDate, MONTH) AS period,
   COUNT(*) AS value
-FROM {{ ref('v_syncs') }}
+FROM {{ ref('int_syncs') }}
 WHERE SyncDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ORDER BY 1

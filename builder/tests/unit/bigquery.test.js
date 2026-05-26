@@ -13,25 +13,25 @@ import { fetchGroupedData, clearAggCache, buildEndDateClause, buildSemanticSql, 
 describe('fetchGroupedData — input validation', () => {
   it('rejects SQL injection in groupByField', async () => {
     await expect(
-      fetchGroupedData('v_trials', 'SignupDate', 'COUNT', 'month', '1; DROP TABLE--', null, 12)
+      fetchGroupedData('int_trials', 'SignupDate', 'COUNT', 'month', '1; DROP TABLE--', null, 12)
     ).rejects.toThrow('Invalid groupByField');
   });
 
   it('rejects spaces in groupByField', async () => {
     await expect(
-      fetchGroupedData('v_trials', 'SignupDate', 'COUNT', 'month', 'Channel OR 1=1', null, 12)
+      fetchGroupedData('int_trials', 'SignupDate', 'COUNT', 'month', 'Channel OR 1=1', null, 12)
     ).rejects.toThrow('Invalid groupByField');
   });
 
   it('rejects empty groupByField', async () => {
     await expect(
-      fetchGroupedData('v_trials', 'SignupDate', 'COUNT', 'month', '', null, 12)
+      fetchGroupedData('int_trials', 'SignupDate', 'COUNT', 'month', '', null, 12)
     ).rejects.toThrow('Invalid groupByField');
   });
 
   it('rejects parentheses in groupByField', async () => {
     await expect(
-      fetchGroupedData('v_trials', 'SignupDate', 'COUNT', 'month', 'CONCAT(a,b)', null, 12)
+      fetchGroupedData('int_trials', 'SignupDate', 'COUNT', 'month', 'CONCAT(a,b)', null, 12)
     ).rejects.toThrow('Invalid groupByField');
   });
 
@@ -39,7 +39,7 @@ describe('fetchGroupedData — input validation', () => {
     const validNames = ['Channel', 'SignupCountry', 'CustDatIndustry', 'SyncType', 'Vertical', 'Att_SEO'];
     for (const name of validNames) {
       try {
-        await fetchGroupedData('v_trials', 'SignupDate', 'COUNT', 'month', name, null, 12);
+        await fetchGroupedData('int_trials', 'SignupDate', 'COUNT', 'month', name, null, 12);
       } catch (e) {
         expect(e.message).not.toContain('Invalid groupByField');
       }
@@ -240,7 +240,7 @@ describe('buildSemanticSql', () => {
 describe('buildSemanticGroupedSql', () => {
   const metric = {
     id: 54,
-    semantic_table: 'v_trials',
+    semantic_table: 'int_trials',
     semantic_measure: 'COUNT(*)',
     semantic_date_col: 'SignupDate',
     semantic_filters: [],
@@ -252,7 +252,7 @@ describe('buildSemanticGroupedSql', () => {
     expect(sql).toContain("FORMAT_DATE('%Y-%m', DATE_TRUNC(SignupDate, MONTH)) AS period");
     expect(sql).toContain('AttributionChannel AS dimension');
     expect(sql).toContain('COUNT(*) AS value');
-    expect(sql).toContain('`project-for-method-dw.revenue.v_trials`');
+    expect(sql).toContain('`project-for-method-dw.revenue.int_trials`');
     expect(sql).toContain('GROUP BY 1, 2 ORDER BY 1, 2');
   });
 

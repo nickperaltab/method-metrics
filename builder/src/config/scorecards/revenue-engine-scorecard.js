@@ -33,8 +33,8 @@ export default {
   // so unbounded fetch is cheap.
   historyMonths: null,
   views: {
-    v_conversions:    { dateCol: 'FirstSaaSInvoiceTxnDate' },
-    v_customer_mrr:   { dateCol: 'Month' },
+    int_conversions:    { dateCol: 'FirstSaaSInvoiceTxnDate' },
+    int_customer_mrr:   { dateCol: 'Month' },
   },
   sections: [
     // ── Acquire — new logo growth ────────────────────────────────

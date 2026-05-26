@@ -15,7 +15,7 @@
 # no business impact) — see docs/dbt-conventions-mapping.md, decision D3.
 
 models:
-  - name: v_trials
+  - name: int_trials
     description: |
       One row per Method account that began a trial. Source: revenue.Account,
       filtered to IsConversionException = FALSE, Partner != 'Method

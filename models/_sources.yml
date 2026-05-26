@@ -35,13 +35,13 @@ sources:
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
 
       # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
-      - name: v_customers
+      - name: int_customers
         description: One row per (customer-month) for active paying customers. Built from TransLineFlattened. Used by Customers metric (#373).
-      - name: v_customer_mrr
+      - name: int_customer_mrr
         description: Monthly customer-grain MRR with movement columns (StartMRR, Cancellations, Downgrades, Expansions, NewMrr). Symmetric Prepay Expiry exclusion (CEO-confirmed methodology, 2026-04-28). Used by MRR family metrics (#378-381).
-      - name: v_customer_annual_mrr
+      - name: int_customer_annual_mrr
         description: Annual customer-grain MRR with movement columns. Used by annual MRR family metrics (#384-387).
-      - name: v_conversions
+      - name: int_conversions
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
-      - name: v_cancellations
+      - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).

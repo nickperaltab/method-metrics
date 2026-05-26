@@ -58,7 +58,7 @@ dbt's standard convention has 5 layers. We use 4 of them (skipping staging becau
 - If a staging layer is added later, it sits between sources and intermediates.
 
 **Open questions:**
-- Will any of the remaining 17 live metrics' sources require a staging cleanup? Probably not — they all use the same `Account` / `Funnel` / `TransLineFlattened` / `v_customer_mrr` paths.
+- Will any of the remaining 17 live metrics' sources require a staging cleanup? Probably not — they all use the same `Account` / `Funnel` / `TransLineFlattened` / `int_customer_mrr` paths.
 
 ---
 
@@ -72,13 +72,13 @@ dbt's standard convention has 5 layers. We use 4 of them (skipping staging becau
 
 | File | What it filters | Grain |
 |---|---|---|
-| `v_trials` | `Account` rows where SignupDate is set (and not exception/internal) | one row per account that began a trial |
-| `v_syncs` | `Funnel` rows where EventType = 'Sync' | one row per sync event |
-| `v_conversions` | `Account` rows where FirstSaaSInvoiceTxnDate is set | one row per converted account |
-| `v_cancellations` | `Account` rows where CancellationDate is set | one row per cancelled account |
-| `v_customers` | Account rows for active customers | one row per active customer |
-| `v_customer_mrr` | Per-customer-per-month MRR with movement columns | one row per (customer, month) |
-| `v_customer_annual_mrr` | Same shape, annual grain | one row per (customer, year) |
+| `int_trials` | `Account` rows where SignupDate is set (and not exception/internal) | one row per account that began a trial |
+| `int_syncs` | `Funnel` rows where EventType = 'Sync' | one row per sync event |
+| `int_conversions` | `Account` rows where FirstSaaSInvoiceTxnDate is set | one row per converted account |
+| `int_cancellations` | `Account` rows where CancellationDate is set | one row per cancelled account |
+| `int_customers` | Account rows for active customers | one row per active customer |
+| `int_customer_mrr` | Per-customer-per-month MRR with movement columns | one row per (customer, month) |
+| `int_customer_annual_mrr` | Same shape, annual grain | one row per (customer, year) |
 | `AccountWithRevenue` | Account joined to TransLineFlattened aggregates | one row per account |
 | (~10 more breakdowns) | Variants of the above by channel/vertical/etc. | various |
 
@@ -116,7 +116,7 @@ dbt's standard convention has 5 layers. We use 4 of them (skipping staging becau
 **Open questions for zoom-out:**
 - Is Phase 1.6 still the right place for marts, or should marts come earlier in Phase 1 (e.g., between intermediates and the metric layer)?
 - Once marts exist, do semantic models attach to the marts instead of intermediates? Yes (per dbt convention), but that's another migration. Plan for it.
-- Do we need `dim_attribution_channels` as a canonical lookup, or is the inline `CASE` expression in `v_trials` good enough?
+- Do we need `dim_attribution_channels` as a canonical lookup, or is the inline `CASE` expression in `int_trials` good enough?
 
 ---
 
@@ -136,7 +136,7 @@ dbt's standard convention has 5 layers. We use 4 of them (skipping staging becau
 - One metric per file.
 - The metric layer is the dbt-native materialization (Option A from round 1 — dbt-bigquery's `description` + `labels` config). NO raw `CREATE OR REPLACE VIEW` DDL — let dbt own the materialization.
 - Cross-model metrics (ratios, derived) live in `models/metrics/_metrics.yml` (the top-level metrics file) and reference single-model metrics by name.
-- Simple metrics are defined inline on the intermediate's semantic_model (see `models/intermediate/v_trials.yml` for the `trials` metric).
+- Simple metrics are defined inline on the intermediate's semantic_model (see `models/intermediate/int_trials.yml` for the `trials` metric).
 
 **Decisions locked (round 2.5 → 3a):**
 - Use dbt-bigquery's native materialization, not a custom Python generator.

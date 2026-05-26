@@ -9,7 +9,7 @@
 SELECT
   Month AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM {{ source('revenue', 'v_customers') }}
+FROM {{ source('revenue', 'int_customers') }}
 WHERE IsActive = TRUE
   AND Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1

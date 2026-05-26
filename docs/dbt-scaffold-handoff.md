@@ -7,7 +7,7 @@
 > ## ⚠️ DO NOT RUN `dbt run` — KNOWN PRODUCTION-BREAKING BUG
 >
 > The scaffold has a self-reference defect (round 2.5 audit, 2026-05-06).
-> Running `dbt run` would `CREATE OR REPLACE VIEW revenue.v_trials AS SELECT * FROM revenue.v_trials`, which overwrites the real filter logic with a circular passthrough. Same for `v_syncs`. **See §12 for full explanation and the rename fix.** Resolve §12 before any `dbt run`, `dbt build`, or CI hookup. `dbt parse` and `dbt compile` remain safe.
+> Running `dbt run` would `CREATE OR REPLACE VIEW revenue.int_trials AS SELECT * FROM revenue.int_trials`, which overwrites the real filter logic with a circular passthrough. Same for `int_syncs`. **See §12 for full explanation and the rename fix.** Resolve §12 before any `dbt run`, `dbt build`, or CI hookup. `dbt parse` and `dbt compile` remain safe.
 
 **Date:** 2026-05-04 (initial); 2026-05-05 (scaffold round 2 — three fixes applied + Option C verdict + Fusion adopted); 2026-05-06 (round 2.5 self-reference bug surfaced, see §12)
 **Status:** Scaffold v2 — all three fixes applied, Option C (foreign-only entity) validated end-to-end via `dbt compile` on Fusion. Five models, three metrics, two semantic models, all green for parse/compile. **NOT safe to `dbt run` until §12 is resolved.**
@@ -35,7 +35,7 @@ The work is bounded — we're not adopting dbt the CLI, not running `dbt run`, n
 
 **Conventions doc:** [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md) — side-by-side jaffle-shop vs. method-metrics layout, plus 5 decision points (D1–D5). Read this for context on why the layout looks the way it does.
 
-**Layer-cake framework:** [`docs/primitives-vs-derivatives.md`](primitives-vs-derivatives.md) — already correct, no changes needed. Confirms `Account`/`TransLineFlattened` are the architectural primitives; `v_trials` etc. are intermediate.
+**Layer-cake framework:** [`docs/primitives-vs-derivatives.md`](primitives-vs-derivatives.md) — already correct, no changes needed. Confirms `Account`/`TransLineFlattened` are the architectural primitives; `int_trials` etc. are intermediate.
 
 **Phase 1 plan (to be rewritten):** [`docs/superpowers/plans/2026-04-28-bq-as-metric-source-of-truth-phase1.md`](superpowers/plans/2026-04-28-bq-as-metric-source-of-truth-phase1.md). Don't rewrite yet — finish the scaffold first, then the rewrite is informed.
 
@@ -48,7 +48,7 @@ In order:
 1. [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md) — context, all 5 decision points
 2. `~/.claude/plugins/cache/dbt-agent-marketplace/dbt/1.3.0/skills/building-dbt-semantic-layer/references/latest-spec.md` — **authoritative dbt latest-spec syntax**. The SKILL.md has a misleading example. Read the reference, not just the SKILL.md.
 3. [`models/README.md`](../models/README.md) — what's in the scaffold and why
-4. [`models/intermediate/v_trials.yml`](../models/intermediate/v_trials.yml) — **has the bug** (see §5)
+4. [`models/intermediate/int_trials.yml`](../models/intermediate/int_trials.yml) — **has the bug** (see §5)
 5. [`models/metrics/v_metric__trials.yml`](../models/metrics/v_metric__trials.yml) — has the `metric_ref` field that needs to drop
 6. [`models/metrics/v_metric__trials.sql`](../models/metrics/v_metric__trials.sql) — the materialized DDL
 
@@ -75,7 +75,7 @@ From [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md), reaffirmed
 
 ## 5. The three fixes to apply
 
-### Fix 1: Rewrite `models/intermediate/v_trials.yml` to proper latest-spec syntax
+### Fix 1: Rewrite `models/intermediate/int_trials.yml` to proper latest-spec syntax
 
 **Bug:** the current file mixes legacy and latest spec. It uses nested `entities:` / `dimensions:` / `measures:` arrays under `semantic_model:` and `type_params:` blocks — those are legacy. The skill explicitly flags this as a common pitfall ("Mixing spec syntax — Don't use `type_params` in latest spec or direct keys in legacy spec").
 
@@ -83,7 +83,7 @@ From [`docs/dbt-conventions-mapping.md`](dbt-conventions-mapping.md), reaffirmed
 
 ```yaml
 models:
-  - name: v_trials
+  - name: int_trials
     description: |
       One row per Method account with SignupDate set (a trial was created).
       Inherits all columns from Account; SignupDate is the lifecycle-event
@@ -137,11 +137,11 @@ Remove the `metric_ref: trials` line at the end. It's an invented field; dbt has
 
 ### Fix 3: Scaffold Sync Rate as the second metric
 
-Sync Rate = syncs / trials. **Cross-model ratio** — denominator is from `v_trials`, numerator is from `v_syncs`. Per latest-spec, cross-model metrics live in a **top-level `metrics:` file**.
+Sync Rate = syncs / trials. **Cross-model ratio** — denominator is from `int_trials`, numerator is from `int_syncs`. Per latest-spec, cross-model metrics live in a **top-level `metrics:` file**.
 
 Files to create:
 
-1. `models/intermediate/v_syncs.yml` — semantic_model on `v_syncs` + simple metric `syncs` (single-model). Mirror the corrected v_trials.yml pattern: column-level entity/dimension blocks, direct `agg`/`expr`, no `type_params`. Source: `revenue.Account` filtered to `FirstSyncDate IS NOT NULL` (verify the actual filter against the existing `v_syncs` BQ view definition before writing).
+1. `models/intermediate/int_syncs.yml` — semantic_model on `int_syncs` + simple metric `syncs` (single-model). Mirror the corrected int_trials.yml pattern: column-level entity/dimension blocks, direct `agg`/`expr`, no `type_params`. Source: `revenue.Account` filtered to `FirstSyncDate IS NOT NULL` (verify the actual filter against the existing `int_syncs` BQ view definition before writing).
 
 2. `models/metrics/_metrics.yml` — top-level cross-model metrics file. First entry:
    ```yaml
@@ -186,7 +186,7 @@ The user said "the rest of my advice (drop metric_ref, commit .sql with CI guard
 
 1. **The dbt skill's SKILL.md and references/latest-spec.md disagree.** The SKILL.md "minimal latest spec example" uses nested `entities:`/`dimensions:`/`measures:` arrays under `semantic_model:`, plus `type_params:` on metrics — those are legacy syntax. The references/latest-spec.md is the authoritative source. Read the reference, not the SKILL.md example.
 
-2. **Method-metrics doesn't have marts yet.** dbt's pattern is to put semantic models on marts. We're putting them on intermediate (`v_trials`) because that's the entity-grained model we have. Phase 1.6 plans `fct_trials` etc.; at that point semantic models could move. Document the intent in the scaffold so the eventual move is mechanical.
+2. **Method-metrics doesn't have marts yet.** dbt's pattern is to put semantic models on marts. We're putting them on intermediate (`int_trials`) because that's the entity-grained model we have. Phase 1.6 plans `fct_trials` etc.; at that point semantic models could move. Document the intent in the scaffold so the eventual move is mechanical.
 
 3. **The materialization layer (`v_metric__*`) is invented.** dbt computes metrics at query time via MetricFlow / a BI tool — it does NOT materialize metrics as BQ views. Method's stack needs the materialization because the AI/MCP reads BQ INFORMATION_SCHEMA, not a MetricFlow server. So the entire `models/metrics/v_metric__*.{sql,yml}` pattern is bridge work that has no canonical dbt equivalent. Expect divergence here; lean on dbt conventions for the underlying semantic-model + metric definitions, and treat the materialization as Method-specific glue. **Keep the bridge isolated** (deploy script in `scripts/migrate/`, materialization yml separate from definition yml) so if MetricFlow ever exposes to BQ INFORMATION_SCHEMA, the bridge becomes deletable without unwinding the definition layer.
 
@@ -212,19 +212,19 @@ cat ~/.claude/plugins/cache/dbt-agent-marketplace/dbt/1.3.0/skills/building-dbt-
 # Look at the existing scaffold
 ls -la models/
 cat models/README.md
-cat models/intermediate/v_trials.yml      # has the bug
+cat models/intermediate/int_trials.yml      # has the bug
 cat models/metrics/v_metric__trials.yml   # has the metric_ref to drop
 cat models/metrics/v_metric__trials.sql
 
 # Look at the existing Phase 1 plan (to be rewritten AFTER scaffold is validated)
 cat docs/superpowers/plans/2026-04-28-bq-as-metric-source-of-truth-phase1.md
 
-# Look at the existing v_trials BQ view definition (informs Fix 3 — verify the v_syncs filter before writing)
+# Look at the existing int_trials BQ view definition (informs Fix 3 — verify the int_syncs filter before writing)
 # Either reconnect Supabase MCP, or query directly:
 bq query --use_legacy_sql=false "
 SELECT view_definition
 FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS\`
-WHERE table_name IN ('v_trials', 'v_syncs')"
+WHERE table_name IN ('int_trials', 'int_syncs')"
 ```
 
 ---
@@ -233,9 +233,9 @@ WHERE table_name IN ('v_trials', 'v_syncs')"
 
 Done when:
 
-1. `models/intermediate/v_trials.yml` uses pure latest-spec syntax (no `type_params`, entity/dimension on columns, direct keys).
+1. `models/intermediate/int_trials.yml` uses pure latest-spec syntax (no `type_params`, entity/dimension on columns, direct keys).
 2. `models/metrics/v_metric__trials.yml` no longer has `metric_ref:`.
-3. `models/intermediate/v_syncs.yml` exists with simple `syncs` metric.
+3. `models/intermediate/int_syncs.yml` exists with simple `syncs` metric.
 4. `models/metrics/_metrics.yml` exists with cross-model `sync_rate` ratio metric.
 5. `models/metrics/v_metric__sync_rate.yml` + `.sql` exist (mirror the `v_metric__trials` pair shape).
 6. (If `v_metric__syncs` is needed as a dependency) — the simple `syncs` materialization also exists.
@@ -259,11 +259,11 @@ Verified against `INFORMATION_SCHEMA.VIEWS` directly. Round-1 plan had three fac
 
 | Round-1 said | Reality |
 |---|---|
-| `v_trials` filter is `SignupDate IS NOT NULL` | `IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')` |
-| `v_syncs` source is `revenue.Account` filtered to `FirstSyncDate IS NOT NULL` | `revenue.Funnel WHERE EventType = 'Sync'` |
-| `v_syncs` agg time dim is `SignupDate` | `SyncDate` (event time). `SignupDate` is also carried for cohort joins, but it's not the model's default time |
+| `int_trials` filter is `SignupDate IS NOT NULL` | `IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')` |
+| `int_syncs` source is `revenue.Account` filtered to `FirstSyncDate IS NOT NULL` | `revenue.Funnel WHERE EventType = 'Sync'` |
+| `int_syncs` agg time dim is `SignupDate` | `SyncDate` (event time). `SignupDate` is also carried for cohort joins, but it's not the model's default time |
 
-Round-1 also assumed `EntityRecordID` was projected on both views. **It isn't** — `Account` and `Funnel` both have it, but the v_trials/v_syncs SELECTs don't surface it. This forced the primary-entity decision below.
+Round-1 also assumed `EntityRecordID` was projected on both views. **It isn't** — `Account` and `Funnel` both have it, but the int_trials/int_syncs SELECTs don't surface it. This forced the primary-entity decision below.
 
 ### 10.2 Primary entity — option C is the answer
 
@@ -274,7 +274,7 @@ Round 1 anticipated three options (A: lie about CompanyAccount being primary; B:
 
 The latest-spec ref's "Common Pitfalls" table flags only missing `agg_time_dimension`, never missing primary entity. The spec accepts foreign-only semantic models. We documented the choice in the yml comments — not as a hack, but as an honest representation of the grain (these are event-grained intermediates; rows are events; we count them).
 
-Fallback B remains authorized if a future requirement needs per-row uniqueness (e.g., joins to dim_customers in Phase 1.6). The v_trials and v_syncs SELECTs would each get a one-line addition of `EntityRecordID` (Funnel has it; Account has it). That's still a small edit.
+Fallback B remains authorized if a future requirement needs per-row uniqueness (e.g., joins to dim_customers in Phase 1.6). The int_trials and int_syncs SELECTs would each get a one-line addition of `EntityRecordID` (Funnel has it; Account has it). That's still a small edit.
 
 ### 10.3 Fusion adopted, Core 1.11 dead-end
 
@@ -291,7 +291,7 @@ The scaffold was yml-only, but `dbt compile` requires:
 - `~/.dbt/profiles.yml` (exists now — bigquery + oauth ADC, project `project-for-method-dw`, dataset `revenue`)
 - `.sql` companion for each model named in yml (otherwise Fusion can't resolve the semantic_model attachment)
 
-The `.sql` companions for `v_trials` and `v_syncs` are passthroughs (`select * from \`project-for-method-dw.revenue.v_trials\``) with a header comment explaining they exist so dbt can attach the semantic_model. They're not the source of truth for the views — the BQ DDL is. Phase 1.5's rename refactor decides whether to inline the filter logic into these dbt models.
+The `.sql` companions for `int_trials` and `int_syncs` are passthroughs (`select * from \`project-for-method-dw.revenue.int_trials\``) with a header comment explaining they exist so dbt can attach the semantic_model. They're not the source of truth for the views — the BQ DDL is. Phase 1.5's rename refactor decides whether to inline the filter logic into these dbt models.
 
 ### 10.5 Parity confirmed via Supabase
 
@@ -316,10 +316,10 @@ Why: converting them is a meaningful rework that belongs in the Phase 1 plan rew
 ```
 models/
   intermediate/
-    v_trials.sql           ← passthrough, dbt-shaped (NEW, this round)
-    v_trials.yml           ← latest-spec, foreign-only entity (REWRITTEN)
-    v_syncs.sql            ← passthrough, dbt-shaped (NEW)
-    v_syncs.yml            ← latest-spec, foreign-only entity (NEW)
+    int_trials.sql           ← passthrough, dbt-shaped (NEW, this round)
+    int_trials.yml           ← latest-spec, foreign-only entity (REWRITTEN)
+    int_syncs.sql            ← passthrough, dbt-shaped (NEW)
+    int_syncs.yml            ← latest-spec, foreign-only entity (NEW)
   metrics/
     _metrics.yml           ← top-level, sync_rate ratio (NEW)
     v_metric__trials.yml   ← metric_ref dropped (EDITED)
@@ -346,11 +346,11 @@ dbt_project.yml            ← minimum viable (NEW)
 
 ```
 EDITED   docs/dbt-scaffold-handoff.md            (this addendum)
-EDITED   models/intermediate/v_trials.yml         (full rewrite)
+EDITED   models/intermediate/int_trials.yml         (full rewrite)
 EDITED   models/metrics/v_metric__trials.yml      (dropped metric_ref)
-NEW      models/intermediate/v_trials.sql
-NEW      models/intermediate/v_syncs.yml
-NEW      models/intermediate/v_syncs.sql
+NEW      models/intermediate/int_trials.sql
+NEW      models/intermediate/int_syncs.yml
+NEW      models/intermediate/int_syncs.sql
 NEW      models/metrics/_metrics.yml
 NEW      models/metrics/v_metric__syncs.yml
 NEW      models/metrics/v_metric__syncs.sql
@@ -370,12 +370,12 @@ After reviewing the §10.8 open questions, the user authorized four follow-ups i
 
 ### 11.1 EntityRecordID surfaced (was §10.8 #4)
 
-`revenue.v_trials` and `revenue.v_syncs` BQ views were modified via `CREATE OR REPLACE VIEW` to include `EntityRecordID` in the SELECT projection. Purely additive change — one column added at the top of each SELECT. All other columns and the WHERE clause are byte-identical.
+`revenue.int_trials` and `revenue.int_syncs` BQ views were modified via `CREATE OR REPLACE VIEW` to include `EntityRecordID` in the SELECT projection. Purely additive change — one column added at the top of each SELECT. All other columns and the WHERE clause are byte-identical.
 
 **Asymmetry preserved honestly:**
 
-- **v_trials**: `EntityRecordID` is unique per row (account-grain). YAML now declares it as `type: primary` (entity name `account`). `CompanyAccount` remains a `foreign` entity (company-grain).
-- **v_syncs**: `EntityRecordID` is NOT unique per row (one account can sync many times → many rows per EntityRecordID). YAML declares it as `type: foreign` (entity name `account`). Still no primary entity. `CompanyAccount` is also `foreign`.
+- **int_trials**: `EntityRecordID` is unique per row (account-grain). YAML now declares it as `type: primary` (entity name `account`). `CompanyAccount` remains a `foreign` entity (company-grain).
+- **int_syncs**: `EntityRecordID` is NOT unique per row (one account can sync many times → many rows per EntityRecordID). YAML declares it as `type: foreign` (entity name `account`). Still no primary entity. `CompanyAccount` is also `foreign`.
 
 The metrics keep their `agg: count, expr: '*'` aggregation — Supabase parity preserved (#54 and #55 both compute `COUNT(*)`). EntityRecordID is now available for future joins to `dim_customers` (Phase 1.6) without changing the canonical metric values.
 
@@ -384,7 +384,7 @@ The metrics keep their `agg: count, expr: '*'` aggregation — Supabase parity p
 All three `v_metric__*.{yml,sql}` pairs converted from raw `CREATE OR REPLACE VIEW ... OPTIONS(...) AS SELECT` DDL to dbt-bigquery's native pattern:
 
 - **`.yml`** — `description:` field at the model level (becomes BQ view description); `config.labels:` block (becomes BQ view labels); `config.materialized: view`
-- **`.sql`** — just the SELECT body, prefixed with `{{ config(materialized='view') }}`. Cross-model refs use `{{ ref('v_trials') }}` instead of hard-coded `\`project-for-method-dw.revenue.v_trials\``.
+- **`.sql`** — just the SELECT body, prefixed with `{{ config(materialized='view') }}`. Cross-model refs use `{{ ref('int_trials') }}` instead of hard-coded `\`project-for-method-dw.revenue.int_trials\``.
 
 `dbt run` will now generate the correct `CREATE OR REPLACE VIEW ... OPTIONS(description, labels) AS ...` automatically. The custom Python deploy script (`scripts/migrate/generate_metric_views.py`) is no longer needed for these three metrics — Phase 1 plan rewrite can plan its retirement once all 20 metrics follow this pattern.
 
@@ -399,19 +399,19 @@ User chose option (b) — pilot 2 more metrics before extending to all 20. The r
 | Pattern | Count | Tested by current scaffold? | Representative examples |
 |---|---|---|---|
 | Simple `COUNT(*)` from event-grained intermediate | 3 | ✅ Trials, Syncs scaffolded | #56 Conversions (clone of Trials/Syncs) |
-| Simple `COUNT(DISTINCT)` from entity-grained intermediate | 2 | ❌ | #59 Churn (`COUNT(DISTINCT CompanyAccount)` from v_cancellations); #373 Customers (`COUNT(DISTINCT EntityRecordID)` from v_customers) |
+| Simple `COUNT(DISTINCT)` from entity-grained intermediate | 2 | ❌ | #59 Churn (`COUNT(DISTINCT CompanyAccount)` from int_cancellations); #373 Customers (`COUNT(DISTINCT EntityRecordID)` from int_customers) |
 | Simple `ROUND(SUM(...))` from per-customer-month MRR | 8 | ❌ | #378 Monthly Start MRR; #384 Annual Start MRR; #379–381, #385–387 |
 | Cross-model ratio | 3 | ✅ Sync Rate scaffolded | #301 Sync-to-Conversion Rate; #302 Trial-to-Conversion Rate |
 | Multi-input derived (formula) | 4 | ❌ | #382 Monthly GRR %, #383 Monthly NRR %, #388 Annual GRR %, #389 Annual NRR % — but these are CEO-blessed and protected from pilot churn |
 
 **Recommended pilot picks (round 3):**
 
-1. **#373 Customers** (`COUNT(DISTINCT EntityRecordID)` from `v_customers`) — exercises:
+1. **#373 Customers** (`COUNT(DISTINCT EntityRecordID)` from `int_customers`) — exercises:
    - `agg: count_distinct, expr: EntityRecordID` (different from event-grain COUNT(*))
-   - A different intermediate (`v_customers`)
+   - A different intermediate (`int_customers`)
    - The customer-grain semantic — directly relevant to Phase 1.6's `dim_customers` mart
 
-2. **#378 Monthly Start MRR** (`ROUND(SUM(StartMRR), 2)` from `v_customer_mrr`) — exercises:
+2. **#378 Monthly Start MRR** (`ROUND(SUM(StartMRR), 2)` from `int_customer_mrr`) — exercises:
    - `agg: sum, expr: StartMRR` with rounding (does dbt latest-spec carry the ROUND wrapper at the metric layer or at materialization?)
    - The MRR family (8 of 17 remaining metrics share this pattern — if this works, the rest follow)
    - Per-customer-per-month grain (different again from event grain)
@@ -425,20 +425,20 @@ If both validate and parity-test against Supabase, the template generalizes. The
 ### 11.5 Files edited / created in round 2.5
 
 ```
-EDITED   models/intermediate/v_trials.yml          (EntityRecordID primary entity)
-EDITED   models/intermediate/v_syncs.yml           (EntityRecordID foreign entity)
+EDITED   models/intermediate/int_trials.yml          (EntityRecordID primary entity)
+EDITED   models/intermediate/int_syncs.yml           (EntityRecordID foreign entity)
 EDITED   models/metrics/v_metric__trials.{yml,sql}  (raw DDL → dbt-native)
 EDITED   models/metrics/v_metric__syncs.{yml,sql}   (raw DDL → dbt-native)
 EDITED   models/metrics/v_metric__sync_rate.{yml,sql} (raw DDL → dbt-native)
 EDITED   docs/dbt-scaffold-handoff.md              (this addendum)
 NEW      docs/dbt-setup.md                          (Fusion version pin)
-APPLIED  CREATE OR REPLACE VIEW revenue.v_trials   (added EntityRecordID column)
-APPLIED  CREATE OR REPLACE VIEW revenue.v_syncs    (added EntityRecordID column)
+APPLIED  CREATE OR REPLACE VIEW revenue.int_trials   (added EntityRecordID column)
+APPLIED  CREATE OR REPLACE VIEW revenue.int_syncs    (added EntityRecordID column)
 ```
 
 ### 11.6 Still open (carrying into round 3)
 
-- **§10.8 #1 partial**: pilot picks identified; not yet implemented. Round 3 = scaffold `v_customers.{sql,yml}`, `v_customer_mrr.{sql,yml}`, `v_metric__customers.{sql,yml}`, `v_metric__monthly_start_mrr.{sql,yml}`.
+- **§10.8 #1 partial**: pilot picks identified; not yet implemented. Round 3 = scaffold `int_customers.{sql,yml}`, `int_customer_mrr.{sql,yml}`, `v_metric__customers.{sql,yml}`, `v_metric__monthly_start_mrr.{sql,yml}`.
 - **§10.8 #2**: commit + push to `main` happens at the end of this round (after the user reviews).
 - The Phase 1 plan rewrite at `docs/superpowers/plans/2026-05-04-phase1-dbt-metric-migration.md` is unchanged from round 1. After round-3 pilot validates, that plan should be rewritten to assume the materialization pattern from §11.2 and the Fusion runtime from §11.3.
 
@@ -446,14 +446,14 @@ APPLIED  CREATE OR REPLACE VIEW revenue.v_syncs    (added EntityRecordID column)
 
 ## 12. Round 3a — bug fix + first successful `dbt run` (2026-05-08)
 
-The scaffold from round 2.5 turned out to have a **self-reference bug** that would have destroyed `revenue.v_trials` and `revenue.v_syncs` if `dbt run` had executed it. A hook caught it. Resolved this round.
+The scaffold from round 2.5 turned out to have a **self-reference bug** that would have destroyed `revenue.int_trials` and `revenue.int_syncs` if `dbt run` had executed it. A hook caught it. Resolved this round.
 
 ### 12.1 The bug
 
-`models/intermediate/v_trials.sql` and `v_syncs.sql` were passthroughs: `SELECT * FROM project-for-method-dw.revenue.v_trials` and `... v_syncs`. dbt's default behavior materializes a model with the model's name into the configured dataset (`revenue`). So `dbt run` would have done:
+`models/intermediate/int_trials.sql` and `int_syncs.sql` were passthroughs: `SELECT * FROM project-for-method-dw.revenue.int_trials` and `... int_syncs`. dbt's default behavior materializes a model with the model's name into the configured dataset (`revenue`). So `dbt run` would have done:
 
 ```sql
-CREATE OR REPLACE VIEW revenue.v_trials AS SELECT * FROM revenue.v_trials
+CREATE OR REPLACE VIEW revenue.int_trials AS SELECT * FROM revenue.int_trials
 ```
 
 That replaces the real filter logic (IsConversionException = FALSE etc.) with a self-referential passthrough — production-breaking.
@@ -462,16 +462,16 @@ That replaces the real filter logic (IsConversionException = FALSE etc.) with a 
 
 Round 3a pulled the live BQ DDL from `INFORMATION_SCHEMA.VIEWS` and inlined it directly into the dbt model files. Now:
 
-- `models/intermediate/v_trials.sql` — full SELECT from `revenue.Account` with the actual WHERE clause + AttributionChannel CASE expression. dbt owns this view.
-- `models/intermediate/v_syncs.sql` — full SELECT from `revenue.Funnel` with the EventType = 'Sync' filter and full projection. dbt owns this view.
+- `models/intermediate/int_trials.sql` — full SELECT from `revenue.Account` with the actual WHERE clause + AttributionChannel CASE expression. dbt owns this view.
+- `models/intermediate/int_syncs.sql` — full SELECT from `revenue.Funnel` with the EventType = 'Sync' filter and full projection. dbt owns this view.
 
-Byte-for-byte equivalent to the previous hand-written BQ DDL. When dbt runs, the resulting `v_trials` and `v_syncs` views in BQ have identical bodies to what was there before — the only thing that changes is ownership.
+Byte-for-byte equivalent to the previous hand-written BQ DDL. When dbt runs, the resulting `int_trials` and `int_syncs` views in BQ have identical bodies to what was there before — the only thing that changes is ownership.
 
 ### 12.3 First successful `dbt run`
 
 ```
-Succeeded model revenue.v_trials (view)
-Succeeded model revenue.v_syncs (view)
+Succeeded model revenue.int_trials (view)
+Succeeded model revenue.int_syncs (view)
 Succeeded model revenue.v_metric__trials (view)
 Succeeded model revenue.v_metric__syncs (view)
 Succeeded model revenue.v_metric__sync_rate (view)
@@ -479,12 +479,12 @@ Summary: 5 total | 5 success
 ```
 
 24 seconds end-to-end. Five views now exist in BQ:
-- `revenue.v_trials`, `revenue.v_syncs` — dbt-owned versions of existing intermediates
+- `revenue.int_trials`, `revenue.int_syncs` — dbt-owned versions of existing intermediates
 - `revenue.v_metric__trials`, `revenue.v_metric__syncs`, `revenue.v_metric__sync_rate` — net-new metric materializations
 
 ### 12.4 Verification
 
-**Parity (most important):** for the 5 most recent months, `v_metric__trials.value` matches a direct `COUNT(*)` on `v_trials` exactly. Dbt produces the same numbers as the canonical Supabase definition (#54: `semantic_measure: COUNT(*)`).
+**Parity (most important):** for the 5 most recent months, `v_metric__trials.value` matches a direct `COUNT(*)` on `int_trials` exactly. Dbt produces the same numbers as the canonical Supabase definition (#54: `semantic_measure: COUNT(*)`).
 
 | period | dbt value | direct COUNT(*) | check |
 |---|---|---|---|
@@ -502,9 +502,9 @@ Summary: 5 total | 5 success
 
 ### 12.5 `v_*` → `int_*` rename — deferred (audit findings)
 
-Before pressing dbt run, the user asked whether to also rename `v_trials`/`v_syncs` → `int_trials`/`int_syncs` while replacing the views. Audited the scope:
+Before pressing dbt run, the user asked whether to also rename `int_trials`/`int_syncs` → `int_trials`/`int_syncs` while replacing the views. Audited the scope:
 
-**Production code that references `v_trials` or `v_syncs` by name:**
+**Production code that references `int_trials` or `int_syncs` by name:**
 - `builder/src/lib/bigquery.js`
 - `builder/src/config/scorecards/trials-breakdown-scorecard.js`
 - `builder/src/config/scorecards/syncs-breakdown-scorecard.js`
@@ -519,8 +519,8 @@ Before pressing dbt run, the user asked whether to also rename `v_trials`/`v_syn
 ### 12.6 Files edited / created in round 3a
 
 ```
-EDITED   models/intermediate/v_trials.sql           (inlined filter; was passthrough)
-EDITED   models/intermediate/v_syncs.sql            (inlined filter; was passthrough)
+EDITED   models/intermediate/int_trials.sql           (inlined filter; was passthrough)
+EDITED   models/intermediate/int_syncs.sql            (inlined filter; was passthrough)
 EDITED   dbt_project.yml                            (+persist_docs config)
 EDITED   docs/dbt-scaffold-handoff.md               (this section)
 APPLIED  dbt run                                    (5 BQ views materialized — see 12.3)
@@ -538,7 +538,7 @@ Round 3a was strictly the bug fix + first dbt run. Round 3b (pilot 2 more metric
 
 ### 13.1 Pushed to main
 
-Commit `897d3323 fix(dbt): inline filter logic into v_trials/v_syncs models + first dbt run` pushed to `nickperaltab/method-metrics` `main`. Range `680ff369..897d3323`. 4 files, +168/-16 lines.
+Commit `897d3323 fix(dbt): inline filter logic into int_trials/int_syncs models + first dbt run` pushed to `nickperaltab/method-metrics` `main`. Range `680ff369..897d3323`. 4 files, +168/-16 lines.
 
 ### 13.2 Registry UI visibility confirmed via INFORMATION_SCHEMA
 
@@ -557,9 +557,9 @@ tracker.html could now build a metric catalog from BQ INFORMATION_SCHEMA alone f
 
 ### 13.3 Parity expectations — better verification + a new project rule
 
-Initial parity check compared `v_metric__trials` to `COUNT(*)` on the *new* `v_trials` — but didn't verify the *new* `v_trials` returns the same rows as the *old* `v_trials` would have. The user flagged this. Corrected with two stronger checks:
+Initial parity check compared `v_metric__trials` to `COUNT(*)` on the *new* `int_trials` — but didn't verify the *new* `int_trials` returns the same rows as the *old* `int_trials` would have. The user flagged this. Corrected with two stronger checks:
 
-1. **Row count vs underlying source filter:** `v_trials` = 110,740 = direct `COUNT(*)` on `Account` with the documented filter clause. Same for `v_syncs` = 66,491. Since `Account` and `Funnel` source tables are unchanged, this confirms the new `v_trials`/`v_syncs` definitions return identical rows to the pre-change versions.
+1. **Row count vs underlying source filter:** `int_trials` = 110,740 = direct `COUNT(*)` on `Account` with the documented filter clause. Same for `int_syncs` = 66,491. Since `Account` and `Funnel` source tables are unchanged, this confirms the new `int_trials`/`int_syncs` definitions return identical rows to the pre-change versions.
 
 2. **Sync rate reconstructed from source tables:** for 10 months of data, `v_metric__sync_rate.value` matches a reconstructed-from-Account-and-Funnel sync rate to 6 decimal places (e.g., 2026-05 = 0.538462 in both). Exact equivalence.
 
@@ -588,24 +588,24 @@ Time-travel (`FOR SYSTEM_TIME AS OF`) was the first attempt but the `CREATE OR R
 The scaffold's intermediate-layer .sql files are passthroughs into the same BQ view name they're named after:
 
 ```sql
--- models/intermediate/v_trials.sql
+-- models/intermediate/int_trials.sql
 {{ config(materialized='view') }}
-select * from `project-for-method-dw.revenue.v_trials`
+select * from `project-for-method-dw.revenue.int_trials`
 ```
 
-The dbt model is named `v_trials`. With profile `dataset: revenue`, dbt will materialize this model as `revenue.v_trials` — the same view it's selecting from. So `dbt run` would execute:
+The dbt model is named `int_trials`. With profile `dataset: revenue`, dbt will materialize this model as `revenue.int_trials` — the same view it's selecting from. So `dbt run` would execute:
 
 ```sql
-CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_trials` AS
-SELECT * FROM `project-for-method-dw.revenue.v_trials`
+CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_trials` AS
+SELECT * FROM `project-for-method-dw.revenue.int_trials`
 ```
 
 Effects:
-- The real filter logic in `v_trials` (`IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`) is **gone**.
+- The real filter logic in `int_trials` (`IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`) is **gone**.
 - The view definition becomes self-referential.
-- Querying `v_trials` after this fails (BQ rejects circular view bodies at query time, or recurses to a depth error).
-- The Registry UI, AI chart builder, every saved chart, every dashboard that uses `v_trials` is **broken**.
-- Same defect on `v_syncs` (model name = view name = `revenue.v_syncs`).
+- Querying `int_trials` after this fails (BQ rejects circular view bodies at query time, or recurses to a depth error).
+- The Registry UI, AI chart builder, every saved chart, every dashboard that uses `int_trials` is **broken**.
+- Same defect on `int_syncs` (model name = view name = `revenue.int_syncs`).
 
 `v_metric__*` models do NOT have this bug — their target view names (`v_metric__trials`, `v_metric__syncs`, `v_metric__sync_rate`) don't collide with anything in BQ today.
 
@@ -620,11 +620,11 @@ Hook blocked a `dbt run` attempt at the end of the 2026-05-05 / 2026-05-06 sessi
 ### Fix options
 
 **(D) Inline the filter logic into the dbt model — the recommended fix** (added 2026-05-08)
-- Replace the passthrough body of `v_trials.sql` and `v_syncs.sql` with the **actual filter SQL** they currently have in BQ. The dbt model then OWNS the view definition.
-- `dbt run` does `CREATE OR REPLACE VIEW revenue.v_trials AS [actual filter logic]` — replaces the existing hand-managed view with a byte-identical-functionally dbt-managed one.
+- Replace the passthrough body of `int_trials.sql` and `int_syncs.sql` with the **actual filter SQL** they currently have in BQ. The dbt model then OWNS the view definition.
+- `dbt run` does `CREATE OR REPLACE VIEW revenue.int_trials AS [actual filter logic]` — replaces the existing hand-managed view with a byte-identical-functionally dbt-managed one.
 - Pros:
   - **This is the migration goal.** The whole point is "BQ views = dbt repo as source of truth." The passthrough was a half-step.
-  - Same names (`v_trials`, `v_syncs`) — zero downstream impact (Registry, chart builder, dashboards untouched)
+  - Same names (`int_trials`, `int_syncs`) — zero downstream impact (Registry, chart builder, dashboards untouched)
   - No new views, no rename churn
   - Smallest diff to working state
 - Cons:
@@ -635,8 +635,8 @@ Hook blocked a `dbt run` attempt at the end of the 2026-05-05 / 2026-05-06 sessi
   - Ownership of view definition moves from "BQ console" to "dbt repo." Anyone editing the view going forward edits the .sql file, not the BQ console. (This is the migration goal, so this is a feature, not a bug.)
 
 **(A) Rename intermediate models to `int_*`** — convention-cleanup, no longer the recommended bug fix
-- `v_trials` → `int_trials`, `v_syncs` → `int_syncs` (the rename round-1 §D3 deferred to Phase 1.5)
-- Was originally proposed as the bug fix because `int_trials` doesn't collide with `revenue.v_trials`. **But option D fixes the collision without renaming.**
+- `int_trials` → `int_trials`, `int_syncs` → `int_syncs` (the rename round-1 §D3 deferred to Phase 1.5)
+- Was originally proposed as the bug fix because `int_trials` doesn't collide with `revenue.int_trials`. **But option D fixes the collision without renaming.**
 - Pros: matches the dbt naming convention (`int_*` for intermediate)
 - Cons: cosmetic-only; touches every `ref()` site; downstream dependents (`v_metric__*.sql`) need updating; doesn't earn its keep until someone wants the convention
 - Status: **deferred indefinitely.** Reopen if/when convention consistency starts mattering.
@@ -664,8 +664,8 @@ Hook blocked a `dbt run` attempt at the end of the 2026-05-05 / 2026-05-06 sessi
 
 ### Round 3 ordering (revised 2026-05-08)
 
-1. **First task: implement fix (D)** — copy current BQ view body of `v_trials` and `v_syncs` into the respective `models/intermediate/*.sql` files. Run `dbt compile`; manually diff the compiled DDL against the current view body to confirm functional equivalence. Sanity-check with `SELECT COUNT(*)` parity.
-2. Then `dbt run` — replaces existing `v_trials` and `v_syncs` with byte-identical-functionally dbt-managed versions, AND creates the three `v_metric__*` views fresh. Genuine moment of truth.
+1. **First task: implement fix (D)** — copy current BQ view body of `int_trials` and `int_syncs` into the respective `models/intermediate/*.sql` files. Run `dbt compile`; manually diff the compiled DDL against the current view body to confirm functional equivalence. Sanity-check with `SELECT COUNT(*)` parity.
+2. Then `dbt run` — replaces existing `int_trials` and `int_syncs` with byte-identical-functionally dbt-managed versions, AND creates the three `v_metric__*` views fresh. Genuine moment of truth.
 3. Then the pilot picks from §11.4 (#373 Customers, #378 Monthly Start MRR)
 4. Then bulk-extend to the remaining 17 live metrics
 5. Then GRR/NRR last and most carefully

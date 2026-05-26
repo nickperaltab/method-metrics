@@ -33,7 +33,7 @@ All four pass → primitive. Any fail → derivative.
 |---|---|---|---|
 | **sources** | Raw upstream tables, untouched | declared in `_sources.yml`, original names kept | `Account`, `TransLineFlattened` |
 | **staging** | 1:1 source-conformed cleanup (renames, type casts, no joins, no filters, no aggregations) | `stg_<source>__<entity>` | (skipped today — our raw tables are already cleaned upstream of BQ) |
-| **intermediate** | Joins, filters, classifications, re-graining | `int_<entity>` | `v_trials`, `v_syncs`, `v_conversions`, `v_cancellations`, `v_customer_mrr`, `v_customer_annual_mrr`, `v_customers`, `AccountWithRevenue` |
+| **intermediate** | Joins, filters, classifications, re-graining | `int_<entity>` | `int_trials`, `int_syncs`, `int_conversions`, `int_cancellations`, `int_customer_mrr`, `int_customer_annual_mrr`, `int_customers`, `AccountWithRevenue` |
 | **marts** | Entity-grained, denormalized, business-facing | `fct_<entity>` (facts) / `dim_<entity>` (dimensions) | (not built yet — Phase 1.6) `fct_trials`, `fct_syncs`, `dim_customers` |
 | **metrics** | Aggregations + formula KPIs over marts/intermediate | `v_metric__<slug>` | `v_metric__monthly_cancellations_dollars`, `v_metric__monthly_grr_pct` (Phase 1 builds these) |
 
@@ -48,7 +48,7 @@ For Method:
 | **Account** (one Method instance/login) | EntityRecordID | `Account` table |
 | **Customer** (one paying business) | CompanyAccount | Implicit — derived by GROUP BY CompanyAccount; no dedicated table today (gap for Phase 1.6 `dim_customers`) |
 | **Transaction line** | (entity, txn_date, line) | `TransLineFlattened` |
-| **Customer-month MRR snapshot** | (CompanyAccount, Month) | Currently *unmaterialized* — embedded as `entity_monthly` CTE in `v_customer_mrr` and re-implemented in `v_customer_annual_mrr`. Architectural debt; Phase 1.5 extracts it. |
+| **Customer-month MRR snapshot** | (CompanyAccount, Month) | Currently *unmaterialized* — embedded as `entity_monthly` CTE in `int_customer_mrr` and re-implemented in `int_customer_annual_mrr`. Architectural debt; Phase 1.5 extracts it. |
 
 These four are all atomic at their respective grains. None is "more L0" than another. dbt's marts guidance is explicit about this:
 
@@ -60,11 +60,11 @@ So when you classify a candidate, **first identify the grain it belongs to.** Th
 
 Trial, sync, conversion, and cancellation in our codebase are **NOT atomic event streams.** Our `Account` table is an *accumulating snapshot* (Kimball's term) — one row per account, with date columns marking each lifecycle milestone. There's no separate `trial_events` source; a "trial" is just an account where `SignUpDate IS NOT NULL`.
 
-So `v_trials` / `v_syncs` / `v_conversions` / `v_cancellations` are **intermediate-layer views** (filters of `Account`), not source-layer event streams. If we ever start ingesting actual event streams (e.g., from Segment Warehouses), those would be sources at event-grain — but that's not where we are today.
+So `int_trials` / `int_syncs` / `int_conversions` / `int_cancellations` are **intermediate-layer views** (filters of `Account`), not source-layer event streams. If we ever start ingesting actual event streams (e.g., from Segment Warehouses), those would be sources at event-grain — but that's not where we are today.
 
 ## Classifying a metric
 
-- **Aggregation metric (in `metrics` layer)** — has a `v_metric__*` view that aggregates an intermediate or mart view. Returns a `(period, value)` time-series. Example: `v_metric__monthly_cancellations_dollars` = `SELECT period, ROUND(SUM(Cancellations), 2) FROM v_customer_mrr GROUP BY 1`.
+- **Aggregation metric (in `metrics` layer)** — has a `v_metric__*` view that aggregates an intermediate or mart view. Returns a `(period, value)` time-series. Example: `v_metric__monthly_cancellations_dollars` = `SELECT period, ROUND(SUM(Cancellations), 2) FROM int_customer_mrr GROUP BY 1`.
 - **Formula metric (also in `metrics` layer)** — JOINs other metric views and computes a formula. Example: `v_metric__monthly_grr_pct` = JOIN over the start/cancel/down metric views, computing the GRR formula.
 
 Both are derivatives. Both live in the metrics layer. The distinction is "reads a view" (aggregation) vs. "math over other metrics" (formula). dbt's MetricFlow uses the same split (`simple`/`derived`/`ratio` metric types).
@@ -88,9 +88,9 @@ A view that isn't actually a primitive (i.e., fails any of the four questions) b
 
 ## Pitfalls we've already hit
 
-- **Conflated source + intermediate inside one view.** `v_customer_mrr` and `v_customer_annual_mrr` both embed the per-(customer, month) MRR snapshot logic inline rather than reading from a shared `int_customer_monthly_mrr_snapshot`. Same logic, two places. Phase 1.5 fixes.
+- **Conflated source + intermediate inside one view.** `int_customer_mrr` and `int_customer_annual_mrr` both embed the per-(customer, month) MRR snapshot logic inline rather than reading from a shared `int_customer_monthly_mrr_snapshot`. Same logic, two places. Phase 1.5 fixes.
 - **Calling aggregation metrics "primitive"** in `metric_type` (the Supabase column we've been using). They're not architectural primitives — they aggregate intermediate or mart views. The label was shorthand for "directly aggregates a view," not "is the atomic concept." Phase 1+ fixes by replacing the column with `OPTIONS(layer="metric", type="aggregation")` labels in BQ.
-- **Multiple measurement paths for the same event.** "Churn" (count from `v_cancellations`) and "Cancellations $" (sum from `v_customer_mrr`) both measure "customer stopped paying" but read from different intermediate views with different exclusions and windows. They probably don't reconcile to the same customer set without explicit checking. To-do: a reconciliation script.
+- **Multiple measurement paths for the same event.** "Churn" (count from `int_cancellations`) and "Cancellations $" (sum from `int_customer_mrr`) both measure "customer stopped paying" but read from different intermediate views with different exclusions and windows. They probably don't reconcile to the same customer set without explicit checking. To-do: a reconciliation script.
 
 ## Quick reference card
 

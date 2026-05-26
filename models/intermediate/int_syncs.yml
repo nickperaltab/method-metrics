@@ -20,7 +20,7 @@
 # docs/dbt-conventions-mapping.md, decision D3.
 
 models:
-  - name: v_syncs
+  - name: int_syncs
     description: |
       One row per sync event recorded in the Funnel pipeline. Source:
       revenue.Funnel filtered to EventType = 'Sync'. The filter and

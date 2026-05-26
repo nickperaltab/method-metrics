@@ -1,7 +1,7 @@
 /**
  * Cancellations (Churn) Dashboard
- * Overview + dimension breakdowns, all driven from semantic layer (v_cancellations).
- * v_cancellations filters: excludes sentinel dates, conversion exceptions, Method Integration partner.
+ * Overview + dimension breakdowns, all driven from semantic layer (int_cancellations).
+ * int_cancellations filters: excludes sentinel dates, conversion exceptions, Method Integration partner.
  */
 
 export default {
@@ -10,7 +10,7 @@ export default {
   status: 'approved',
   group: 'funnel',
   views: {
-    v_cancellations: { dateCol: 'CancellationDate' },
+    int_cancellations: { dateCol: 'CancellationDate' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────

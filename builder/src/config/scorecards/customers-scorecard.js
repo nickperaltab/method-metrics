@@ -1,6 +1,6 @@
 /**
  * Customers Scorecard
- * Semantic layer — Active, New, Churned customers from v_customers.
+ * Semantic layer — Active, New, Churned customers from int_customers.
  * Dimensions: AttributionChannel, SignupCountry, Vertical, SyncType, HasDEP.
  */
 

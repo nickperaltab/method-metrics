@@ -5,11 +5,11 @@ const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
 // Full metric context — every live scorecard metric
-const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
-- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
-- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
+const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:int_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:int_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:int_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
 - id:57 name:"New Net SaaS" type:primitive view:v_new_net_saas
-- id:59 name:"Churn" type:primitive view:v_cancellations has_chart_sql:true
+- id:59 name:"Churn" type:primitive view:int_cancellations has_chart_sql:true
 - id:285 name:"Trials Forecast" type:primitive view:none has_chart_sql:true desc:"Total monthly trials forecast. Use for actual vs forecast comparison and KPI tiles."
 - id:286 name:"Syncs Forecast" type:primitive view:none has_chart_sql:true desc:"Total monthly syncs forecast."
 - id:289 name:"Forecasted New Net SaaS" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted new net SaaS revenue."
@@ -51,11 +51,11 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:338 name:"Net SaaS Trajectory" type:primitive view:none has_chart_sql:true
 - id:339 name:"Net SaaS Forecast vs Trajectory" type:primitive view:none has_chart_sql:true
 - id:340 name:"Net SaaS Forecast Attainment" type:primitive view:none has_chart_sql:true
-- id:341 name:"Churn Trajectory" type:primitive view:v_cancellations has_chart_sql:true
+- id:341 name:"Churn Trajectory" type:primitive view:int_cancellations has_chart_sql:true
 - id:342 name:"Forecasted Churn Rate %" type:primitive view:none has_chart_sql:true
 - id:343 name:"Budgeted Churn Rate %" type:primitive view:none has_chart_sql:true
-- id:344 name:"Churn Rate" type:primitive view:v_cancellations has_chart_sql:true
-- id:345 name:"Churn Rate % Trajectory" type:primitive view:v_cancellations has_chart_sql:true
+- id:344 name:"Churn Rate" type:primitive view:int_cancellations has_chart_sql:true
+- id:345 name:"Churn Rate % Trajectory" type:primitive view:int_cancellations has_chart_sql:true
 - id:346 name:"NRR" type:primitive view:none has_chart_sql:true
 - id:347 name:"Forecasted NRR" type:primitive view:none has_chart_sql:true
 - id:348 name:"Budgeted NRR" type:primitive view:none has_chart_sql:true
@@ -75,10 +75,10 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:363 name:"Sync Rate vs Forecast" type:primitive view:none has_chart_sql:true
 - id:364 name:"Sync Rate Attainment" type:primitive view:none has_chart_sql:true`;
 
-const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), SyncType(STRING), Vertical(STRING)
-v_syncs: SyncDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SyncType(STRING)
-v_conversions: FirstSaaSInvoiceTxnDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING)
-v_cancellations: CancellationDate(DATE), CompanyAccount(STRING), Channel(STRING)
+const SCHEMA_CONTEXT = `int_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), SyncType(STRING), Vertical(STRING)
+int_syncs: SyncDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SyncType(STRING)
+int_conversions: FirstSaaSInvoiceTxnDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING)
+int_cancellations: CancellationDate(DATE), CompanyAccount(STRING), Channel(STRING)
 v_trials_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_syncs_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_new_net_saas: TxnDate(DATE), SaaSAmount(FLOAT), CompanyAccount(STRING)

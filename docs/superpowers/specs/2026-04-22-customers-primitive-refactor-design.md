@@ -6,7 +6,7 @@
 
 ## Context
 
-Today's `customer-segments-scorecard` is backed by metric 373 (Total Customers, entity grain) plus four per-segment "metrics" (374 Solo no DEP, 375 2-3 no DEP, 376 4+ no DEP, 377 Team AI Plus) sourced from the BQ view `v_customer_segments`.
+Today's `customer-segments-scorecard` is backed by metric 373 (Total Customers, entity grain) plus four per-segment "metrics" (374 Solo no DEP, 375 2-3 no DEP, 376 4+ no DEP, 377 Team AI Plus) sourced from the BQ view `int_customer_segments`.
 
 The five-metric layout is structurally wrong under the project's semantic-layer taxonomy (`docs/semantic-layer.md`):
 
@@ -36,7 +36,7 @@ One primitive, one BQ view, a set of independent dimensions, and one derived dim
 ```
 Primitive:  Customers  (metric 373, renamed)
 Measure:    COUNT(DISTINCT EntityRecordID)
-Source:     v_customers   (new)
+Source:     int_customers   (new)
 Grain:      Month × EntityRecordID
 Filter:     IsActive = TRUE
 Dimensions: Segment, UserTier, HasDEP,
@@ -45,9 +45,9 @@ Dimensions: Segment, UserTier, HasDEP,
 
 `Segment` is derived in the view as `IF(HasDEP, 'Team AI Plus', <UserTier-based label>)`. `UserTier` is a bucket on `TotalUsers`. Both are exposed independently so analyses can use either.
 
-Segment label values are preserved exactly from `v_customer_segments`: `'Solo no DEP' / '2-3 no DEP' / '4+ no DEP' / 'Team AI Plus'`. This is a deliberate choice to minimize churn for the deck Justin already reviewed; the UserTier labels (`Solo / Small Team / Team`) differ and are independent.
+Segment label values are preserved exactly from `int_customer_segments`: `'Solo no DEP' / '2-3 no DEP' / '4+ no DEP' / 'Team AI Plus'`. This is a deliberate choice to minimize churn for the deck Justin already reviewed; the UserTier labels (`Solo / Small Team / Team`) differ and are independent.
 
-## BQ View: `v_customers`
+## BQ View: `int_customers`
 
 **Grain:** `Month × EntityRecordID`.
 
@@ -92,7 +92,7 @@ WITH entity_month AS (
     ARRAY_AGG(SignupCountry      ORDER BY SignupDate LIMIT 1)[OFFSET(0)] AS SignupCountry,
     ARRAY_AGG(Vertical           ORDER BY SignupDate LIMIT 1)[OFFSET(0)] AS Vertical,
     ARRAY_AGG(SyncType           ORDER BY SignupDate LIMIT 1)[OFFSET(0)] AS SyncType
-  FROM <same base source v_customer_segments uses>
+  FROM <same base source int_customer_segments uses>
   GROUP BY Month, EntityRecordID, EntityFullName
 ),
 with_tiers AS (
@@ -127,8 +127,8 @@ An entity can own multiple `CompanyAccount` rows with different `AttributionChan
 The view ships only when the following query returns an empty result set against historical data:
 
 ```sql
-WITH a AS (SELECT Month, Segment, COUNT(*) n FROM v_customers         GROUP BY 1,2),
-     b AS (SELECT Month, Segment, COUNT(*) n FROM v_customer_segments GROUP BY 1,2)
+WITH a AS (SELECT Month, Segment, COUNT(*) n FROM int_customers         GROUP BY 1,2),
+     b AS (SELECT Month, Segment, COUNT(*) n FROM int_customer_segments GROUP BY 1,2)
 SELECT * FROM a FULL JOIN b USING (Month, Segment)
 WHERE a.n != b.n OR a.n IS NULL OR b.n IS NULL
 ```
@@ -142,8 +142,8 @@ This is the launch gate.
 | Field | Before | After |
 |---|---|---|
 | `name` | `Total Customers (Entity)` | `Customers` |
-| `view_name` | `v_customer_segments` | `v_customers` |
-| `semantic_table` | `v_customer_segments` | `v_customers` |
+| `view_name` | `int_customer_segments` | `int_customers` |
+| `semantic_table` | `int_customer_segments` | `int_customers` |
 | `semantic_measure` | `COUNT(DISTINCT EntityRecordID)` | unchanged |
 | `semantic_date_col` | `Month` | unchanged |
 | `semantic_filters` | `NULL` | `['IsActive = TRUE']` |
@@ -216,7 +216,7 @@ Approval is mild ("sure for now") — the change is small and scoped, and no alt
 
 Strict order. Each step gated on the previous.
 
-1. Create `v_customers` in BQ (non-destructive; no frontend impact).
+1. Create `int_customers` in BQ (non-destructive; no frontend impact).
 2. Run parity gate (the SQL above). Fix-and-retry until empty result set.
 3. Supabase: update metric 373 as specified.
 4. Supabase: deprecate metrics 374–377 (status → `queued`, name suffix).
@@ -224,18 +224,18 @@ Strict order. Each step gated on the previous.
 6. Implement `dimensionFilter` support in `builder/src/components/scorecards/KpiColumn.jsx`.
 7. Local QA: all six scorecard sections render; values match screenshots of current production; raw-table customer list unchanged.
 8. Commit and push. GitHub Pages auto-deploys.
-9. Alias: `CREATE OR REPLACE VIEW v_customer_segments AS SELECT * FROM v_customers` (back-compat for one release cycle).
+9. Alias: `CREATE OR REPLACE VIEW int_customer_segments AS SELECT * FROM int_customers` (back-compat for one release cycle).
 10. Re-stamp `verified_at` on metric 373 after Nic eyeballs the deployed scorecard.
 
 ## Rollback
 
 Per-step reversibility:
 
-- Steps 1–2: BQ-only, drop `v_customers`.
-- Step 3: `UPDATE metrics SET view_name='v_customer_segments', semantic_table='v_customer_segments', semantic_dimensions='{Segment,HasDEP}', semantic_filters=NULL WHERE id=373;`
+- Steps 1–2: BQ-only, drop `int_customers`.
+- Step 3: `UPDATE metrics SET view_name='int_customer_segments', semantic_table='int_customer_segments', semantic_dimensions='{Segment,HasDEP}', semantic_filters=NULL WHERE id=373;`
 - Step 4: `UPDATE metrics SET status='live' WHERE id IN (374,375,376,377);`
 - Steps 5–6: `git revert` the commit.
-- Step 9: Replace the alias with the original `v_customer_segments` definition.
+- Step 9: Replace the alias with the original `int_customer_segments` definition.
 
 Abort triggers:
 
@@ -245,19 +245,19 @@ Abort triggers:
 
 ## Out of Scope / Deferred to GRR Project
 
-- Per-customer MRR column on `v_customers`
+- Per-customer MRR column on `int_customers`
 - Per-customer M−1 lag columns (`MRR_prev_month`, `Segment_prev_month`)
 - Per-month ChurnAmount / DowngradeAmount / ExpansionAmount pre-computed columns
-- `Currency` dimension on `v_customers`
+- `Currency` dimension on `int_customers`
 - GRR primitives (Start MRR, Cancellations, Downgrades, Expansions — per-customer-grain with Segment + Currency dims)
 - GRR derivative metric (`1 − (Cancellations + Downgrades) / Start MRR`)
 - Reconciliation to Justin's `method_forecast` model
 - Verification via `/metric-solver` against `USD Rates _ Board KPI Deck Preparation 2023+ - Monthly Detail.csv` (col BU Start, col CA Gross MRR Retention)
 
-When that project starts, `v_customers` will get a second revision to add the MRR/cohort columns. The view, metric 373, and the scorecard built in this spec remain unchanged.
+When that project starts, `int_customers` will get a second revision to add the MRR/cohort columns. The view, metric 373, and the scorecard built in this spec remain unchanged.
 
 ## Known Caveats
 
 - **Earliest-signup dimension rollup is lossy.** See Rollup Rule. Entity-grain Channel counts will not match account-grain Channel counts. Document in `docs/semantic-layer.md`.
 - **`verified_at` is cleared on metric 373** until Nic re-verifies after deploy.
-- **Aliasing `v_customer_segments`** is temporary. Schedule a follow-up to drop it after any saved charts or stray references are confirmed migrated.
+- **Aliasing `int_customer_segments`** is temporary. Schedule a follow-up to drop it after any saved charts or stray references are confirmed migrated.

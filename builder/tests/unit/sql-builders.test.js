@@ -8,7 +8,7 @@ const sql = await import('../../src/lib/sql/index.js');
 
 const trialsMetric = {
   id: 54,
-  semantic_table: 'v_trials',
+  semantic_table: 'int_trials',
   semantic_measure: 'COUNT(*)',
   semantic_date_col: 'SignupDate',
   semantic_filters: [],
@@ -18,7 +18,7 @@ const trialsMetric = {
 describe('buildSemanticSql', () => {
   it('builds monthly GROUP BY query over last N months', () => {
     const out = sql.buildSemanticSql(trialsMetric, 'month', 13, null);
-    expect(out).toContain('v_trials');
+    expect(out).toContain('int_trials');
     expect(out).toContain("FORMAT_DATE('%Y-%m'");
     expect(out).toContain('SignupDate');
     expect(out).toContain('INTERVAL 13 MONTH');

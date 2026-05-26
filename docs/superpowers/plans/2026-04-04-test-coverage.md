@@ -46,9 +46,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
-export const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
-- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
-- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
+export const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:int_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:int_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:int_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
 - id:20 name:"Conversion Rate" type:derived view:none formula:SAFE_DIVIDE({56},{54}) depends_on:[56,54]
 - id:300 name:"Sync Rate" type:derived view:none formula:SAFE_DIVIDE({55},{54})*100 depends_on:[55,54]
 - id:46 name:"Churn Rate" type:derived view:none
@@ -103,7 +103,7 @@ export const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trial
 - id:338 name:"Net SaaS Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month total net SaaS revenue. Formula: (MTD this month / MTD same days last month) × last month total. Current month only."
 - id:339 name:"Net SaaS Forecast vs Trajectory" type:primitive view:none has_chart_sql:true desc:"Delta: Net SaaS Trajectory minus Forecasted Total Net SaaS. Negative = behind pace. Current month only."
 - id:340 name:"Net SaaS Forecast Attainment" type:primitive view:none has_chart_sql:true desc:"Net SaaS Trajectory as a % of Forecasted Total Net SaaS. 100% = on track. Current month only."
-- id:59 name:"Churn" type:primitive view:v_cancellations has_chart_sql:true desc:"Monthly count of churned accounts. Source: v_cancellations."
+- id:59 name:"Churn" type:primitive view:int_cancellations has_chart_sql:true desc:"Monthly count of churned accounts. Source: int_cancellations."
 - id:274 name:"Forecasted Churn" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted churn count from method_forecast. Pair with Budgeted Churn (id:280) and Churn (id:59) for budget vs forecast vs actual charts."
 - id:280 name:"Budgeted Churn" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted churn count from method_forecast. Annual budget target."
 - id:341 name:"Churn Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month churn count at current pace. Current month only."
@@ -112,24 +112,24 @@ export const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trial
 - id:344 name:"Churn Rate" type:primitive view:none has_chart_sql:true desc:"Historical monthly churn rate: churns / (BOM customers + monthly conversions) × 100."
 - id:345 name:"Churn Rate % Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected churn rate for current month: churn trajectory / BOM customers × 100. Current month only."`;
 
-export const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
-v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
-v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
+export const SCHEMA_CONTEXT = `int_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER), Att_Social(INTEGER), Att_Email(INTEGER), Att_Referral_Link(INTEGER), Att_Partners(INTEGER), Att_Content(INTEGER), Att_Remarketing(INTEGER), Att_Other(INTEGER), Att_None(INTEGER)
+int_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), EventType(STRING), SyncType(STRING), SyncTypeRegion(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
+int_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING), Att_SEO(INTEGER), Att_Pay_Per_Click(INTEGER), Att_Direct(INTEGER)
 v_trials_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_syncs_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_trials_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)
 v_syncs_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)`;
 
 export const METRICS = [
-  { id: 54, view_name: 'v_trials' },
-  { id: 55, view_name: 'v_syncs' },
-  { id: 56, view_name: 'v_conversions' },
+  { id: 54, view_name: 'int_trials' },
+  { id: 55, view_name: 'int_syncs' },
+  { id: 56, view_name: 'int_conversions' },
   { id: 20, view_name: null },
   { id: 300, view_name: null },
   { id: 46, view_name: null },
   { id: 57, view_name: 'v_new_net_saas' },
   { id: 58, view_name: 'v_churn' },
-  { id: 59, view_name: 'v_cancellations' },
+  { id: 59, view_name: 'int_cancellations' },
   { id: 271, view_name: 'v_trials_forecast_channel' },
   { id: 272, view_name: 'v_syncs_forecast_channel' },
   { id: 273, view_name: 'v_scorecard_mtd' },
@@ -205,17 +205,17 @@ export const APPROVED_DIMENSIONS = [
 ];
 
 export const SCHEMA_MAP = {
-  v_trials: [
+  int_trials: [
     { name: 'SignupDate', type: 'DATE' }, { name: 'CompanyAccount', type: 'STRING' },
     { name: 'AttributionChannel', type: 'STRING' }, { name: 'SignupCountry', type: 'STRING' },
     { name: 'Vertical', type: 'STRING' }, { name: 'SyncType', type: 'STRING' },
   ],
-  v_syncs: [
+  int_syncs: [
     { name: 'SyncDate', type: 'DATE' }, { name: 'SignupDate', type: 'DATE' },
     { name: 'CompanyAccount', type: 'STRING' }, { name: 'AttributionChannel', type: 'STRING' },
     { name: 'SyncType', type: 'STRING' }, { name: 'SignupCountry', type: 'STRING' },
   ],
-  v_conversions: [
+  int_conversions: [
     { name: 'ConversionDate', type: 'DATE' }, { name: 'SignupDate', type: 'DATE' },
     { name: 'CompanyAccount', type: 'STRING' }, { name: 'AttributionChannel', type: 'STRING' },
     { name: 'SignupCountry', type: 'STRING' }, { name: 'Vertical', type: 'STRING' },

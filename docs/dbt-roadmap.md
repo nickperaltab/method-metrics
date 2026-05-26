@@ -49,21 +49,21 @@ Goal: all 20 live metrics have dbt-managed definitions in git, with BQ INFORMATI
 - [x] First handoff doc
 
 ### ✅ Round 2 (fixes from round-1 review, ~2026-05-04)
-- [x] Fix latest-spec syntax in `v_trials.yml` (drop `type_params`, `measures:`)
+- [x] Fix latest-spec syntax in `int_trials.yml` (drop `type_params`, `measures:`)
 - [x] Drop `metric_ref` field
 - [x] Scaffold Sync Rate as cross-model ratio metric
 - [x] Create `models/metrics/_metrics.yml` for top-level metrics
-- [x] Scaffold `v_syncs.yml` + materialization pair
+- [x] Scaffold `int_syncs.yml` + materialization pair
 
 ### ✅ Round 2.5 (deferred follow-ups, ~2026-05-05)
-- [x] Add `EntityRecordID` to `v_trials` and `v_syncs` BQ views
+- [x] Add `EntityRecordID` to `int_trials` and `int_syncs` BQ views
 - [x] Convert raw DDL → dbt-native materialization (description + labels)
 - [x] Install dbt Fusion 2.0.0-preview.175
 - [x] Write `docs/dbt-setup.md` with version pin
 - [x] Push to GitHub (commit `522cba4f`)
 
 ### ✅ Round 3a (bug fix + first dbt run, 2026-05-08)
-- [x] Discover self-reference bug (`v_trials.sql` was passthrough that would destroy real DDL)
+- [x] Discover self-reference bug (`int_trials.sql` was passthrough that would destroy real DDL)
 - [x] Inline filter logic into intermediate model files
 - [x] First successful `dbt run` — 5 views materialized
 - [x] Parity-verify: dbt sync_rate matches reconstructed-from-source to 6 decimals × 10 months
@@ -73,13 +73,13 @@ Goal: all 20 live metrics have dbt-managed definitions in git, with BQ INFORMATI
 - [x] Push (commits `897d3323`, `e6592a13`)
 
 ### ✅ Round 3b — Pilot 2 more metrics (2026-05-12)
-- [x] Scaffold `v_metric__customers` (#373) consuming `v_customers` via `{{ source(...) }}`
+- [x] Scaffold `v_metric__customers` (#373) consuming `int_customers` via `{{ source(...) }}`
   - Tests `count_distinct` aggregation pattern
   - Includes Supabase's `IsActive = TRUE` filter (was missed in initial review, caught + applied)
-- [x] Scaffold `v_metric__monthly_start_mrr` (#378) consuming `v_customer_mrr`
+- [x] Scaffold `v_metric__monthly_start_mrr` (#378) consuming `int_customer_mrr`
   - Tests `SUM` with `ROUND` wrapper pattern
-  - Inherits CEO-confirmed Prepay Expiry methodology from upstream `v_customer_mrr`
-- [x] **NEW: `models/_sources.yml`** declaring revenue dataset sources (Account, Funnel, TransLineFlattened, method_forecast + BQ-managed `v_customers`, `v_customer_mrr`, etc.). Phase 1.5 will migrate the `v_*` intermediates to dbt-managed `int_*` models.
+  - Inherits CEO-confirmed Prepay Expiry methodology from upstream `int_customer_mrr`
+- [x] **NEW: `models/_sources.yml`** declaring revenue dataset sources (Account, Funnel, TransLineFlattened, method_forecast + BQ-managed `int_customers`, `int_customer_mrr`, etc.). Phase 1.5 will migrate the `v_*` intermediates to dbt-managed `int_*` models.
 - [x] `dbt compile` clean (7 models | 3 metrics | 2 semantic models | 7 success)
 - [x] `dbt run` succeeded — both new BQ views materialized in `revenue` dataset
 - [x] Parity-check: 23 / 23 spot-checked values match exactly (12 months Customers + 11 months Monthly Start MRR — penny-match)
@@ -104,7 +104,7 @@ Setup tasks:
 
 Metric migration (group by family):
 - [ ] **Single-account-grain simple** — #56 Conversions, #59 Churn (`COUNT(DISTINCT CompanyAccount)`)
-- [ ] **MRR family monthly** — #379 Monthly Cancellations $, #380 Monthly Downgrades $, #381 Monthly Expansions $ (all `ROUND(SUM(...), 2)` from `v_customer_mrr`)
+- [ ] **MRR family monthly** — #379 Monthly Cancellations $, #380 Monthly Downgrades $, #381 Monthly Expansions $ (all `ROUND(SUM(...), 2)` from `int_customer_mrr`)
 - [ ] **MRR family annual** — #384 Annual Start MRR, #385 Annual Cancellations, #386 Annual Downgrades, #387 Annual Expansions (mirror of monthly)
 - [ ] **Cross-model ratios** — #301 Sync-to-Conversion Rate (Conversions/Syncs), #302 Trial-to-Conversion Rate (Conversions/Trials)
 
@@ -154,8 +154,8 @@ Goal: add `dim_*` (dimensions) and `fct_*` (facts) marts as the business-facing 
 - [ ] Design `dim_customers` against all 9 customer-grain metric queries
   - Columns: EntityRecordID, CompanyAccount, SignupDate cohort, FirstSync date cohort, attribution channel, vertical, current MRR tier, churn status, etc.
 - [ ] Design `fct_trials`, `fct_syncs`, `fct_conversions` with denormalized attribution
-- [ ] Refactor customer-grain metrics from `v_customer_mrr` / `v_customers` → `dim_customers`
-- [ ] Refactor event-grain metrics from `v_trials` / `v_syncs` → `fct_trials` / `fct_syncs`
+- [ ] Refactor customer-grain metrics from `int_customer_mrr` / `int_customers` → `dim_customers`
+- [ ] Refactor event-grain metrics from `int_trials` / `int_syncs` → `fct_trials` / `fct_syncs`
 - [ ] Parity-check every refactored metric
 - [ ] Update semantic models to attach to marts (dbt-canonical pattern)
 

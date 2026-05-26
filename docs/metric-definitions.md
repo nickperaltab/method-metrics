@@ -91,7 +91,7 @@ Imagine the person querying is one of these, and write so each can use the metri
 - **A marketing person** trying to figure out "is this just paid signups or all signups?"
 - **A new analyst** writing their first ad-hoc query
 
-These readers don't know about `intermediate/v_trials.yml`, "Registry UI", semantic_models, or what `simple` means in MetricFlow terminology. **No internal jargon. No file paths. No dbt vocabulary.**
+These readers don't know about `intermediate/int_trials.yml`, "Registry UI", semantic_models, or what `simple` means in MetricFlow terminology. **No internal jargon. No file paths. No dbt vocabulary.**
 
 ### The format (2-5 sentences, ~50-100 words)
 
@@ -108,9 +108,9 @@ A good description has these parts, in order. The first three are mandatory; the
 ### Examples — bad vs. good
 
 **Bad (current Trials description):**
-> "Monthly trial-signup count, materialized for Registry UI and dashboard consumption. Materialization of the 'Trials' metric (#54), defined in intermediate/v_trials.yml as a `simple` metric (COUNT(*) of v_trials grouped by SignupDate)."
+> "Monthly trial-signup count, materialized for Registry UI and dashboard consumption. Materialization of the 'Trials' metric (#54), defined in intermediate/int_trials.yml as a `simple` metric (COUNT(*) of int_trials grouped by SignupDate)."
 >
-> ❌ Mentions internal file path (`intermediate/v_trials.yml`)
+> ❌ Mentions internal file path (`intermediate/int_trials.yml`)
 > ❌ Mentions dbt jargon ("`simple` metric")
 > ❌ Mentions internal UI ("Registry UI")
 > ❌ Doesn't mention the grain at all (an account-vs-customer landmine)
@@ -147,7 +147,7 @@ Run through every question for every metric before flipping `live`:
 - [ ] **Filter match.** Does the metric exclude the same things the source-of-truth report excludes? (E.g., internal accounts, exception flags, sentinel dates.)
 - [ ] **Currency / FX match.** Pre-FX vs FX-adjusted. Methodology source should specify.
 - [ ] **Cohort definition match.** "Trials" by SignupDate cohort vs by AcquisitionMonth cohort — different.
-- [ ] **Methodology consistency.** If `v_customer_mrr` uses symmetric Prepay Expiry exclusion, ALL derived metrics should inherit that — not silently drop it.
+- [ ] **Methodology consistency.** If `int_customer_mrr` uses symmetric Prepay Expiry exclusion, ALL derived metrics should inherit that — not silently drop it.
 
 ---
 
@@ -170,12 +170,12 @@ These metrics are live in `revenue.v_metric__*` views, parity-verified, with ful
 SELECT
   FORMAT_DATE('%Y-%m', SignupDate) AS period,
   COUNT(*) AS value
-FROM `project-for-method-dw.revenue.v_trials`
+FROM `project-for-method-dw.revenue.int_trials`
 WHERE SignupDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
-Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`.
+Where `int_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversionException = FALSE AND Partner != 'Method Integration' AND SignupDate != DATE('0001-01-01')`.
 
 **Grain:** **account-level** (by design — see §4 top note). One row per Method account that began a trial. A customer with 2 trial accounts contributes 2 trials. This is canonical for Method's funnel reporting, not a flaw.
 
@@ -184,7 +184,7 @@ Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversion
 - `Partner != 'Method Integration'` — excludes internal Method Integration partner rows
 - `SignupDate != DATE('0001-01-01')` — excludes the "no trial" sentinel value
 
-**Methodology source:** Existing BQ view `v_trials`, pre-dbt convention. Definition unchanged in migration; dbt now owns the view.
+**Methodology source:** Existing BQ view `int_trials`, pre-dbt convention. Definition unchanged in migration; dbt now owns the view.
 
 **Parity-verified against:** Pre-migration BQ values for the 5 most recent months (Sep 2025 – May 2026), all penny-match (Round 3a, 2026-05-08).
 
@@ -211,19 +211,19 @@ Where `v_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversion
 SELECT
   FORMAT_DATE('%Y-%m', SyncDate) AS period,
   COUNT(*) AS value
-FROM `project-for-method-dw.revenue.v_syncs`
+FROM `project-for-method-dw.revenue.int_syncs`
 WHERE SyncDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
-Where `v_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
+Where `int_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 
 **Grain:** **account-grain by intent** (per §4 top note — Method tracks funnel metrics at account level). Each row in Funnel is a sync milestone event. See caveats for the data-vs-intent nuance.
 
 **Filters / exclusions:**
 - `EventType = 'Sync'` — filters Funnel to sync milestone events only (not all activity)
 
-**Methodology source:** Existing BQ view `v_syncs`, pre-dbt convention. Definition unchanged in migration.
+**Methodology source:** Existing BQ view `int_syncs`, pre-dbt convention. Definition unchanged in migration.
 
 **Parity-verified against:** Pre-migration BQ values (Round 3a, 2026-05-08), penny-match for 10+ months.
 
@@ -290,21 +290,21 @@ So: `SUM(sync events in month) / SUM(trial events in month)`.
 SELECT
   Month AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM `project-for-method-dw.revenue.v_customers`
+FROM `project-for-method-dw.revenue.int_customers`
 WHERE IsActive = TRUE
   AND Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
-Where `v_customers` is the existing BQ view that aggregates `TransLineFlattened` to (EntityRecordID, Month) grain with `IsActive` classification.
+Where `int_customers` is the existing BQ view that aggregates `TransLineFlattened` to (EntityRecordID, Month) grain with `IsActive` classification.
 
 **Grain:** **customer-level** (EntityRecordID). A customer with multiple Method accounts counts ONCE per month.
 
 **Filters / exclusions:**
-- `IsActive = TRUE` — applied to match Supabase's canonical filter. NOTE: this is **redundant** in practice — `v_customers` only contains customer-months with revenue activity, so all rows have `IsActive = TRUE`. Filter applied anyway for definitional consistency.
-- Internal Method partner accounts already excluded upstream in v_customers (Partner != 'Method Integration' filter).
+- `IsActive = TRUE` — applied to match Supabase's canonical filter. NOTE: this is **redundant** in practice — `int_customers` only contains customer-months with revenue activity, so all rows have `IsActive = TRUE`. Filter applied anyway for definitional consistency.
+- Internal Method partner accounts already excluded upstream in int_customers (Partner != 'Method Integration' filter).
 
-**Methodology source:** Existing BQ view `v_customers` + Supabase metric #373 semantic definition.
+**Methodology source:** Existing BQ view `int_customers` + Supabase metric #373 semantic definition.
 
 **Parity-verified against:** Pre-migration BQ values for 12 months (Jun 2025 – May 2026), all penny-match (Round 3b, 2026-05-12).
 
@@ -332,22 +332,22 @@ Where `v_customers` is the existing BQ view that aggregates `TransLineFlattened`
 SELECT
   Month AS period,
   ROUND(SUM(StartMRR), 2) AS value
-FROM `project-for-method-dw.revenue.v_customer_mrr`
+FROM `project-for-method-dw.revenue.int_customer_mrr`
 WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
-Where `v_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P1/P2 cohort pattern with symmetric Prepay Expiry Income exclusion.
+Where `int_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P1/P2 cohort pattern with symmetric Prepay Expiry Income exclusion.
 
 **Grain:** period-level (one $ value per month). Underlying aggregation is customer-month.
 
-**Filters / exclusions (inherited from `v_customer_mrr`):**
+**Filters / exclusions (inherited from `int_customer_mrr`):**
 - Internal Method accounts (`CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%'`) — matches Looker and SaaS Analytics Engine filters
 - **Symmetric Prepay Expiry Income exclusion** (CEO-confirmed 2026-04-28): customers whose entire Period-1 SaaS revenue was Prepay Expiry Income are excluded from BOTH StartMRR and Cancellations. Their actual churn was captured in an earlier monthly cohort.
 - TxnDate >= '2021-12-01' (data quality floor)
 - Excludes current incomplete month
 
-**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql` — Justin's verified pattern. CEO methodology confirmation logged 2026-04-28.
+**Methodology source:** `knowledge/verified-queries/int_customer_mrr.sql` — Justin's verified pattern. CEO methodology confirmation logged 2026-04-28.
 
 **Parity-verified against:** Pre-migration BQ values for 11 months (Jun 2025 – Apr 2026), all penny-match (Round 3b, 2026-05-12).
 
@@ -357,7 +357,7 @@ Where `v_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P
 **Known caveats:**
 - **Pre-FX** — all currencies at face value (USD, CAD, UK). If you want USD-equivalent, that's a different metric.
 - Diverges from board-deck monthly retention by ~4–6bp because this view uses symmetric methodology while the board deck uses asymmetric (PE-only customers left in StartMRR but excluded from Cancellations).
-- Current month NOT shown (v_customer_mrr excludes in-progress month).
+- Current month NOT shown (int_customer_mrr excludes in-progress month).
 
 **Used by:**
 - Method Monday (Revenue section, foundation for Monthly GRR/NRR)
@@ -375,19 +375,19 @@ Where `v_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's P
 **The math:**
 ```sql
 SELECT Month AS period, ROUND(SUM(Cancellations), 2) AS value
-FROM `project-for-method-dw.revenue.v_customer_mrr`
+FROM `project-for-method-dw.revenue.int_customer_mrr`
 WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
 **Grain:** period-level. Underlying aggregation is customer-month.
 
-**Filters / exclusions (inherited from `v_customer_mrr`):**
+**Filters / exclusions (inherited from `int_customer_mrr`):**
 - Internal Method accounts (CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%')
 - **Symmetric Prepay Expiry Income exclusion** (CEO-confirmed 2026-04-28)
 - TxnDate >= '2021-12-01'; excludes current incomplete month
 
-**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified pattern.
+**Methodology source:** `knowledge/verified-queries/int_customer_mrr.sql`. Justin-verified pattern.
 
 **Parity-verified against:** Pre-migration BQ values for 6 months, all penny-match (Round 4, 2026-05-14).
 
@@ -412,16 +412,16 @@ GROUP BY 1
 **The math:**
 ```sql
 SELECT Month AS period, ROUND(SUM(Downgrades), 2) AS value
-FROM `project-for-method-dw.revenue.v_customer_mrr`
+FROM `project-for-method-dw.revenue.int_customer_mrr`
 WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
 **Grain:** period-level.
 
-**Filters / exclusions:** Same as #379 (inherited from v_customer_mrr).
+**Filters / exclusions:** Same as #379 (inherited from int_customer_mrr).
 
-**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified.
+**Methodology source:** `knowledge/verified-queries/int_customer_mrr.sql`. Justin-verified.
 
 **Parity-verified against:** 6 months, penny-match (Round 4, 2026-05-14).
 
@@ -446,16 +446,16 @@ GROUP BY 1
 **The math:**
 ```sql
 SELECT Month AS period, ROUND(SUM(Expansions), 2) AS value
-FROM `project-for-method-dw.revenue.v_customer_mrr`
+FROM `project-for-method-dw.revenue.int_customer_mrr`
 WHERE Month >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ```
 
 **Grain:** period-level.
 
-**Filters / exclusions:** Same as #379 (inherited from v_customer_mrr).
+**Filters / exclusions:** Same as #379 (inherited from int_customer_mrr).
 
-**Methodology source:** `knowledge/verified-queries/v_customer_mrr.sql`. Justin-verified.
+**Methodology source:** `knowledge/verified-queries/int_customer_mrr.sql`. Justin-verified.
 
 **Parity-verified against:** 6 months, penny-match (Round 4, 2026-05-14).
 
@@ -479,11 +479,11 @@ GROUP BY 1
 
 **What it answers:** How many Method accounts converted from trial to paying (received their first SaaS invoice) in each month?
 
-**The math:** `COUNT(*) FROM v_conversions GROUP BY FirstSaaSInvoiceTxnDate (month)`
+**The math:** `COUNT(*) FROM int_conversions GROUP BY FirstSaaSInvoiceTxnDate (month)`
 
 **Grain:** account-level. A customer with 2 converted accounts contributes 2 conversions.
 
-**Filters:** Inherits from v_conversions — excludes IsConversionException accounts and Method Integration partners.
+**Filters:** Inherits from int_conversions — excludes IsConversionException accounts and Method Integration partners.
 
 **Parity-verified:** 6 months, penny-match (Round 4, 2026-05-14).
 
@@ -499,11 +499,11 @@ GROUP BY 1
 
 **What it answers:** How many distinct Method customers canceled in each month?
 
-**The math:** `COUNT(DISTINCT CompanyAccount) FROM v_cancellations GROUP BY CancellationDate (month)`
+**The math:** `COUNT(DISTINCT CompanyAccount) FROM int_cancellations GROUP BY CancellationDate (month)`
 
 **Grain:** customer-level (uses DISTINCT). A customer with multiple canceling accounts in the same month counts ONCE.
 
-**Filters:** Inherits from v_cancellations.
+**Filters:** Inherits from int_cancellations.
 
 **Parity-verified:** 6 months, penny-match (Round 4, 2026-05-14).
 
@@ -555,11 +555,11 @@ GROUP BY 1
 
 **What they answer:** Same as the monthly MRR family (#378-381), but at annual cohort grain — reported monthly via trailing comparison.
 
-**The math:** `ROUND(SUM(X), 2) FROM v_customer_annual_mrr GROUP BY Month`, where X is StartMRR / Cancellations / Downgrades / Expansions.
+**The math:** `ROUND(SUM(X), 2) FROM int_customer_annual_mrr GROUP BY Month`, where X is StartMRR / Cancellations / Downgrades / Expansions.
 
 **Grain:** Period-level (annual cohort comparison, reported monthly).
 
-**Filters / methodology:** Same as v_customer_mrr — CEO-confirmed symmetric Prepay Expiry exclusion, internal Method accounts excluded.
+**Filters / methodology:** Same as int_customer_mrr — CEO-confirmed symmetric Prepay Expiry exclusion, internal Method accounts excluded.
 
 **Parity-verified:** 5 months × 4 metrics = 20 / 20 penny-match (Round 4, 2026-05-14).
 

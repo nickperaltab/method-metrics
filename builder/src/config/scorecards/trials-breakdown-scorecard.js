@@ -1,8 +1,8 @@
 /**
  * Trials Dashboard
- * Overview + dimension breakdowns, all driven from semantic layer (v_trials).
+ * Overview + dimension breakdowns, all driven from semantic layer (int_trials).
  *
- * Note: RevenueBucket breakdown requires BQ view update (AnnualSales not in v_trials yet).
+ * Note: RevenueBucket breakdown requires BQ view update (AnnualSales not in int_trials yet).
  */
 
 export default {
@@ -11,7 +11,7 @@ export default {
   status: 'approved',
   group: 'funnel',
   views: {
-    v_trials: { dateCol: 'SignupDate' },
+    int_trials: { dateCol: 'SignupDate' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────

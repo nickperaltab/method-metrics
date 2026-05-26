@@ -16,9 +16,9 @@ const SONNET_URL = `${SUPABASE_URL}/functions/v1/ai-chart`;
 const HAIKU_URL = process.env.ENDPOINT_HAIKU || `${SUPABASE_URL}/functions/v1/ai-chart-haiku`;
 
 // Same context as eval.test.js
-const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
-- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
-- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
+const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:int_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:int_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:int_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
 - id:20 name:"Conversion Rate" type:derived view:none formula:SAFE_DIVIDE({56},{54}) depends_on:[56,54]
 - id:300 name:"Sync Rate" type:derived view:none formula:SAFE_DIVIDE({55},{54})*100 depends_on:[55,54]
 - id:46 name:"Churn Rate" type:derived view:none
@@ -29,7 +29,7 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:295 name:"Syncs Trajectory" type:primitive view:none has_chart_sql:true desc:"Projected end-of-month syncs."
 - id:273 name:"Conversions Forecast" type:primitive view:v_scorecard_mtd has_chart_sql:true desc:"Monthly forecast for conversions."
 - id:274 name:"Forecasted Churn" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted churn count."
-- id:59 name:"Churn" type:primitive view:v_cancellations has_chart_sql:true desc:"Monthly count of churned accounts."
+- id:59 name:"Churn" type:primitive view:int_cancellations has_chart_sql:true desc:"Monthly count of churned accounts."
 - id:329 name:"Total New DEP Net SaaS" type:primitive view:none has_chart_sql:true desc:"New DEP revenue per month."
 - id:282 name:"Budgeted New DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly budgeted new DEP revenue."
 - id:290 name:"Forecasted New DEP Revenue" type:primitive view:none has_chart_sql:true desc:"Monthly forecasted new DEP revenue."
@@ -37,9 +37,9 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:331 name:"New DEP Forecast vs Trajectory" type:derived depends_on:[330,290] desc:"Delta: trajectory minus forecast."
 - id:332 name:"New DEP Forecast Attainment" type:derived depends_on:[330,290] desc:"Trajectory as % of forecast."`;
 
-const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING)
-v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SyncType(STRING), AttributionChannel(STRING)
-v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING)`;
+const SCHEMA_CONTEXT = `int_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING)
+int_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SyncType(STRING), AttributionChannel(STRING)
+int_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), SignupCountry(STRING), Vertical(STRING), AttributionChannel(STRING)`;
 
 // Test prompts with expected assertions
 const TEST_CASES = [

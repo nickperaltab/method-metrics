@@ -150,7 +150,7 @@ This justifies the full mart investment — each mart serves multiple consumers.
 | `days_since_last_activity` | INT64 | from latest Funnel event or TransLine | Engagement signal |
 | `total_accounts` | INT64 | COUNT(DISTINCT RecordID) for this customer | Multi-account flag |
 | `active_accounts` | INT64 | COUNT(DISTINCT active RecordIDs) | Multi-account active |
-| `current_mrr` | FLOAT64 | latest month's SUM(SaaSAmount) from v_customer_mrr | $ value today |
+| `current_mrr` | FLOAT64 | latest month's SUM(SaaSAmount) from int_customer_mrr | $ value today |
 | `mrr_30d_ago` | FLOAT64 | 30-day-ago snapshot | Trend signal |
 | `mrr_90d_ago` | FLOAT64 | 90-day-ago snapshot | Longer trend |
 | `mrr_trend_30d` | STRING | derived: 'growing'/'declining'/'flat' | AC declining-MRR audience |
@@ -162,13 +162,13 @@ This justifies the full mart investment — each mart serves multiple consumers.
 | `nps_score` | FLOAT64 | (if Intercom NPS data joined) | Sentiment |
 | `support_tickets_30d` | INT64 | (if Intercom data joined) | Support load |
 | `last_sync_date` | DATE | latest SyncDate across accounts | Engagement |
-| `total_lifetime_syncs` | INT64 | COUNT from v_syncs | Engagement total |
+| `total_lifetime_syncs` | INT64 | COUNT from int_syncs | Engagement total |
 | `industry` | STRING | CustDatIndustry (latest) | Segment |
 | `employee_count` | INT64 | CustDatCountOfEmployees (latest) | Firmographic |
 | `annual_sales` | FLOAT64 | CustDatAnnualSales (latest) | Firmographic |
 
 **Notes:**
-- "Latest" rules need a deterministic tie-breaker per `v_customer_mrr`'s pattern (e.g., ORDER BY signup_date ASC).
+- "Latest" rules need a deterministic tie-breaker per `int_customer_mrr`'s pattern (e.g., ORDER BY signup_date ASC).
 - Intercom-derived fields (NPS, support tickets) only land once Intercom→BQ pipeline exists. Listed for design completeness; can be deferred.
 - Some fields require new intermediates (e.g., `int_customer_engagement_summary` aggregating Funnel by EntityRecordID).
 
@@ -176,7 +176,7 @@ This justifies the full mart investment — each mart serves multiple consumers.
 
 **Grain:** One row per `RecordID` (~144,862 today).
 **FK to:** `dim_customers.customer_id` (via EntityRecordID).
-**Built from:** `int_account_attributes` (essentially the existing v_trials/v_conversions/v_cancellations logic but UNIONed across all accounts, not just by lifecycle stage).
+**Built from:** `int_account_attributes` (essentially the existing int_trials/int_conversions/int_cancellations logic but UNIONed across all accounts, not just by lifecycle stage).
 
 **Proposed columns:**
 
@@ -222,7 +222,7 @@ This justifies the full mart investment — each mart serves multiple consumers.
 
 **Grain:** One row per trial signup event = one row per account that began a trial.
 **FK to:** `dim_customers`, `dim_accounts`.
-**Built from:** Existing `v_trials` intermediate.
+**Built from:** Existing `int_trials` intermediate.
 
 **Proposed columns:**
 
@@ -250,7 +250,7 @@ This justifies the full mart investment — each mart serves multiple consumers.
 
 **Grain:** One row per sync event from Funnel.
 **FK to:** `dim_customers`, `dim_accounts`.
-**Built from:** Existing `v_syncs` intermediate.
+**Built from:** Existing `int_syncs` intermediate.
 
 | Column | Type | Source |
 |---|---|---|
@@ -263,13 +263,13 @@ This justifies the full mart investment — each mart serves multiple consumers.
 | `sync_type` | STRING | SyncType |
 | `event_type` | STRING | EventType (always 'Sync' in this fact, but kept for consistency) |
 
-**Open question:** Funnel doesn't currently surface `RecordID`. If we want `account_id` on `fct_syncs`, we need to either: (a) add it to v_syncs from Funnel if Funnel has it, or (b) accept that `fct_syncs` is customer-grained only (with account_id NULL for some events). Need to check Funnel schema.
+**Open question:** Funnel doesn't currently surface `RecordID`. If we want `account_id` on `fct_syncs`, we need to either: (a) add it to int_syncs from Funnel if Funnel has it, or (b) accept that `fct_syncs` is customer-grained only (with account_id NULL for some events). Need to check Funnel schema.
 
 ### 3.5 `fct_conversions` — one row per conversion event
 
 **Grain:** One row per account that converted (had `FirstSaaSInvoiceTxnDate` set).
 **FK to:** `dim_customers`, `dim_accounts`, optional `fct_trials` (which trial led to this conversion).
-**Built from:** Existing `v_conversions` intermediate + TransLineFlattened (for first-month MRR).
+**Built from:** Existing `int_conversions` intermediate + TransLineFlattened (for first-month MRR).
 
 | Column | Type | Source |
 |---|---|---|
@@ -293,7 +293,7 @@ This justifies the full mart investment — each mart serves multiple consumers.
 
 **Grain:** One row per (EntityRecordID, Month, movement_type). Most complex fact.
 **FK to:** `dim_customers`, `dim_accounts` (account_id of the relevant account for that month).
-**Built from:** Existing `v_customer_mrr` (which already has the methodology).
+**Built from:** Existing `int_customer_mrr` (which already has the methodology).
 
 | Column | Type | Source |
 |---|---|---|
@@ -301,11 +301,11 @@ This justifies the full mart investment — each mart serves multiple consumers.
 | `customer_id` | INT64 | EntityRecordID |
 | `account_id` | INT64 | RecordID of the relevant account (TBD: how to pick when customer has multi-accounts — see open questions) |
 | `month` | DATE | Month |
-| `start_mrr` | FLOAT64 | from v_customer_mrr |
-| `cancellations_mrr` | FLOAT64 | v_customer_mrr.Cancellations |
-| `downgrades_mrr` | FLOAT64 | v_customer_mrr.Downgrades |
-| `expansions_mrr` | FLOAT64 | v_customer_mrr.Expansions |
-| `new_mrr` | FLOAT64 | v_customer_mrr.NewMrr |
+| `start_mrr` | FLOAT64 | from int_customer_mrr |
+| `cancellations_mrr` | FLOAT64 | int_customer_mrr.Cancellations |
+| `downgrades_mrr` | FLOAT64 | int_customer_mrr.Downgrades |
+| `expansions_mrr` | FLOAT64 | int_customer_mrr.Expansions |
+| `new_mrr` | FLOAT64 | int_customer_mrr.NewMrr |
 | `end_mrr` | FLOAT64 | start + new - cancellations - downgrades + expansions |
 
 **Notes:**
@@ -339,7 +339,7 @@ In dependency order. Each must pass parity verification (CLAUDE.md snapshot rule
 ### Wave 1 — Foundation (Phase 1.6a)
 
 1. **`int_customer_attributes`** — aggregates Account-level attrs to customer grain (most common Vertical, latest CompanyAccount with deterministic tie-break, earliest signup date, etc.). Built from `Account`.
-2. **`int_customer_revenue_summary`** — current/30d/90d MRR + lifetime revenue per customer. Built from `TransLineFlattened` + `v_customer_mrr`.
+2. **`int_customer_revenue_summary`** — current/30d/90d MRR + lifetime revenue per customer. Built from `TransLineFlattened` + `int_customer_mrr`.
 3. **`dim_customers`** — combines (1) and (2). First mart shipped.
 
 **Why first:** Unlocks immediate Voice-of-Customer queries. Foundation for everything else. Validates the dim pattern works end-to-end.
@@ -352,22 +352,22 @@ In dependency order. Each must pass parity verification (CLAUDE.md snapshot rule
 
 ### Wave 3 — Funnel facts
 
-5. **`fct_trials`** — built from existing `v_trials` (after surfacing RecordID).
-6. **`fct_conversions`** — built from `v_conversions` + TransLineFlattened first-month revenue.
-7. **`fct_syncs`** — built from `v_syncs` (after addressing the Funnel.RecordID question).
+5. **`fct_trials`** — built from existing `int_trials` (after surfacing RecordID).
+6. **`fct_conversions`** — built from `int_conversions` + TransLineFlattened first-month revenue.
+7. **`fct_syncs`** — built from `int_syncs` (after addressing the Funnel.RecordID question).
 
 **Why third:** Unlocks Acquisition section of Method Monday. Unlocks Looker-style funnel analyses.
 
 ### Wave 4 — Retention fact
 
-8. **`fct_mrr_movements`** — built from `v_customer_mrr`. Most complex; built last after the other patterns are proven.
+8. **`fct_mrr_movements`** — built from `int_customer_mrr`. Most complex; built last after the other patterns are proven.
 9. **`fct_cancellations`** — derived from `fct_mrr_movements`.
 
 **Why last:** Most complex; unlocks Retention/Revenue sections of Method Monday + the heaviest AC integration audiences (declining-MRR).
 
 ### Wave 5 — Refactor existing metrics to consume marts
 
-10. Refactor `v_metric__trials` to query `fct_trials` (was `v_trials`)
+10. Refactor `v_metric__trials` to query `fct_trials` (was `int_trials`)
 11. Refactor `v_metric__syncs` to query `fct_syncs`
 12. Refactor `v_metric__sync_rate` to compute from `fct_trials` + `fct_syncs`
 13. Phase out direct v_metric__ → intermediate dependency
@@ -407,13 +407,13 @@ Proposed defaults, lock or revise:
 
 Specifically `mrr_trend_30d`. Three options:
 - **(a) Compare current_mrr vs mrr_30d_ago, %change buckets**: 'growing' (>5% up), 'flat' (-5% to +5%), 'declining' (>5% down), 'churned' (zero)
-- **(b) Justin's existing methodology** if there's one already in `v_customer_mrr` — preferable for consistency
+- **(b) Justin's existing methodology** if there's one already in `int_customer_mrr` — preferable for consistency
 - **(c) Skip from MVP; add later when AC audiences need it**
 
 ### Q3 — `fct_syncs.account_id` (blocks `fct_syncs`)
 
 `Funnel` table has `EntityRecordID` but apparently not `RecordID`. Two paths:
-- **(a) Add RecordID to v_syncs's underlying Funnel** — requires upstream pipeline change OR a join from Funnel to Account by EntityRecordID picking "primary" account
+- **(a) Add RecordID to int_syncs's underlying Funnel** — requires upstream pipeline change OR a join from Funnel to Account by EntityRecordID picking "primary" account
 - **(b) Accept `fct_syncs` is customer-grained only** (account_id NULL) — limits per-account sync analyses
 - **(c) Pick the account that was active in the sync's month** — derive account_id from MRR-bearing relationship
 
@@ -446,7 +446,7 @@ When do these external sources land in BQ? Affects when `dim_customers.support_t
 
 ### Q8 — Currency/FX handling
 
-`v_customer_mrr` is pre-FX. Should `dim_customers.current_mrr` be pre-FX or FX-adjusted? Affects AC integration (does AC want USD-equivalent or local currency?). Best practice: store BOTH (`current_mrr_local`, `current_mrr_usd`).
+`int_customer_mrr` is pre-FX. Should `dim_customers.current_mrr` be pre-FX or FX-adjusted? Affects AC integration (does AC want USD-equivalent or local currency?). Best practice: store BOTH (`current_mrr_local`, `current_mrr_usd`).
 
 ### Q9 — PII handling on `dim_customers`
 
@@ -458,10 +458,10 @@ When do these external sources land in BQ? Affects when `dim_customers.support_t
 
 Before declaring Phase 1.6 done:
 
-- [ ] `dim_customers` shipped, parity-verified (totals match `v_customers` and v_customer_mrr's customer count)
+- [ ] `dim_customers` shipped, parity-verified (totals match `int_customers` and int_customer_mrr's customer count)
 - [ ] `dim_accounts` shipped, FK relationship to `dim_customers` validated (orphan check: every account row has a valid customer_id)
 - [ ] `fct_trials`, `fct_syncs`, `fct_conversions` shipped, FKs to both dims validated
-- [ ] `fct_mrr_movements` shipped, parity-verified against `v_customer_mrr` (penny-match for sample months)
+- [ ] `fct_mrr_movements` shipped, parity-verified against `int_customer_mrr` (penny-match for sample months)
 - [ ] `fct_cancellations` shipped, parity-verified against current Cancellation metric values
 - [ ] All marts have descriptions + labels propagated to BQ (visible via INFORMATION_SCHEMA)
 - [ ] All marts have `meta.owner` set in the YAML
@@ -476,7 +476,7 @@ Before declaring Phase 1.6 done:
 - **Wave 1 (dim_customers + supporting intermediates):** ~1 focused day. Most complex single mart due to multi-account rollup logic and lifecycle derivation.
 - **Wave 2 (dim_accounts):** ~half day. Mostly mechanical Account → mart mapping.
 - **Wave 3 (fct_trials, fct_conversions, fct_syncs):** ~1 day total. Each is a refactor of an existing intermediate.
-- **Wave 4 (fct_mrr_movements + fct_cancellations):** ~half day. Most logic exists in `v_customer_mrr`; mostly schema shaping.
+- **Wave 4 (fct_mrr_movements + fct_cancellations):** ~half day. Most logic exists in `int_customer_mrr`; mostly schema shaping.
 - **Wave 5 (refactor metrics to consume marts):** ~half day. Mechanical.
 - **Plus testing, parity verification, documentation, and review:** ~half day buffer.
 

@@ -200,7 +200,7 @@ const sql = await import('../../src/lib/sql/index.js');
 
 const trialsMetric = {
   id: 54,
-  semantic_table: 'v_trials',
+  semantic_table: 'int_trials',
   semantic_measure: 'COUNT(*)',
   semantic_date_col: 'SignupDate',
   semantic_filters: [],
@@ -210,7 +210,7 @@ const trialsMetric = {
 describe('buildSemanticSql', () => {
   it('builds monthly GROUP BY query over last N months', () => {
     const out = sql.buildSemanticSql(trialsMetric, 'month', 13, null);
-    expect(out).toContain('v_trials');
+    expect(out).toContain('int_trials');
     expect(out).toContain("FORMAT_DATE('%Y-%m'");
     expect(out).toContain('SignupDate');
     expect(out).toContain('INTERVAL 13 MONTH');
@@ -563,7 +563,7 @@ describe('buildScorecardQueryPlan', () => {
   it('creates a primitive query for each semantic metric', () => {
     const metrics = [
       makeMetric(54, {
-        semantic_table: 'v_trials',
+        semantic_table: 'int_trials',
         semantic_measure: 'COUNT(*)',
         semantic_date_col: 'SignupDate',
         semantic_filters: [],
@@ -579,7 +579,7 @@ describe('buildScorecardQueryPlan', () => {
   it('adds weekly entry for a week-bucketed chart', () => {
     const metrics = [
       makeMetric(54, {
-        semantic_table: 'v_trials',
+        semantic_table: 'int_trials',
         semantic_measure: 'COUNT(*)',
         semantic_date_col: 'SignupDate',
         semantic_filters: [],
@@ -1387,7 +1387,7 @@ describe('snapshot contract — dataMap entry shapes', () => {
 
   it('grouped entry: { labels, seriesMap: { [dim]: (number|null)[] } }', async () => {
     const metrics = [makeMetric(54, {
-      semantic_table: 'v_trials',
+      semantic_table: 'int_trials',
       semantic_measure: 'COUNT(*)',
       semantic_date_col: 'SignupDate',
       semantic_filters: [],
@@ -1420,7 +1420,7 @@ describe('snapshot contract — dataMap entry shapes', () => {
 
   it('raw_table entry: { rows: Object[], columns: string[] }', async () => {
     const metrics = [makeMetric(54, {
-      semantic_table: 'v_trials',
+      semantic_table: 'int_trials',
       semantic_measure: 'COUNT(*)',
       semantic_date_col: 'SignupDate',
       semantic_filters: [],
@@ -2042,7 +2042,7 @@ jobs:
               const { rows } = await q(\`
                 SELECT table_id, TIMESTAMP_MILLIS(last_modified_time) AS lm
                 FROM \\\`project-for-method-dw.revenue.__TABLES__\\\`
-                WHERE table_id IN ('v_trials','v_syncs')
+                WHERE table_id IN ('int_trials','int_syncs')
               \`);
               const cutoff = new Date(Date.now() - 18*3600*1000);
               const stale = rows.filter(r => new Date(r.lm) < cutoff);

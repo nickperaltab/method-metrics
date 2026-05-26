@@ -4,10 +4,10 @@
  */
 
 const VIEWS = {
-  v_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
+  int_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
   v_new_net_saas: { dateCol: 'TxnDate' },
   v_new_dep_revenue: { dateCol: 'TxnDate' },
-  v_cancellations: { dateCol: 'CancellationDate' },
+  int_cancellations: { dateCol: 'CancellationDate' },
   v_total_net_saas: { dateCol: 'TxnDate' },
   v_total_dep_revenue: { dateCol: 'TxnDate' },
 };
@@ -70,7 +70,7 @@ GROUP BY 1 ORDER BY 1
 const WEEKLY_CHURN_COUNT_SQL = `
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(CancellationDate, WEEK(MONDAY))) AS period,
   COUNT(DISTINCT CompanyAccount) AS value
-FROM \`project-for-method-dw.revenue.v_cancellations\`
+FROM \`project-for-method-dw.revenue.int_cancellations\`
 WHERE CancellationDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
   AND CancellationDate <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1

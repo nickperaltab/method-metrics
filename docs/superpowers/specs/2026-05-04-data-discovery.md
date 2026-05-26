@@ -27,10 +27,10 @@ This doc is the input for the data-initiatives backlog and the Composable CDP ro
 |---|---|---|
 | Account state | `revenue.Account` | One row per Method account / EntityRecordID. Lifecycle dates as columns (SignUpDate, SyncDate, FirstSaaSInvoiceTxnDate, CancellationDate). This is an accumulating snapshot. |
 | Transaction lines | `revenue.TransLineFlattened` | Every revenue line. Atomic event-grain. |
-| Customer-month MRR snapshot | (unmaterialized) | Lives as `entity_monthly` CTE inside `v_customer_mrr` and re-implemented in `v_customer_annual_mrr`. Architectural debt. |
-| Lifecycle filter views | `revenue.v_trials`, `v_syncs`, `v_conversions`, `v_cancellations` | Each is `Account` filtered to one date column. Intermediate-layer derivatives. |
-| Retention math | `revenue.v_customer_mrr`, `v_customer_annual_mrr` | Pair-and-classify views. CEO-confirmed symmetric PE methodology 2026-04-28 (diverges from board deck by 4–6bp on monthly numbers). |
-| Customer state | `revenue.v_customers`, `v_customer_segments` | Per-(customer, month) classifications. Verified 2026-04-22. |
+| Customer-month MRR snapshot | (unmaterialized) | Lives as `entity_monthly` CTE inside `int_customer_mrr` and re-implemented in `int_customer_annual_mrr`. Architectural debt. |
+| Lifecycle filter views | `revenue.int_trials`, `int_syncs`, `int_conversions`, `int_cancellations` | Each is `Account` filtered to one date column. Intermediate-layer derivatives. |
+| Retention math | `revenue.int_customer_mrr`, `int_customer_annual_mrr` | Pair-and-classify views. CEO-confirmed symmetric PE methodology 2026-04-28 (diverges from board deck by 4–6bp on monthly numbers). |
+| Customer state | `revenue.int_customers`, `int_customer_segments` | Per-(customer, month) classifications. Verified 2026-04-22. |
 | DEP revenue | `revenue.v_total_dep_revenue` | Forecasts/budgets for DEP. |
 | Forecasts/budgets | `revenue.method_forecast` | Federated Google Sheet. Forecasted_Trials, Forecasted_Syncs, Forecasted_Churn, Budgeted_*, etc. |
 | Breakdown views | `revenue.v_trials_by_industry`, `v_trials_by_country`, `v_trials_by_channel`, `v_trials_by_sync_type` | Per-dimension pre-aggregations. |
@@ -63,10 +63,10 @@ Status definitions: **defined** = single agreed-upon definition, owned, cultural
 
 | Term | Status | Notes / blocking deliverables |
 |---|---|---|
-| Trial | defined | `v_trials`, semantic_date_col=`SignupDate`. Solid. |
-| Sync | defined | `v_syncs`, semantic_date_col=`SyncDate`. |
-| Conversion | defined | `v_conversions`, FirstSaaSInvoiceTxnDate. |
-| Cancellation (event) | defined | `v_cancellations`, CancellationDate. |
+| Trial | defined | `int_trials`, semantic_date_col=`SignupDate`. Solid. |
+| Sync | defined | `int_syncs`, semantic_date_col=`SyncDate`. |
+| Conversion | defined | `int_conversions`, FirstSaaSInvoiceTxnDate. |
+| Cancellation (event) | defined | `int_cancellations`, CancellationDate. |
 | Customer | **contested** | CLAUDE.md says "join by EntityRecordID, classify at CompanyAccount" but adoption unclear. Some teams use one, some the other. Blocks: churn report, lead identity resolution, marketing dashboard. |
 | MRR (per customer per month) | defined | Verified penny-exact against Justin's verified queries 2026-03-27 (monthly), 2026-04-24 (annual). |
 | Start MRR (monthly) | defined | Symmetric PE methodology, CEO-confirmed 2026-04-28. |
@@ -84,7 +84,7 @@ Status definitions: **defined** = single agreed-upon definition, owned, cultural
 | Channel attribution (trials/syncs) | partial | UTM-based, only when consistent UTMs are used. Mattis: *"we have different UTM standards across different systems."* |
 | Channel attribution (everything else) | **undefined** | Demo bookings, webinar leads, etc. not consistently attributed. |
 | Vertical | defined | Surfaced in scorecards. |
-| Customer Segment | defined | `v_customer_segments`, verified 2026-04-22. |
+| Customer Segment | defined | `int_customer_segments`, verified 2026-04-22. |
 | Health score | **orphaned** | Some scoring exists in AC; nobody owns / maintains it. *"Nobody's owning this. Nobody's maintaining any of it."* (Mattis) |
 | ARR | defined | Justin's revenue model. |
 | Net New ARR | defined | Per `metrics-catalog.md`. |
@@ -106,7 +106,7 @@ Where definitions / metrics / lists live OUTSIDE the BQ data layer. These cause 
 | 2026 Revenue Plan PDF | Strategic doc | Sarah / leadership | Yes — defines targets (GRR 81%, NRR 95%, ARR +25%) | Indirectly — defines goals, not measurement. | Medium — targets shift across versions |
 | Q1 2026 RevOps Roadmap | Markdown (Obsidian) | Nic | Yes — defines RevOps initiatives + framework | Indirectly — references metrics that should exist. | Low (actively maintained by Nic) |
 | Justin's verified-queries SQL | Repo (`knowledge/verified-queries/`) | Justin | Yes — penny-exact methodology | Yes — these ARE the BQ definitions for retention metrics. | Low (in git) |
-| Justin's retention spreadsheet | Spreadsheet | Justin | Working source for verification | Yes — verifies against `v_customer_annual_mrr` periodically | Low (actively maintained) |
+| Justin's retention spreadsheet | Spreadsheet | Justin | Working source for verification | Yes — verifies against `int_customer_annual_mrr` periodically | Low (actively maintained) |
 | Christa's MQL definition doc | Markdown (March 2025) | Originally Christa, now nobody | No — orphaned | N/A — never implemented | High — will get rediscovered with no context, may inform a divergent rebuild |
 | Lead scoring rules in Active Campaign | Vendor config | Nelson (set up); current owner unclear | Unclear — possibly active, possibly orphaned | NO — not in BQ, opaque from outside AC | High — undocumented behavior may be affecting AC sends today |
 | Webinar lead lists in Slack threads | Slack DMs | Whoever ran the webinar (Mattis, Michelle) | No — no system of record | NO — not in any system | Critical — data evaporates as Slack messages age out |
@@ -178,9 +178,9 @@ Each section cites the source: ✓ direct (interview, transcript, conversation) 
 
 | # | Problem | Evidence |
 |---|---|---|
-| F1 | Recurring GRR / retention reconciliation between BQ and board deck | The 2026-04-28 CEO-confirmed PE methodology change is the third major reconciliation in the last quarter. Symptom of definitions living in deck + spreadsheets without being linked to BQ. Memory entry: *"Both v_customer_mrr (monthly) and v_customer_annual_mrr now use CEO-confirmed symmetric PE exclusion (2026-04-28). Diverges from board-deck monthly numbers by ~4–6bp."* |
+| F1 | Recurring GRR / retention reconciliation between BQ and board deck | The 2026-04-28 CEO-confirmed PE methodology change is the third major reconciliation in the last quarter. Symptom of definitions living in deck + spreadsheets without being linked to BQ. Memory entry: *"Both int_customer_mrr (monthly) and int_customer_annual_mrr now use CEO-confirmed symmetric PE exclusion (2026-04-28). Diverges from board-deck monthly numbers by ~4–6bp."* |
 | F2 | Verification work happens in spreadsheets first, then ports to BQ | Justin's process per knowledge files: verify in Excel/spreadsheet → translate to BQ → check penny-match. High craft; not scalable to every metric. |
-| F3 | Customer Segments live but unverified | Memory entry from 2026-04-21: *"Metrics 373–377 live but unverified... priority: audit v_customer_segments then approve."* Several months later still not formally validated. |
+| F3 | Customer Segments live but unverified | Memory entry from 2026-04-21: *"Metrics 373–377 live but unverified... priority: audit int_customer_segments then approve."* Several months later still not formally validated. |
 | F4 | Annual vs monthly retention mental model split | Memory: *"Board-deck GRR (78% for Feb'26) uses 12-month cohort... monthly GRR (~96%) is a different view."* Two retention numbers, both correct, used for different purposes — but the difference confuses any non-Justin viewer. |
 | F5 | New methodology drift risk on every change | Each retention methodology change requires reconciling old reports, updating board deck commentary, and explaining the gap. No process for "how we change a definition." |
 | F6 | (Inferred) Metric onboarding latency | A new revenue metric requires Justin to build it in Excel, verify, then someone to translate to BQ. Time-to-trustworthy is high. |
@@ -227,8 +227,8 @@ Each section cites the source: ✓ direct (interview, transcript, conversation) 
 | I1 | Two parallel definition stores: BQ views + Supabase metrics | Drift incidents (view_definition cache, chart_sql), maintenance burden of keeping both in sync. Phase 1 of Composable CDP roadmap addresses this. |
 | I2 | Custom semantic-layer SQL builder vs canonical BQ views | Reinventing the wheel; dbt + BQ INFORMATION_SCHEMA does this natively. |
 | I3 | New metric onboarding requires touching two systems | High friction; each metric needs a Supabase row AND BQ work. |
-| I4 | The unmaterialized snapshot pattern (entity_monthly CTE) | Same logic duplicated in `v_customer_mrr` and `v_customer_annual_mrr`. Architectural debt; surfaced multiple times in design conversations. |
-| I5 | Multiple measurement paths for the same event | E.g., "Churn" (count from `v_cancellations`) vs "Cancellations $" (sum from `v_customer_mrr`) — both measure customer attrition but read from different views with different exclusions. May not reconcile to same customer set. |
+| I4 | The unmaterialized snapshot pattern (entity_monthly CTE) | Same logic duplicated in `int_customer_mrr` and `int_customer_annual_mrr`. Architectural debt; surfaced multiple times in design conversations. |
+| I5 | Multiple measurement paths for the same event | E.g., "Churn" (count from `int_cancellations`) vs "Cancellations $" (sum from `int_customer_mrr`) — both measure customer attrition but read from different views with different exclusions. May not reconcile to same customer set. |
 | I6 | Custom UI maintenance burden | Method Metrics chart builder + scorecards work but require ongoing dev. Has unique value (AI chart authoring) so worth keeping; the metric-registry layer beneath it is the part that should retire. |
 | I7 | Metric registry definitions drift from BQ | Pre-2026-04-27 the cached `view_definition` could lag BQ; chart_sql still has this risk. |
 

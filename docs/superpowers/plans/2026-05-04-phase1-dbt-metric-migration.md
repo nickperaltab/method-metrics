@@ -4,7 +4,7 @@
 
 **Goal:** Migrate metric definitions from the Supabase registry to dbt+BigQuery, with the first 5 metrics (Trials, Syncs, Conversions, Cancellations, Sync Rate) materialized as `v_metric__*` BQ views, validated for numerical parity against their Supabase-defined counterparts, and queryable via BQ INFORMATION_SCHEMA.
 
-**Architecture:** Adopt dbt CLI (Option A — full adoption, decided 2026-05-04). dbt-bigquery natively supports BQ OPTIONS via model config (`description` + `labels`), so the previously-planned custom Python deploy script (`scripts/migrate/generate_metric_views.py`) is not built. Existing intermediate views (`v_trials`, `v_syncs`, etc.) are referenced as dbt sources rather than re-created. The metric layer (`v_metric__*`) is materialized as dbt views, with semantic models declared on the upstream intermediate per dbt latest-spec convention. Parity is enforced via dbt singular tests that compare each `v_metric__*` to the Supabase-defined chart_sql output.
+**Architecture:** Adopt dbt CLI (Option A — full adoption, decided 2026-05-04). dbt-bigquery natively supports BQ OPTIONS via model config (`description` + `labels`), so the previously-planned custom Python deploy script (`scripts/migrate/generate_metric_views.py`) is not built. Existing intermediate views (`int_trials`, `int_syncs`, etc.) are referenced as dbt sources rather than re-created. The metric layer (`v_metric__*`) is materialized as dbt views, with semantic models declared on the upstream intermediate per dbt latest-spec convention. Parity is enforced via dbt singular tests that compare each `v_metric__*` to the Supabase-defined chart_sql output.
 
 **Tech Stack:** dbt-core 1.12+ (latest spec), dbt-bigquery adapter, BigQuery (`project-for-method-dw.revenue` dataset), Python 3.11+ for dbt runtime, Supabase REST API (read-only, for parity validation), git + GitHub Pages deploy.
 
@@ -20,7 +20,7 @@
 - BQ OAuth or service account credentials available for `dbt run`
 - Supabase REST API access for parity queries (anon key in `tracker.html` or env var)
 - Python 3.11+ installed locally
-- The current scaffold at `models/intermediate/v_trials.yml` + `models/metrics/v_metric__trials.{yml,sql}` exists (per `docs/dbt-scaffold-handoff.md`) — the plan modifies these, doesn't re-create from scratch
+- The current scaffold at `models/intermediate/int_trials.yml` + `models/metrics/v_metric__trials.{yml,sql}` exists (per `docs/dbt-scaffold-handoff.md`) — the plan modifies these, doesn't re-create from scratch
 
 ---
 
@@ -32,7 +32,7 @@
 |---|---|
 | `dbt_project.yml` | dbt project root config: project name, model paths, target schema, version |
 | `profiles.yml` (in repo or `~/.dbt/`) | BQ connection profile: dataset, project, auth method |
-| `models/sources.yml` | Declares existing BQ views (`v_trials`, `v_syncs`, etc.) as dbt sources so the metric models can `{{ source('revenue', 'v_trials') }}` |
+| `models/sources.yml` | Declares existing BQ views (`int_trials`, `int_syncs`, etc.) as dbt sources so the metric models can `{{ source('revenue', 'int_trials') }}` |
 | `models/metrics/v_metric__syncs.sql` | SELECT body for syncs metric materialization |
 | `models/metrics/v_metric__syncs.yml` | dbt config with OPTIONS for syncs |
 | `models/metrics/v_metric__conversions.sql` | SELECT body for conversions metric |
@@ -42,9 +42,9 @@
 | `models/metrics/v_metric__sync_rate.sql` | SELECT body for sync_rate ratio metric |
 | `models/metrics/v_metric__sync_rate.yml` | dbt config for sync_rate |
 | `models/metrics/_metrics.yml` | Top-level cross-model metrics file (sync_rate ratio definition per MetricFlow latest-spec) |
-| `models/intermediate/v_syncs.yml` | semantic_model + simple `syncs` metric on the existing `v_syncs` BQ view (referenced as source) |
-| `models/intermediate/v_conversions.yml` | semantic_model + simple `conversions` metric on `v_conversions` |
-| `models/intermediate/v_cancellations.yml` | semantic_model + simple `cancellations` metric on `v_cancellations` |
+| `models/intermediate/int_syncs.yml` | semantic_model + simple `syncs` metric on the existing `int_syncs` BQ view (referenced as source) |
+| `models/intermediate/int_conversions.yml` | semantic_model + simple `conversions` metric on `int_conversions` |
+| `models/intermediate/int_cancellations.yml` | semantic_model + simple `cancellations` metric on `int_cancellations` |
 | `tests/parity/test_parity_trials.sql` | Singular test: `v_metric__trials` row-count + sum match Supabase-defined chart_sql output for metric #54 |
 | `tests/parity/test_parity_syncs.sql` | Same pattern, syncs |
 | `tests/parity/test_parity_conversions.sql` | Same pattern, conversions |
@@ -57,7 +57,7 @@
 
 | Path | What changes |
 |---|---|
-| `models/intermediate/v_trials.yml` | Rewrite to dbt latest-spec syntax (current file mixes legacy + latest per handoff §5 Fix 1) |
+| `models/intermediate/int_trials.yml` | Rewrite to dbt latest-spec syntax (current file mixes legacy + latest per handoff §5 Fix 1) |
 | `models/metrics/v_metric__trials.yml` | Convert from custom-materialization-spec to dbt model config; drop the `metric_ref` field per handoff §5 Fix 2 |
 | `models/metrics/v_metric__trials.sql` | Reduce from full DDL to just the SELECT body — dbt wraps it in `CREATE VIEW ... OPTIONS(...)` at run time |
 | `.gitignore` | Add `target/`, `dbt_packages/`, `logs/`, `.user.yml` |
@@ -77,7 +77,7 @@
 
 - **Latest spec only** (dbt 1.12+). semantic_models nested on dbt models, NOT as top-level resources. No `type_params:` blocks. Entity/dimension blocks live on columns, not in nested arrays.
 - **Naming:** intermediate views stay as `v_*` (current Method convention). Metric materializations are `v_metric__<slug>`. Cross-model metrics live in `models/metrics/_metrics.yml`. Single-model simple metrics co-locate with their semantic_model on the upstream intermediate.
-- **Sources:** existing BQ views (`revenue.v_trials`, etc.) are declared as dbt sources, not re-built. Metric models reference them via `{{ source('revenue', 'v_trials') }}`.
+- **Sources:** existing BQ views (`revenue.int_trials`, etc.) are declared as dbt sources, not re-built. Metric models reference them via `{{ source('revenue', 'int_trials') }}`.
 - **Materialization:** all metric models materialize as `view` (not `table`). dbt's BQ adapter applies OPTIONS automatically when `description` and `labels` are set in the model config.
 
 ### Metric materialization shape
@@ -268,7 +268,7 @@ the new plan at 2026-05-04-phase1-dbt-metric-migration.md supersedes it."
 **Files:**
 - Create: `models/sources.yml`
 
-The existing intermediate views (`v_trials`, `v_syncs`, `v_conversions`, `v_cancellations`) live in BQ and are not managed by dbt. We declare them as sources so metric models can reference them with `{{ source(...) }}` instead of hardcoded `revenue.v_trials` strings.
+The existing intermediate views (`int_trials`, `int_syncs`, `int_conversions`, `int_cancellations`) live in BQ and are not managed by dbt. We declare them as sources so metric models can reference them with `{{ source(...) }}` instead of hardcoded `revenue.int_trials` strings.
 
 - [ ] **Step 1: Write `models/sources.yml`**
 
@@ -292,23 +292,23 @@ sources:
           Lifecycle dates as columns (SignUpDate, SyncDate, FirstSaaSInvoiceTxnDate,
           CancellationDate). Accumulating snapshot.
 
-      - name: v_trials
+      - name: int_trials
         description: |
           Account filtered to SignUpDate IS NOT NULL.
           One row per account that started a trial. SignUpDate is the
           lifecycle-event timestamp.
 
-      - name: v_syncs
+      - name: int_syncs
         description: |
           Account filtered to SyncDate IS NOT NULL (or first-sync field per BQ definition;
           verify column name before metric materialization writes).
 
-      - name: v_conversions
+      - name: int_conversions
         description: |
           Account filtered to FirstSaaSInvoiceTxnDate IS NOT NULL.
           One row per account that converted to a paying customer.
 
-      - name: v_cancellations
+      - name: int_cancellations
         description: |
           Account filtered to CancellationDate IS NOT NULL.
           One row per cancellation event.
@@ -328,11 +328,11 @@ OR run a quick compile test:
 Create a temporary file `models/test_source_resolution.sql`:
 
 ```sql
-SELECT COUNT(*) FROM {{ source('revenue', 'v_trials') }}
+SELECT COUNT(*) FROM {{ source('revenue', 'int_trials') }}
 ```
 
 Run: `dbt compile --select test_source_resolution --profiles-dir .`
-Expected: compiles to `SELECT COUNT(*) FROM \`project-for-method-dw\`.\`revenue\`.\`v_trials\`` (or similar).
+Expected: compiles to `SELECT COUNT(*) FROM \`project-for-method-dw\`.\`revenue\`.\`int_trials\`` (or similar).
 
 Delete the test file: `rm models/test_source_resolution.sql`
 
@@ -342,7 +342,7 @@ Delete the test file: `rm models/test_source_resolution.sql`
 git add models/sources.yml
 git commit -m "feat(dbt): declare existing BQ views as dbt sources
 
-Sources declared: Account, v_trials, v_syncs, v_conversions, v_cancellations.
+Sources declared: Account, int_trials, int_syncs, int_conversions, int_cancellations.
 Metric models reference these via {{ source('revenue', '...') }} instead
 of hardcoding the BQ paths. Phase 1.5 may migrate these to dbt-managed
 intermediate models."
@@ -350,21 +350,21 @@ intermediate models."
 
 ---
 
-## Task 3: Rewrite `models/intermediate/v_trials.yml` to dbt latest-spec syntax
+## Task 3: Rewrite `models/intermediate/int_trials.yml` to dbt latest-spec syntax
 
 **Files:**
-- Modify: `models/intermediate/v_trials.yml`
+- Modify: `models/intermediate/int_trials.yml`
 
 The current file mixes legacy and latest spec syntax (per handoff §5 Fix 1). Latest spec puts entity/dimension on columns (not in nested arrays) and uses direct `agg`/`expr` on metrics (not `type_params`).
 
 - [ ] **Step 1: Read the existing file**
 
-Run: `cat models/intermediate/v_trials.yml`
+Run: `cat models/intermediate/int_trials.yml`
 Note the current shape so the rewrite preserves intent (the metric is "trials count by signup date").
 
 - [ ] **Step 2: Rewrite the file**
 
-Replace the entire contents of `models/intermediate/v_trials.yml` with:
+Replace the entire contents of `models/intermediate/int_trials.yml` with:
 
 ```yaml
 version: 2
@@ -374,14 +374,14 @@ sources:
     database: project-for-method-dw
     schema: revenue
     tables:
-      - name: v_trials
+      - name: int_trials
 
 # Note: this file declares a semantic_model + simple metric on top of the
-# revenue.v_trials BQ source. dbt latest-spec puts the semantic_model nested
+# revenue.int_trials BQ source. dbt latest-spec puts the semantic_model nested
 # under the model definition, with entity/dimension blocks on columns (not
 # nested arrays).
 #
-# Because v_trials is an existing BQ view (declared as a source in
+# Because int_trials is an existing BQ view (declared as a source in
 # models/sources.yml), there is no dbt-managed model for it — only the
 # semantic-layer metadata. We use a "model" entry here purely to attach
 # the semantic_model and metric to the source.
@@ -389,14 +389,14 @@ sources:
 models:
   - name: trials_semantic
     description: |
-      Semantic model attached to revenue.v_trials. Defines the `account` entity
+      Semantic model attached to revenue.int_trials. Defines the `account` entity
       and the `signup_date` time dimension. The `trials` simple metric is
       defined here and materialized as v_metric__trials.
     config:
       enabled: false  # No dbt-managed model body; semantic_model only.
       meta:
         layer: intermediate
-        underlying_view: revenue.v_trials
+        underlying_view: revenue.int_trials
 
     semantic_model:
       enabled: true
@@ -454,8 +454,8 @@ If `mf` is not installed, `pip install dbt-metricflow==0.7.x` and retry. Or skip
 - [ ] **Step 5: Commit**
 
 ```bash
-git add models/intermediate/v_trials.yml
-git commit -m "fix(dbt): rewrite v_trials.yml to pure latest-spec syntax
+git add models/intermediate/int_trials.yml
+git commit -m "fix(dbt): rewrite int_trials.yml to pure latest-spec syntax
 
 Previous file mixed legacy entities:/dimensions:/measures: arrays with
 latest-spec keys. Rewrote to put entity/dimension blocks on columns,
@@ -488,7 +488,7 @@ Replace the entire contents with the SELECT body only (dbt wraps it in `CREATE V
 SELECT
   DATE_TRUNC(SignUpDate, MONTH) AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM {{ source('revenue', 'v_trials') }}
+FROM {{ source('revenue', 'int_trials') }}
 WHERE SignUpDate IS NOT NULL
 GROUP BY period
 ORDER BY period
@@ -507,8 +507,8 @@ models:
       Monthly count of distinct Method accounts that started a trial,
       grouped by SignUpDate truncated to month.
       Canonical "Trials" metric. Materialization of the `trials` simple
-      metric defined in models/intermediate/v_trials.yml.
-      Source: revenue.v_trials (sourced as revenue.v_trials).
+      metric defined in models/intermediate/int_trials.yml.
+      Source: revenue.int_trials (sourced as revenue.int_trials).
       Shape: (period DATE, value FLOAT64).
     config:
       labels:
@@ -547,7 +547,7 @@ Then inspect the compiled output:
 
 Run: `cat target/compiled/method_metrics/models/metrics/v_metric__trials.sql`
 
-Expected: the source reference is resolved to `\`project-for-method-dw\`.\`revenue\`.\`v_trials\`` and the SELECT is otherwise unchanged.
+Expected: the source reference is resolved to `\`project-for-method-dw\`.\`revenue\`.\`int_trials\`` and the SELECT is otherwise unchanged.
 
 - [ ] **Step 5: Commit**
 
@@ -647,7 +647,7 @@ curl -s "https://<project-ref>.supabase.co/rest/v1/metrics?id=eq.54&select=chart
   -H "Authorization: Bearer <ANON_KEY>"
 ```
 
-For metric 54 (Trials) the semantic-layer fields likely populate as: `semantic_table=v_trials`, `semantic_measure=count_distinct(EntityRecordID)`, `semantic_date_col=SignUpDate`. The equivalent SQL is what we wrote in Task 4 Step 1.
+For metric 54 (Trials) the semantic-layer fields likely populate as: `semantic_table=int_trials`, `semantic_measure=count_distinct(EntityRecordID)`, `semantic_date_col=SignUpDate`. The equivalent SQL is what we wrote in Task 4 Step 1.
 
 - [ ] **Step 2: Write `tests/parity/test_parity_trials.sql`**
 
@@ -657,7 +657,7 @@ A dbt singular test SELECTs rows that violate the assertion. If it returns zero 
 -- Singular parity test: dbt-managed v_metric__trials should produce the same
 -- (period, value) tuples as the Supabase-defined Trials metric (#54).
 --
--- The Supabase definition is: COUNT(DISTINCT EntityRecordID) FROM v_trials
+-- The Supabase definition is: COUNT(DISTINCT EntityRecordID) FROM int_trials
 -- WHERE SignUpDate IS NOT NULL, GROUPED BY DATE_TRUNC(SignUpDate, MONTH).
 --
 -- This test re-runs that definition and joins to v_metric__trials. Any row
@@ -667,7 +667,7 @@ WITH supabase_definition AS (
   SELECT
     DATE_TRUNC(SignUpDate, MONTH) AS period,
     COUNT(DISTINCT EntityRecordID) AS value
-  FROM {{ source('revenue', 'v_trials') }}
+  FROM {{ source('revenue', 'int_trials') }}
   WHERE SignUpDate IS NOT NULL
   GROUP BY period
 ),
@@ -709,17 +709,17 @@ returns mismatched rows; pass = 0 rows."
 
 ---
 
-## Task 7: Add v_syncs intermediate semantic model + v_metric__syncs materialization
+## Task 7: Add int_syncs intermediate semantic model + v_metric__syncs materialization
 
 **Files:**
-- Create: `models/intermediate/v_syncs.yml`
+- Create: `models/intermediate/int_syncs.yml`
 - Create: `models/metrics/v_metric__syncs.sql`
 - Create: `models/metrics/v_metric__syncs.yml`
 - Create: `tests/parity/test_parity_syncs.sql`
 
 Same pattern as Trials. The first non-Trials metric — proves the pattern repeats cleanly.
 
-- [ ] **Step 1: Verify the v_syncs filter in BQ**
+- [ ] **Step 1: Verify the int_syncs filter in BQ**
 
 Run:
 
@@ -727,14 +727,14 @@ Run:
 bq query --use_legacy_sql=false "
 SELECT view_definition
 FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS\`
-WHERE table_name = 'v_syncs'"
+WHERE table_name = 'int_syncs'"
 ```
 
 Expected: a SELECT statement showing which date column is used. Likely `SyncDate IS NOT NULL` or `FirstSyncDate IS NOT NULL`. Note the exact column name; the metric materialization needs to match.
 
 For this plan, assume the column is `SyncDate`. **If your verification shows a different column name, adjust the SQL in steps 2 and 3 accordingly.**
 
-- [ ] **Step 2: Write `models/intermediate/v_syncs.yml`**
+- [ ] **Step 2: Write `models/intermediate/int_syncs.yml`**
 
 ```yaml
 version: 2
@@ -742,14 +742,14 @@ version: 2
 models:
   - name: syncs_semantic
     description: |
-      Semantic model attached to revenue.v_syncs. Defines the `account` entity
+      Semantic model attached to revenue.int_syncs. Defines the `account` entity
       and the `sync_date` time dimension. The `syncs` simple metric is defined
       here and materialized as v_metric__syncs.
     config:
       enabled: false
       meta:
         layer: intermediate
-        underlying_view: revenue.v_syncs
+        underlying_view: revenue.int_syncs
 
     semantic_model:
       enabled: true
@@ -792,7 +792,7 @@ models:
 SELECT
   DATE_TRUNC(SyncDate, MONTH) AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM {{ source('revenue', 'v_syncs') }}
+FROM {{ source('revenue', 'int_syncs') }}
 WHERE SyncDate IS NOT NULL
 GROUP BY period
 ORDER BY period
@@ -819,8 +819,8 @@ models:
       Monthly count of distinct Method accounts that completed at least one
       sync, grouped by SyncDate truncated to month.
       Canonical "Syncs" metric. Materialization of the `syncs` simple metric
-      defined in models/intermediate/v_syncs.yml.
-      Source: revenue.v_syncs.
+      defined in models/intermediate/int_syncs.yml.
+      Source: revenue.int_syncs.
       Shape: (period DATE, value FLOAT64).
     config:
       labels:
@@ -870,7 +870,7 @@ WITH supabase_definition AS (
   SELECT
     DATE_TRUNC(SyncDate, MONTH) AS period,
     COUNT(DISTINCT EntityRecordID) AS value
-  FROM {{ source('revenue', 'v_syncs') }}
+  FROM {{ source('revenue', 'int_syncs') }}
   WHERE SyncDate IS NOT NULL
   GROUP BY period
 ),
@@ -900,30 +900,30 @@ Expected: PASS, 0 mismatched rows.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add models/intermediate/v_syncs.yml \
+git add models/intermediate/int_syncs.yml \
         models/metrics/v_metric__syncs.sql \
         models/metrics/v_metric__syncs.yml \
         tests/parity/test_parity_syncs.sql
 git commit -m "feat(dbt): add v_metric__syncs with semantic model and parity test
 
-Same pattern as v_metric__trials. Simple metric on revenue.v_syncs;
+Same pattern as v_metric__trials. Simple metric on revenue.int_syncs;
 COUNT(DISTINCT EntityRecordID) by SyncDate truncated to month. Parity
 test confirms identical output to the Supabase-defined Syncs metric."
 ```
 
 ---
 
-## Task 8: Add v_conversions intermediate semantic model + v_metric__conversions materialization
+## Task 8: Add int_conversions intermediate semantic model + v_metric__conversions materialization
 
 **Files:**
-- Create: `models/intermediate/v_conversions.yml`
+- Create: `models/intermediate/int_conversions.yml`
 - Create: `models/metrics/v_metric__conversions.sql`
 - Create: `models/metrics/v_metric__conversions.yml`
 - Create: `tests/parity/test_parity_conversions.sql`
 
-Identical pattern to syncs, on `v_conversions` filtered by `FirstSaaSInvoiceTxnDate`.
+Identical pattern to syncs, on `int_conversions` filtered by `FirstSaaSInvoiceTxnDate`.
 
-- [ ] **Step 1: Verify the v_conversions filter**
+- [ ] **Step 1: Verify the int_conversions filter**
 
 Run:
 
@@ -931,12 +931,12 @@ Run:
 bq query --use_legacy_sql=false "
 SELECT view_definition
 FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS\`
-WHERE table_name = 'v_conversions'"
+WHERE table_name = 'int_conversions'"
 ```
 
 Confirm the date column is `FirstSaaSInvoiceTxnDate`. Adjust subsequent SQL if different.
 
-- [ ] **Step 2: Write `models/intermediate/v_conversions.yml`**
+- [ ] **Step 2: Write `models/intermediate/int_conversions.yml`**
 
 ```yaml
 version: 2
@@ -944,14 +944,14 @@ version: 2
 models:
   - name: conversions_semantic
     description: |
-      Semantic model attached to revenue.v_conversions. Defines the `account`
+      Semantic model attached to revenue.int_conversions. Defines the `account`
       entity and the `conversion_date` time dimension. The `conversions` simple
       metric is defined here and materialized as v_metric__conversions.
     config:
       enabled: false
       meta:
         layer: intermediate
-        underlying_view: revenue.v_conversions
+        underlying_view: revenue.int_conversions
 
     semantic_model:
       enabled: true
@@ -994,7 +994,7 @@ models:
 SELECT
   DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM {{ source('revenue', 'v_conversions') }}
+FROM {{ source('revenue', 'int_conversions') }}
 WHERE FirstSaaSInvoiceTxnDate IS NOT NULL
 GROUP BY period
 ORDER BY period
@@ -1013,7 +1013,7 @@ models:
       Monthly count of distinct accounts that converted to paying customers,
       grouped by FirstSaaSInvoiceTxnDate truncated to month.
       Canonical "Conversions" metric.
-      Source: revenue.v_conversions.
+      Source: revenue.int_conversions.
       Shape: (period DATE, value FLOAT64).
     config:
       labels:
@@ -1051,7 +1051,7 @@ WITH supabase_definition AS (
   SELECT
     DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS period,
     COUNT(DISTINCT EntityRecordID) AS value
-  FROM {{ source('revenue', 'v_conversions') }}
+  FROM {{ source('revenue', 'int_conversions') }}
   WHERE FirstSaaSInvoiceTxnDate IS NOT NULL
   GROUP BY period
 ),
@@ -1081,7 +1081,7 @@ Expected: PASS.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add models/intermediate/v_conversions.yml \
+git add models/intermediate/int_conversions.yml \
         models/metrics/v_metric__conversions.sql \
         models/metrics/v_metric__conversions.yml \
         tests/parity/test_parity_conversions.sql
@@ -1090,19 +1090,19 @@ git commit -m "feat(dbt): add v_metric__conversions with semantic model and pari
 
 ---
 
-## Task 9: Add v_cancellations intermediate semantic model + v_metric__cancellations materialization
+## Task 9: Add int_cancellations intermediate semantic model + v_metric__cancellations materialization
 
 **Files:**
-- Create: `models/intermediate/v_cancellations.yml`
+- Create: `models/intermediate/int_cancellations.yml`
 - Create: `models/metrics/v_metric__cancellations.sql`
 - Create: `models/metrics/v_metric__cancellations.yml`
 - Create: `tests/parity/test_parity_cancellations.sql`
 
-Same pattern again, on `v_cancellations` filtered by `CancellationDate`.
+Same pattern again, on `int_cancellations` filtered by `CancellationDate`.
 
 **Important:** "Cancellations" as an event count (one per cancellation) is distinct from "Cancellations $" (sum of MRR lost). This task migrates the *event count*, not the MRR-weighted version. The MRR-weighted version is part of retention methodology (left out of first 5 per Justin's stabilization).
 
-- [ ] **Step 1: Verify the v_cancellations filter**
+- [ ] **Step 1: Verify the int_cancellations filter**
 
 Run:
 
@@ -1110,12 +1110,12 @@ Run:
 bq query --use_legacy_sql=false "
 SELECT view_definition
 FROM \`project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS\`
-WHERE table_name = 'v_cancellations'"
+WHERE table_name = 'int_cancellations'"
 ```
 
 Confirm the date column is `CancellationDate`.
 
-- [ ] **Step 2: Write `models/intermediate/v_cancellations.yml`**
+- [ ] **Step 2: Write `models/intermediate/int_cancellations.yml`**
 
 ```yaml
 version: 2
@@ -1123,17 +1123,17 @@ version: 2
 models:
   - name: cancellations_semantic
     description: |
-      Semantic model attached to revenue.v_cancellations. Defines the `account`
+      Semantic model attached to revenue.int_cancellations. Defines the `account`
       entity and `cancellation_date` time dimension. The `cancellations` simple
       metric counts cancellation events.
       NOTE: this is the EVENT count, not MRR-weighted cancellation $.
-      MRR-weighted retention math lives in the v_customer_mrr / v_customer_annual_mrr
+      MRR-weighted retention math lives in the int_customer_mrr / int_customer_annual_mrr
       family and is intentionally out of scope for this plan.
     config:
       enabled: false
       meta:
         layer: intermediate
-        underlying_view: revenue.v_cancellations
+        underlying_view: revenue.int_cancellations
 
     semantic_model:
       enabled: true
@@ -1176,7 +1176,7 @@ models:
 SELECT
   DATE_TRUNC(CancellationDate, MONTH) AS period,
   COUNT(DISTINCT EntityRecordID) AS value
-FROM {{ source('revenue', 'v_cancellations') }}
+FROM {{ source('revenue', 'int_cancellations') }}
 WHERE CancellationDate IS NOT NULL
 GROUP BY period
 ORDER BY period
@@ -1194,9 +1194,9 @@ models:
       truncated to month.
       EVENT count, not MRR-weighted. The MRR-weighted retention metric family
       (Cancellations $, GRR, NRR) is intentionally out of scope for this
-      migration round; those depend on the v_customer_mrr / v_customer_annual_mrr
+      migration round; those depend on the int_customer_mrr / int_customer_annual_mrr
       view family which uses CEO-confirmed symmetric PE methodology.
-      Source: revenue.v_cancellations.
+      Source: revenue.int_cancellations.
       Shape: (period DATE, value FLOAT64).
     config:
       labels:
@@ -1234,7 +1234,7 @@ WITH supabase_definition AS (
   SELECT
     DATE_TRUNC(CancellationDate, MONTH) AS period,
     COUNT(DISTINCT EntityRecordID) AS value
-  FROM {{ source('revenue', 'v_cancellations') }}
+  FROM {{ source('revenue', 'int_cancellations') }}
   WHERE CancellationDate IS NOT NULL
   GROUP BY period
 ),
@@ -1264,7 +1264,7 @@ Expected: PASS.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add models/intermediate/v_cancellations.yml \
+git add models/intermediate/int_cancellations.yml \
         models/metrics/v_metric__cancellations.sql \
         models/metrics/v_metric__cancellations.yml \
         tests/parity/test_parity_cancellations.sql
@@ -1408,7 +1408,7 @@ WITH supabase_definition AS (
     SELECT
       DATE_TRUNC(SyncDate, MONTH) AS period,
       COUNT(DISTINCT EntityRecordID) AS value
-    FROM {{ source('revenue', 'v_syncs') }}
+    FROM {{ source('revenue', 'int_syncs') }}
     WHERE SyncDate IS NOT NULL
     GROUP BY period
   ) s
@@ -1416,7 +1416,7 @@ WITH supabase_definition AS (
     SELECT
       DATE_TRUNC(SignUpDate, MONTH) AS period,
       COUNT(DISTINCT EntityRecordID) AS value
-    FROM {{ source('revenue', 'v_trials') }}
+    FROM {{ source('revenue', 'int_trials') }}
     WHERE SignUpDate IS NOT NULL
     GROUP BY period
   ) t USING (period)
@@ -1646,10 +1646,10 @@ Run: `find models tests -type f -name '*.yml' -o -name '*.sql' | sort`
 Expected output (no extras, no missing):
 
 ```
-models/intermediate/v_cancellations.yml
-models/intermediate/v_conversions.yml
-models/intermediate/v_syncs.yml
-models/intermediate/v_trials.yml
+models/intermediate/int_cancellations.yml
+models/intermediate/int_conversions.yml
+models/intermediate/int_syncs.yml
+models/intermediate/int_trials.yml
 models/metrics/_metrics.yml
 models/metrics/v_metric__cancellations.sql
 models/metrics/v_metric__cancellations.yml
@@ -1747,7 +1747,7 @@ No "TBD"/"TODO"/"implement later" bare placeholders. ✓
 
 - Task 1 (dbt init) precedes anything that uses dbt. ✓
 - Task 2 (sources) precedes anything that references sources. ✓
-- Task 3 (v_trials.yml fix) precedes Task 4 (v_metric__trials conversion). ✓
+- Task 3 (int_trials.yml fix) precedes Task 4 (v_metric__trials conversion). ✓
 - Tasks 7-9 (Syncs, Conversions, Cancellations) are independent of each other but depend on Tasks 1-2. ✓
 - Task 10 (Sync Rate) depends on v_metric__syncs (Task 7) and v_metric__trials (Task 4). ✓
 - Task 11 (full batch) depends on all 5 metrics. ✓

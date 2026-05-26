@@ -48,7 +48,7 @@
               │  • sources    — raw upstream tables          │
               │  • staging    — (skipped today)              │
               │  • intermediate — joins, classifications,    │
-              │      re-graining (v_customer_mrr, etc.)      │
+              │      re-graining (int_customer_mrr, etc.)      │
               │  • marts — entity-grained, denormalized      │
               │      (fct_trials, fct_syncs, dim_customers)  │
               │  • metrics — aggregations + formulas         │
@@ -107,7 +107,7 @@
 
 ### Phase 1.5 — Clean up the view layer
 - Label every existing intermediate view with `OPTIONS(layer="intermediate")` and a meaningful description.
-- Extract the `entity_monthly` snapshot CTE (currently embedded in `v_customer_mrr` and `v_customer_annual_mrr`) into its own view `int_customer_monthly_mrr_snapshot`. Both retention views read from it. Solves the architectural-debt smell that's surfaced ~5 times in design conversations.
+- Extract the `entity_monthly` snapshot CTE (currently embedded in `int_customer_mrr` and `int_customer_annual_mrr`) into its own view `int_customer_monthly_mrr_snapshot`. Both retention views read from it. Solves the architectural-debt smell that's surfaced ~5 times in design conversations.
 - Update `docs/primitives-vs-derivatives.md` with the corrected dbt vocabulary (sources / intermediate / marts / metrics, no L0/L1/L2/L3 numbering).
 
 ### Phase 1.6 — Build the marts layer

@@ -6,7 +6,7 @@
 SELECT
   DATE_TRUNC(CancellationDate, MONTH) AS period,
   COUNT(DISTINCT CompanyAccount) AS value
-FROM {{ source('revenue', 'v_cancellations') }}
+FROM {{ source('revenue', 'int_cancellations') }}
 WHERE CancellationDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
 GROUP BY 1
 ORDER BY 1

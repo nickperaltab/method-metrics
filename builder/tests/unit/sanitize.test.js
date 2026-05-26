@@ -9,7 +9,7 @@ import {
 
 describe('validateIdentifier', () => {
   it('accepts valid SQL identifiers', () => {
-    expect(validateIdentifier('v_trials')).toBe('v_trials');
+    expect(validateIdentifier('int_trials')).toBe('int_trials');
     expect(validateIdentifier('SignupDate')).toBe('SignupDate');
     expect(validateIdentifier('Att_SEO')).toBe('Att_SEO');
     expect(validateIdentifier('Channel')).toBe('Channel');

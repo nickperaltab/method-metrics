@@ -71,10 +71,10 @@ Data flows **downstream only**. A layer can only reference what's above it. Cros
 
 | File | What it does | Reusable for |
 |---|---|---|
-| `v_trials` | Filters Account to rows with real SignupDate | Trial count, trials-by-channel, trial-to-conversion |
-| `v_syncs` | Filters Funnel to EventType='Sync' | Sync count, sync rate, sync trajectories |
-| `v_customer_mrr` | Per-customer monthly MRR with movement columns | GRR, NRR, expansion, cancellation analyses |
-| `v_customer_segments` | Classifies customers by size/tier | Segment-based metrics, cohort analyses |
+| `int_trials` | Filters Account to rows with real SignupDate | Trial count, trials-by-channel, trial-to-conversion |
+| `int_syncs` | Filters Funnel to EventType='Sync' | Sync count, sync rate, sync trajectories |
+| `int_customer_mrr` | Per-customer monthly MRR with movement columns | GRR, NRR, expansion, cancellation analyses |
+| `int_customer_segments` | Classifies customers by size/tier | Segment-based metrics, cohort analyses |
 
 **Rules:**
 - An intermediate exists because **2+ downstream models share its logic**. If only one consumer uses it, inline instead.
@@ -224,7 +224,7 @@ The single rule that covers all of these: **data flows downstream**. Layers can 
 |---|---|---|
 | **Source** | Raw data dropped in by an upstream system | `Account`, `Funnel`, `TransLineFlattened` |
 | **Staging** (`stg_*`) | 1:1 cleanup of a source (Method skips this) | Would be `stg_account` if we had one |
-| **Intermediate** (`int_*` / today's `v_*`) | Reusable building block; business logic shared by multiple downstream models | `v_trials`, `v_customer_mrr` |
+| **Intermediate** (`int_*` / today's `v_*`) | Reusable building block; business logic shared by multiple downstream models | `int_trials`, `int_customer_mrr` |
 | **Mart** | Business-facing model; consumers query these directly | Anything in `models/marts/` |
 | **Dimension** (`dim_*`) | One row per entity (customer, account, channel) with attributes | `dim_customers` |
 | **Fact** (`fct_*`) | One row per event with FKs to dimensions | `fct_trials`, `fct_syncs` |
@@ -232,7 +232,7 @@ The single rule that covers all of these: **data flows downstream**. Layers can 
 | **Grain** | The level of detail in a row (event-level, account-level, customer-level, etc.) | `fct_trials` is event-grain; `dim_customers` is customer-grain |
 | **Foreign key (FK)** | A column that points to another table's primary key | `fct_trials.customer_id` is an FK to `dim_customers` |
 | **Star schema** | Facts in the center, dims around them via FKs | The pattern that makes marts composable |
-| **Semantic model** | YAML metadata declaring entities, dimensions, measures on a model | What `models/intermediate/v_trials.yml` declares |
+| **Semantic model** | YAML metadata declaring entities, dimensions, measures on a model | What `models/intermediate/int_trials.yml` declares |
 
 ---
 

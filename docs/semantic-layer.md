@@ -9,7 +9,7 @@ Before the semantic layer, clicking a metric in MetricInspector showed a wall of
 With semantic fields, MetricInspector shows:
 
 ```
-Source:      revenue.v_cancellations
+Source:      revenue.int_cancellations
 Measure:     COUNT(DISTINCT CompanyAccount)
 Date column: CancellationDate
 Grains:      Daily · Weekly · Monthly · Quarterly · Yearly
@@ -36,7 +36,7 @@ All five are nullable. If unset, the system falls back to `chart_sql` or `view_n
 
 ### Primitive metrics (e.g. Trials 54, Syncs 55, Conversions 56, Churn 59)
 - Get all five semantic fields
-- `semantic_table` points to their BQ view (`v_trials`, `v_syncs`, etc.)
+- `semantic_table` points to their BQ view (`int_trials`, `int_syncs`, etc.)
 - `semantic_measure` is typically `COUNT(*)` or `COUNT(DISTINCT CompanyAccount)`
 - `semantic_filters` are empty `[]` — the view itself bakes in business logic (exclusions, date guards)
 - `semantic_dimensions` lists categorical columns valid for chart breakdowns
@@ -62,9 +62,9 @@ Two kinds of columns live in a semantic view:
 
 If you want a numeric field to be chartable as a dimension, add a *bucketed* column to the BQ view instead (e.g. `AgeBucket`: `0–6mo / 6–12mo / 1–2yr / 2yr+`) and add that to `semantic_dimensions`.
 
-### Entity-Grain Rollup (`v_customers`)
+### Entity-Grain Rollup (`int_customers`)
 
-`v_customers` is at `Month × EntityRecordID` grain. An entity can own multiple `CompanyAccount` rows with different `AttributionChannel`, `SignupCountry`, `Vertical`, or `SyncType` values. When rolling CompanyAccount → EntityRecordID, the **earliest-signup account** wins for those four dimensions. Consequence: entity-grain channel/country/vertical/sync-type counts do **not** reconcile to account-grain counts from `v_accounts`. `Segment` / `UserTier` / `HasDEP` are fully defined at entity grain and are not affected.
+`int_customers` is at `Month × EntityRecordID` grain. An entity can own multiple `CompanyAccount` rows with different `AttributionChannel`, `SignupCountry`, `Vertical`, or `SyncType` values. When rolling CompanyAccount → EntityRecordID, the **earliest-signup account** wins for those four dimensions. Consequence: entity-grain channel/country/vertical/sync-type counts do **not** reconcile to account-grain counts from `v_accounts`. `Segment` / `UserTier` / `HasDEP` are fully defined at entity grain and are not affected.
 
 ## How SQL Gets Built
 
@@ -100,7 +100,7 @@ For grouped/breakdown queries, `buildSemanticGroupedSql` adds a second SELECT co
 `buildMetricContext` in `builder/src/lib/ai.js` formats the metric catalog sent to Claude. For semantic metrics:
 
 ```
-- id:54 name:"Trials" type:primitive view:v_trials source:v_trials grains:[daily,weekly,monthly,quarterly,yearly] dimensions:[AttributionChannel,SignupCountry,Vertical,SyncType]
+- id:54 name:"Trials" type:primitive view:int_trials source:int_trials grains:[daily,weekly,monthly,quarterly,yearly] dimensions:[AttributionChannel,SignupCountry,Vertical,SyncType]
 ```
 
 For complex metrics:
@@ -116,10 +116,10 @@ This lets the AI correctly answer "show me trials weekly by country" — it know
 
 | ID | Name | Table | Measure | Dimensions |
 |----|------|-------|---------|------------|
-| 54 | Trials | v_trials | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
-| 55 | Syncs | v_syncs | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
-| 56 | Conversions | v_conversions | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
-| 59 | Churn | v_cancellations | COUNT(DISTINCT CompanyAccount) | AttributionChannel, SignupCountry, Vertical, SyncType, AgeBucket, LicenseTier |
+| 54 | Trials | int_trials | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
+| 55 | Syncs | int_syncs | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
+| 56 | Conversions | int_conversions | COUNT(*) | AttributionChannel, SignupCountry, Vertical, SyncType |
+| 59 | Churn | int_cancellations | COUNT(DISTINCT CompanyAccount) | AttributionChannel, SignupCountry, Vertical, SyncType, AgeBucket, LicenseTier |
 | 300 | Sync Rate | — | formula: SAFE_DIVIDE({55},{54})*100 | — |
 | 301 | Sync-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{55})*100 | — |
 | 302 | Trial-to-Conversion Rate | — | formula: SAFE_DIVIDE({56},{54})*100 | — |
@@ -135,7 +135,7 @@ This lets the AI correctly answer "show me trials weekly by country" — it know
 
 **Implemented:**
 - `buildSemanticGroupedSql(metric, dimension, timeBucket, lastNMonths, endDateRule)` — fully implemented in `bigquery.js`, routed through `useScorecardData` and `chartDataBuilder`. Validates dimension against `semantic_dimensions`, generates `SELECT period, dimension, value FROM ... GROUP BY 1, 2` SQL.
-- `AgeBucket` and `LicenseTier` bucketed columns added to `v_cancellations` BQ view; metric 59 `semantic_dimensions` updated accordingly; breakdown tabs added to Churn scorecard.
+- `AgeBucket` and `LicenseTier` bucketed columns added to `int_cancellations` BQ view; metric 59 `semantic_dimensions` updated accordingly; breakdown tabs added to Churn scorecard.
 
 ## Revert Strategy
 

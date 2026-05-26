@@ -7,9 +7,9 @@
 const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
-const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
-- id:55 name:"Syncs" type:primitive view:v_syncs dimensions:[AttributionChannel,SyncType]
-- id:56 name:"Conversions" type:primitive view:v_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
+const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:int_trials dimensions:[AttributionChannel,SignupCountry,SyncType,Vertical]
+- id:55 name:"Syncs" type:primitive view:int_syncs dimensions:[AttributionChannel,SyncType]
+- id:56 name:"Conversions" type:primitive view:int_conversions dimensions:[AttributionChannel,SignupCountry,Vertical]
 - id:20 name:"Conversion Rate" type:derived view:none formula:SAFE_DIVIDE({56},{54}) depends_on:[56,54]
 - id:25 name:"Sync Rate" type:derived view:none formula:SAFE_DIVIDE({55},{54}) depends_on:[55,54]
 - id:46 name:"Churn Rate" type:derived view:none
@@ -35,17 +35,17 @@ const METRIC_CONTEXT = `- id:54 name:"Trials" type:primitive view:v_trials dimen
 - id:316 name:"Syncs Traj vs Forecast %" type:derived depends_on:[308,306] desc:"Syncs trajectory vs forecast as a percentage."
 - id:317 name:"Sync Rate Forecast" type:derived depends_on:[306,305] desc:"Expected sync rate by channel: syncs forecast / trials forecast."`;
 
-const SCHEMA_CONTEXT = `v_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING)
-v_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SyncType(STRING)
-v_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING)
+const SCHEMA_CONTEXT = `int_trials: SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING), SyncType(STRING)
+int_syncs: SyncDate(DATE), SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SyncType(STRING)
+int_conversions: ConversionDate(DATE), SignupDate(DATE), CompanyAccount(STRING), AttributionChannel(STRING), SignupCountry(STRING), Vertical(STRING)
 v_trials_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_syncs_forecast_channel: forecast_date(DATE), AttributionChannel(STRING), forecast_value(FLOAT)
 v_trials_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)
 v_syncs_trajectory_channel: snapshot_date(DATE), AttributionChannel(STRING), trajectory_value(FLOAT)`;
 
 const METRICS = [
-  { id: 54, view_name: 'v_trials' }, { id: 55, view_name: 'v_syncs' },
-  { id: 56, view_name: 'v_conversions' }, { id: 20, view_name: null },
+  { id: 54, view_name: 'int_trials' }, { id: 55, view_name: 'int_syncs' },
+  { id: 56, view_name: 'int_conversions' }, { id: 20, view_name: null },
   { id: 25, view_name: null }, { id: 46, view_name: null },
   { id: 57, view_name: 'v_new_net_saas' }, { id: 58, view_name: 'v_churn' },
   { id: 59, view_name: 'v_bom_customers' },

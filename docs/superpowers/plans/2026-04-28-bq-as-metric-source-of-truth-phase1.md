@@ -57,7 +57,7 @@ Once these views exist, the canonical definition lives in BQ. Supabase rows beco
 - `status` — `live` for everything in this phase
 - `owner` — `nic`, `justin`, or `unassigned`
 - `verified_at` — ISO date `yyyy-mm-dd` or `unverified`
-- `source_table` — for L2 metrics, the BQ view it reads (e.g., `v_customer_mrr`); empty for L3
+- `source_table` — for L2 metrics, the BQ view it reads (e.g., `int_customer_mrr`); empty for L3
 - `source_measure_safe` — for L2, a sanitized version of the measure expression; empty for L3 (BQ labels can't contain spaces or symbols, so we slug it)
 - `depends_on` — for L3 metrics, comma-separated metric IDs (e.g., `378-379-380`); empty for L2
 
@@ -208,7 +208,7 @@ FROM metrics WHERE id = 54;
 ```
 
 Expected fields:
-- `semantic_table = 'v_trials'`
+- `semantic_table = 'int_trials'`
 - `semantic_measure = 'COUNT(*)'`
 - `semantic_date_col = 'SignupDate'`
 - `assigned_to` likely null or 'Nic'
@@ -227,7 +227,7 @@ OPTIONS (
     ("status", "live"),
     ("owner", "unassigned"),
     ("verified_at", "2026-04-07"),
-    ("source_table", "v_trials"),
+    ("source_table", "int_trials"),
     ("source_measure_safe", "count_star"),
     ("depends_on", "")
   ]
@@ -235,7 +235,7 @@ OPTIONS (
 SELECT
   SignupDate AS period,
   COUNT(*) AS value
-FROM `project-for-method-dw.revenue.v_trials`
+FROM `project-for-method-dw.revenue.int_trials`
 GROUP BY 1
 ORDER BY 1;
 ```

@@ -231,7 +231,7 @@ export async function fetchViewDefinition(viewName) {
  * Instead of SELECT * and client-side aggregation, this builds a proper
  * GROUP BY query so BQ does the aggregation server-side.
  *
- * @param {string} viewName - BQ view name (e.g., 'v_trials')
+ * @param {string} viewName - BQ view name (e.g., 'int_trials')
  * @param {string} xField - Column for X axis (e.g., 'SignupDate')
  * @param {string} yField - Column for Y axis, or 'COUNT'
  * @param {string} timeBucket - 'month' | 'week' | 'day' | null
@@ -606,7 +606,7 @@ const DRILL_VIEWS = {
   v_new_net_saas: { dateCol: 'TxnDate' },
   v_dep_revenue: { dateCol: 'TxnDate' },
   v_total_dep_revenue: { dateCol: 'TxnDate' },
-  v_cancellations: { dateCol: 'CancellationDate' },
+  int_cancellations: { dateCol: 'CancellationDate' },
   v_total_net_saas: { dateCol: 'TxnDate' },
 };
 

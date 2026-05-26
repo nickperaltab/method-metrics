@@ -1,6 +1,6 @@
 /**
  * Syncs Dashboard
- * Overview + dimension breakdowns, all driven from semantic layer (v_syncs).
+ * Overview + dimension breakdowns, all driven from semantic layer (int_syncs).
  */
 
 export default {
@@ -9,7 +9,7 @@ export default {
   status: 'approved',
   group: 'funnel',
   views: {
-    v_syncs: { dateCol: 'SyncDate' },
+    int_syncs: { dateCol: 'SyncDate' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────

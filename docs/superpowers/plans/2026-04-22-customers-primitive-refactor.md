@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Collapse metrics 374–377 into metric 373 + `Segment` dimension, backed by a new BQ view `v_customers` at `Month × EntityRecordID` grain, while preserving every number shown on the current `customer-segments-scorecard`.
+**Goal:** Collapse metrics 374–377 into metric 373 + `Segment` dimension, backed by a new BQ view `int_customers` at `Month × EntityRecordID` grain, while preserving every number shown on the current `customer-segments-scorecard`.
 
-**Architecture:** One primitive (`Customers` / metric 373) with seven semantic dimensions (`Segment`, `UserTier`, `HasDEP`, plus the four standard dims) on a new view `v_customers`. The scorecard uses `groupByDimension: 'Segment'` for charts and a new per-tile `dimensionFilter` for KPI tiles. Small engine extension to the scorecard query planner and `KpiColumn` to handle dim-filtered KPIs. No GRR/MRR this round — the view shape is designed so GRR drops in as new primitives on the same view later.
+**Architecture:** One primitive (`Customers` / metric 373) with seven semantic dimensions (`Segment`, `UserTier`, `HasDEP`, plus the four standard dims) on a new view `int_customers`. The scorecard uses `groupByDimension: 'Segment'` for charts and a new per-tile `dimensionFilter` for KPI tiles. Small engine extension to the scorecard query planner and `KpiColumn` to handle dim-filtered KPIs. No GRR/MRR this round — the view shape is designed so GRR drops in as new primitives on the same view later.
 
 **Tech Stack:** BigQuery views (`project-for-method-dw.revenue.*`), Supabase REST (metrics registry), React/Vanilla JS frontend (`builder/src/…`), vitest unit tests (`npm run test:unit`), GitHub Pages auto-deploy on push to `main`.
 
@@ -15,7 +15,7 @@
 ## File Map
 
 **Create:**
-- (BigQuery) `project-for-method-dw.revenue.v_customers` — new view
+- (BigQuery) `project-for-method-dw.revenue.int_customers` — new view
 - `builder/tests/unit/kpi-dimension-filter.test.js` — new unit test file
 
 **Modify:**
@@ -24,7 +24,7 @@
 - `builder/src/config/scorecards/customer-segments-scorecard.js` — rewire all metric references to 373 + `dimensionFilter`
 - (Supabase row) `metrics.id=373` — update view/table/filters/dimensions, clear `verified_at`
 - (Supabase rows) `metrics.id=374,375,376,377` — status → `queued`, rename suffix
-- (BigQuery, final step) `v_customer_segments` — replace definition with `SELECT * FROM v_customers` alias
+- (BigQuery, final step) `int_customer_segments` — replace definition with `SELECT * FROM int_customers` alias
 - `docs/semantic-layer.md` — document the earliest-signup entity-rollup caveat
 
 **Untouched (verify during QA, don't edit):**
@@ -428,7 +428,7 @@ git checkout -- builder/dist/
 
 ---
 
-## Task 7: Capture the current `v_customer_segments` definition
+## Task 7: Capture the current `int_customer_segments` definition
 
 **Files:** (read-only — capturing baseline)
 
@@ -448,23 +448,23 @@ Use the BigQuery MCP tool:
 mcp__bigquery__execute_sql with:
   sql: SELECT view_definition
        FROM `project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS`
-       WHERE table_name = 'v_customer_segments'
+       WHERE table_name = 'int_customer_segments'
 ```
 
 - [ ] **Step 3: Save the captured SQL as a reference artifact**
 
-Write the current definition to `knowledge/verified-queries/v_customer_segments-baseline-2026-04-22.sql` (do NOT commit; this is a working artifact for the next task).
+Write the current definition to `knowledge/verified-queries/int_customer_segments-baseline-2026-04-22.sql` (do NOT commit; this is a working artifact for the next task).
 
 ---
 
-## Task 8: Create `v_customers` in BigQuery
+## Task 8: Create `int_customers` in BigQuery
 
 **Files:**
-- Create (in BigQuery): `project-for-method-dw.revenue.v_customers`
+- Create (in BigQuery): `project-for-method-dw.revenue.int_customers`
 
 - [ ] **Step 1: Draft the CREATE VIEW SQL using the baseline as a template**
 
-Start from the captured `v_customer_segments` definition. Keep the same base source query and entity-month rollup logic. Augment with:
+Start from the captured `int_customer_segments` definition. Keep the same base source query and entity-month rollup logic. Augment with:
 
 1. A `with_tiers` CTE that produces both `UserTier` and `Segment`:
    ```sql
@@ -499,7 +499,7 @@ Start from the captured `v_customer_segments` definition. Keep the same base sou
 
 ```
 mcp__bigquery__execute_sql with:
-  sql: CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customers` AS
+  sql: CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customers` AS
        <full view body from Step 1>
 ```
 
@@ -507,29 +507,29 @@ mcp__bigquery__execute_sql with:
 
 ```
 mcp__bigquery__execute_sql with:
-  sql: SELECT COUNT(*) FROM `project-for-method-dw.revenue.v_customers`
+  sql: SELECT COUNT(*) FROM `project-for-method-dw.revenue.int_customers`
 ```
 
 Expected: > 0 rows.
 
 - [ ] **Step 4: Save the final view SQL as a verified artifact**
 
-Write to `knowledge/verified-queries/v_customers.sql` and commit:
+Write to `knowledge/verified-queries/int_customers.sql` and commit:
 
 ```bash
-git add knowledge/verified-queries/v_customers.sql
-git commit -m "bq: add v_customers view (entity-grain customers primitive)
+git add knowledge/verified-queries/int_customers.sql
+git commit -m "bq: add int_customers view (entity-grain customers primitive)
 
 Replaces the 5-metric Solo/Small/Team/DEP layout with one primitive
 (COUNT DISTINCT EntityRecordID) plus Segment/UserTier/HasDEP dimensions.
-Ships behind a parity gate vs v_customer_segments (see plan task 9).
+Ships behind a parity gate vs int_customer_segments (see plan task 9).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 9: Parity gate — `v_customers` must match `v_customer_segments` row-for-row
+## Task 9: Parity gate — `int_customers` must match `int_customer_segments` row-for-row
 
 **Files:** (BigQuery query; no file changes)
 
@@ -538,8 +538,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 mcp__bigquery__execute_sql with:
   sql: |
-    WITH a AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.v_customers`         GROUP BY 1,2),
-         b AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.v_customer_segments` GROUP BY 1,2)
+    WITH a AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_customers`         GROUP BY 1,2),
+         b AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_customer_segments` GROUP BY 1,2)
     SELECT COALESCE(a.Month, b.Month)     AS Month,
            COALESCE(a.Segment, b.Segment) AS Segment,
            a.n AS v_customers_n,
@@ -556,7 +556,7 @@ Expected: **zero rows**.
 
 If any rows returned:
 - Non-matching `Segment` label spellings → fix `CASE` literals to exactly `'Solo no DEP' / '2-3 no DEP' / '4+ no DEP' / 'Team AI Plus'`.
-- Different row counts in a month → probably a base-source or grain issue; compare the entity-month CTE in `v_customers` against the equivalent in `v_customer_segments`.
+- Different row counts in a month → probably a base-source or grain issue; compare the entity-month CTE in `int_customers` against the equivalent in `int_customer_segments`.
 - Null `Month` → the rollup dropped a month; check that the entity-month CTE's `GROUP BY` includes `Month`.
 
 Iterate on Task 8 Step 1-2 until this query returns empty. **Do not proceed past Task 9 if the parity gate is red.**
@@ -573,13 +573,13 @@ mcp__bigquery__execute_sql with:
       COUNTIF(IsChurned) AS churn_flags,
       COUNT(DISTINCT Segment) AS segment_cardinality,
       COUNT(DISTINCT UserTier) AS usertier_cardinality
-    FROM `project-for-method-dw.revenue.v_customers`
+    FROM `project-for-method-dw.revenue.int_customers`
 ```
 
 Expected:
 - `segment_cardinality` = 4 (exactly the four labels)
 - `usertier_cardinality` = 3 (Solo / Small Team / Team)
-- `earliest / latest` match the equivalent on `v_customer_segments` (rerun same query on that view to confirm).
+- `earliest / latest` match the equivalent on `int_customer_segments` (rerun same query on that view to confirm).
 
 ---
 
@@ -604,8 +604,8 @@ mcp__supabase__execute_sql with:
   query: |
     UPDATE metrics SET
       name               = 'Customers',
-      view_name          = 'v_customers',
-      semantic_table     = 'v_customers',
+      view_name          = 'int_customers',
+      semantic_table     = 'int_customers',
       semantic_filters   = ARRAY['IsActive = TRUE'],
       semantic_dimensions = ARRAY['Segment','UserTier','HasDEP','AttributionChannel','SignupCountry','Vertical','SyncType'],
       verified_at        = NULL
@@ -621,7 +621,7 @@ They're already correct (`COUNT(DISTINCT EntityRecordID)` / `Month`).
 
 - [ ] **Step 4: Refresh `view_definition` cache**
 
-The Supabase column `view_definition` caches the BQ SQL for offline viewing. Update it to the new `v_customers` body:
+The Supabase column `view_definition` caches the BQ SQL for offline viewing. Update it to the new `int_customers` body:
 
 ```
 mcp__supabase__execute_sql with:
@@ -631,7 +631,7 @@ mcp__supabase__execute_sql with:
     WHERE id = 373
 ```
 
-where `$1` is the SQL body saved in `knowledge/verified-queries/v_customers.sql` (Task 8 Step 4). Or re-pull via `INFORMATION_SCHEMA` and paste.
+where `$1` is the SQL body saved in `knowledge/verified-queries/int_customers.sql` (Task 8 Step 4). Or re-pull via `INFORMATION_SCHEMA` and paste.
 
 ---
 
@@ -674,7 +674,7 @@ Overwrite `builder/src/config/scorecards/customer-segments-scorecard.js` with:
 ```js
 /**
  * Customers Scorecard (entity grain)
- * Backed by metric 373 "Customers" on v_customers with Segment as a dimension.
+ * Backed by metric 373 "Customers" on int_customers with Segment as a dimension.
  * Per-segment sections filter metric 373 via dimensionFilter; the Overview
  * adds a stacked bar + line grouped by Segment (Justin's Slack asks #1 and #2).
  */
@@ -686,7 +686,7 @@ export default {
   status: 'approved',
   hideGrain: true,
   views: {
-    v_customers: { dateCol: 'Month' },
+    int_customers: { dateCol: 'Month' },
   },
   sections: [
     // ── Overview ────────────────────────────────────────────────
@@ -901,7 +901,7 @@ git commit -m "feat(scorecard): customer-segments uses metric 373 + Segment dim
 Collapses 374-377 into metric 373 + dimensionFilter. Adds Overview stacked
 bar + line grouped by Segment (Justin Slack asks). Per-segment sections
 each render metric 373 filtered to one Segment value. Zero data change vs
-the previous scorecard (same underlying rows via v_customers parity gate).
+the previous scorecard (same underlying rows via int_customers parity gate).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -984,14 +984,14 @@ Wait ~60s, open `https://nickperaltab.github.io/method-metrics/` in an incognito
 
 ---
 
-## Task 15: Alias `v_customer_segments`
+## Task 15: Alias `int_customer_segments`
 
 **Files:** (BigQuery)
 
-- [ ] **Step 1: Confirm nothing in the repo still references `v_customer_segments` except historical docs**
+- [ ] **Step 1: Confirm nothing in the repo still references `int_customer_segments` except historical docs**
 
 ```bash
-grep -rn "v_customer_segments" builder/src/ 2>/dev/null
+grep -rn "int_customer_segments" builder/src/ 2>/dev/null
 ```
 
 Expected: zero hits. (If any remain, fix before proceeding.)
@@ -1001,20 +1001,20 @@ Expected: zero hits. (If any remain, fix before proceeding.)
 ```
 mcp__bigquery__execute_sql with:
   sql: |
-    CREATE OR REPLACE VIEW `project-for-method-dw.revenue.v_customer_segments` AS
+    CREATE OR REPLACE VIEW `project-for-method-dw.revenue.int_customer_segments` AS
     SELECT
       Month, EntityRecordID, EntityFullName,
       AccountCount, TotalUsers, HasDEP, Segment
-    FROM `project-for-method-dw.revenue.v_customers`
+    FROM `project-for-method-dw.revenue.int_customers`
 ```
 
-(Only columns the previous `v_customer_segments` exposed — this keeps any external consumer working.)
+(Only columns the previous `int_customer_segments` exposed — this keeps any external consumer working.)
 
 - [ ] **Step 3: Verify aliased view returns the expected row count**
 
 ```
 mcp__bigquery__execute_sql with:
-  sql: SELECT COUNT(*) FROM `project-for-method-dw.revenue.v_customer_segments`
+  sql: SELECT COUNT(*) FROM `project-for-method-dw.revenue.int_customer_segments`
 ```
 
 Expected: matches Task 9 Step 3 entity-month row count.
@@ -1024,8 +1024,8 @@ Expected: matches Task 9 Step 3 entity-month row count.
 ```
 mcp__bigquery__execute_sql with:
   sql: |
-    WITH a AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.v_customers`         GROUP BY 1,2),
-         b AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.v_customer_segments` GROUP BY 1,2)
+    WITH a AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_customers`         GROUP BY 1,2),
+         b AS (SELECT Month, Segment, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_customer_segments` GROUP BY 1,2)
     SELECT * FROM a FULL OUTER JOIN b USING (Month, Segment)
     WHERE a.n IS NULL OR b.n IS NULL OR a.n <> b.n
 ```
@@ -1044,16 +1044,16 @@ Expected: empty. The two views are now trivially equal by construction.
 Add the following to `docs/semantic-layer.md` immediately after the "Dimensions vs Attributes" section:
 
 ```markdown
-### Entity-Grain Rollup (`v_customers`)
+### Entity-Grain Rollup (`int_customers`)
 
-`v_customers` is at `Month × EntityRecordID` grain. An entity can own multiple `CompanyAccount` rows with different `AttributionChannel`, `SignupCountry`, `Vertical`, or `SyncType` values. When rolling CompanyAccount → EntityRecordID, the **earliest-signup account** wins for those four dimensions. Consequence: entity-grain channel/country/vertical/sync-type counts do **not** reconcile to account-grain counts from `v_accounts`. Segment / UserTier / HasDEP are fully defined at entity grain and are not affected.
+`int_customers` is at `Month × EntityRecordID` grain. An entity can own multiple `CompanyAccount` rows with different `AttributionChannel`, `SignupCountry`, `Vertical`, or `SyncType` values. When rolling CompanyAccount → EntityRecordID, the **earliest-signup account** wins for those four dimensions. Consequence: entity-grain channel/country/vertical/sync-type counts do **not** reconcile to account-grain counts from `v_accounts`. Segment / UserTier / HasDEP are fully defined at entity grain and are not affected.
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add docs/semantic-layer.md
-git commit -m "docs(semantic-layer): document v_customers entity-rollup caveat
+git commit -m "docs(semantic-layer): document int_customers entity-rollup caveat
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -1091,10 +1091,10 @@ If any step goes sideways, these commands revert in order:
 
 - **Frontend regression (Tasks 2–6, 12):** `git revert <commit>` and push.
 - **Scorecard shows wrong numbers, but view and metric OK:** revert the scorecard commit (Task 12), leave BQ and Supabase in place.
-- **Metric 373 update (Task 10):** `UPDATE metrics SET view_name='v_customer_segments', semantic_table='v_customer_segments', semantic_dimensions=ARRAY['Segment','HasDEP'], semantic_filters=NULL WHERE id=373;`
+- **Metric 373 update (Task 10):** `UPDATE metrics SET view_name='int_customer_segments', semantic_table='int_customer_segments', semantic_dimensions=ARRAY['Segment','HasDEP'], semantic_filters=NULL WHERE id=373;`
 - **Metrics 374–377 deprecated (Task 11):** `UPDATE metrics SET status='live', name=REGEXP_REPLACE(name, ' \(deprecated.*\)$', '') WHERE id IN (374,375,376,377);`
-- **BQ view parity gate fails (Task 9):** stop; do NOT promote. Fix view or drop it with `DROP VIEW project-for-method-dw.revenue.v_customers`.
-- **`v_customer_segments` alias wrong (Task 15):** replace with the baseline SQL captured in Task 7.
+- **BQ view parity gate fails (Task 9):** stop; do NOT promote. Fix view or drop it with `DROP VIEW project-for-method-dw.revenue.int_customers`.
+- **`int_customer_segments` alias wrong (Task 15):** replace with the baseline SQL captured in Task 7.
 
 ---
 
@@ -1102,7 +1102,7 @@ If any step goes sideways, these commands revert in order:
 
 See `docs/superpowers/specs/2026-04-22-customers-primitive-refactor-design.md` § "Out of Scope / Deferred to GRR Project" for the full list. Summary:
 
-- Add `MRR`, `MRR_prev_month`, `ChurnAmount`, `DowngradeAmount`, `ExpansionAmount`, `Currency` to `v_customers`
+- Add `MRR`, `MRR_prev_month`, `ChurnAmount`, `DowngradeAmount`, `ExpansionAmount`, `Currency` to `int_customers`
 - Register new primitives + GRR derivative (`1 − (Cancellations + Downgrades) / Start MRR`)
 - Reconcile to Justin's `method_forecast` model
 - Verify via `/metric-solver` against `USD Rates _ Board KPI Deck Preparation 2023+ - Monthly Detail.csv` (col BU Start, col CA Gross MRR Retention)

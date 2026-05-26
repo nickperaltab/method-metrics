@@ -116,7 +116,7 @@ describe('buildScorecardQueryPlan', () => {
   it('creates a primitive query for each semantic metric', () => {
     const metrics = [
       makeMetric(54, {
-        semantic_table: 'v_trials',
+        semantic_table: 'int_trials',
         semantic_measure: 'COUNT(*)',
         semantic_date_col: 'SignupDate',
         semantic_filters: [],
@@ -132,7 +132,7 @@ describe('buildScorecardQueryPlan', () => {
   it('adds weekly entry for a week-bucketed chart', () => {
     const metrics = [
       makeMetric(54, {
-        semantic_table: 'v_trials',
+        semantic_table: 'int_trials',
         semantic_measure: 'COUNT(*)',
         semantic_date_col: 'SignupDate',
         semantic_filters: [],

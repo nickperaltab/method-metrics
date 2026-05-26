@@ -75,7 +75,7 @@ describe('groupScorecardTasks', () => {
 
   it('puts view_name metrics into individual (they use fetchAggregatedData)', () => {
     const primitives = [
-      makeMetric(54, { view_name: 'v_trials' }),
+      makeMetric(54, { view_name: 'int_trials' }),
     ];
     const result = groupScorecardTasks(primitives, [], {}, 13);
     expect(result.batchable).toHaveLength(0);
@@ -94,7 +94,7 @@ describe('groupScorecardTasks', () => {
   it('returns both groups for mixed input', () => {
     const primitives = [
       makeMetric(56, { chart_sql: "SELECT '2026-01' AS period, 42 AS value" }),
-      makeMetric(54, { view_name: 'v_trials' }),
+      makeMetric(54, { view_name: 'int_trials' }),
     ];
     const customSqls = [
       { key: '__custom', sql: "SELECT '2026-01' AS period, 1 AS value" },
@@ -716,7 +716,7 @@ git commit -m "feat: batch chart_sql queries with UNION ALL, bump concurrency to
 **Files:**
 - Create: `builder/tests/integration/scorecard-live.test.js`
 
-These hit real BQ. Require `BQ_TOKEN` env var. Skip gracefully if not set. Uses actual scorecard-style SQL patterns (not just simple v_trials).
+These hit real BQ. Require `BQ_TOKEN` env var. Skip gracefully if not set. Uses actual scorecard-style SQL patterns (not just simple int_trials).
 
 - [ ] **Step 1: Write the integration test file**
 
@@ -759,8 +759,8 @@ async function queryBq(sql) {
 describe('UNION ALL batching — real BQ', () => {
   it('batched query returns same data as individual queries', async () => {
     if (!BQ_TOKEN) return skip('No BQ_TOKEN');
-    const sql1 = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
-    const sql2 = `SELECT FORMAT_DATE('%Y-%m', SyncDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_syncs\` WHERE SyncDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
+    const sql1 = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
+    const sql2 = `SELECT FORMAT_DATE('%Y-%m', SyncDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_syncs\` WHERE SyncDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
 
     const [rows1, rows2] = await Promise.all([queryBq(sql1), queryBq(sql2)]);
 
@@ -783,7 +783,7 @@ ORDER BY _key, period`;
 
   it('row ordering is preserved within each key', async () => {
     if (!BQ_TOKEN) return skip('No BQ_TOKEN');
-    const sql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
+    const sql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
 
     const batchSql = `SELECT 'trials' AS _key, sub.* FROM (${sql}) sub
 ORDER BY _key, period`;
@@ -796,8 +796,8 @@ ORDER BY _key, period`;
 
   it('empty sub-query does not break other results', async () => {
     if (!BQ_TOKEN) return skip('No BQ_TOKEN');
-    const realSql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
-    const emptySql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_trials\` WHERE SignupDate = DATE('1900-01-01') GROUP BY 1 ORDER BY 1`;
+    const realSql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH) GROUP BY 1 ORDER BY 1`;
+    const emptySql = `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_trials\` WHERE SignupDate = DATE('1900-01-01') GROUP BY 1 ORDER BY 1`;
 
     const batchSql = `SELECT 'real' AS _key, sub.* FROM (${realSql}) sub
 UNION ALL
@@ -813,10 +813,10 @@ ORDER BY _key, period`;
     if (!BQ_TOKEN) return skip('No BQ_TOKEN');
     // Use scorecard-style SQL patterns (CTE with joins, not just simple COUNT)
     const queries = [
-      `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
-      `SELECT FORMAT_DATE('%Y-%m', SyncDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_syncs\` WHERE SyncDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
-      `SELECT FORMAT_DATE('%Y-%m', FirstSaaSInvoiceTxnDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.v_conversions\` WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
-      `SELECT FORMAT_DATE('%Y-%m', CancellationDate) AS period, COUNT(DISTINCT CompanyAccount) AS value FROM \`project-for-method-dw.revenue.v_cancellations\` WHERE CancellationDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
+      `SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_trials\` WHERE SignupDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
+      `SELECT FORMAT_DATE('%Y-%m', SyncDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_syncs\` WHERE SyncDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
+      `SELECT FORMAT_DATE('%Y-%m', FirstSaaSInvoiceTxnDate) AS period, COUNT(*) AS value FROM \`project-for-method-dw.revenue.int_conversions\` WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
+      `SELECT FORMAT_DATE('%Y-%m', CancellationDate) AS period, COUNT(DISTINCT CompanyAccount) AS value FROM \`project-for-method-dw.revenue.int_cancellations\` WHERE CancellationDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
       `SELECT FORMAT_DATE('%Y-%m', TxnDate) AS period, ROUND(SUM(SaaSAmount),2) AS value FROM \`project-for-method-dw.revenue.v_new_net_saas\` WHERE TxnDate >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH) GROUP BY 1 ORDER BY 1`,
     ];
     const parts = queries.map((sql, i) => `SELECT 'q${i}' AS _key, sub.* FROM (${sql}) sub`);

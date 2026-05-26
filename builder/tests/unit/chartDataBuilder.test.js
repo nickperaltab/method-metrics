@@ -11,7 +11,7 @@ vi.mock('../../src/lib/bigquery', () => ({
 
 vi.mock('../../src/lib/schemaCache', () => ({
   default: {
-    v_trials: [
+    int_trials: [
       { name: 'SignupDate', type: 'DATE' },
       { name: 'CompanyAccount', type: 'STRING' },
       { name: 'AttributionChannel', type: 'STRING' },
@@ -22,7 +22,7 @@ vi.mock('../../src/lib/schemaCache', () => ({
 import { fetchChartDatasets } from '../../src/lib/chartDataBuilder.js';
 import { fetchGroupedData, fetchChartData } from '../../src/lib/bigquery.js';
 
-const metric54 = { id: 54, name: 'Trials', view_name: 'v_trials', metric_type: 'primitive' };
+const metric54 = { id: 54, name: 'Trials', view_name: 'int_trials', metric_type: 'primitive' };
 
 const baseDataConfig = {
   xField: 'SignupDate',
