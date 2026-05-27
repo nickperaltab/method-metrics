@@ -15,3 +15,13 @@ models:
     +persist_docs:
       relation: true
       columns: true
+
+    # Schema isolation: verified metrics (v_metric__*) land in `revenue_metrics`
+    # while everything else (intermediates, sources) stays in `revenue`. This makes
+    # the verified-vs-unverified boundary structural, not just convention.
+    #
+    # dbt-bigquery's `+schema:` config is APPENDED to the profile's `dataset` value,
+    # so `+schema: metrics` here resolves to `revenue_metrics` because the profile
+    # specifies `dataset: revenue`.
+    metrics:
+      +schema: metrics

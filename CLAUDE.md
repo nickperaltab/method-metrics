@@ -99,6 +99,31 @@ The DDL panel is fetched live from BigQuery via `useViewDefinition` (see `builde
 
 Change a primitive (`CREATE OR REPLACE VIEW v_trials AS ...`) → all breakdowns and derived rates update automatically.
 
+### Querying BQ for verified metrics
+
+Method's BQ has TWO datasets that matter for metric work:
+
+| Dataset | Contents | Trust level |
+|---|---|---|
+| **`revenue_metrics`** | The 20 verified `v_metric__*` views — dbt-managed, fully documented (descriptions + labels), parity-verified | ✅ Verified — quote freely |
+| **`revenue`** | Raw sources (Account, Funnel, TransLineFlattened, method_forecast), intermediates (int_trials, int_customers, int_customer_mrr, etc.), deprecated aliases (v_*), and Justin's hand-written revenue views (v_saas_mrr, v_new_mrr, v_channel_scorecard, breakdowns) | ⚠️ Mixed — verify before quoting |
+
+**Rules for any BQ query path (Claude/MCP, ad-hoc, etc.):**
+
+- For canonical metric values (the answer to "what's X for period Y?"): query `revenue_metrics.v_metric__*`. Every view there has a description and `status: live` label.
+- For dimensional slicing (group by channel, segment, vertical, etc.): query the corresponding `revenue.int_*` intermediate. These have descriptions too but are at row-level grain.
+- For raw exploration: source tables in `revenue` (Account, Funnel, TransLineFlattened).
+- **Avoid views without descriptions** (the trust signal). Anything in `revenue` lacking a description in `INFORMATION_SCHEMA.TABLE_OPTIONS` is unverified, ad-hoc, or historical — don't quote externally without confirming.
+
+The 20 v_metric__* views also exist as deprecated aliases in `revenue` (pointing at `revenue_metrics.v_metric__*`) so any legacy bookmark / saved query keeps working. Those aliases will be dropped in a future round.
+
+To list the verified catalog:
+```sql
+SELECT REPLACE(table_name, 'v_metric__', '') AS metric, option_value AS description
+FROM `project-for-method-dw.revenue_metrics.INFORMATION_SCHEMA.TABLE_OPTIONS`
+WHERE option_name = 'description' ORDER BY 1
+```
+
 ### Snapshot before changing any BQ view DDL
 
 **Always capture the pre-change query result before modifying a BQ view, then compare to the post-change result.** Don't just say "looks in range" or "row count matches expectations" — show a row-by-row diff against the actual previous values.

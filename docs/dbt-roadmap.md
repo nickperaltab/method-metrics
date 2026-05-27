@@ -26,6 +26,8 @@
 | Phase 1 — Round 4 | Annual MRR family (4) + Conversions + Churn + 2 ratios (11 total — minus 3 monthly already in 3b's actual coverage = 9 net) | ✅ Done (2026-05-14) |
 | Phase 1 — Round 5 | GRR/NRR family (#382, #383, #388, #389) | ✅ Done (2026-05-14) |
 | **🎯 Phase 1 complete** | **20 / 20 live metrics in dbt + BQ, parity-verified** | **✅ 2026-05-14** |
+| Phase 1.5 | `v_*` → `int_*` rename + consumer-facing descriptions + soft-aliased drops | ✅ Done (2026-05-14) |
+| Phase 1.6 — Schema isolation | Move verified `v_metric__*` to `revenue_metrics` dataset; `revenue` becomes the raw + intermediates + deprecated aliases dataset | ✅ Done (2026-05-14) |
 | Phase 1 — Round 4 | Bulk extend to remaining ~13 simple/ratio metrics | ⏳ Planned |
 | Phase 1 — Round 5 | GRR/NRR migration (protected family) | ⏳ Planned |
 | **Phase 1 done = 20 metrics reliable in BQ** | All metrics dbt-managed with correct columns + catalog metadata | 🎯 Target state |
