@@ -8,6 +8,7 @@ import { getScorecardStars } from '../pages/Home';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
+  { path: '/channel-arr', label: 'Channel ARR', icon: '\u25ef' },
 ];
 
 const ADMIN_ITEMS = [

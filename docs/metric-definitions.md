@@ -603,6 +603,35 @@ GROUP BY 1
 
 ---
 
+## 4b. Directional metrics (NOT live, NOT in revenue_metrics)
+
+These are dbt-managed and documented, but deliberately **not** verified-grade. They live in `revenue` (not `revenue_metrics`), carry `status: directional`, and must never be quoted as accounting-grade.
+
+### Channel ARR — `revenue.v_channel_arr` (directional)
+
+**What it answers in one sentence:** For new customers acquired each month, what's the run-rate ARR by marketing attribution channel? (Replicates the marketing Looker "Revenue by Channel" dashboard.)
+
+**The math:** per `(channel × first-invoice month)`, `SaaS = SUM(Custdatlastsaasamount × Att_<channel>)`; `ARPC = SaaS / SUM(Att)`; `ARR = ARPC × 12`; `CAD ARR = ((saas_us_portion × rate + saas_nonus_portion) / SUM(Att)) × 12`. FX rate applied downstream (the app page), so the view emits the pre-FX US/non-US split.
+
+**Grain:** `(attribution channel × month)`. Month = `DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH)` — the new-customer acquisition cohort. Account-grain underneath (a company with 2 accounts contributes twice), attribution-fraction-weighted.
+
+**Filters / exclusions:** `IsConversionException = FALSE`; `Partner != 'Method Integration'`; converted accounts only (`FirstSaaSInvoiceTxnDate` set); current incomplete month excluded; 24-month window.
+
+**Methodology source:** reverse-engineered from the marketing Looker "Revenue by Channel" dashboard and penny-matched (see `scripts/parity_v_channel_arr.py`).
+
+**Parity-verified against:** the Looker dashboard, May 2026 — customers, SaaS, CAD ARR, and Avg First Invoice Revenue all match across all 8 channels (2026-06-01).
+
+**Status:** **directional** — NOT live. ⚠️ Uses `Custdatlastsaasamount` (run-rate snapshot), a **documented exception** to the canonical-revenue-column rule (`SaaSAmount`). The exception is justified because ARR wants a recurring *rate*, not invoiced revenue — see the "run-rate / ARR carve-out" in `migrate-metric-to-dbt/SKILL.md`. It is directional, not accounting-grade, and will NOT reconcile to RevCogs/QuickBooks. The canonical run-rate would be `int_customer_mrr`-derived; this replicates the live marketing artifact instead.
+
+**Known caveats:**
+- Directional run-rate, ~10% fuzzy vs invoiced (plan-rate field misses discounts/prorations).
+- Pre-FX; CAD conversion is currency-aware (US × rate, CAN/Other × 1) and applied by the consumer.
+- "Avg First Invoice Revenue" is the only invoice-based column (attribution-weighted).
+
+**Used by:** the in-app **Channel ARR** page (`builder/src/pages/ChannelArr.jsx`).
+
+---
+
 ## 5. Status — Phase 1 complete 🎯
 
 All 20 live metrics are now dbt-managed with consumer-facing descriptions and BQ catalog metadata. Parity-verified across all metrics.

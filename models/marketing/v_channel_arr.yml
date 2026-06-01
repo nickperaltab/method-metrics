@@ -1,0 +1,48 @@
+# Directional metric definition for "Channel ARR" (marketing Revenue-by-Channel).
+# See docs/metric-definitions.md "Channel ARR" for the full definition + the
+# documented Custdatlastsaasamount carve-out.
+
+version: 2
+
+models:
+  - name: v_channel_arr
+    description: |
+      DIRECTIONAL run-rate, NOT accounting-grade. New-customer ARR by marketing
+      channel, one row per (attribution channel x first-invoice month). Replicates
+      the marketing Looker "Revenue by Channel" dashboard. "SaaS" is each new
+      customer's current monthly plan rate (Custdatlastsaasamount) allocated to its
+      attribution channel — a run-rate snapshot, NOT invoiced revenue, so it does
+      not tie to QuickBooks/RevCogs (that uses SaaSAmount). Use for directional
+      ARR-by-channel storytelling only; the canonical run-rate is int_customer_mrr.
+      FX is applied by the consumer: emits the pre-FX US / non-US SaaS split so
+      CAD ARR = ((saas_us_portion*rate + saas_nonus_portion)/attribution_value)*12.
+      Excludes test accounts, internal Method Integration partner rows, and the
+      current incomplete month.
+    config:
+      materialized: view
+      labels:
+        metric_id: ''
+        layer: marketing
+        type: dimensional
+        status: directional
+        verified_at: '2026-06-01'
+        source_table: account
+        source_measure_safe: custdatlastsaasamount_run_rate
+        depends_on: ''
+    columns:
+      - name: channel
+        description: Attribution channel (SEO, PPC, Direct, OPN, Partners, Email, etc.), unpivoted from the Account Att_* flags.
+      - name: month
+        description: First-invoice month (DATE_TRUNC of FirstSaaSInvoiceTxnDate) — the new-customer acquisition cohort, not signup month.
+      - name: customers
+        description: Distinct new customers (CompanyAccount) attributed to this channel in this month.
+      - name: attribution_value
+        description: Sum of fractional multi-touch attribution credit for the channel/month (a customer split across channels contributes a fraction to each).
+      - name: saas_usd
+        description: DIRECTIONAL run-rate. SUM(Custdatlastsaasamount * attribution_value), face value (pre-FX). Monthly plan rate allocated by attribution. NOT invoiced revenue.
+      - name: saas_us_portion
+        description: Portion of saas_usd from US-AR accounts (gets the USD->CAD multiplier downstream).
+      - name: saas_nonus_portion
+        description: Portion of saas_usd from non-US accounts (CAN/Other — no FX multiplier; already local).
+      - name: first_invoice_weighted
+        description: Attribution-weighted SUM(first_invoice_net_saas * attribution_value). Divide by attribution_value for "Avg First Invoice Revenue" (matches Looker). Invoiced basis (SaaSAmount+SaaSExpense on TxnDate=FirstSaaSInvoiceTxnDate).

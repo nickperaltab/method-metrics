@@ -197,7 +197,21 @@ We almost shipped #373 Customers without its `IsActive = TRUE` filter. The value
 
 The CRO flagged `v_converted_mrr` using `Custdatlastsaasamount` (drifts upward over time) instead of `SaaSAmount` from TransLineFlattened (the canonical revenue column).
 
-**For any revenue metric, the canonical column is `SaaSAmount` on TransLineFlattened.** Never `Custdatlastsaasamount` (that's a snapshot column from Account).
+**For any *recognized-revenue* metric, the canonical column is `SaaSAmount` on TransLineFlattened.** Never `Custdatlastsaasamount` (that's a snapshot column from Account).
+
+#### Scope clarification — the run-rate / ARR carve-out (added 2026-06-01)
+
+The rule above governs **recognized-revenue** metrics — booked/invoiced dollars (what `v_converted_mrr` was trying to be). It is **not** a blanket ban on `Custdatlastsaasamount`.
+
+For **run-rate / ARR / MRR-style** metrics, the correct input is a *recurring monthly rate*, not invoiced revenue — and the canonical run-rate source is `int_customer_mrr` (SaaSAmount-derived). `Custdatlastsaasamount` is an **accepted directional proxy for the run-rate** *only when explicitly labeled*, and only when there's a reason to (e.g. replicating an existing business artifact).
+
+**Worked example — `v_channel_arr` (Channel ARR, 2026-06-01):** replicates the marketing Looker "Revenue by Channel" dashboard, which computes ARR by channel from `Custdatlastsaasamount × Att_<channel>`. We replicate it faithfully (penny-match) *because the goal is to reproduce the live marketing number*, not to define a new accounting-grade one. Because it uses the snapshot field, it ships:
+
+- materialized in **`revenue`**, NOT `revenue_metrics` (which stays all-`live`/verified)
+- `status: directional` (never `live`)
+- a description that says, in plain words, that it's a directional run-rate replica, not accounting-grade, and that the canonical run-rate would be `int_customer_mrr`-derived
+
+So: recognized revenue → `SaaSAmount`, always. Run-rate/ARR → recurring rate; `int_customer_mrr` is canonical, `Custdatlastsaasamount` is an accepted *directional* proxy when labeled `directional` and kept out of `revenue_metrics`. **Never** use `Custdatlastsaasamount` for a metric that claims to be `live`/verified or that needs to tie to QuickBooks.
 
 ### "I declared a non-unique column as primary entity"
 
