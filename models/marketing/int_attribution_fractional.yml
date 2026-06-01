@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: int_attribution_fractional
+    description: |
+      PRIMITIVE — real multi-touch (fractional) channel attribution. One row per
+      (account × channel) with the fractional attribution weight; each account's
+      weights sum to exactly 1.0 across channels (one customer's credit spread
+      across the channels that touched them). Distinct from the single-touch
+      `AttributionChannel` dimension (which collapses each account to one channel
+      and buckets the rest as 'Unknown'). Carries signup/first-invoice dates,
+      run-rate plan amount (Custdatlastsaasamount), first-invoice net SaaS, and
+      US/non-US region, so any fractional "X by channel" measure is
+      SUM(<measure> * attribution_weight) GROUP BY channel. Excludes test accounts
+      and internal Method Integration partner rows.
+    config:
+      materialized: view
+      labels:
+        layer: intermediate
+        type: primitive
+        status: directional
+        grain: account_x_channel
+        source_table: account
+    columns:
+      - name: CompanyAccount
+        description: Method account (foreign-key grain — a customer can have multiple accounts).
+      - name: EntityRecordID
+        description: Stable customer-level id.
+      - name: channel
+        description: Attribution channel the weight applies to (SEO, PPC, Direct, OPN, Partners, Email, Social, etc.).
+      - name: attribution_weight
+        description: Fractional multi-touch credit for this (account, channel). Sums to 1.0 per account across channels.
+      - name: SignupDate
+        description: Trial signup date (for signup-cohort fractional breakdowns).
+      - name: FirstSaaSInvoiceTxnDate
+        description: First SaaS invoice date (conversion date; for new-customer-cohort fractional breakdowns).
+      - name: plan_rate
+        description: Custdatlastsaasamount — current monthly run-rate snapshot. DIRECTIONAL, not invoiced. Used for run-rate ARR.
+      - name: first_invoice_revenue
+        description: Net SaaS (SaaSAmount+SaaSExpense) on the account's first-invoice date. Invoiced basis.
+      - name: is_us
+        description: TRUE if the account's most-recent AR account is US (gets the USD->CAD multiplier downstream).

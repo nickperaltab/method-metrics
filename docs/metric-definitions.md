@@ -617,7 +617,7 @@ These are dbt-managed and documented, but deliberately **not** verified-grade. T
 
 **Filters / exclusions:** `IsConversionException = FALSE`; `Partner != 'Method Integration'`; converted accounts only (`FirstSaaSInvoiceTxnDate` set); current incomplete month excluded; 24-month window.
 
-**Methodology source:** reverse-engineered from the marketing Looker "Revenue by Channel" dashboard and penny-matched (see `scripts/parity_v_channel_arr.py`).
+**Methodology source:** reverse-engineered from the marketing Looker "Revenue by Channel" dashboard and penny-matched (see `scripts/parity_v_channel_arr.py`). Built on the **`int_attribution_fractional`** primitive — real multi-touch attribution (each customer's 1.0 of credit spread across the channels that touched them, weights sum to 1.0), distinct from the single-touch `AttributionChannel` dimension on int_trials/int_conversions.
 
 **Parity-verified against:** the Looker dashboard, May 2026 — customers, SaaS, CAD ARR, and Avg First Invoice Revenue all match across all 8 channels (2026-06-01).
 
@@ -628,7 +628,7 @@ These are dbt-managed and documented, but deliberately **not** verified-grade. T
 - Pre-FX; CAD conversion is currency-aware (US × rate, CAN/Other × 1) and applied by the consumer.
 - "Avg First Invoice Revenue" is the only invoice-based column (attribution-weighted).
 
-**Used by:** the in-app **Channel ARR** page (`builder/src/pages/ChannelArr.jsx`).
+**Used by:** *(pending)* — to be surfaced as a fractional-channel breakdown in the marketing scorecard (the bespoke standalone page was reverted in favor of the scorecard infra).
 
 ---
 

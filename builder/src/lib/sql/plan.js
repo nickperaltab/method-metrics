@@ -271,12 +271,21 @@ export function buildScorecardQueryPlan(config, metrics) {
   }
 
   for (const section of c.rawTableSections) {
-    const metric = metricsMap.get(section.metricId);
-    if (!metric?.semantic_table) continue;
-    const cols = (section.columns || [metric.semantic_date_col, 'CompanyAccount']).join(', ');
-    const table = `\`project-for-method-dw.revenue.${metric.semantic_table}\``;
+    let cols, table, orderCol;
+    if (section.viewName) {
+      // Escape hatch: point a rawTable straight at a BQ view (no registered
+      // metric needed). Use a string metricId so collectMetricIds skips it.
+      table = `\`project-for-method-dw.revenue.${section.viewName}\``;
+      cols = (section.columns || ['*']).join(', ');
+      orderCol = section.dateCol || 'month';
+    } else {
+      const metric = metricsMap.get(section.metricId);
+      if (!metric?.semantic_table) continue;
+      cols = (section.columns || [metric.semantic_date_col, 'CompanyAccount']).join(', ');
+      table = `\`project-for-method-dw.revenue.${metric.semantic_table}\``;
+      orderCol = metric.semantic_date_col;
+    }
     const limit = section.limit || 100;
-    const orderCol = metric.semantic_date_col;
     const key = `${section.metricId}:raw`;
     expectedKeys.add(key);
     queries.push({
