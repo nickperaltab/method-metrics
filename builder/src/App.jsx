@@ -13,7 +13,6 @@ import AdminInsights from './pages/AdminInsights';
 import Scorecard from './pages/Scorecard';
 import McpToken from './pages/McpToken';
 import SaasDataExport from './pages/SaasDataExport';
-import ChannelArr from './pages/ChannelArr';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
@@ -117,7 +116,6 @@ export default function App() {
             <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
             {/* Disconnected admin route — no nav link, direct URL only. */}
             <Route path="/exports/saas-data" element={<SaasDataExport bqConnected={connected} />} />
-            <Route path="/channel-arr" element={<ChannelArr bqConnected={connected} />} />
           </Routes>
         </Layout>
       </HashRouter>
