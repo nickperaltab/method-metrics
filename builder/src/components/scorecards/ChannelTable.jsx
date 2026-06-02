@@ -19,6 +19,7 @@ const DEFAULT_COLUMNS = [
   { key: 'arpc',            label: 'ARPC',             metricId: 397, format: 'currency' },
   { key: 'arr',             label: 'ARR',              metricId: 398, format: 'currency' },
   { key: 'cadArr',          label: 'CAD ARR',          metricId: 399, format: 'currency' },
+  { key: 'cadArr3mo',       label: 'CAD ARR (3-mo)',   format: 'currency' },
 ];
 
 const fmt = {
@@ -57,6 +58,20 @@ export default function ChannelTable({ config, dataMap, onMetricClick }) {
   const [sortKey, setSortKey] = useState('attribution');
   const [sortDir, setSortDir] = useState('desc');
 
+  // trailing 3 calendar months ending at the selected month (for the rolling avg)
+  const windowMonths = useMemo(() => {
+    const asc = [...new Set(series.attr?.labels || [])].sort();
+    const i = asc.indexOf(activeMonth);
+    return i >= 0 ? asc.slice(Math.max(0, i - 2), i + 1) : (activeMonth ? [activeMonth] : []);
+  }, [series.attr, activeMonth]);
+
+  // a channel's CAD ARR for one month (per-customer, current FX); null if no data
+  const cadArrFor = (ch, m) => {
+    const a = valAt(series.attr, ch, m);
+    if (!a) return null;
+    return ((valAt(series.us, ch, m) * rate + valAt(series.nonus, ch, m)) / a) * 12;
+  };
+
   const rows = useMemo(() => {
     const channels = [...new Set(Object.keys(series.attr?.seriesMap || {}))];
     const out = channels.map((ch) => {
@@ -66,42 +81,81 @@ export default function ChannelTable({ config, dataMap, onMetricClick }) {
       const attribution = valAt(series.attr, ch, activeMonth);
       const customers = valAt(series.customers, ch, activeMonth);
       const firstInv = valAt(series.firstInv, ch, activeMonth);
+      // simple average of the per-month CAD ARR over the trailing 3 months (skip empty months)
+      const detail = windowMonths.map((m) => ({ month: m, value: cadArrFor(ch, m) }))
+        .filter((d) => d.value != null);
+      const cadArr3mo = detail.length ? detail.reduce((s, d) => s + d.value, 0) / detail.length : null;
       return {
         channel: ch, customers, attribution, saas,
         avgFirstInvoice: attribution ? firstInv / attribution : 0,
         arpc: attribution ? saas / attribution : 0,
         arr: attribution ? (saas / attribution) * 12 : 0,
         cadArr: attribution ? ((us * rate + nonus) / attribution) * 12 : 0,
+        cadArr3mo, cadArr3moDetail: detail,
         _us: us, _nonus: nonus,
       };
     }).filter((r) => r.attribution || r.customers);
+    const norm = (v) => (v == null ? -Infinity : v);
     out.sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
-      const cmp = typeof av === 'string' ? av.localeCompare(bv) : (av - bv);
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : (norm(av) - norm(bv));
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return out;
-  }, [series, activeMonth, rate, sortKey, sortDir]);
+  }, [series, activeMonth, rate, sortKey, sortDir, windowMonths]);
 
   const total = useMemo(() => {
     const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
     const attribution = sum('attribution');
     const saas = sum('saas'), us = sum('_us'), nonus = sum('_nonus');
     const firstInvW = rows.reduce((s, r) => s + r.avgFirstInvoice * r.attribution, 0);
+    // total CAD ARR per window month (all channels pooled), then simple-averaged
+    const channels = Object.keys(series.attr?.seriesMap || {});
+    const detail = windowMonths.map((m) => {
+      let su = 0, sn = 0, sa = 0;
+      for (const ch of channels) {
+        const a = valAt(series.attr, ch, m);
+        if (!a) continue;
+        su += valAt(series.us, ch, m); sn += valAt(series.nonus, ch, m); sa += a;
+      }
+      return { month: m, value: sa ? ((su * rate + sn) / sa) * 12 : null };
+    }).filter((d) => d.value != null);
+    const cadArr3mo = detail.length ? detail.reduce((s, d) => s + d.value, 0) / detail.length : null;
     return {
       channel: 'Grand total', customers: sum('customers'), attribution, saas,
       avgFirstInvoice: attribution ? firstInvW / attribution : 0,
       arpc: attribution ? saas / attribution : 0,
       arr: attribution ? (saas / attribution) * 12 : 0,
       cadArr: attribution ? ((us * rate + nonus) / attribution) * 12 : 0,
+      cadArr3mo, cadArr3moDetail: detail,
     };
-  }, [rows, rate]);
+  }, [rows, rate, series, windowMonths]);
 
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('desc'); }
   };
   const click = (col, value) => col.metricId && onMetricClick?.(col.metricId, value, col.format);
+
+  const renderCell = (c, row, bold) => {
+    if (c.key === 'cadArr3mo') {
+      const tip = (row.cadArr3moDetail || [])
+        .map((d) => `${String(d.month).slice(0, 7)}: ${fmt.currency(d.value)}`).join('    ');
+      return (
+        <td key={c.key} style={bold ? { ...td, fontWeight: 700 } : td} title={tip || undefined}>
+          {row.cadArr3mo == null ? '—' : fmt.currency(row.cadArr3mo)}
+        </td>
+      );
+    }
+    const base = c.metricId ? tdClick : td;
+    return (
+      <td key={c.key} style={bold ? { ...base, fontWeight: 700 } : base}
+        onClick={() => click(c, row[c.key])}
+        title={c.metricId ? 'Click to see how this is derived' : undefined}>
+        {(fmt[c.format] || fmt.number)(row[c.key])}
+      </td>
+    );
+  };
 
   if (!series.attr) {
     return <p style={{ color: '#6b7280', fontSize: 13, padding: 16 }}>Loading channel data…</p>;
@@ -139,23 +193,12 @@ export default function ChannelTable({ config, dataMap, onMetricClick }) {
             {rows.map((r) => (
               <tr key={r.channel}>
                 <td style={tdL}>{r.channel}</td>
-                {columns.map((c) => (
-                  <td key={c.key} style={c.metricId ? tdClick : td}
-                    onClick={() => click(c, r[c.key])}
-                    title={c.metricId ? 'Click to see how this is derived' : undefined}>
-                    {(fmt[c.format] || fmt.number)(r[c.key])}
-                  </td>
-                ))}
+                {columns.map((c) => renderCell(c, r, false))}
               </tr>
             ))}
             <tr style={{ borderTop: '2px solid #e2e5e9' }}>
               <td style={{ ...tdL, fontWeight: 700 }}>{total.channel}</td>
-              {columns.map((c) => (
-                <td key={c.key} style={{ ...(c.metricId ? tdClick : td), fontWeight: 700 }}
-                  onClick={() => click(c, total[c.key])}>
-                  {(fmt[c.format] || fmt.number)(total[c.key])}
-                </td>
-              ))}
+              {columns.map((c) => renderCell(c, total, true))}
             </tr>
           </tbody>
         </table>

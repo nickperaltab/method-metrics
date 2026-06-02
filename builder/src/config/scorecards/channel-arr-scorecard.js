@@ -34,6 +34,7 @@ export default {
         { key: 'arpc',            label: 'ARPC',             metricId: 397, format: 'currency' },
         { key: 'arr',             label: 'ARR',              metricId: 398, format: 'currency' },
         { key: 'cadArr',          label: 'CAD ARR',          metricId: 399, format: 'currency' },
+        { key: 'cadArr3mo',       label: 'CAD ARR (3-mo)',   format: 'currency' },
       ],
     },
   ],
