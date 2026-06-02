@@ -191,9 +191,11 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
             </div>
           )}
         </div>
-        <ScoreCardFilters
-          lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
-        />
+        {!config.hideDateFilter && (
+          <ScoreCardFilters
+            lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
+          />
+        )}
       </div>
 
       <StaleIndicator freshness={freshness} refreshedAt={refreshedAt} />

@@ -17,6 +17,7 @@ export default {
   status: 'pending',
   group: 'revenue',
   hideGrain: true,
+  hideDateFilter: true,  // table has its own month picker — the range filter is redundant
   sections: [
     {
       type: 'channelTable',
