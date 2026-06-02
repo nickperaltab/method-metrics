@@ -628,7 +628,9 @@ These are dbt-managed and documented, but deliberately **not** verified-grade. T
 - Pre-FX; CAD conversion is currency-aware (US × rate, CAN/Other × 1) and applied by the consumer.
 - "Avg First Invoice Revenue" is the only invoice-based column (attribution-weighted).
 
-**Used by:** *(pending)* — to be surfaced as a fractional-channel breakdown in the marketing scorecard (the bespoke standalone page was reverted in favor of the scorecard infra).
+**Registered metric family (directional, ids #390–399):** Channel New SaaS run-rate (#390), US/Non-US SaaS (#391/#392), Attribution Value (#393), Unique Customers (#394), First Invoice weighted (#395) — all semantic measures on `int_attribution_fractional` grouped by `channel`; plus derived **Avg First Invoice (#396), ARPC (#397), ARR (#398), CAD ARR (#399)** (formula metrics → drill-down resolves the derivation chain). All `queued`/directional, stage `revenue`.
+
+**Used by:** the **Channel ARR** scorecard (`/scorecards/channel-arr`) — a `channelTable` section (dimension rows × metric columns, month + USD→CAD filters, grand total, sortable, per-cell drill-down to the MetricInspector).
 
 ---
 

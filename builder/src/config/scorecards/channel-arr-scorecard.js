@@ -1,38 +1,39 @@
 /**
  * Channel ARR — marketing "Revenue by Channel" replica.
  *
- * DIRECTIONAL run-rate (Custdatlastsaasamount), backed by the fractional
- * multi-touch attribution primitive (revenue.int_attribution_fractional) via
- * revenue.v_channel_arr_display. CAD baked at 1.33. Penny-matched to the Looker
+ * Backed by the registered Channel ARR metric family (#390-399) on the
+ * real multi-touch attribution primitive (revenue.int_attribution_fractional).
+ * DIRECTIONAL run-rate (Custdatlastsaasamount); penny-matched to the Looker
  * "Revenue by Channel" dashboard (May 2026). See docs/metric-definitions.md
  * "Channel ARR". Not accounting-grade; will not tie to RevCogs.
  *
- * Renders via the existing `rawTable` section (sortable / searchable / paged).
+ * Renders via the `channelTable` section: dimension rows × metric columns,
+ * month + USD→CAD filters, grand total, sortable headers, and per-cell
+ * drill-down to the MetricInspector (formula + dependency chain + SQL).
  */
 export default {
   id: 'channel-arr',
   title: 'Channel ARR',
   status: 'pending',
   group: 'revenue',
+  hideGrain: true,
   sections: [
     {
-      type: 'rawTable',
+      type: 'channelTable',
       title: 'Revenue by Channel',
-      description:
-        'New-customer ARR by marketing channel, using real multi-touch attribution ' +
-        '(each customer’s credit split across the channels that touched them). ' +
-        'DIRECTIONAL run-rate (Custdatlastsaasamount); CAD at a fixed 1.33 — not ' +
-        'accounting-grade, will not tie to RevCogs. Click a column header to sort; ' +
-        'use search to filter by channel or month (e.g. “2026-05”).',
-      label: 'Revenue by Channel',
-      metricId: 'channel-arr',          // string id → skips the metric machinery
-      viewName: 'v_channel_arr_display',
-      dateCol: 'month',
+      dimension: 'channel',
+      lastNMonths: 25,
+      // base metrics fetched grouped by channel; derived columns computed in-table
+      baseMetrics: [390, 391, 392, 393, 394, 395],
       columns: [
-        'month', 'channel', 'customers', 'attribution_value',
-        'avg_first_invoice', 'saas', 'arpc', 'arr', 'cad_arr', 'cad_arr_3mo',
+        { key: 'customers',       label: 'Unique Customers', metricId: 394, format: 'number'  },
+        { key: 'attribution',     label: 'AttributionValue', metricId: 393, format: 'number2' },
+        { key: 'avgFirstInvoice', label: 'Avg First Invoice', metricId: 396, format: 'currency' },
+        { key: 'saas',            label: 'SaaS',             metricId: 390, format: 'currency' },
+        { key: 'arpc',            label: 'ARPC',             metricId: 397, format: 'currency' },
+        { key: 'arr',             label: 'ARR',              metricId: 398, format: 'currency' },
+        { key: 'cadArr',          label: 'CAD ARR',          metricId: 399, format: 'currency' },
       ],
-      limit: 500,
     },
   ],
 };

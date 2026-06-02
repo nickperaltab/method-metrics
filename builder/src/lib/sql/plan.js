@@ -34,6 +34,21 @@ export function collectMetricIds(config) {
       if (typeof section.metricId === 'number') ids.add(section.metricId);
       continue;
     }
+    if (section.type === 'channelTable') {
+      // Fetch the base metrics grouped by the dimension; the table computes the
+      // derived columns client-side and uses the derived ids only for drill-down.
+      const dim = section.dimension || 'channel';
+      for (const mid of section.baseMetrics || []) {
+        if (typeof mid === 'number') {
+          ids.add(mid);
+          groupedCharts.push({ metricId: mid, dimension: dim, lastNMonths: section.lastNMonths ?? 25 });
+        }
+      }
+      for (const col of section.columns || []) {
+        if (typeof col.metricId === 'number') ids.add(col.metricId);
+      }
+      continue;
+    }
     for (const kpi of section.kpis || []) {
       if (typeof kpi.metricId !== 'number') continue;
       ids.add(kpi.metricId);

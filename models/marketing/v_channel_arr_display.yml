@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: v_channel_arr_display
+    description: |
+      DIRECTIONAL presentation view for the Channel ARR scorecard — final display
+      columns per (channel × first-invoice month) computed from v_channel_arr (on
+      the int_attribution_fractional real-multi-touch primitive). "SaaS" is the
+      run-rate (Custdatlastsaasamount) allocated by fractional attribution — NOT
+      invoiced revenue, does not tie to RevCogs. CAD ARR baked at a fixed 1.33.
+      Penny-matched to the Looker "Revenue by Channel" dashboard (May 2026).
+    config:
+      materialized: view
+      labels:
+        layer: marketing
+        type: presentation
+        status: directional
+        source_table: v_channel_arr
+    columns:
+      - name: channel
+        description: Attribution channel (real multi-touch — see int_attribution_fractional).
+      - name: month
+        description: First-invoice month (new-customer acquisition cohort).
+      - name: customers
+        description: Distinct new customers attributed to the channel that month.
+      - name: attribution_value
+        description: Summed fractional attribution credit (a customer split across channels contributes a fraction to each).
+      - name: avg_first_invoice
+        description: Attribution-weighted average first-invoice net SaaS (invoiced basis). = Σ(first_invoice×w)/attribution_value.
+      - name: saas
+        description: DIRECTIONAL run-rate SaaS = Σ(Custdatlastsaasamount × weight). Plan rate, not invoiced.
+      - name: arpc
+        description: Average revenue per customer = saas / attribution_value.
+      - name: arr
+        description: Annual run-rate per customer = arpc × 12.
+      - name: cad_arr
+        description: ARR converted to CAD (US × 1.33, non-US × 1), per customer. = ((US saas×1.33 + non-US saas)/attribution_value)×12.
+      - name: cad_arr_3mo
+        description: 3-month trailing rolling average of cad_arr per channel.

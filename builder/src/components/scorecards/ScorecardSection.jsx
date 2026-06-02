@@ -3,6 +3,7 @@ import KpiColumn from './KpiColumn';
 import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
+import ChannelTable from './ChannelTable';
 
 const GRAIN_OPTIONS = [
   { label: 'Daily', value: 'day' },
@@ -33,6 +34,18 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
           )}
         </div>
         <RawTable config={section} dataMap={dataMap} />
+      </div>
+    );
+  }
+
+  // Channel breakdown table — dimension rows × metric columns, filters + drill-down.
+  if (section.type === 'channelTable') {
+    return (
+      <div style={{ marginBottom: 48 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: '0 0 16px', fontFamily: "'DM Sans', sans-serif" }}>
+          {section.title}
+        </h2>
+        <ChannelTable config={section} dataMap={dataMap} onMetricClick={onMetricClick} />
       </div>
     );
   }
