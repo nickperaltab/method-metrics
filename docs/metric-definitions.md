@@ -621,7 +621,7 @@ These are dbt-managed and documented, but deliberately **not** verified-grade. T
 
 **Parity-verified against:** the Looker dashboard, May 2026 — customers, SaaS, CAD ARR, and Avg First Invoice Revenue all match across all 8 channels (2026-06-01).
 
-**Status:** **directional** — NOT live. ⚠️ Uses `Custdatlastsaasamount` (run-rate snapshot), a **documented exception** to the canonical-revenue-column rule (`SaaSAmount`). The exception is justified because ARR wants a recurring *rate*, not invoiced revenue — see the "run-rate / ARR carve-out" in `migrate-metric-to-dbt/SKILL.md`. It is directional, not accounting-grade, and will NOT reconcile to RevCogs/QuickBooks. The canonical run-rate would be `int_customer_mrr`-derived; this replicates the live marketing artifact instead.
+**Status:** **directional — verified** (parity-confirmed vs the Looker dashboard 2026-06-02 across all columns incl. the 3-mo rolling; metrics #390–399 stamped `verified_at`, scorecard `channel-arr` approved). Intentionally **NOT `live`** and NOT in `revenue_metrics`. ⚠️ Uses `Custdatlastsaasamount` (run-rate snapshot), a **documented exception** to the canonical-revenue-column rule (`SaaSAmount`). The exception is justified because ARR wants a recurring *rate*, not invoiced revenue — see the "run-rate / ARR carve-out" in `migrate-metric-to-dbt/SKILL.md`. It is directional, not accounting-grade, and will NOT reconcile to RevCogs/QuickBooks. The canonical run-rate would be `int_customer_mrr`-derived; this replicates the live marketing artifact instead.
 
 **Known caveats:**
 - Directional run-rate, ~10% fuzzy vs invoiced (plan-rate field misses discounts/prorations).

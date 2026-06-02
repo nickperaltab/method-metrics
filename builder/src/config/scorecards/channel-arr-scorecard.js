@@ -14,7 +14,7 @@
 export default {
   id: 'channel-arr',
   title: 'Channel ARR',
-  status: 'pending',
+  status: 'approved',  // parity-confirmed vs Looker 2026-06-02
   group: 'revenue',
   hideGrain: true,
   hideDateFilter: true,  // table has its own month picker — the range filter is redundant

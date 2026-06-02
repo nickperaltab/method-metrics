@@ -19,6 +19,7 @@ models:
         layer: intermediate
         type: primitive
         status: directional
+        verified_at: '2026-06-02'
         grain: account_x_channel
         source_table: account
     columns:

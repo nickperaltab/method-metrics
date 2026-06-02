@@ -15,6 +15,7 @@ models:
         layer: marketing
         type: presentation
         status: directional
+        verified_at: '2026-06-02'
         source_table: v_channel_arr
     columns:
       - name: channel
