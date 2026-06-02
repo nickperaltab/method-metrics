@@ -3,3 +3,7 @@ test-results/
 playwright-report/
 .env
 dbt_internal_packages/
+
+# Internal financial source-of-truth files and dbt logs — never commit (public repo)
+sources/
+logs/
