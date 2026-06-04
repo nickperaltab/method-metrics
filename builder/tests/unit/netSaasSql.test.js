@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -161,5 +161,34 @@ describe('buildRateSql', () => {
     expect(sql).toContain('revenue_metrics.v_metric__monthly_grr');
     expect(sql).toContain("period = '2026-05-01'");
     expect(sql).toContain('value');
+  });
+});
+
+describe('buildAccountHistorySql', () => {
+  it('monthly mrr/seats/apps for one entity, full history, ordered', () => {
+    const sql = buildAccountHistorySql({ entityRecordId: 100037 });
+    expect(sql).toContain('int_customer_mrr_lines');
+    expect(sql).toContain('entity_record_id = 100037');
+    expect(sql).toContain('SUM(saas)');
+    expect(sql.toLowerCase()).toContain('count(distinct');
+    expect(sql.toLowerCase()).toContain('group by month');
+    expect(sql.toLowerCase()).toContain('order by month');
+  });
+  it('coerces entityRecordId to a number (no quotes, no injection)', () => {
+    const sql = buildAccountHistorySql({ entityRecordId: '100037; DROP' });
+    expect(sql).toContain('entity_record_id = 100037');
+    expect(sql).not.toContain('DROP');
+  });
+});
+
+describe('buildAccountLifecycleSql', () => {
+  it('aggregates lifecycle dates for one entity from Account', () => {
+    const sql = buildAccountLifecycleSql({ entityRecordId: 100037 });
+    expect(sql).toContain('revenue.Account');
+    expect(sql).toContain('EntityRecordID = 100037');
+    expect(sql).toContain('MIN(SignUpDate)');
+    expect(sql).toContain('MIN(CustDatFirstSyncCompleted)');
+    expect(sql).toContain('MIN(FirstSaaSInvoiceTxnDate)');
+    expect(sql).toContain('MAX(CancellationDate)');
   });
 });

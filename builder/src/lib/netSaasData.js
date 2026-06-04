@@ -14,6 +14,8 @@ import {
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
+  buildAccountHistorySql,
+  buildAccountLifecycleSql,
 } from './netSaasSql.js';
 
 const num = (v) => Number(v) || 0;
@@ -79,4 +81,17 @@ export async function fetchFilterOptions({ dims, months = 24, bridgeView }) {
     if (out[r.dim]) out[r.dim].push(r.val);
   }
   return out;
+}
+
+// Per-account monthly MRR / seats / apps history for the L4 detail view.
+export async function fetchAccountHistory({ entityRecordId }) {
+  const { rows } = await queryBq(buildAccountHistorySql({ entityRecordId }));
+  return rows.map((r) => ({ month: r.month, mrr: num(r.mrr), seats: num(r.seats), apps: num(r.apps) }));
+}
+
+// Lifecycle milestone dates for one account — null when absent.
+export async function fetchAccountLifecycle({ entityRecordId }) {
+  const { rows } = await queryBq(buildAccountLifecycleSql({ entityRecordId }));
+  const r = rows[0] || {};
+  return { signup: r.signup || null, firstSync: r.first_sync || null, firstInvoice: r.first_invoice || null, cancelled: r.cancelled || null };
 }

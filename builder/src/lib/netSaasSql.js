@@ -153,3 +153,32 @@ GROUP BY val`);
   return `${parts.join('\nUNION ALL\n')}
 ORDER BY dim, val`;
 }
+
+// Per-account monthly MRR / seats / apps history (full timeline) for the detail
+// view. entityRecordId is a trusted numeric from the L3 row — coerced via
+// Number() and interpolated as a number (no quotes), which also neutralizes any
+// injection attempt (Number('100037; DROP') === 100037).
+export function buildAccountHistorySql({ entityRecordId }) {
+  const id = parseInt(entityRecordId, 10);
+  return `SELECT
+  month,
+  ROUND(SUM(saas), 2) AS mrr,
+  SUM(CASE WHEN NOT is_discount THEN qty ELSE 0 END) AS seats,
+  COUNT(DISTINCT CASE WHEN NOT is_discount AND saas != 0 THEN item END) AS apps
+FROM \`project-for-method-dw.revenue.int_customer_mrr_lines\`
+WHERE entity_record_id = ${id}
+GROUP BY month
+ORDER BY month`;
+}
+
+// Lifecycle milestone dates for one account, aggregated from the Account source.
+export function buildAccountLifecycleSql({ entityRecordId }) {
+  const id = parseInt(entityRecordId, 10);
+  return `SELECT
+  MIN(SignUpDate) AS signup,
+  MIN(CustDatFirstSyncCompleted) AS first_sync,
+  MIN(FirstSaaSInvoiceTxnDate) AS first_invoice,
+  MAX(CancellationDate) AS cancelled
+FROM \`project-for-method-dw.revenue.Account\`
+WHERE EntityRecordID = ${id}`;
+}
