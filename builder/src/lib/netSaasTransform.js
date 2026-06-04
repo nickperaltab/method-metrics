@@ -23,6 +23,21 @@ export function normalizeBridge(row, config) {
   });
 }
 
+// Apply a lens to normalized bridge bars: mark visibility (totals always visible;
+// delta bars visible iff in lensCfg.bars) and compute % of Start for delta bars
+// when the lens uses dual labels. Totals never carry a pct.
+export function applyLens(bars, lensCfg, startValue) {
+  const visibleDeltas = new Set(lensCfg?.bars || []);
+  return bars.map((b) => {
+    if (b.type === 'total') return { ...b, visible: true, pct: null };
+    const visible = visibleDeltas.has(b.key);
+    const pct = (lensCfg?.labelMode === 'dual' && startValue)
+      ? b.value / startValue
+      : null;
+    return { ...b, visible, pct };
+  });
+}
+
 // Period-over-period delta. pct is null when prior is 0 (avoid div-by-zero).
 export function computeDelta(current, prior) {
   const abs = current - prior;
