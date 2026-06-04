@@ -30,7 +30,7 @@ const thL = { ...th, textAlign: 'left' };
 const td = { textAlign: 'right', padding: '7px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#374151', borderBottom: '1px solid #f1f3f5', whiteSpace: 'nowrap' };
 const tdL = { ...td, textAlign: 'left', fontFamily: "'DM Sans', sans-serif", fontWeight: 600 };
 
-export default function NetSaasAccountTable({ rows, drill, config }) {
+export default function NetSaasAccountTable({ rows, drill, config, onRowClick }) {
   const columns = useMemo(() => {
     const core = config?.l3?.core || [];
     const extras = (config?.l3?.extras && drill && config.l3.extras[drill]) || [];
@@ -90,7 +90,13 @@ export default function NetSaasAccountTable({ rows, drill, config }) {
           </thead>
           <tbody>
             {sorted.map((r, i) => (
-              <tr key={r.id ?? r.Company ?? i}>
+              <tr
+                key={r.id ?? r.Company ?? i}
+                onClick={() => onRowClick?.(r)}
+                style={onRowClick ? { cursor: 'pointer' } : undefined}
+                onMouseEnter={onRowClick ? (e) => { e.currentTarget.style.background = '#f1f5f9'; } : undefined}
+                onMouseLeave={onRowClick ? (e) => { e.currentTarget.style.background = ''; } : undefined}
+              >
                 {columns.map((c) => (
                   <td key={c.key} style={c.key === firstTextKey ? tdL : td}>
                     {(fmt[c.format] || fmt.text)(r[c.key])}

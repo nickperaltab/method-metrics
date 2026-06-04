@@ -12,6 +12,7 @@ import { ChartErrorBoundary } from '../EChart';
 import NetSaasBridge from './NetSaasBridge';
 import L2Panel from './L2Panel';
 import NetSaasAccountTable from './NetSaasAccountTable';
+import AccountDetail from './AccountDetail';
 import DrillBreadcrumb from './DrillBreadcrumb';
 import GlobalFilterBar from './GlobalFilterBar';
 import { normalizeBridge, applyLens } from '../../lib/netSaasTransform';
@@ -23,6 +24,8 @@ import {
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
+  fetchAccountHistory,
+  fetchAccountLifecycle,
 } from '../../lib/netSaasData';
 
 // ── date helpers ────────────────────────────────────────────────────────────
@@ -80,6 +83,11 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [l2, setL2] = useState(null);
   const [l3, setL3] = useState(null);
 
+  const [account, setAccount] = useState(null);
+  const [accountHistory, setAccountHistory] = useState(null);
+  const [accountLifecycle, setAccountLifecycle] = useState(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+
   const [bridgeLoading, setBridgeLoading] = useState(false);
   const [l2Loading, setL2Loading] = useState(false);
   const [l3Loading, setL3Loading] = useState(false);
@@ -95,6 +103,9 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setDrill(null);
     setL2(null);
     setL3(null);
+    setAccount(null);
+    setAccountHistory(null);
+    setAccountLifecycle(null);
 
     const bridgeView = grainCfg.bridgeView;
 
@@ -161,12 +172,19 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   }, [cfg, filters, month, grainCfg]);
 
   // ── handlers ────────────────────────────────────────────────────────────────
+  const clearAccount = () => {
+    setAccount(null);
+    setAccountHistory(null);
+    setAccountLifecycle(null);
+  };
+
   const handleBarClick = (barKey) => {
     const spec = cfg.drills[barKey];
     if (!spec) return;
     const dim = spec.mode === 'dimension' ? (spec.defaultDim || null) : null;
     setDrill({ bar: barKey, dim, slice: null });
     setL3(null);
+    clearAccount();
     loadL2(barKey, dim);
   };
 
@@ -174,6 +192,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     if (!drill) return;
     setDrill((d) => ({ ...d, dim, slice: null }));
     setL3(null);
+    clearAccount();
     loadL2(drill.bar, dim);
   };
 
@@ -182,13 +201,35 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setDrill((d) => ({ ...d, slice }));
     setL3Loading(true);
     setError(null);
+    clearAccount();
     fetchAccountTable({ month, drill: drill.bar, dim: drill.dim, slice, filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView })
       .then((rows) => setL3(rows))
       .catch((e) => setError(e))
       .finally(() => setL3Loading(false));
   };
 
+  const handleAccountClick = (row) => {
+    if (!row?.entity_record_id) return;
+    setAccount(row);
+    setAccountLoading(true);
+    setAccountHistory(null);
+    setAccountLifecycle(null);
+    Promise.all([
+      fetchAccountHistory({ entityRecordId: row.entity_record_id }),
+      fetchAccountLifecycle({ entityRecordId: row.entity_record_id }),
+    ])
+      .then(([hist, life]) => { setAccountHistory(hist); setAccountLifecycle(life); })
+      .catch((e) => setError(e))
+      .finally(() => setAccountLoading(false));
+  };
+
   const handleNavigate = (level) => {
+    // Any non-leaf navigation drops the open account detail (level 4 is the leaf).
+    if (level <= 3) {
+      setAccount(null);
+      setAccountHistory(null);
+      setAccountLifecycle(null);
+    }
     if (level === 0) {
       setDrill(null);
       setL2(null);
@@ -197,7 +238,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       setDrill((d) => (d ? { ...d, slice: null } : d));
       setL3(null);
     }
-    // level 2 is the leaf — no-op (already there)
+    // level 2 is the slice leaf; level 4 is the account leaf — no-op for drill state.
   };
 
   // ── breadcrumb trail from drill state ───────────────────────────────────────
@@ -206,6 +247,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     const bar = cfg.bridge.find((b) => b.key === drill.bar);
     trail.push({ level: 1, label: bar?.label || drill.bar });
     if (drill.slice) trail.push({ level: 2, label: String(drill.slice) });
+    if (account) trail.push({ level: 4, label: account.Company || 'Account' });
   }
 
   // ── unauthed state: mirror the Scorecard router's connect prompt ─────────────
@@ -376,7 +418,14 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {drill?.slice && (
         l3Loading && !l3
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} /></ChartErrorBoundary>
+          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} onRowClick={handleAccountClick} /></ChartErrorBoundary>
+      )}
+
+      {/* 7. L4 account detail (history timeline) */}
+      {account && (
+        accountLoading && !accountHistory
+          ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading account history…</p>
+          : <ChartErrorBoundary><AccountDetail account={account} history={accountHistory} lifecycle={accountLifecycle} /></ChartErrorBoundary>
       )}
     </div>
   );
