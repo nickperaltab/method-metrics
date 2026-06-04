@@ -11,6 +11,32 @@ export const netSaasScorecard = {
   defaultRange: 'latest-complete-month',
   renderer: 'netSaasDrill',  // Scorecard.jsx branches on this to mount DecompositionDrill
 
+  // grain → source views (monthly = today's; annual = the live annual models)
+  grains: {
+    monthly: {
+      label: 'Monthly',
+      bridgeView: 'int_customer_mrr',
+      decompView: 'int_mrr_movement_decomposed',
+      grrMetric: 'v_metric__monthly_grr',
+      nrrMetric: 'v_metric__monthly_nrr',
+    },
+    annual: {
+      label: 'Annual',
+      bridgeView: 'int_customer_annual_mrr',
+      decompView: 'int_annual_mrr_movement_decomposed',
+      grrMetric: 'v_metric__annual_grr',
+      nrrMetric: 'v_metric__annual_nrr',
+    },
+  },
+
+  // lens → which DELTA bars show + label mode + headline rate (null = no rate)
+  // Start + End always render. NRR excludes New; GRR excludes New AND Expansion.
+  lenses: {
+    netSaas: { label: 'Net SaaS', bars: ['new','expansion','downgrade','churn'], labelMode: 'dollar', rate: null },
+    nrr:     { label: 'NRR',      bars: ['expansion','downgrade','churn'],       labelMode: 'dual',   rate: 'nrr' },
+    grr:     { label: 'GRR',      bars: ['downgrade','churn'],                    labelMode: 'dual',   rate: 'grr' },
+  },
+
   // L1 bridge bars, in render order. `sign` drives the waterfall direction.
   bridge: [
     { key: 'start',      label: 'Start MRR',  type: 'total',  column: 'StartMRR' },
