@@ -16,7 +16,7 @@ const COLOR_GREY = '#6b7280';
 const LIFECYCLE_EVENTS = [
   { key: 'signup', label: 'Signup', color: '#9ca3af' },      // grey
   { key: 'firstSync', label: 'First sync', color: '#3b6ea5' }, // blue
-  { key: 'firstInvoice', label: 'First invoice', color: '#059669' }, // green
+  { key: 'firstInvoice', label: 'Invoice', color: '#059669' }, // green
   { key: 'cancelled', label: 'Cancelled', color: '#dc2626' }, // red
 ];
 
