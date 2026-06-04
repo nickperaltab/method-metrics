@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -27,5 +27,23 @@ describe('buildBridgeSql', () => {
   it('escapes single quotes in filter values', () => {
     const sql = buildBridgeSql({ month: '2026-05-01', filters: { Vertical: "Joe's Plumbing" } });
     expect(sql).toContain("Vertical = 'Joe''s Plumbing'");
+  });
+});
+
+describe('buildDimSplitSql', () => {
+  it('groups NewMRR by AttributionChannel where NewMRR > 0', () => {
+    const sql = buildDimSplitSql({ month: '2026-05-01', measure: 'NewMRR', dim: 'AttributionChannel', filters: {} });
+    expect(sql).toContain('AttributionChannel AS bucket');
+    expect(sql).toContain('SUM(NewMRR) AS value');
+    expect(sql).toContain('NewMRR > 0');
+    expect(sql).toContain('GROUP BY AttributionChannel');
+    expect(sql).toContain('ORDER BY value DESC');
+  });
+
+  it('groups Cancellations by Segment where Cancellations > 0', () => {
+    const sql = buildDimSplitSql({ month: '2026-05-01', measure: 'Cancellations', dim: 'Segment', filters: {} });
+    expect(sql).toContain('SUM(Cancellations) AS value');
+    expect(sql).toContain('Cancellations > 0');
+    expect(sql).toContain('GROUP BY Segment');
   });
 });

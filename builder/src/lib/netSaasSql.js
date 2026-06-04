@@ -32,3 +32,15 @@ FROM ${ICM}
 WHERE Month = ${sqlStr(month)}
 ${buildFilterClauses(filters)}`.trimEnd();
 }
+
+export function buildDimSplitSql({ month, measure, dim, filters = {} }) {
+  return `SELECT
+  ${dim} AS bucket,
+  SUM(${measure}) AS value
+FROM ${ICM}
+WHERE Month = ${sqlStr(month)}
+  AND ${measure} > 0
+${buildFilterClauses(filters)}
+GROUP BY ${dim}
+ORDER BY value DESC`.trimEnd();
+}
