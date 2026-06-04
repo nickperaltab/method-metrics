@@ -37,8 +37,6 @@ sources:
       # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
       - name: int_customers
         description: One row per (customer-month) for active paying customers. Built from TransLineFlattened. Used by Customers metric (#373).
-      - name: int_customer_mrr
-        description: Monthly customer-grain MRR with movement columns (StartMRR, Cancellations, Downgrades, Expansions, NewMrr). Symmetric Prepay Expiry exclusion (CEO-confirmed methodology, 2026-04-28). Used by MRR family metrics (#378-381).
       - name: int_customer_annual_mrr
         description: Annual customer-grain MRR with movement columns. Used by annual MRR family metrics (#384-387).
       - name: int_conversions

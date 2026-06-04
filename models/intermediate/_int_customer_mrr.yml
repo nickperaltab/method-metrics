@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: int_customer_mrr
+    description: |
+      Per-customer per-month MRR with movement classification. Migrated from the
+      orphaned BQ view 2026-06-03 (see knowledge/verified-queries/int_customer_mrr-pre-migration-ddl.sql).
+      Parity-verified via scripts/parity_int_customer_mrr.py (MRR math bit-identical to legacy).
+      Methodology: CEO-confirmed symmetric Prepay-Expiry exclusion (2026-04-28).
+      Movements are PARALLEL columns (NewMRR/Expansions/Downgrades/Cancellations), not a single movement_kind.
+    columns:
+      - name: Month
+        description: First day of the month.
+        tests: [not_null]
+      - name: EntityRecordID
+        description: Stable numeric customer ID. Use for temporal joins (not Company, which drifts on rename).
+        tests: [not_null]
+      - name: p2_saas
+        description: Current-month SaaS total for the entity (raw book; PE exclusion does not touch this).
+        tests: [not_null]

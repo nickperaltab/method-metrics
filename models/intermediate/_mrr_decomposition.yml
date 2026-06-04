@@ -1,0 +1,59 @@
+version: 2
+
+# Net SaaS MRR movement decomposition models — VALIDATED 2026-06-03.
+# Evidence:
+#   scripts/parity_mrr_decomposition_identity.py        — identity within $0.01/row
+#   scripts/parity_mrr_decomposition_vs_customer_mrr.py — reconciles to int_customer_mrr ($0.00 / 96 pairs)
+#   scripts/parity_customer_mrr_lines.py                — feeder rollup bit-exact (177,241 pairs)
+#   tests/assert_no_mixed_multientity_pe_company_months.sql — PE-grain guardrail
+#   dbt schema tests: not_null + accepted_values(movement_kind)
+
+models:
+  - name: int_customer_mrr_lines
+    description: >
+      Monthly line composition per customer-entity (month, entity, item) with
+      qty (seats proxy), saas, and an is_discount flag. Mirrors int_customer_mrr's
+      raw monthly book but keeps line detail. Validated 2026-06-03: rolls up bit-exact
+      to int_customer_mrr's customer-month SaaS total (scripts/parity_customer_mrr_lines.py).
+    columns:
+      - name: month
+        description: First of the calendar month (DATE_TRUNC of TxnDate).
+        tests: [not_null]
+      - name: entity_record_id
+        description: Stable numeric entity id (join key; survives company renames).
+        tests: [not_null]
+      - name: item
+        description: ItemFullName — the app/module (Service) or discount line.
+        tests: [not_null]
+      - name: qty
+        description: Sum of Qty on the line — proxy for paid users/seats.
+      - name: saas
+        description: Sum of SaaSAmount on the line for the month.
+
+  - name: int_mrr_movement_decomposed
+    description: >
+      Per (month, entity) month-over-month MRR change split into app_mrr /
+      seat_mrr / price_mrr via a price–volume–mix decomposition, plus a movement_kind
+      label (downgrade / expansion / cancellation / new / flat). Buckets sum to the
+      net change. Validated 2026-06-03: reconciles to int_customer_mrr movement totals
+      at $0.00 across 96 (month, kind) pairs (scripts/parity_mrr_decomposition_vs_customer_mrr.py).
+    columns:
+      - name: month
+        description: First of the calendar month (DATE_TRUNC of TxnDate).
+        tests: [not_null]
+      - name: entity_record_id
+        description: Stable numeric entity id (join key; survives company renames).
+        tests: [not_null]
+      - name: movement_kind
+        description: downgrade | expansion | cancellation | new | flat (by net MoM change).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['new', 'expansion', 'downgrade', 'cancellation', 'flat']
+      - name: seat_mrr
+        description: Portion of the change from seat/user (Qty) movement.
+      - name: app_mrr
+        description: Portion from modules (ItemFullName) added or dropped.
+      - name: price_mrr
+        description: Portion from unit-rate / discount changes.

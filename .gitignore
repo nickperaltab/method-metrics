@@ -7,3 +7,10 @@ dbt_internal_packages/
 # Internal financial source-of-truth files and dbt logs — never commit (public repo)
 sources/
 logs/
+
+# Account-level snapshots (contain Company names + per-customer MRR) — never commit (public repo)
+scripts/audit/*.json
+
+# Internal financial/strategy docs — kept private (live in ~/Desktop/method-private-docs/)
+docs/data-ingestion-proposal.md
+docs/superpowers/specs/2026-06-02-revenue-operating-model.md

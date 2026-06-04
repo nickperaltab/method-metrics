@@ -634,6 +634,101 @@ These are dbt-managed and documented, but deliberately **not** verified-grade. T
 
 ---
 
+## 4c. MRR-movement decomposition (Seats / Apps / Price) — staging, NOT live
+
+These three components split each customer-month's MRR change into Seats, Apps, and Price using a price–volume–mix decomposition. They become consumer-facing in the Net SaaS drilldown dashboard (the L2 split under Expansion and Downgrades). All three come from one model — `models/intermediate/int_mrr_movement_decomposed.sql` — and share the same grain, filters, methodology source, and parity evidence; the per-component sections below cover only what differs.
+
+**Shared grain:** customer-month. One value per `EntityRecordID × month`, attributed to a `movement_kind` of new / expansion / downgrade / cancellation / flat. The three columns (`seat_mrr`, `app_mrr`, `price_mrr`) sum to the customer-month's total MRR change by construction: `seat_mrr + app_mrr + price_mrr = p2_saas - p1_saas`.
+
+**Shared filters / exclusions (inherited from `int_customer_mrr_lines` and the model):**
+- `TxnDate >= '2021-12-01'` — data-quality floor.
+- Current incomplete month excluded — mid-month data shows false cancellations.
+- Internal Method accounts excluded (`CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%'`).
+- **Symmetric Prepay-Expiry exclusion** applied to cancellations: a customer-month whose prior book was entirely "Prepay Expiry Income" is reclassified out of cancellation (to `flat`), matching the verified `int_customer_mrr` model. WHY: phantom prepay-expiry books were never real recurring SaaS, so their expiry is not a real loss. CEO-confirmed methodology, 2026-04-28.
+
+**Shared methodology source:** price–volume–mix decomposition. Reference implementation: `scripts/decompose_mrr_movements.py`. Model: `models/intermediate/int_mrr_movement_decomposed.sql`.
+
+**Shared parity-verified against (2026-06-03):**
+- Identity (`seat + app + price = p2_saas - p1_saas`): `scripts/parity_mrr_decomposition_identity.py` — holds on all rows within $0.01.
+- Reconciliation to the verified `int_customer_mrr` movement totals: `scripts/parity_mrr_decomposition_vs_customer_mrr.py` — $0.00 across all 96 (month, movement_kind) pairs over the trailing 24 months.
+- Feeder line-rollup: `scripts/parity_customer_mrr_lines.py` — bit-exact (177,241 (month, entity) pairs, $0.00).
+
+**Shared status:** **staging — validated 2026-06-03, NOT live.** The model lives in `revenue`/staging, not promoted to `revenue_metrics`, and is not yet wired to a live consumer.
+
+**Shared caveats (apply to all three):**
+- The Prepay-Expiry exclusion is currently evaluated at **entity grain**; it matches the verified company-grain definition only because every all-PE company is presently single-entity. The dbt guardrail test `tests/assert_no_mixed_multientity_pe_company_months.sql` fails loudly if that ever stops being true.
+- The components decompose **Expansion and Downgrade** movements meaningfully. For New and Cancellation the change is the full book appearing or disappearing — the split still sums correctly but "seats vs apps vs price" is less analytically meaningful there.
+
+---
+
+### MRR Movement — Seats (`seat_mrr`)
+
+**What it answers in one sentence:** How much of a customer-month's MRR change came from buying or dropping paid users on a module they kept?
+
+**The math:** For a module (Service `ItemFullName`) present in both the prior and current month, `Δqty × prior unit-rate` — the change in paid-user quantity valued at the prior month's per-seat rate.
+
+**Grain:** customer-month (see shared grain above).
+
+**Filters / exclusions:** see shared filters above.
+
+**Methodology source:** see shared methodology source above.
+
+**Parity-verified against:** see shared parity evidence above.
+
+**Status:** staging — validated 2026-06-03, NOT live (see shared status).
+
+**Known caveats:**
+- A quantity change on a continuing module is "seats"; a module added or dropped entirely is "apps" (see Apps).
+- For a module with simultaneous quantity and rate changes, the price–volume–mix convention values Δqty at the prior rate (seats); the remainder is price. See the Price caveat.
+- Plus all shared caveats above.
+
+---
+
+### MRR Movement — Apps (`app_mrr`)
+
+**What it answers in one sentence:** How much of a customer-month's MRR change came from adding or dropping an entire module?
+
+**The math:** For a module (Service `ItemFullName`) added or dropped entirely between the two months, the full `+/-` of that module's SaaS amount.
+
+**Grain:** customer-month (see shared grain above).
+
+**Filters / exclusions:** see shared filters above.
+
+**Methodology source:** see shared methodology source above.
+
+**Parity-verified against:** see shared parity evidence above.
+
+**Status:** staging — validated 2026-06-03, NOT live (see shared status).
+
+**Known caveats:**
+- A module added or dropped entirely is "apps"; a quantity change on a continuing module is "seats" (see Seats).
+- A plan migration that swaps one module for another reads as an app-drop + an app-add, not a price change.
+- Plus all shared caveats above.
+
+---
+
+### MRR Movement — Price (`price_mrr`)
+
+**What it answers in one sentence:** How much of a customer-month's MRR change came from a change in the per-seat rate on a module they kept, plus any change in discounts?
+
+**The math:** For a module (Service `ItemFullName`) present in both months, the change in unit-rate — computed as the residual after the seat component — plus any change in Discount-line amounts.
+
+**Grain:** customer-month (see shared grain above).
+
+**Filters / exclusions:** see shared filters above.
+
+**Methodology source:** see shared methodology source above.
+
+**Parity-verified against:** see shared parity evidence above.
+
+**Status:** staging — validated 2026-06-03, NOT live (see shared status).
+
+**Known caveats:**
+- Price is computed as a **residual** (total module change minus the seat component, plus discount-line changes). For a module with simultaneous quantity and rate changes, attribution between seats and price follows the price–volume–mix convention: Δqty valued at the prior rate is seats, the remainder is price.
+- Plus all shared caveats above.
+
+---
+
 ## 5. Status — Phase 1 complete 🎯
 
 All 20 live metrics are now dbt-managed with consumer-facing descriptions and BQ catalog metadata. Parity-verified across all metrics.
