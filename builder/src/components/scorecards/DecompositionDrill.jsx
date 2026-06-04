@@ -134,6 +134,13 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     if (!spec) return;
     setL2Loading(true);
     setError(null);
+    // Clear stale L2 data before the async fetch. Without this, switching from a
+    // component-mode bar (data = {seats,apps,price}) to a dimension-mode bar
+    // (data = [{bucket,value}]) would briefly render L2Panel with the previous
+    // shape, and the loading guard (l2Loading && !l2) wouldn't fire because l2
+    // is still truthy — causing a render crash on the shape mismatch.
+    setL2(null);
+    setPriorL2(null);
 
     const fetchFor = (m) => {
       if (spec.mode === 'component') {
@@ -321,17 +328,19 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
           : (
-            <L2Panel
-              drill={drill.bar}
-              mode={activeSpec?.mode}
-              data={l2}
-              dims={activeSpec?.dims}
-              activeDim={drill.dim}
-              onDimChange={handleDimChange}
-              onSliceClick={handleSliceClick}
-              showDelta={showDelta}
-              priorData={showDelta ? priorL2 : null}
-            />
+            <ChartErrorBoundary>
+              <L2Panel
+                drill={drill.bar}
+                mode={activeSpec?.mode}
+                data={l2}
+                dims={activeSpec?.dims}
+                activeDim={drill.dim}
+                onDimChange={handleDimChange}
+                onSliceClick={handleSliceClick}
+                showDelta={showDelta}
+                priorData={showDelta ? priorL2 : null}
+              />
+            </ChartErrorBoundary>
           )
       )}
 
@@ -339,7 +348,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {drill?.slice && (
         l3Loading && !l3
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-          : <NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} />
+          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} /></ChartErrorBoundary>
       )}
     </div>
   );

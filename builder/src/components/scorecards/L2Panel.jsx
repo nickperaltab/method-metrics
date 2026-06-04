@@ -64,14 +64,18 @@ function deltaLabel(current, prior) {
 export default function L2Panel({ drill, mode, data, dims, activeDim, onDimChange, onSliceClick, showDelta, priorData }) {
   // Normalize both modes into a uniform list of rows: {key, label, value}.
   const rows = useMemo(() => {
+    // component mode: data is a {seats,apps,price} object. Guard against an array
+    // (stale dimension data) so we never read array indices as components.
     if (mode === 'component') {
-      const d = data || {};
+      const d = data && !Array.isArray(data) ? data : {};
       return COMPONENT_ORDER
         .filter((k) => k in d)
         .map((k) => ({ key: k, label: COMPONENT_LABELS[k] || k, value: Number(d[k]) || 0 }));
     }
     // dimension mode: data is [{bucket, value}] (already sorted desc by caller).
-    return (data || []).map((r) => ({ key: r.bucket, label: r.bucket ?? '(none)', value: Number(r.value) || 0 }));
+    // Guard against a non-array (stale component object) to avoid a .map crash.
+    if (!Array.isArray(data)) return [];
+    return data.map((r) => ({ key: r.bucket, label: r.bucket ?? '(none)', value: Number(r.value) || 0 }));
   }, [mode, data]);
 
   // Prior lookup for delta annotations.
@@ -79,10 +83,12 @@ export default function L2Panel({ drill, mode, data, dims, activeDim, onDimChang
     if (!showDelta || !priorData) return null;
     const m = {};
     if (mode === 'component') {
+      if (Array.isArray(priorData)) return null; // stale dimension prior; skip deltas
       for (const k of COMPONENT_ORDER) {
         if (k in priorData) m[k] = Number(priorData[k]) || 0;
       }
     } else {
+      if (!Array.isArray(priorData)) return null; // stale component prior; skip deltas
       for (const r of priorData) m[r.bucket] = Number(r.value) || 0;
     }
     return m;
