@@ -10,3 +10,4 @@ logs/
 
 # Account-level snapshots (contain Company names + per-customer MRR) — never commit (public repo)
 scripts/audit/*.json
+.superpowers/
