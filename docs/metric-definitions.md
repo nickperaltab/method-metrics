@@ -729,6 +729,24 @@ These three components split each customer-month's MRR change into Seats, Apps, 
 
 ---
 
+## 4d. Annual MRR-movement decomposition (Seats / Apps / Price) — staging, NOT live
+
+The annual-cohort sibling of §4c. Same three components (`seat_mrr`, `app_mrr`, `price_mrr`) and the same price–volume–mix decomposition, but pairs each customer's book at month M against month **M-12** instead of M-1. Sourced from `models/intermediate/int_annual_mrr_movement_decomposed.sql`; mirrors `int_customer_annual_mrr`. The shared methodology, identity, and per-component definitions in §4c apply unchanged — only the comparison window differs.
+
+**Grain:** annual cohort — one value per (window-end month, `EntityRecordID`), comparing the customer's book at month M vs month M-12, attributed to a `movement_kind` of new / expansion / downgrade / cancellation / flat. The three columns sum to the YoY change by construction.
+
+**Filters / exclusions / methodology:** same as the monthly decomposition (§4c) — symmetric Prepay-Expiry exclusion, internal-account (`m11%`/`m18%`) exclusion, current incomplete month excluded — applied over a 12-month pairing rather than month-over-month; mirrors `int_customer_annual_mrr`.
+
+**Parity-verified against (2026-06-04):**
+- Identity (`seat + app + price = M − M-12 change`): `scripts/parity_annual_decomposition_identity.py` — holds on all rows within $0.01.
+- Reconciliation to the validated `v_metric__annual_downgrades` / `v_metric__annual_expansions` / `v_metric__annual_cancellations`: `scripts/parity_annual_decomposition_vs_metrics.py` — $0.00 across all overlapping periods (2024-07 onward).
+
+**Status:** **staging — validated 2026-06-04, NOT live.** Prod cutover pending.
+
+**Caveats:** same as §4c (entity-grain PE exclusion guarded by `tests/assert_no_mixed_multientity_pe_company_months.sql`; the seats/apps/price split is most meaningful for Expansion and Downgrade), evaluated over the 12-month window.
+
+---
+
 ## 5. Status — Phase 1 complete 🎯
 
 All 20 live metrics are now dbt-managed with consumer-facing descriptions and BQ catalog metadata. Parity-verified across all metrics.
