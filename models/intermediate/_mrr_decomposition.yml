@@ -57,3 +57,34 @@ models:
         description: Portion from modules (ItemFullName) added or dropped.
       - name: price_mrr
         description: Portion from unit-rate / discount changes.
+
+  - name: int_annual_mrr_movement_decomposed
+    description: >
+      Annual-cohort sibling of int_mrr_movement_decomposed: per (month, entity)
+      change comparing the customer's book at month M vs M-12, split into
+      app_mrr / seat_mrr / price_mrr via the same price–volume–mix decomposition,
+      plus a movement_kind label (downgrade / expansion / cancellation / new / flat).
+      Validated 2026-06-04: identity holds within $0.01 across all rows
+      (scripts/parity_annual_decomposition_identity.py); reconciles to
+      v_metric__annual_downgrades / expansions / cancellations at $0.00 across all
+      overlapping periods (scripts/parity_annual_decomposition_vs_metrics.py).
+    columns:
+      - name: month
+        description: First of the calendar month (window-end; compared against M-12).
+        tests: [not_null]
+      - name: entity_record_id
+        description: Stable numeric entity id (join key; survives company renames).
+        tests: [not_null]
+      - name: movement_kind
+        description: downgrade | expansion | cancellation | new | flat (by net YoY change).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['new', 'expansion', 'downgrade', 'cancellation', 'flat']
+      - name: seat_mrr
+        description: Portion of the change from seat/user (Qty) movement.
+      - name: app_mrr
+        description: Portion from modules (ItemFullName) added or dropped.
+      - name: price_mrr
+        description: Portion from unit-rate / discount changes.
