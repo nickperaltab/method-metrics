@@ -49,6 +49,27 @@ jobs:
               console.log(\`ETL freshness OK. Latest SignupDate: \${maxSignup} (\${ageDays.toFixed(1)} days old)\`);
             });
           "
+      # Rebuild the materialized MRR tables BEFORE the snapshot refresh, so the
+      # v_metric__* views (and the dashboard) read fresh data. These models are
+      # materialized=table for query speed, so they must be rebuilt daily after ETL.
+      # Requires the GCP_SA_KEY service account to have BigQuery dataEditor on the
+      # `revenue` and `revenue_metrics` datasets.
+      - name: Set up Python (dbt)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Refresh dbt tables
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          pip install "dbt-bigquery~=1.8"
+          printf '%s' "$GCP_SA_KEY" > /tmp/dbt-sa.json
+          export DBT_KEYFILE=/tmp/dbt-sa.json
+          dbt run --profiles-dir ci --target ci \
+            --select int_customers int_customer_mrr int_customer_mrr_lines \
+                     int_mrr_movement_decomposed int_annual_mrr_movement_decomposed \
+                     int_customer_annual_mrr
+
       - name: Refresh
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}

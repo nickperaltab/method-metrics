@@ -1,0 +1,17 @@
+# dbt profile used ONLY by CI (the daily refresh in .github/workflows/refresh-scorecards.yml).
+# No secret here: the BigQuery service-account keyfile path is injected at runtime via
+# the DBT_KEYFILE env var (the workflow writes the GCP_SA_KEY secret to a temp file).
+# Local development uses ~/.dbt/profiles.yml (OAuth), not this file.
+method_metrics:
+  target: ci
+  outputs:
+    ci:
+      type: bigquery
+      method: service-account
+      keyfile: "{{ env_var('DBT_KEYFILE') }}"
+      project: project-for-method-dw
+      dataset: revenue
+      threads: 4
+      location: US
+      priority: interactive
+      timeout_seconds: 600
