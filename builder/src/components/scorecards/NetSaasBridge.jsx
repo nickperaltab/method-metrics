@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { computeDelta } from '../../lib/netSaasTransform';
 
 // Per-bar palette (richer than the Phase 2 three-color set): each movement gets
 // a distinct hue, totals are neutral grey, the closing total is green.
@@ -59,16 +58,15 @@ const fontSans = "'DM Sans', sans-serif";
  * @param {Array<{key,label,type,value,visible,pct}>} props.bars - output of
  *   applyLens(normalizeBridge(...)). Signs already applied (downgrade/churn
  *   negative). `visible` flags lens-included delta bars; `pct` is % of Start
- *   for dual-label lenses (null otherwise). For interim compatibility with the
+ *   for dual-label lenses (null otherwise). Dual labels ($ + %) render whenever
+ *   a visible delta bar carries a pct. For interim compatibility with the
  *   pre-Task-6 controller, `visible` may be undefined (treated as true) and
  *   `pct` may be undefined (treated as null).
- * @param {Array<{key,label,type,value}>|null} props.prior - prior period bars.
  * @param {'netSaas'|'nrr'|'grr'} [props.lens] - active lens (label-mode hint).
- * @param {boolean} props.showDelta - render period-over-period ▲/▼ chips.
  * @param {(key:string)=>void} props.onBarClick - called with bar key when a
  *   visible delta bar is clicked.
  */
-export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick }) {
+export default function NetSaasBridge({ bars, lens, onBarClick }) {
   const [hovered, setHovered] = useState(null); // bar key being hovered
 
   const model = useMemo(() => {
@@ -81,9 +79,10 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
       pct: b.pct === undefined ? null : b.pct,
     }));
 
-    // Dollar mode (netSaas / no lens): chips vs prior, no %.
-    // Dual mode (nrr / grr): $ AND %.
-    const dualMode = lens === 'nrr' || lens === 'grr';
+    // Dual mode ($ AND %) whenever a visible delta bar carries a pct (% of
+    // Start). Driven by the bar data, not the lens key, so any dual-labelMode
+    // lens renders %.
+    const dualMode = norm.some((b) => b.type === 'delta' && b.pct != null);
 
     // y-scale: fixed baseline, y-max ~1.2x the largest total (Start/End).
     const totals = norm.filter((b) => b.type === 'total').map((b) => Math.abs(b.value));
@@ -117,10 +116,6 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
       return { ...bar, bottom, height, top: bottom + height, runBefore: before, runAfter: after };
     });
 
-    // Prior lookup for ▲/▼ chips.
-    const priorByKey = {};
-    if (prior) for (const p of prior) priorByKey[p.key] = p.value;
-
     // Group brackets: only over groups with >=1 visible bar under this lens.
     const groups = GROUPS.map((g) => {
       const members = placed.filter((b) => g.keys.includes(b.key) && b.visible && !b.hidden);
@@ -131,8 +126,8 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
       return { label: g.label, subtotal, firstIdx, lastIdx };
     }).filter(Boolean);
 
-    return { placed, priorByKey, dualMode, pxPerDollar, yMax, n: placed.length, groups };
-  }, [bars, prior, lens]);
+    return { placed, dualMode, pxPerDollar, yMax, n: placed.length, groups };
+  }, [bars, lens]);
 
   if (!model) {
     return (
@@ -146,8 +141,7 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
     );
   }
 
-  const { placed, priorByKey, dualMode, n, groups } = model;
-  const showChips = showDelta && !!prior;
+  const { placed, dualMode, n, groups } = model;
 
   // Column geometry in CSS percentages (responsive width). Each bar gets an
   // equal slot; the bar is centered within its slot at BAR_WIDTH_RATIO width.
@@ -248,10 +242,6 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
         {placed.map((bar, i) => {
           const isClickable = bar.type === 'delta' && bar.visible && !bar.hidden;
           const fill = colorFor(bar);
-          const priorVal = priorByKey[bar.key];
-          const delta = (showChips && bar.type === 'delta' && bar.key in priorByKey)
-            ? computeDelta(bar.value, priorVal)
-            : null;
 
           // Vertical placement: bar top edge (px from SVG top).
           const barTopY = plotTop + (PLOT_HEIGHT - bar.top);
@@ -270,13 +260,6 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
               lineMain = formatUsd(bar.value);
             }
           }
-
-          const deltaColor = delta
-            ? (delta.direction === 'up' ? COLOR_POSITIVE : delta.direction === 'down' ? COLOR_NEGATIVE : '#9ca3af')
-            : '#9ca3af';
-          const deltaText = delta && delta.direction !== 'flat'
-            ? `${delta.direction === 'up' ? '▲' : '▼'}${delta.pct == null ? '' : ' ' + Math.abs(Math.round(delta.pct * 100)) + '%'}`
-            : '';
 
           return (
             <div
@@ -314,14 +297,6 @@ export default function NetSaasBridge({ bars, prior, lens, showDelta, onBarClick
                       color: '#6b7280', whiteSpace: 'nowrap',
                     }}>
                       {lineSub}
-                    </div>
-                  )}
-                  {showChips && deltaText && (
-                    <div style={{
-                      fontFamily: fontMono, fontSize: 10, fontWeight: 600,
-                      color: deltaColor, whiteSpace: 'nowrap',
-                    }}>
-                      {deltaText}
                     </div>
                   )}
                 </div>

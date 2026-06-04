@@ -38,10 +38,6 @@ function latestCompleteMonth() {
   const n = new Date();
   return isoMonth(firstOfMonth(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() - 1, 1))));
 }
-function priorMonth(iso) {
-  const d = new Date(iso + 'T00:00:00Z');
-  return isoMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)));
-}
 function monthLabel(iso) {
   const d = new Date(iso + 'T00:00:00Z');
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -72,8 +68,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [filters, setFilters] = useState({});
   const [filterOptions, setFilterOptions] = useState({});
   const [month, setMonth] = useState(latestCompleteMonth());
-  const [compareMonth, setCompareMonth] = useState(priorMonth(latestCompleteMonth()));
-  const [showDelta, setShowDelta] = useState(true);
   const [grain, setGrain] = useState('monthly');
   const [lens, setLens] = useState('netSaas');
 
@@ -82,10 +76,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
   const [drill, setDrill] = useState(null); // null at L1, else { bar, dim, slice }
   const [bridge, setBridge] = useState(null);
-  const [priorBridge, setPriorBridge] = useState(null);
   const [rate, setRate] = useState(null);
   const [l2, setL2] = useState(null);
-  const [priorL2, setPriorL2] = useState(null);
   const [l3, setL3] = useState(null);
 
   const [bridgeLoading, setBridgeLoading] = useState(false);
@@ -93,7 +85,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [l3Loading, setL3Loading] = useState(false);
   const [error, setError] = useState(null);
 
-  // ── L1: fetch current + comparison bridge whenever filters / months change ──
+  // ── L1: fetch the current bridge whenever filters / month change ──
   useEffect(() => {
     if (!bqConnected) return;
     let cancelled = false;
@@ -102,29 +94,20 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     // Reset drill on filter/month change so we never show stale L2/L3.
     setDrill(null);
     setL2(null);
-    setPriorL2(null);
     setL3(null);
 
     const bridgeView = grainCfg.bridgeView;
 
     Promise.all([
       fetchBridge({ month, filters, bridgeView }),
-      showDelta ? fetchBridge({ month: compareMonth, filters, bridgeView }) : Promise.resolve(null),
       lensCfg.rate ? fetchRate({ metric: grainCfg[lensCfg.rate + 'Metric'], period: month }) : Promise.resolve(null),
     ])
-      .then(([cur, prev, rateVal]) => {
+      .then(([cur, rateVal]) => {
         if (cancelled) return;
         // Apply the active lens after normalizing. Start value drives % labels.
         const curBars = normalizeBridge(cur, cfg);
         const start = curBars.find((b) => b.key === 'start')?.value ?? 0;
         setBridge(applyLens(curBars, lensCfg, start));
-        if (prev) {
-          const prevBars = normalizeBridge(prev, cfg);
-          const prevStart = prevBars.find((b) => b.key === 'start')?.value ?? 0;
-          setPriorBridge(applyLens(prevBars, lensCfg, prevStart));
-        } else {
-          setPriorBridge(null);
-        }
         setRate(lensCfg.rate ? rateVal : null);
       })
       .catch((e) => {
@@ -135,7 +118,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       });
 
     return () => { cancelled = true; };
-  }, [filters, month, compareMonth, showDelta, bqConnected, cfg, grain, lens, grainCfg, lensCfg]);
+  }, [filters, month, bqConnected, cfg, grain, lens, grainCfg, lensCfg]);
 
   // ── load distinct filter values once BQ is connected (reference data) ────────
   useEffect(() => {
@@ -160,7 +143,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     // shape, and the loading guard (l2Loading && !l2) wouldn't fire because l2
     // is still truthy — causing a render crash on the shape mismatch.
     setL2(null);
-    setPriorL2(null);
 
     const { bridgeView, decompView } = grainCfg;
     const fetchFor = (m) => {
@@ -172,17 +154,11 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
     };
 
-    Promise.all([
-      fetchFor(month),
-      showDelta ? fetchFor(compareMonth) : Promise.resolve(null),
-    ])
-      .then(([cur, prev]) => {
-        setL2(cur);
-        setPriorL2(prev);
-      })
+    fetchFor(month)
+      .then((cur) => setL2(cur))
       .catch((e) => setError(e))
       .finally(() => setL2Loading(false));
-  }, [cfg, filters, month, compareMonth, showDelta, grainCfg]);
+  }, [cfg, filters, month, grainCfg]);
 
   // ── handlers ────────────────────────────────────────────────────────────────
   const handleBarClick = (barKey) => {
@@ -216,7 +192,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     if (level === 0) {
       setDrill(null);
       setL2(null);
-      setPriorL2(null);
       setL3(null);
     } else if (level === 1) {
       setDrill((d) => (d ? { ...d, slice: null } : d));
@@ -272,7 +247,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         overflow={cfg.filters.overflow}
       />
 
-      {/* 2. grain + lens + period + delta controls */}
+      {/* 2. grain + lens + period controls */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
         margin: '8px 0 20px',
@@ -329,28 +304,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
             <option key={m} value={m}>{monthLabel(m)}</option>
           ))}
         </select>
-        <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={showDelta}
-            onChange={(e) => setShowDelta(e.target.checked)}
-          />
-          Compare to
-        </label>
-        <select
-          value={compareMonth}
-          disabled={!showDelta}
-          onChange={(e) => setCompareMonth(e.target.value)}
-          style={{
-            padding: '5px 8px', fontSize: 13, borderRadius: 6, border: '1px solid #d1d5db',
-            fontFamily: "'DM Sans', sans-serif", background: showDelta ? '#fff' : '#f3f4f6',
-            color: showDelta ? '#1a1a1a' : '#9ca3af',
-          }}
-        >
-          {recentMonths(6).filter((m) => m !== month).map((m) => (
-            <option key={m} value={m}>{monthLabel(m)}</option>
-          ))}
-        </select>
       </div>
 
       {error && (
@@ -389,9 +342,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         <ChartErrorBoundary>
           <NetSaasBridge
             bars={bridge}
-            prior={showDelta ? priorBridge : null}
             lens={lens}
-            showDelta={showDelta}
             onBarClick={handleBarClick}
           />
         </ChartErrorBoundary>
@@ -414,8 +365,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
                 activeDim={drill.dim}
                 onDimChange={handleDimChange}
                 onSliceClick={handleSliceClick}
-                showDelta={showDelta}
-                priorData={showDelta ? priorL2 : null}
+                showDelta={false}
+                priorData={null}
               />
             </ChartErrorBoundary>
           )

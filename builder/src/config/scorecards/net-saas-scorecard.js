@@ -32,7 +32,7 @@ export const netSaasScorecard = {
   // lens → which DELTA bars show + label mode + headline rate (null = no rate)
   // Start + End always render. NRR excludes New; GRR excludes New AND Expansion.
   lenses: {
-    netSaas: { label: 'Net SaaS', bars: ['new','expansion','downgrade','churn'], labelMode: 'dollar', rate: null },
+    netSaas: { label: 'Net SaaS', bars: ['new','expansion','downgrade','churn'], labelMode: 'dual', rate: null },
     nrr:     { label: 'NRR',      bars: ['expansion','downgrade','churn'],       labelMode: 'dual',   rate: 'nrr' },
     grr:     { label: 'GRR',      bars: ['downgrade','churn'],                    labelMode: 'dual',   rate: 'grr' },
   },
