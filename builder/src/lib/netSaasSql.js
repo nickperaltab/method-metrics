@@ -66,3 +66,37 @@ WHERE d.month = ${sqlStr(month)}
   AND d.movement_kind = ${sqlStr(movementKind)}
 ${buildFilterClauses(filters, 'c')}`.trimEnd();
 }
+
+const ORDER_COL = { seats: 'seat_mrr', apps: 'app_mrr', price: 'price_mrr' };
+
+export function buildAccountTableSql({ month, drill, dim, slice, filters = {} }) {
+  if (drill === 'expansion' || drill === 'downgrade') {
+    const orderCol = ORDER_COL[slice] || 'seat_mrr';
+    return `SELECT
+  d.entity_record_id,
+  c.Company, c.Segment, c.UserTier,
+  (d.p2_saas - d.p1_saas) AS deltaMrr,
+  d.seat_mrr, d.app_mrr, d.price_mrr
+FROM ${DECOMP} d
+JOIN ${ICM} c
+  ON c.Month = d.month AND c.EntityRecordID = d.entity_record_id
+WHERE d.month = ${sqlStr(month)}
+  AND d.movement_kind = ${sqlStr(drill)}
+${buildFilterClauses(filters, 'c')}
+ORDER BY ABS(d.${orderCol}) DESC
+LIMIT 50`.trimEnd();
+  }
+  // new / churn — straight from int_customer_mrr
+  const measure = drill === 'new' ? 'NewMRR' : 'Cancellations';
+  const sliceClause = dim && slice ? `  AND ${dim} = ${sqlStr(slice)}\n` : '';
+  return `SELECT
+  EntityRecordID AS entity_record_id,
+  Company, Segment, UserTier, AttributionChannel,
+  ${measure} AS deltaMrr
+FROM ${ICM}
+WHERE Month = ${sqlStr(month)}
+  AND ${measure} > 0
+${sliceClause}${buildFilterClauses(filters)}
+ORDER BY ${measure} DESC
+LIMIT 50`.trimEnd();
+}

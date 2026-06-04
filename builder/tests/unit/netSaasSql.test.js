@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -68,5 +68,28 @@ describe('buildComponentSplitSql', () => {
   it('omits the join when no filters are set', () => {
     const sql = buildComponentSplitSql({ month: '2026-05-01', movementKind: 'downgrade', filters: {} });
     expect(sql).not.toContain('JOIN');
+  });
+});
+
+describe('buildAccountTableSql', () => {
+  it('downgrade→seats: joins decomposition+icm, orders by |seat_mrr|, limit 50', () => {
+    const sql = buildAccountTableSql({ month:'2026-05-01', drill:'downgrade', slice:'seats', filters:{} });
+    expect(sql).toContain('int_mrr_movement_decomposed');
+    expect(sql).toContain('JOIN');
+    expect(sql).toContain('c.Company');
+    expect(sql).toContain("d.movement_kind = 'downgrade'");
+    expect(sql).toContain('ORDER BY ABS(d.seat_mrr) DESC');
+    expect(sql).toContain('LIMIT 50');
+  });
+  it('new→channel slice: from int_customer_mrr only, filtered by channel', () => {
+    const sql = buildAccountTableSql({ month:'2026-05-01', drill:'new', dim:'AttributionChannel', slice:'Paid', filters:{} });
+    expect(sql).not.toContain('int_mrr_movement_decomposed');
+    expect(sql).toContain('NewMRR > 0');
+    expect(sql).toContain("AttributionChannel = 'Paid'");
+  });
+  it('churn→segment slice: from int_customer_mrr, filtered by segment', () => {
+    const sql = buildAccountTableSql({ month:'2026-05-01', drill:'churn', dim:'Segment', slice:'SMB', filters:{} });
+    expect(sql).toContain('Cancellations > 0');
+    expect(sql).toContain("Segment = 'SMB'");
   });
 });
