@@ -129,3 +129,28 @@ describe('buildDistinctValuesSql', () => {
     expect(sql).toContain('CAST(HasDEP AS STRING)');
   });
 });
+
+describe('grain parameterization', () => {
+  it('buildBridgeSql uses annual view when bridgeView passed', () => {
+    const sql = buildBridgeSql({ month: '2026-05-01', filters: {}, bridgeView: 'int_customer_annual_mrr' });
+    expect(sql).toContain('int_customer_annual_mrr');
+    expect(sql).not.toContain('revenue.int_customer_mrr`');
+  });
+  it('buildBridgeSql defaults to monthly view when bridgeView omitted', () => {
+    const sql = buildBridgeSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain('int_customer_mrr');
+  });
+  it('buildComponentSplitSql uses annual decomp view when decompView passed', () => {
+    const sql = buildComponentSplitSql({ month: '2026-05-01', movementKind: 'downgrade', filters: {}, decompView: 'int_annual_mrr_movement_decomposed' });
+    expect(sql).toContain('int_annual_mrr_movement_decomposed');
+  });
+  it('buildDimSplitSql honors bridgeView', () => {
+    const sql = buildDimSplitSql({ month: '2026-05-01', measure: 'NewMRR', dim: 'Segment', filters: {}, bridgeView: 'int_customer_annual_mrr' });
+    expect(sql).toContain('int_customer_annual_mrr');
+  });
+  it('buildAccountTableSql honors views (annual)', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'downgrade', slice: 'seats', filters: {}, bridgeView: 'int_customer_annual_mrr', decompView: 'int_annual_mrr_movement_decomposed' });
+    expect(sql).toContain('int_annual_mrr_movement_decomposed');
+    expect(sql).toContain('int_customer_annual_mrr');
+  });
+});
