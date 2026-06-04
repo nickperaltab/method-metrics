@@ -139,7 +139,7 @@ The Phase 2 builders hardcode `int_customer_mrr` / `int_mrr_movement_decomposed`
 
 - [ ] **Step 1:** Add state: `const [grain, setGrain] = useState('monthly')` and `const [lens, setLens] = useState('netSaas')`. Derive `grainCfg = cfg.grains[grain]`, `lensCfg = cfg.lenses[lens]`.
 - [ ] **Step 2:** Thread `grainCfg.bridgeView`/`decompView` into all fetches (`fetchBridge`, `fetchComponentSplit`, `fetchDimSplit`, `fetchAccountTable`, `fetchFilterOptions`). Reset drill on grain/lens change (like filter change). Apply `applyLens(normalizeBridge(...), lensCfg, startValue)` before passing to the bridge.
-- [ ] **Step 3:** When `lensCfg.rate`, `fetchRate({ metric: grainCfg[lensCfg.rate+'Metric'], period: month })` → show the headline rate (e.g. "GRR REDACTED-PCT") above/beside the bridge. (`grrMetric`/`nrrMetric` from grainCfg.)
+- [ ] **Step 3:** When `lensCfg.rate`, `fetchRate({ metric: grainCfg[lensCfg.rate+'Metric'], period: month })` → show the headline rate (e.g. "GRR 9X%", illustrative) above/beside the bridge. (`grrMetric`/`nrrMetric` from grainCfg.)
 - [ ] **Step 4:** Add controls to the header: a **grain** segmented toggle (Monthly/Annual) and a **lens** selector (Net SaaS/NRR/GRR), styled like the mockup. Prominent grain label.
 - [ ] **Step 5:** Annual drill routing: component drill (Expansion/Downgrades → seats/apps/price) uses `grainCfg.decompView` — works in both grains now (annual model is live). New/Churn dim drills use `grainCfg.bridgeView`.
 - [ ] **Step 6:** `npm run build` + eslint clean; full vitest suite still green (324 + new tests). Commit `feat(net-saas-v2): grain + lens controls in DecompositionDrill`.
