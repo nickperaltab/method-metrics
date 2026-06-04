@@ -83,10 +83,10 @@ export async function fetchFilterOptions({ dims, months = 24, bridgeView }) {
   return out;
 }
 
-// Per-account monthly MRR / seats / apps history for the L4 detail view.
+// Per-account monthly MRR / licenses / apps history for the L4 detail view.
 export async function fetchAccountHistory({ entityRecordId }) {
   const { rows } = await queryBq(buildAccountHistorySql({ entityRecordId }));
-  return rows.map((r) => ({ month: r.month, mrr: num(r.mrr), seats: num(r.seats), apps: num(r.apps) }));
+  return rows.map((r) => ({ month: r.month, mrr: num(r.mrr), licenses: num(r.licenses), apps: num(r.apps) }));
 }
 
 // Lifecycle milestone dates for one account — null when absent.

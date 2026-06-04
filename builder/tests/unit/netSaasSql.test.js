@@ -165,11 +165,13 @@ describe('buildRateSql', () => {
 });
 
 describe('buildAccountHistorySql', () => {
-  it('monthly mrr/seats/apps for one entity, full history, ordered', () => {
+  it('monthly mrr/licenses/apps for one entity, full history, ordered', () => {
     const sql = buildAccountHistorySql({ entityRecordId: 100037 });
     expect(sql).toContain('int_customer_mrr_lines');
     expect(sql).toContain('entity_record_id = 100037');
     expect(sql).toContain('SUM(saas)');
+    expect(sql).toContain('MAX(user_paid_count)');
+    expect(sql.toLowerCase()).toContain('as licenses');
     expect(sql.toLowerCase()).toContain('count(distinct');
     expect(sql.toLowerCase()).toContain('group by month');
     expect(sql.toLowerCase()).toContain('order by month');

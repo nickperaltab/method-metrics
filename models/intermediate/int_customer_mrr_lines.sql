@@ -17,6 +17,7 @@ select
     ItemFullName                 as item,
     ItemType = 'Discount'        as is_discount,
     sum(Qty)                     as qty,    -- proxy for seats / paid users on the line
+    max(UserPaidCount)           as user_paid_count,  -- per-line paid-user count; MAX in group = account paid users
     sum(SaaSAmount)              as saas
 from {{ source('revenue', 'TransLineFlattened') }}
 where TxnDate >= '2021-12-01'

@@ -154,7 +154,7 @@ GROUP BY val`);
 ORDER BY dim, val`;
 }
 
-// Per-account monthly MRR / seats / apps history (full timeline) for the detail
+// Per-account monthly MRR / licenses / apps history (full timeline) for the detail
 // view. entityRecordId is a trusted numeric from the L3 row — coerced via
 // Number() and interpolated as a number (no quotes), which also neutralizes any
 // injection attempt (Number('100037; DROP') === 100037).
@@ -163,7 +163,7 @@ export function buildAccountHistorySql({ entityRecordId }) {
   return `SELECT
   month,
   ROUND(SUM(saas), 2) AS mrr,
-  SUM(CASE WHEN NOT is_discount THEN qty ELSE 0 END) AS seats,
+  MAX(user_paid_count) AS licenses,
   COUNT(DISTINCT CASE WHEN NOT is_discount AND saas != 0 THEN item END) AS apps
 FROM \`project-for-method-dw.revenue.int_customer_mrr_lines\`
 WHERE entity_record_id = ${id}

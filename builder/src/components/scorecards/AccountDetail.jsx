@@ -8,7 +8,7 @@ const fontMono = "'JetBrains Mono', monospace";
 const fontSans = "'DM Sans', sans-serif";
 
 const COLOR_MRR = '#059669';   // green
-const COLOR_SEATS = '#3b6ea5'; // blue
+const COLOR_LICENSES = '#3b6ea5'; // blue
 const COLOR_APPS = '#7c3aed';  // purple
 const COLOR_GREY = '#6b7280';
 
@@ -87,7 +87,7 @@ function monthIndex(key) {
  *
  * @param {object} props
  * @param {{Company:string, Segment?:string, UserTier?:string}} props.account
- * @param {Array<{month:string, mrr:number, seats:number, apps:number}>} props.history
+ * @param {Array<{month:string, mrr:number, licenses:number, apps:number}>} props.history
  *   ascending by month; month is 'YYYY-MM-01'. May be empty.
  * @param {{signup?:string|null, firstSync?:string|null, firstInvoice?:string|null, cancelled?:string|null}} props.lifecycle
  */
@@ -112,7 +112,7 @@ export default function AccountDetail({ account, history, lifecycle }) {
 
     const categories = monthMeta.map((mm) => mm.label);
     const mrr = rows.map((r) => (r.mrr == null ? null : r.mrr));
-    const seats = rows.map((r) => (r.seats == null ? null : r.seats));
+    const licenses = rows.map((r) => (r.licenses == null ? null : r.licenses));
     const apps = rows.map((r) => (r.apps == null ? null : r.apps));
 
     // Lifecycle markLines: one vertical dashed line per non-null event that
@@ -142,7 +142,7 @@ export default function AccountDetail({ account, history, lifecycle }) {
       grid: { top: 36, right: 56, bottom: 28, left: 64 },
       legend: {
         top: 0,
-        data: ['MRR', 'Seats', 'Apps'],
+        data: ['MRR', 'Licenses', 'Apps'],
         textStyle: { fontFamily: fontSans, fontSize: 12 },
       },
       tooltip: {
@@ -179,7 +179,7 @@ export default function AccountDetail({ account, history, lifecycle }) {
           type: 'value',
           name: '#',
           position: 'right',
-          nameTextStyle: { color: COLOR_SEATS, fontFamily: fontSans, fontSize: 11 },
+          nameTextStyle: { color: COLOR_LICENSES, fontFamily: fontSans, fontSize: 11 },
           minInterval: 1,
           splitLine: { show: false },
           axisLabel: { formatter: (v) => (v == null ? '' : String(Math.round(v))) },
@@ -207,15 +207,15 @@ export default function AccountDetail({ account, history, lifecycle }) {
             : undefined,
         },
         {
-          name: 'Seats',
+          name: 'Licenses',
           type: 'line',
           yAxisIndex: 1,
-          data: seats,
+          data: licenses,
           smooth: true,
           symbol: 'circle',
           symbolSize: 4,
-          lineStyle: { color: COLOR_SEATS, width: 2 },
-          itemStyle: { color: COLOR_SEATS },
+          lineStyle: { color: COLOR_LICENSES, width: 2 },
+          itemStyle: { color: COLOR_LICENSES },
           connectNulls: true,
         },
         {
@@ -238,7 +238,7 @@ export default function AccountDetail({ account, history, lifecycle }) {
   const subline = [acct.Segment, acct.UserTier].filter(Boolean).join(' · ');
   const last = rows.length ? rows[rows.length - 1] : null;
   const currentLine = last
-    ? `${formatUsd(last.mrr)} · ${last.seats == null ? '—' : last.seats} seats · ${last.apps == null ? '—' : last.apps} apps`
+    ? `${formatUsd(last.mrr)} · ${last.licenses == null ? '—' : last.licenses} licenses · ${last.apps == null ? '—' : last.apps} apps`
     : '';
 
   const chips = LIFECYCLE_EVENTS
