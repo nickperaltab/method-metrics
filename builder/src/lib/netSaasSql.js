@@ -100,3 +100,26 @@ ${sliceClause}${buildFilterClauses(filters)}
 ORDER BY ${measure} DESC
 LIMIT 50`.trimEnd();
 }
+
+export function buildCohortAgeChurnSql({ month, filters = {} }) {
+  return `WITH firsts AS (
+  SELECT EntityRecordID, MIN(Month) AS first_month
+  FROM ${ICM}
+  GROUP BY EntityRecordID
+)
+SELECT
+  CASE
+    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 3  THEN '0-3'
+    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 12 THEN '4-12'
+    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 24 THEN '13-24'
+    ELSE '25+'
+  END AS bucket,
+  SUM(c.Cancellations) AS value
+FROM ${ICM} c
+JOIN firsts f ON f.EntityRecordID = c.EntityRecordID
+WHERE c.Month = ${sqlStr(month)}
+  AND c.Cancellations > 0
+${buildFilterClauses(filters, 'c')}
+GROUP BY bucket
+ORDER BY bucket`.trimEnd();
+}

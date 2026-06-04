@@ -5,14 +5,13 @@
 // queryBq(sql) returns { rows, schema } where every value is a STRING (BigQuery
 // REST returns all values as strings). So we unwrap `.rows` and coerce numbers.
 //
-// NOTE: fetchCohortAgeChurn (and its buildCohortAgeChurnSql import) are added in
-// Task 9 — intentionally omitted here so this module imports cleanly.
 import { queryBq } from './bigquery.js';
 import {
   buildBridgeSql,
   buildDimSplitSql,
   buildComponentSplitSql,
   buildAccountTableSql,
+  buildCohortAgeChurnSql,
 } from './netSaasSql.js';
 
 const num = (v) => Number(v) || 0;
@@ -33,6 +32,11 @@ export async function fetchBridge({ month, filters }) {
 
 export async function fetchDimSplit({ month, measure, dim, filters }) {
   const { rows } = await queryBq(buildDimSplitSql({ month, measure, dim, filters }));
+  return rows.map((r) => ({ bucket: r.bucket, value: num(r.value) }));
+}
+
+export async function fetchCohortAgeChurn({ month, filters }) {
+  const { rows } = await queryBq(buildCohortAgeChurnSql({ month, filters }));
   return rows.map((r) => ({ bucket: r.bucket, value: num(r.value) }));
 }
 

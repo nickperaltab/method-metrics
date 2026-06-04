@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -91,5 +91,24 @@ describe('buildAccountTableSql', () => {
     const sql = buildAccountTableSql({ month:'2026-05-01', drill:'churn', dim:'Segment', slice:'SMB', filters:{} });
     expect(sql).toContain('Cancellations > 0');
     expect(sql).toContain("Segment = 'SMB'");
+  });
+});
+
+describe('buildCohortAgeChurnSql', () => {
+  it('sub-selects each entity first month and buckets age', () => {
+    const sql = buildCohortAgeChurnSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain('MIN(Month)');
+    expect(sql).toContain('DATE_DIFF');
+    expect(sql).toContain("'0-3'");
+    expect(sql).toContain("'4-12'");
+    expect(sql).toContain("'13-24'");
+    expect(sql).toContain("'25+'");
+    expect(sql).toContain('SUM(c.Cancellations) AS value');
+    expect(sql).toContain('Cancellations > 0');
+    expect(sql).toContain('GROUP BY bucket');
+  });
+  it('applies global filters with the c. alias', () => {
+    const sql = buildCohortAgeChurnSql({ month: '2026-05-01', filters: { Segment: 'SMB' } });
+    expect(sql).toContain("c.Segment = 'SMB'");
   });
 });
