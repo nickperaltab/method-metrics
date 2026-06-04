@@ -61,18 +61,19 @@ describe('fetchChartDatasets — grouped path', () => {
     expect(fetchChartData).not.toHaveBeenCalled();
   });
 
-  it('returns empty (no silent fallback) when fetchGroupedData throws', async () => {
+  it('surfaces the BQ error (no silent fallback) when fetchGroupedData throws', async () => {
     fetchGroupedData.mockRejectedValue(new Error('Invalid xField: null'));
 
-    const result = await fetchChartDatasets({
+    // When every metric query fails, fetchChartDatasets re-throws the first
+    // error rather than returning a generic empty state (commit 7bf497ea —
+    // "surface all BQ errors, not just auth"). The original assertion that it
+    // returned { empty: true } predated that change and was never updated.
+    await expect(fetchChartDatasets({
       metricIds: [54],
       metrics: [metric54],
       dataConfig: { ...baseDataConfig, groupByDimension: 'AttributionChannel' },
-    });
+    })).rejects.toThrow('Invalid xField: null');
 
-    expect(result).not.toBeNull();
-    expect(result.empty).toBe(true);
-    expect(result.datasets).toHaveLength(0);
     // No silent fallback to ungrouped
     expect(fetchChartData).not.toHaveBeenCalled();
   });
