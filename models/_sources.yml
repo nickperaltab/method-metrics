@@ -39,8 +39,9 @@ sources:
       # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
       # NOTE: int_customers is now a dbt model (models/intermediate/int_customers.sql),
       # migrated 2026-06-04 to add a deterministic dim tiebreaker. Consumers use ref().
-      - name: int_customer_annual_mrr
-        description: Annual customer-grain MRR with movement columns. Used by annual MRR family metrics (#384-387).
+      # NOTE: int_customer_annual_mrr is now a dbt model
+      # (models/intermediate/int_customer_annual_mrr.sql), migrated 2026-06-04 to a
+      # materialized table for performance. Consumers use ref().
       - name: int_conversions
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
       - name: int_cancellations
