@@ -9,6 +9,7 @@ export const netSaasScorecard = {
   group: 'revenue',
   grain: 'month',            // V1: month only
   defaultRange: 'latest-complete-month',
+  renderer: 'netSaasDrill',  // Scorecard.jsx branches on this to mount DecompositionDrill
 
   // L1 bridge bars, in render order. `sign` drives the waterfall direction.
   bridge: [

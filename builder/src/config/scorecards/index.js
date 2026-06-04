@@ -13,6 +13,7 @@ import customers from './customers-scorecard.js';
 import customerSegments from './customer-segments-scorecard.js';
 import revenueEngine from './revenue-engine-scorecard.js';
 import channelArr from './channel-arr-scorecard.js';
+import netSaas from './net-saas-scorecard.js';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
@@ -28,6 +29,7 @@ export const SCORECARDS = {
   'dep-revenue': depRevenue,
   'revenue-engine': revenueEngine,
   'channel-arr': channelArr,
+  'net-saas': netSaas,
   'customers': customers,
   'customer-segments': customerSegments,
 };

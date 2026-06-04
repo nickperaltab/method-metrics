@@ -4,6 +4,7 @@ import { SCORECARDS } from '../config/scorecards';
 import posthog from '../lib/posthog';
 import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
+import DecompositionDrill from '../components/scorecards/DecompositionDrill';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -131,6 +132,12 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         <p>No scorecard with ID "{id}"</p>
       </div>
     );
+  }
+
+  // Custom-renderer scorecards (e.g. Net SaaS drilldown) own their own data
+  // fetching + layout; they have no `sections`, so branch before the section loop.
+  if (config.renderer === 'netSaasDrill') {
+    return <DecompositionDrill config={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
 
   if (needsBq && dataMap.size === 0) {
