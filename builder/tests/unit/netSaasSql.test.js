@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -45,5 +45,28 @@ describe('buildDimSplitSql', () => {
     expect(sql).toContain('SUM(Cancellations) AS value');
     expect(sql).toContain('Cancellations > 0');
     expect(sql).toContain('GROUP BY Segment');
+  });
+});
+
+describe('buildComponentSplitSql', () => {
+  it('sums seat/app/price for the given movement_kind', () => {
+    const sql = buildComponentSplitSql({ month: '2026-05-01', movementKind: 'expansion', filters: {} });
+    expect(sql).toContain('SUM(seat_mrr)');
+    expect(sql).toContain('SUM(app_mrr)');
+    expect(sql).toContain('SUM(price_mrr)');
+    expect(sql).toContain('int_mrr_movement_decomposed');
+    expect(sql).toContain("movement_kind = 'expansion'");
+    expect(sql).toContain('month = ');
+  });
+
+  it('joins int_customer_mrr for dim filters since the decomposition lacks dim columns', () => {
+    const sql = buildComponentSplitSql({ month: '2026-05-01', movementKind: 'downgrade', filters: { Segment: 'SMB' } });
+    expect(sql).toContain('JOIN');
+    expect(sql).toContain("c.Segment = 'SMB'");
+  });
+
+  it('omits the join when no filters are set', () => {
+    const sql = buildComponentSplitSql({ month: '2026-05-01', movementKind: 'downgrade', filters: {} });
+    expect(sql).not.toContain('JOIN');
   });
 });

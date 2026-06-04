@@ -2,7 +2,6 @@
 // Pure SQL builders for the Net SaaS drilldown. No I/O. Unit-tested.
 
 const ICM = '`project-for-method-dw.revenue.int_customer_mrr`';
-// eslint-disable-next-line no-unused-vars -- used by later builders (T4+); kept at module top by design.
 const DECOMP = '`project-for-method-dw.revenue.int_mrr_movement_decomposed`';
 
 // BigQuery string-literal escape: double any single quote.
@@ -43,4 +42,27 @@ WHERE Month = ${sqlStr(month)}
 ${buildFilterClauses(filters)}
 GROUP BY ${dim}
 ORDER BY value DESC`.trimEnd();
+}
+
+export function buildComponentSplitSql({ month, movementKind, filters = {} }) {
+  const hasFilters = Object.values(filters).some((v) => v !== null && v !== undefined && v !== '');
+  if (!hasFilters) {
+    return `SELECT
+  SUM(seat_mrr)  AS seats,
+  SUM(app_mrr)   AS apps,
+  SUM(price_mrr) AS price
+FROM ${DECOMP}
+WHERE month = ${sqlStr(month)}
+  AND movement_kind = ${sqlStr(movementKind)}`.trimEnd();
+  }
+  return `SELECT
+  SUM(d.seat_mrr)  AS seats,
+  SUM(d.app_mrr)   AS apps,
+  SUM(d.price_mrr) AS price
+FROM ${DECOMP} d
+JOIN ${ICM} c
+  ON c.Month = d.month AND c.EntityRecordID = d.entity_record_id
+WHERE d.month = ${sqlStr(month)}
+  AND d.movement_kind = ${sqlStr(movementKind)}
+${buildFilterClauses(filters, 'c')}`.trimEnd();
 }
