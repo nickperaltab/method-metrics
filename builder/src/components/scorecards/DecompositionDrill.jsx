@@ -14,7 +14,7 @@ import L2Panel from './L2Panel';
 import NetSaasAccountTable from './NetSaasAccountTable';
 import DrillBreadcrumb from './DrillBreadcrumb';
 import GlobalFilterBar from './GlobalFilterBar';
-import { normalizeBridge } from '../../lib/netSaasTransform';
+import { normalizeBridge, applyLens } from '../../lib/netSaasTransform';
 import {
   fetchBridge,
   fetchDimSplit,
@@ -22,6 +22,7 @@ import {
   fetchAccountTable,
   fetchCohortAgeChurn,
   fetchFilterOptions,
+  fetchRate,
 } from '../../lib/netSaasData';
 
 // ── date helpers ────────────────────────────────────────────────────────────
@@ -73,10 +74,16 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [month, setMonth] = useState(latestCompleteMonth());
   const [compareMonth, setCompareMonth] = useState(priorMonth(latestCompleteMonth()));
   const [showDelta, setShowDelta] = useState(true);
+  const [grain, setGrain] = useState('monthly');
+  const [lens, setLens] = useState('netSaas');
+
+  const grainCfg = cfg.grains[grain];
+  const lensCfg = cfg.lenses[lens];
 
   const [drill, setDrill] = useState(null); // null at L1, else { bar, dim, slice }
   const [bridge, setBridge] = useState(null);
   const [priorBridge, setPriorBridge] = useState(null);
+  const [rate, setRate] = useState(null);
   const [l2, setL2] = useState(null);
   const [priorL2, setPriorL2] = useState(null);
   const [l3, setL3] = useState(null);
@@ -98,14 +105,27 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setPriorL2(null);
     setL3(null);
 
+    const bridgeView = grainCfg.bridgeView;
+
     Promise.all([
-      fetchBridge({ month, filters }),
-      showDelta ? fetchBridge({ month: compareMonth, filters }) : Promise.resolve(null),
+      fetchBridge({ month, filters, bridgeView }),
+      showDelta ? fetchBridge({ month: compareMonth, filters, bridgeView }) : Promise.resolve(null),
+      lensCfg.rate ? fetchRate({ metric: grainCfg[lensCfg.rate + 'Metric'], period: month }) : Promise.resolve(null),
     ])
-      .then(([cur, prev]) => {
+      .then(([cur, prev, rateVal]) => {
         if (cancelled) return;
-        setBridge(normalizeBridge(cur, cfg));
-        setPriorBridge(prev ? normalizeBridge(prev, cfg) : null);
+        // Apply the active lens after normalizing. Start value drives % labels.
+        const curBars = normalizeBridge(cur, cfg);
+        const start = curBars.find((b) => b.key === 'start')?.value ?? 0;
+        setBridge(applyLens(curBars, lensCfg, start));
+        if (prev) {
+          const prevBars = normalizeBridge(prev, cfg);
+          const prevStart = prevBars.find((b) => b.key === 'start')?.value ?? 0;
+          setPriorBridge(applyLens(prevBars, lensCfg, prevStart));
+        } else {
+          setPriorBridge(null);
+        }
+        setRate(lensCfg.rate ? rateVal : null);
       })
       .catch((e) => {
         if (!cancelled) setError(e);
@@ -115,18 +135,18 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       });
 
     return () => { cancelled = true; };
-  }, [filters, month, compareMonth, showDelta, bqConnected, cfg]);
+  }, [filters, month, compareMonth, showDelta, bqConnected, cfg, grain, lens, grainCfg, lensCfg]);
 
   // ── load distinct filter values once BQ is connected (reference data) ────────
   useEffect(() => {
     if (!bqConnected) return;
     let cancelled = false;
     const dims = [...cfg.filters.primary, ...cfg.filters.overflow];
-    fetchFilterOptions({ dims })
+    fetchFilterOptions({ dims, bridgeView: grainCfg.bridgeView })
       .then((opts) => { if (!cancelled) setFilterOptions(opts); })
       .catch(() => { /* leave options empty on failure — dropdowns still show "All" */ });
     return () => { cancelled = true; };
-  }, [bqConnected, cfg]);
+  }, [bqConnected, cfg, grainCfg]);
 
   // ── L2 fetch (shared by bar click + dim change) ─────────────────────────────
   const loadL2 = useCallback((barKey, dim) => {
@@ -142,13 +162,14 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setL2(null);
     setPriorL2(null);
 
+    const { bridgeView, decompView } = grainCfg;
     const fetchFor = (m) => {
       if (spec.mode === 'component') {
-        return fetchComponentSplit({ month: m, movementKind: spec.movementKind, filters });
+        return fetchComponentSplit({ month: m, movementKind: spec.movementKind, filters, decompView, bridgeView });
       }
       // dimension mode
-      if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters });
-      return fetchDimSplit({ month: m, measure: spec.measure, dim, filters });
+      if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
+      return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
     };
 
     Promise.all([
@@ -161,7 +182,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       })
       .catch((e) => setError(e))
       .finally(() => setL2Loading(false));
-  }, [cfg, filters, month, compareMonth, showDelta]);
+  }, [cfg, filters, month, compareMonth, showDelta, grainCfg]);
 
   // ── handlers ────────────────────────────────────────────────────────────────
   const handleBarClick = (barKey) => {
@@ -185,7 +206,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setDrill((d) => ({ ...d, slice }));
     setL3Loading(true);
     setError(null);
-    fetchAccountTable({ month, drill: drill.bar, dim: drill.dim, slice, filters })
+    fetchAccountTable({ month, drill: drill.bar, dim: drill.dim, slice, filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView })
       .then((rows) => setL3(rows))
       .catch((e) => setError(e))
       .finally(() => setL3Loading(false));
@@ -251,11 +272,50 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         overflow={cfg.filters.overflow}
       />
 
-      {/* 2. period + delta controls */}
+      {/* 2. grain + lens + period + delta controls */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
         margin: '8px 0 20px',
       }}>
+        {/* grain segmented toggle (prominent — annual vs monthly GRR differ a lot) */}
+        <div style={{ display: 'inline-flex', borderRadius: 8, overflow: 'hidden', border: '1px solid #d1d5db' }}>
+          {Object.entries(cfg.grains).map(([key, g]) => {
+            const active = grain === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setGrain(key)}
+                style={{
+                  padding: '6px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  border: 'none', fontFamily: "'DM Sans', sans-serif",
+                  background: active ? '#059669' : '#fff',
+                  color: active ? '#fff' : '#374151',
+                }}
+              >
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* lens selector */}
+        <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+          Lens
+          <select
+            value={lens}
+            onChange={(e) => setLens(e.target.value)}
+            style={{
+              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
+              border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
+              background: '#fff', color: '#1a1a1a',
+            }}
+          >
+            {Object.entries(cfg.lenses).map(([key, l]) => (
+              <option key={key} value={key}>{l.label}</option>
+            ))}
+          </select>
+        </label>
+
         <select
           value={month}
           onChange={(e) => setMonth(e.target.value)}
@@ -305,7 +365,23 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         </div>
       )}
 
-      {/* 3. L1 waterfall bridge */}
+      {/* 3a. headline rate (GRR/NRR lenses only) */}
+      {lensCfg.rate && (
+        <div style={{ margin: '0 0 4px' }}>
+          <span style={{
+            fontSize: 32, fontWeight: 700, color: '#1a1a1a',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {lensCfg.label}{' '}
+            {rate != null ? (rate * 100).toFixed(1) + '%' : '—'}
+          </span>
+          <span style={{ ...sectionLabel, marginLeft: 10 }}>
+            {grainCfg.label} · {monthLabel(month)}
+          </span>
+        </div>
+      )}
+
+      {/* 3b. L1 waterfall bridge */}
       {bridgeLoading && !bridge && (
         <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading bridge…</p>
       )}
@@ -314,6 +390,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
           <NetSaasBridge
             bars={bridge}
             prior={showDelta ? priorBridge : null}
+            lens={lens}
             showDelta={showDelta}
             onBarClick={handleBarClick}
           />

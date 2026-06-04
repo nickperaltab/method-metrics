@@ -18,8 +18,8 @@ import {
 
 const num = (v) => Number(v) || 0;
 
-export async function fetchBridge({ month, filters }) {
-  const { rows } = await queryBq(buildBridgeSql({ month, filters }));
+export async function fetchBridge({ month, filters, bridgeView }) {
+  const { rows } = await queryBq(buildBridgeSql({ month, filters, bridgeView }));
   const r = rows[0];
   if (!r) return null;
   return {
@@ -40,25 +40,25 @@ export async function fetchRate({ metric, period }) {
   return v == null ? null : Number(v);
 }
 
-export async function fetchDimSplit({ month, measure, dim, filters }) {
-  const { rows } = await queryBq(buildDimSplitSql({ month, measure, dim, filters }));
+export async function fetchDimSplit({ month, measure, dim, filters, bridgeView }) {
+  const { rows } = await queryBq(buildDimSplitSql({ month, measure, dim, filters, bridgeView }));
   return rows.map((r) => ({ bucket: r.bucket, value: num(r.value) }));
 }
 
-export async function fetchCohortAgeChurn({ month, filters }) {
-  const { rows } = await queryBq(buildCohortAgeChurnSql({ month, filters }));
+export async function fetchCohortAgeChurn({ month, filters, bridgeView }) {
+  const { rows } = await queryBq(buildCohortAgeChurnSql({ month, filters, bridgeView }));
   return rows.map((r) => ({ bucket: r.bucket, value: num(r.value) }));
 }
 
-export async function fetchComponentSplit({ month, movementKind, filters }) {
-  const { rows } = await queryBq(buildComponentSplitSql({ month, movementKind, filters }));
+export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {
+  const { rows } = await queryBq(buildComponentSplitSql({ month, movementKind, filters, decompView, bridgeView }));
   const r = rows[0];
   if (!r) return { seats: 0, apps: 0, price: 0 };
   return { seats: num(r.seats), apps: num(r.apps), price: num(r.price) };
 }
 
-export async function fetchAccountTable({ month, drill, dim, slice, filters }) {
-  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters }));
+export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView }) {
+  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView }));
   return rows.map((r) => {
     const out = { ...r, deltaMrr: num(r.deltaMrr) };
     // seat/app/price columns only exist on expansion/downgrade rows.
@@ -71,8 +71,8 @@ export async function fetchAccountTable({ month, drill, dim, slice, filters }) {
 
 // Distinct values per filter dim — reference data, values are strings (labels),
 // no numeric coercion. Returns { [dim]: string[] }, one array per requested dim.
-export async function fetchFilterOptions({ dims, months = 24 }) {
-  const { rows } = await queryBq(buildDistinctValuesSql({ dims, months }));
+export async function fetchFilterOptions({ dims, months = 24, bridgeView }) {
+  const { rows } = await queryBq(buildDistinctValuesSql({ dims, months, bridgeView }));
   const out = {};
   for (const d of dims) out[d] = [];
   for (const r of rows) {
