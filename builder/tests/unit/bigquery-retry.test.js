@@ -6,7 +6,7 @@ globalThis.fetch = mockFetch;
 
 globalThis.localStorage = { getItem: () => 'fake-token', setItem: () => {}, removeItem: () => {} };
 
-const { queryBqWithRetry, _setBqToken } = await import('../../src/lib/bigquery.js');
+const { queryBqWithRetry, _setBqToken, clearQueryCache } = await import('../../src/lib/bigquery.js');
 
 function bqResponse(rows, fields = [{ name: 'period' }, { name: 'value' }]) {
   return {
@@ -30,7 +30,7 @@ function bqErrorResponse(status) {
 }
 
 describe('queryBqWithRetry', () => {
-  beforeEach(() => { mockFetch.mockReset(); _setBqToken('fake-token'); });
+  beforeEach(() => { mockFetch.mockReset(); _setBqToken('fake-token'); clearQueryCache(); });
 
   it('returns data on first success', async () => {
     mockFetch.mockResolvedValueOnce(bqResponse([{ period: '2026-01', value: '42' }]));

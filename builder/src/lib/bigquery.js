@@ -102,8 +102,34 @@ function cleanSql(sql) {
     .replace(/\u2264/g, '<=');
 }
 
+// Session-scoped SQL → result cache. Keyed by the exact SQL string, stores the
+// in-flight promise so two identical concurrent queries dedupe to one network
+// call. Successful results stay cached for the session (a page reload clears it,
+// which is the natural refresh); rejected promises are evicted so failures retry.
+const queryCache = new Map();
+
+export function clearQueryCache() {
+  queryCache.clear();
+}
+
 export async function queryBq(sql) {
   if (!bqToken) throw new Error('Not connected to BigQuery');
+  const key = cleanSql(sql);
+  const cached = queryCache.get(key);
+  if (cached) return cached;
+  const promise = runQueryBq(sql);
+  queryCache.set(key, promise);
+  // Evict failures so the next call retries instead of replaying the rejection.
+  // Also evict empty results — an empty row set can come from transient BQ rate
+  // limiting (same rationale as aggCache), so we don't want to pin it.
+  promise.then(
+    (r) => { if (!r.rows.length && queryCache.get(key) === promise) queryCache.delete(key); },
+    () => { if (queryCache.get(key) === promise) queryCache.delete(key); },
+  );
+  return promise;
+}
+
+async function runQueryBq(sql) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
   let res;
@@ -248,6 +274,7 @@ export function clearAggCache() {
 export function clearAllCaches() {
   clearViewCache();
   clearAggCache();
+  clearQueryCache();
 }
 
 export async function fetchYoYData(viewName, dateCol, yField, channelFilter, yearFilter) {
