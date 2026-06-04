@@ -82,6 +82,6 @@ SELECT
   vc_dim.SignupCountry, vc_dim.Vertical, vc_dim.SyncType
 FROM entity_paired ep
 JOIN company_classified cc ON ep.month_str = cc.month_str AND ep.Company = cc.Company
-LEFT JOIN {{ source('revenue', 'int_customers') }} vc_dim
+LEFT JOIN {{ ref('int_customers') }} vc_dim
   ON vc_dim.EntityRecordID = ep.EntityRecordID
   AND vc_dim.Month = CASE WHEN ep.p1_saas > 0 THEN DATE_SUB(ep.Month, INTERVAL 1 MONTH) ELSE ep.Month END

@@ -27,6 +27,8 @@ sources:
       # ----- Raw source tables (Alocet-managed) -----
       - name: Account
         description: One row per Method account (entity-grained snapshot). Primary key columns RecordID (account level) and EntityRecordID (customer level — can repeat across rows when a customer has multiple accounts).
+      - name: Entity
+        description: One row per customer entity. RecordID is the customer-level PK (joins to EntityRecordID elsewhere); EntityFullName is the display name. Used by int_customers.
       - name: Funnel
         description: One row per lifecycle event (Sync, Conversion, etc.). EntityRecordID maps back to a customer.
       - name: TransLineFlattened
@@ -35,8 +37,8 @@ sources:
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
 
       # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
-      - name: int_customers
-        description: One row per (customer-month) for active paying customers. Built from TransLineFlattened. Used by Customers metric (#373).
+      # NOTE: int_customers is now a dbt model (models/intermediate/int_customers.sql),
+      # migrated 2026-06-04 to add a deterministic dim tiebreaker. Consumers use ref().
       - name: int_customer_annual_mrr
         description: Annual customer-grain MRR with movement columns. Used by annual MRR family metrics (#384-387).
       - name: int_conversions
