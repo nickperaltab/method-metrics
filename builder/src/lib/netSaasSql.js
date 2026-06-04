@@ -19,6 +19,14 @@ export function buildFilterClauses(filters = {}, alias = '') {
     .join('\n');
 }
 
+// Headline GRR/NRR % comes from the validated monthly metric views in
+// `revenue_metrics` (period DATE + value NUMERIC ratio) — never recomputed.
+export function buildRateSql({ metric, period }) {
+  return `SELECT value
+FROM \`project-for-method-dw.revenue_metrics.${metric}\`
+WHERE period = ${sqlStr(period)}`;
+}
+
 export function buildBridgeSql({ month, filters = {}, bridgeView = 'int_customer_mrr' }) {
   const icm = fqn(bridgeView);
   return `SELECT

@@ -13,6 +13,7 @@ import {
   buildAccountTableSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
+  buildRateSql,
 } from './netSaasSql.js';
 
 const num = (v) => Number(v) || 0;
@@ -29,6 +30,14 @@ export async function fetchBridge({ month, filters }) {
     churn_mrr: num(r.churn_mrr),
     end_mrr: num(r.end_mrr),
   };
+}
+
+// Headline GRR/NRR % from the validated metric view — null when no row exists
+// for the period (so callers can distinguish "no data" from a real 0 rate).
+export async function fetchRate({ metric, period }) {
+  const { rows } = await queryBq(buildRateSql({ metric, period }));
+  const v = rows[0]?.value;
+  return v == null ? null : Number(v);
 }
 
 export async function fetchDimSplit({ month, measure, dim, filters }) {

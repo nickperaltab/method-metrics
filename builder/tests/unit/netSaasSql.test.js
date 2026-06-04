@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -152,5 +152,14 @@ describe('grain parameterization', () => {
     const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'downgrade', slice: 'seats', filters: {}, bridgeView: 'int_customer_annual_mrr', decompView: 'int_annual_mrr_movement_decomposed' });
     expect(sql).toContain('int_annual_mrr_movement_decomposed');
     expect(sql).toContain('int_customer_annual_mrr');
+  });
+});
+
+describe('buildRateSql', () => {
+  it('selects value from the metric view in revenue_metrics for the period', () => {
+    const sql = buildRateSql({ metric: 'v_metric__monthly_grr', period: '2026-05-01' });
+    expect(sql).toContain('revenue_metrics.v_metric__monthly_grr');
+    expect(sql).toContain("period = '2026-05-01'");
+    expect(sql).toContain('value');
   });
 });
