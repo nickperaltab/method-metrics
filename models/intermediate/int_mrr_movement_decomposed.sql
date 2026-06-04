@@ -8,7 +8,7 @@
 --   seat  = same module, change in Qty (users)        -> Δqty * prior unit-rate
 --   price = same module, change in unit-rate (residual) + any Discount-line change
 
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 with lines as (
     select * from {{ ref('int_customer_mrr_lines') }}

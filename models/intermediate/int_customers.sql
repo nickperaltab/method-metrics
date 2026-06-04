@@ -24,7 +24,7 @@
 --       (ARRAY_AGG(CompanyAccount ORDER BY SaaSAmount DESC, CompanyAccount ASC
 --       LIMIT 1)), keeping the two models' tiebreak sense consistent.
 
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 WITH monthly_accounts AS (
   SELECT

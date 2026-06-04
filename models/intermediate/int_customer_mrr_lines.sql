@@ -9,7 +9,7 @@
 -- seats (Qty) / apps (ItemFullName) / price (Rate, Discount lines).
 -- Feeds int_mrr_movement_decomposed.
 
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 select
     date_trunc(TxnDate, month)   as month,

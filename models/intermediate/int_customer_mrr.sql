@@ -10,7 +10,7 @@
 -- single movement_kind dimension. A customer-month with all four = 0 is a
 -- steady-state row.
 
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 WITH entity_monthly AS (
   SELECT

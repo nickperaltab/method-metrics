@@ -9,7 +9,7 @@
 --   price = same module, change in unit-rate (residual) + any Discount-line change
 -- Validation: scripts/parity_annual_decomposition_identity.py + _vs_metrics.py.
 
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 with lines as (
     select * from {{ ref('int_customer_mrr_lines') }}
