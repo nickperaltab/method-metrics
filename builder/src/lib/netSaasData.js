@@ -93,5 +93,5 @@ export async function fetchAccountHistory({ entityRecordId }) {
 export async function fetchAccountLifecycle({ entityRecordId }) {
   const { rows } = await queryBq(buildAccountLifecycleSql({ entityRecordId }));
   const r = rows[0] || {};
-  return { signup: r.signup || null, firstSync: r.first_sync || null, firstInvoice: r.first_invoice || null, cancelled: r.cancelled || null };
+  return { signup: r.signup || null, firstSync: r.first_sync || null, firstInvoice: r.first_invoice || null };
 }

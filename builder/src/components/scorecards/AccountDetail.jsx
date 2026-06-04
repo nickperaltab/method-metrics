@@ -17,7 +17,6 @@ const LIFECYCLE_EVENTS = [
   { key: 'signup', label: 'Signup', color: '#9ca3af' },      // grey
   { key: 'firstSync', label: 'First sync', color: '#3b6ea5' }, // blue
   { key: 'firstInvoice', label: 'Invoice', color: '#059669' }, // green
-  { key: 'cancelled', label: 'Cancelled', color: '#dc2626' }, // red
 ];
 
 // Compact currency, e.g. $1.2M / $120K / $0 / -$45K.

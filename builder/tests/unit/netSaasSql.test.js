@@ -188,9 +188,10 @@ describe('buildAccountLifecycleSql', () => {
     const sql = buildAccountLifecycleSql({ entityRecordId: 100037 });
     expect(sql).toContain('revenue.Account');
     expect(sql).toContain('EntityRecordID = 100037');
-    expect(sql).toContain('MIN(SignUpDate)');
-    expect(sql).toContain('MIN(CustDatFirstSyncCompleted)');
-    expect(sql).toContain('MIN(FirstSaaSInvoiceTxnDate)');
-    expect(sql).toContain('MAX(CancellationDate)');
+    expect(sql).toContain('MIN(NULLIF(SignUpDate');
+    expect(sql).toContain('MIN(NULLIF(CustDatFirstSyncCompleted');
+    expect(sql).toContain('MIN(NULLIF(FirstSaaSInvoiceTxnDate');
+    expect(sql).toContain("DATE '0001-01-01'");   // sentinel ignored
+    expect(sql).not.toContain('CancellationDate'); // no cancellation marker
   });
 });

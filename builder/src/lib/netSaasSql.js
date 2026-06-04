@@ -174,11 +174,16 @@ ORDER BY month`;
 // Lifecycle milestone dates for one account, aggregated from the Account source.
 export function buildAccountLifecycleSql({ entityRecordId }) {
   const id = parseInt(entityRecordId, 10);
+  // NULLIF the '0001-01-01' sentinel (Method's no-date marker) so MIN doesn't
+  // grab it from never-invoiced sub-accounts. One entity can have many
+  // CompanyAccounts (e.g. backup/restore "...restoreYYYYMMDD" rows); MIN over
+  // real dates gives the entity's true founding events. No cancellation marker:
+  // MAX(CancellationDate) across sub-accounts is unreliable (restore accounts
+  // cancel while the customer is live); the MRR line already shows when revenue stops.
   return `SELECT
-  MIN(SignUpDate) AS signup,
-  MIN(CustDatFirstSyncCompleted) AS first_sync,
-  MIN(FirstSaaSInvoiceTxnDate) AS first_invoice,
-  MAX(CancellationDate) AS cancelled
+  MIN(NULLIF(SignUpDate, DATE '0001-01-01')) AS signup,
+  MIN(NULLIF(CustDatFirstSyncCompleted, DATE '0001-01-01')) AS first_sync,
+  MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')) AS first_invoice
 FROM \`project-for-method-dw.revenue.Account\`
 WHERE EntityRecordID = ${id}`;
 }
