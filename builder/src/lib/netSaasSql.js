@@ -123,3 +123,17 @@ ${buildFilterClauses(filters, 'c')}
 GROUP BY bucket
 ORDER BY bucket`.trimEnd();
 }
+
+// Distinct values per filter dimension, scoped to recent months for relevance.
+// `dims` are trusted config identifiers (column names on int_customer_mrr), so
+// they're interpolated directly — both as the 'dim' literal label and as the
+// CAST(... AS STRING) column reference (STRING cast handles BOOL dims like HasDEP).
+export function buildDistinctValuesSql({ dims, months = 24 }) {
+  const window = `Month >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL ${Number(months)} MONTH)`;
+  const parts = dims.map((d) => `SELECT '${d}' AS dim, CAST(${d} AS STRING) AS val
+FROM ${ICM}
+WHERE ${window} AND ${d} IS NOT NULL AND CAST(${d} AS STRING) != ''
+GROUP BY val`);
+  return `${parts.join('\nUNION ALL\n')}
+ORDER BY dim, val`;
+}

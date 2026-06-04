@@ -20,6 +20,7 @@ import {
   fetchComponentSplit,
   fetchAccountTable,
   fetchCohortAgeChurn,
+  fetchFilterOptions,
 } from '../../lib/netSaasData';
 
 // ── date helpers ────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const cfg = config;
 
   const [filters, setFilters] = useState({});
+  const [filterOptions, setFilterOptions] = useState({});
   const [month, setMonth] = useState(latestCompleteMonth());
   const [compareMonth, setCompareMonth] = useState(priorMonth(latestCompleteMonth()));
   const [showDelta, setShowDelta] = useState(true);
@@ -113,6 +115,17 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
     return () => { cancelled = true; };
   }, [filters, month, compareMonth, showDelta, bqConnected, cfg]);
+
+  // ── load distinct filter values once BQ is connected (reference data) ────────
+  useEffect(() => {
+    if (!bqConnected) return;
+    let cancelled = false;
+    const dims = [...cfg.filters.primary, ...cfg.filters.overflow];
+    fetchFilterOptions({ dims })
+      .then((opts) => { if (!cancelled) setFilterOptions(opts); })
+      .catch(() => { /* leave options empty on failure — dropdowns still show "All" */ });
+    return () => { cancelled = true; };
+  }, [bqConnected, cfg]);
 
   // ── L2 fetch (shared by bar click + dim change) ─────────────────────────────
   const loadL2 = useCallback((barKey, dim) => {
@@ -224,7 +237,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {/* 1. global filters */}
       <GlobalFilterBar
         filters={filters}
-        options={{}}
+        options={filterOptions}
         onFilterChange={setFilters}
         primary={cfg.filters.primary}
         overflow={cfg.filters.overflow}

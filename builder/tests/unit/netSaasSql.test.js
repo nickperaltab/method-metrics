@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -110,5 +110,22 @@ describe('buildCohortAgeChurnSql', () => {
   it('applies global filters with the c. alias', () => {
     const sql = buildCohortAgeChurnSql({ month: '2026-05-01', filters: { Segment: 'SMB' } });
     expect(sql).toContain("c.Segment = 'SMB'");
+  });
+});
+
+describe('buildDistinctValuesSql', () => {
+  it('UNION ALLs a distinct-values select per requested dim', () => {
+    const sql = buildDistinctValuesSql({ dims: ['Segment', 'SyncType'], months: 24 });
+    expect(sql).toContain("'Segment' AS dim");
+    expect(sql).toContain("'SyncType' AS dim");
+    expect(sql).toContain('UNION ALL');
+    expect(sql).toContain('int_customer_mrr');
+    expect(sql).toContain('GROUP BY');
+    // recent-months scoping present
+    expect(sql).toContain('DATE_SUB');
+  });
+  it('casts each dim to STRING so BOOL dims like HasDEP work', () => {
+    const sql = buildDistinctValuesSql({ dims: ['HasDEP'], months: 24 });
+    expect(sql).toContain('CAST(HasDEP AS STRING)');
   });
 });

@@ -12,6 +12,7 @@ import {
   buildComponentSplitSql,
   buildAccountTableSql,
   buildCohortAgeChurnSql,
+  buildDistinctValuesSql,
 } from './netSaasSql.js';
 
 const num = (v) => Number(v) || 0;
@@ -57,4 +58,16 @@ export async function fetchAccountTable({ month, drill, dim, slice, filters }) {
     if (r.price_mrr !== undefined) out.price_mrr = num(r.price_mrr);
     return out;
   });
+}
+
+// Distinct values per filter dim — reference data, values are strings (labels),
+// no numeric coercion. Returns { [dim]: string[] }, one array per requested dim.
+export async function fetchFilterOptions({ dims, months = 24 }) {
+  const { rows } = await queryBq(buildDistinctValuesSql({ dims, months }));
+  const out = {};
+  for (const d of dims) out[d] = [];
+  for (const r of rows) {
+    if (out[r.dim]) out[r.dim].push(r.val);
+  }
+  return out;
 }
