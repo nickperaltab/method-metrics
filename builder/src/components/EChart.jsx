@@ -8,7 +8,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
 
 // Error boundary prevents a single broken chart from crashing the entire page
-class ChartErrorBoundary extends Component {
+export class ChartErrorBoundary extends Component {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(error, info) { console.error('Chart render error:', error, info); }

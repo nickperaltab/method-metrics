@@ -8,6 +8,7 @@
 // Small date helpers live at the top; handlers stay flat and tidy.
 
 import { useState, useEffect, useCallback } from 'react';
+import { ChartErrorBoundary } from '../EChart';
 import NetSaasBridge from './NetSaasBridge';
 import L2Panel from './L2Panel';
 import NetSaasAccountTable from './NetSaasAccountTable';
@@ -302,12 +303,14 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading bridge…</p>
       )}
       {bridge && (
-        <NetSaasBridge
-          bars={bridge}
-          prior={showDelta ? priorBridge : null}
-          showDelta={showDelta}
-          onBarClick={handleBarClick}
-        />
+        <ChartErrorBoundary>
+          <NetSaasBridge
+            bars={bridge}
+            prior={showDelta ? priorBridge : null}
+            showDelta={showDelta}
+            onBarClick={handleBarClick}
+          />
+        </ChartErrorBoundary>
       )}
 
       {/* 4. breadcrumb */}
