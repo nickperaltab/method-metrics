@@ -94,6 +94,29 @@ function cohortAgeClause(slice, ageExpr) {
     : `  AND ${ageExpr} BETWEEN ${lo} AND ${hi}\n`;
 }
 
+// Cohort age = TENURE AT CHURN, i.e. how long the customer actually paid:
+// last active month − first paid month. NOT "months since signup to today" —
+// that would add dead time for customers who churned long before the analysis
+// month (esp. in the annual lens, where churn can be up to 12 months old).
+//   firsts: true first paid month (Account.FirstSaaSInvoiceTxnDate, sentinel-NULLIF'd)
+//   lasts:  last month with SaaS MRR (int_customer_mrr_lines)
+// Aliases f (firsts) / l (lasts) join to the bridge view aliased c.
+function cohortTenureCtes() {
+  return `WITH firsts AS (
+  SELECT EntityRecordID,
+    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
+  FROM ${fqn('Account')}
+  GROUP BY EntityRecordID
+),
+lasts AS (
+  SELECT entity_record_id, MAX(month) AS last_month
+  FROM ${fqn('int_customer_mrr_lines')}
+  WHERE saas != 0
+  GROUP BY entity_record_id
+)`;
+}
+const COHORT_TENURE_EXPR = 'DATE_DIFF(l.last_month, f.first_month, MONTH)';
+
 export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed' }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
@@ -118,23 +141,17 @@ LIMIT 50`.trimEnd();
   // CohortAge slice: derived from FirstSaaSInvoiceTxnDate tenure (no such column),
   // so join the firsts CTE and filter by the bucket's age range.
   if (dim === 'CohortAge') {
-    const acct = fqn('Account');
-    const ageExpr = `DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH)`;
-    return `WITH firsts AS (
-  SELECT EntityRecordID,
-    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
-  FROM ${acct}
-  GROUP BY EntityRecordID
-)
+    return `${cohortTenureCtes()}
 SELECT
   c.EntityRecordID AS entity_record_id,
   c.Company, c.Segment, c.UserTier, c.AttributionChannel,
   c.${measure} AS deltaMrr
 FROM ${icm} c
 JOIN firsts f ON f.EntityRecordID = c.EntityRecordID
+JOIN lasts  l ON l.entity_record_id = c.EntityRecordID
 WHERE c.Month = ${sqlStr(month)}
   AND c.${measure} > 0
-${cohortAgeClause(slice, ageExpr)}${buildFilterClauses(filters, 'c')}
+${cohortAgeClause(slice, COHORT_TENURE_EXPR)}${buildFilterClauses(filters, 'c')}
 ORDER BY c.${measure} DESC
 LIMIT 50`.trimEnd();
   }
@@ -153,33 +170,26 @@ LIMIT 50`.trimEnd();
 
 export function buildCohortAgeChurnSql({ month, filters = {}, bridgeView = 'int_customer_mrr' }) {
   const icm = fqn(bridgeView);
-  const acct = fqn('Account');
-  // Cohort age = tenure since the customer's TRUE first paid invoice, from
-  // Account.FirstSaaSInvoiceTxnDate. NULLIF the '0001-01-01' sentinel and MIN
-  // across the entity's CompanyAccounts (one customer can have many) so we get
-  // the real start, not a value floored at the model's first month. ORDER BY the
-  // bucket's minimum age so buckets read 0-3 → 4-12 → 13-24 → 25+ (not lexically).
-  return `WITH firsts AS (
-  SELECT EntityRecordID,
-    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
-  FROM ${acct}
-  GROUP BY EntityRecordID
-)
+  const age = COHORT_TENURE_EXPR;
+  // Bucket churned MRR by tenure at churn (see cohortTenureCtes). ORDER BY the
+  // bucket's minimum tenure so buckets read 0-3 → 4-12 → 13-24 → 25+ (not lexically).
+  return `${cohortTenureCtes()}
 SELECT
   CASE
-    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 3  THEN '0-3'
-    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 12 THEN '4-12'
-    WHEN DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH) <= 24 THEN '13-24'
+    WHEN ${age} <= 3  THEN '0-3'
+    WHEN ${age} <= 12 THEN '4-12'
+    WHEN ${age} <= 24 THEN '13-24'
     ELSE '25+'
   END AS bucket,
   SUM(c.Cancellations) AS value
 FROM ${icm} c
 JOIN firsts f ON f.EntityRecordID = c.EntityRecordID
+JOIN lasts  l ON l.entity_record_id = c.EntityRecordID
 WHERE c.Month = ${sqlStr(month)}
   AND c.Cancellations > 0
 ${buildFilterClauses(filters, 'c')}
 GROUP BY bucket
-ORDER BY MIN(DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH))`.trimEnd();
+ORDER BY MIN(${age})`.trimEnd();
 }
 
 // Distinct values per filter dimension, scoped to recent months for relevance.

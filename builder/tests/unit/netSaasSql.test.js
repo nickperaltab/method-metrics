@@ -96,7 +96,8 @@ describe('buildAccountTableSql', () => {
     const sql = buildAccountTableSql({ month:'2026-05-01', drill:'churn', dim:'CohortAge', slice:'4-12', filters:{} });
     expect(sql).not.toContain('CohortAge =');           // never references a nonexistent column
     expect(sql).toContain('FirstSaaSInvoiceTxnDate');    // derives tenure from first paid date
-    expect(sql).toContain('BETWEEN 4 AND 12');           // 4-12 bucket → age range
+    expect(sql).toContain('last_month');                 // tenure-at-churn, not age-to-today
+    expect(sql).toContain('BETWEEN 4 AND 12');           // 4-12 bucket → tenure range
     expect(sql).toContain('Cancellations > 0');
   });
   it('churn→CohortAge 25+ slice: open-ended age range', () => {
@@ -112,7 +113,9 @@ describe('buildCohortAgeChurnSql', () => {
     expect(sql).toContain('FirstSaaSInvoiceTxnDate');     // tenure anchored on true first paid date
     expect(sql).toContain("DATE '0001-01-01'");           // sentinel ignored
     expect(sql).toContain('revenue.Account');
-    expect(sql).toContain('DATE_DIFF');
+    expect(sql).toContain('int_customer_mrr_lines');      // last active month source
+    expect(sql).toContain('last_month');                  // tenure-at-churn = last − first
+    expect(sql).toContain('DATE_DIFF(l.last_month, f.first_month');
     expect(sql).toContain("'0-3'");
     expect(sql).toContain("'4-12'");
     expect(sql).toContain("'13-24'");
