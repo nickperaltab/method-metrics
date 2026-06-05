@@ -117,9 +117,16 @@ LIMIT 50`.trimEnd();
 
 export function buildCohortAgeChurnSql({ month, filters = {}, bridgeView = 'int_customer_mrr' }) {
   const icm = fqn(bridgeView);
+  const acct = fqn('Account');
+  // Cohort age = tenure since the customer's TRUE first paid invoice, from
+  // Account.FirstSaaSInvoiceTxnDate. NULLIF the '0001-01-01' sentinel and MIN
+  // across the entity's CompanyAccounts (one customer can have many) so we get
+  // the real start, not a value floored at the model's first month. ORDER BY the
+  // bucket's minimum age so buckets read 0-3 → 4-12 → 13-24 → 25+ (not lexically).
   return `WITH firsts AS (
-  SELECT EntityRecordID, MIN(Month) AS first_month
-  FROM ${icm}
+  SELECT EntityRecordID,
+    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
+  FROM ${acct}
   GROUP BY EntityRecordID
 )
 SELECT
@@ -136,7 +143,7 @@ WHERE c.Month = ${sqlStr(month)}
   AND c.Cancellations > 0
 ${buildFilterClauses(filters, 'c')}
 GROUP BY bucket
-ORDER BY bucket`.trimEnd();
+ORDER BY MIN(DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH))`.trimEnd();
 }
 
 // Distinct values per filter dimension, scoped to recent months for relevance.

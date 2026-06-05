@@ -97,7 +97,9 @@ describe('buildAccountTableSql', () => {
 describe('buildCohortAgeChurnSql', () => {
   it('sub-selects each entity first month and buckets age', () => {
     const sql = buildCohortAgeChurnSql({ month: '2026-05-01', filters: {} });
-    expect(sql).toContain('MIN(Month)');
+    expect(sql).toContain('FirstSaaSInvoiceTxnDate');     // tenure anchored on true first paid date
+    expect(sql).toContain("DATE '0001-01-01'");           // sentinel ignored
+    expect(sql).toContain('revenue.Account');
     expect(sql).toContain('DATE_DIFF');
     expect(sql).toContain("'0-3'");
     expect(sql).toContain("'4-12'");
@@ -106,6 +108,8 @@ describe('buildCohortAgeChurnSql', () => {
     expect(sql).toContain('SUM(c.Cancellations) AS value');
     expect(sql).toContain('Cancellations > 0');
     expect(sql).toContain('GROUP BY bucket');
+    expect(sql).toContain('ORDER BY MIN(DATE_DIFF');       // numeric age order, not lexical
+    expect(sql).not.toContain('ORDER BY bucket');
   });
   it('applies global filters with the c. alias', () => {
     const sql = buildCohortAgeChurnSql({ month: '2026-05-01', filters: { Segment: 'SMB' } });
