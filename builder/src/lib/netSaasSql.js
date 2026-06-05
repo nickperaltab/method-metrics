@@ -81,6 +81,19 @@ ${buildFilterClauses(filters, 'c')}`.trimEnd();
 
 const ORDER_COL = { seats: 'seat_mrr', apps: 'app_mrr', price: 'price_mrr' };
 
+// CohortAge is a DERIVED bucket (tenure since first paid invoice), not a column.
+// Drilling an L3 account table by a cohort slice must reproduce the bucket's age
+// range, not filter `AND CohortAge = '...'` (which 400s: no such column).
+const COHORT_AGE_RANGE = { '0-3': [0, 3], '4-12': [4, 12], '13-24': [13, 24], '25+': [25, null] };
+function cohortAgeClause(slice, ageExpr) {
+  const r = COHORT_AGE_RANGE[slice];
+  if (!r) return '';
+  const [lo, hi] = r;
+  return hi == null
+    ? `  AND ${ageExpr} >= ${lo}\n`
+    : `  AND ${ageExpr} BETWEEN ${lo} AND ${hi}\n`;
+}
+
 export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed' }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
@@ -102,6 +115,29 @@ LIMIT 50`.trimEnd();
   }
   // new / churn — straight from int_customer_mrr
   const measure = drill === 'new' ? 'NewMRR' : 'Cancellations';
+  // CohortAge slice: derived from FirstSaaSInvoiceTxnDate tenure (no such column),
+  // so join the firsts CTE and filter by the bucket's age range.
+  if (dim === 'CohortAge') {
+    const acct = fqn('Account');
+    const ageExpr = `DATE_DIFF(${sqlStr(month)}, f.first_month, MONTH)`;
+    return `WITH firsts AS (
+  SELECT EntityRecordID,
+    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
+  FROM ${acct}
+  GROUP BY EntityRecordID
+)
+SELECT
+  c.EntityRecordID AS entity_record_id,
+  c.Company, c.Segment, c.UserTier, c.AttributionChannel,
+  c.${measure} AS deltaMrr
+FROM ${icm} c
+JOIN firsts f ON f.EntityRecordID = c.EntityRecordID
+WHERE c.Month = ${sqlStr(month)}
+  AND c.${measure} > 0
+${cohortAgeClause(slice, ageExpr)}${buildFilterClauses(filters, 'c')}
+ORDER BY c.${measure} DESC
+LIMIT 50`.trimEnd();
+  }
   const sliceClause = dim && slice ? `  AND ${dim} = ${sqlStr(slice)}\n` : '';
   return `SELECT
   EntityRecordID AS entity_record_id,

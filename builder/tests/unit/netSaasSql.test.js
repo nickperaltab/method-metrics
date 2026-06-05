@@ -92,6 +92,18 @@ describe('buildAccountTableSql', () => {
     expect(sql).toContain('Cancellations > 0');
     expect(sql).toContain("Segment = 'SMB'");
   });
+  it('churn→CohortAge slice: joins firsts CTE and filters by age range, not a column', () => {
+    const sql = buildAccountTableSql({ month:'2026-05-01', drill:'churn', dim:'CohortAge', slice:'4-12', filters:{} });
+    expect(sql).not.toContain('CohortAge =');           // never references a nonexistent column
+    expect(sql).toContain('FirstSaaSInvoiceTxnDate');    // derives tenure from first paid date
+    expect(sql).toContain('BETWEEN 4 AND 12');           // 4-12 bucket → age range
+    expect(sql).toContain('Cancellations > 0');
+  });
+  it('churn→CohortAge 25+ slice: open-ended age range', () => {
+    const sql = buildAccountTableSql({ month:'2026-05-01', drill:'churn', dim:'CohortAge', slice:'25+', filters:{} });
+    expect(sql).toContain('>= 25');
+    expect(sql).not.toContain('BETWEEN');
+  });
 });
 
 describe('buildCohortAgeChurnSql', () => {
