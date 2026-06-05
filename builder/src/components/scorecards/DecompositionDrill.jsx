@@ -242,7 +242,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   };
 
   // ── breadcrumb trail from drill state ───────────────────────────────────────
-  const trail = [{ level: 0, label: 'Net SaaS' }];
+  const trail = [{ level: 0, label: 'SaaS MRR' }];
   if (drill) {
     const bar = cfg.bridge.find((b) => b.key === drill.bar);
     trail.push({ level: 1, label: bar?.label || drill.bar });
@@ -274,11 +274,19 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       <h1 style={{
-        fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: '0 0 24px',
+        fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px',
         fontFamily: "'DM Sans', sans-serif",
       }}>
         {cfg.title}
       </h1>
+      {cfg.subtitle && (
+        <p style={{
+          fontSize: 13, color: '#6b7280', margin: '0 0 24px',
+          fontFamily: "'DM Sans', sans-serif", maxWidth: 760,
+        }}>
+          {cfg.subtitle}
+        </p>
+      )}
 
       {/* 1. global filters */}
       <GlobalFilterBar

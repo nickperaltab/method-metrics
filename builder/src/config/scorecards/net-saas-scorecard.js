@@ -4,7 +4,11 @@
 
 export const netSaasScorecard = {
   id: 'net-saas',
-  title: 'Net SaaS Movement',
+  title: 'SaaS MRR Movement',
+  // Gross SaaS MRR (matches verified v_saas_mrr to the dollar). Runs slightly above
+  // Looker's "Total Net SaaS", which nets out SaaS Expense; expense is a cost line,
+  // not a customer movement, so the movement bridge tracks gross.
+  subtitle: 'Gross SaaS MRR — matches verified v_saas_mrr. Runs slightly above Looker “Total Net SaaS”, which subtracts SaaS Expense.',
   status: 'live',
   group: 'revenue',
   grain: 'month',            // V1: month only
@@ -32,7 +36,7 @@ export const netSaasScorecard = {
   // lens → which DELTA bars show + label mode + headline rate (null = no rate)
   // Start + End always render. NRR excludes New; GRR excludes New AND Expansion.
   lenses: {
-    netSaas: { label: 'Net SaaS', bars: ['new','expansion','downgrade','churn'], labelMode: 'dual', rate: null },
+    netSaas: { label: 'SaaS MRR', bars: ['new','expansion','downgrade','churn'], labelMode: 'dual', rate: null },
     nrr:     { label: 'NRR',      bars: ['expansion','downgrade','churn'],       labelMode: 'dual',   rate: 'nrr' },
     grr:     { label: 'GRR',      bars: ['downgrade','churn'],                    labelMode: 'dual',   rate: 'grr' },
   },
