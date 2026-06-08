@@ -173,6 +173,24 @@ export default function Sidebar({ collapsed, onToggle }) {
             );
           })()}
 
+          {/* Labs — experimental dashboards, visible to ALL (not admin-gated, no star). */}
+          {(() => {
+            const labs = Object.values(SCORECARDS).filter(sc => sc.labs);
+            if (labs.length === 0) return null;
+            return (
+              <>
+                <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+                <div style={sectionLabel}>Labs</div>
+                {labs.map(sc => (
+                  <NavLink key={sc.id} to={`/scorecards/${sc.id}`} style={linkStyle}>
+                    <span style={{ fontSize: 12, color: '#f59e0b', marginRight: 6 }}>{'◉'}</span>
+                    {sc.title}
+                  </NavLink>
+                ))}
+              </>
+            );
+          })()}
+
           {/* Metric Registry — visible to all, read-only for non-admins */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
           <NavLink to="/admin/registry" style={linkStyle}>
@@ -184,7 +202,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           {isAdmin(currentUser) && (() => {
             const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
             const plan = Object.values(SCORECARDS).filter(sc => sc.group === 'plan');
-            const revenue = Object.values(SCORECARDS).filter(sc => sc.group === 'revenue');
+            const revenue = Object.values(SCORECARDS).filter(sc => sc.group === 'revenue' && !sc.labs);
             const customer = Object.values(SCORECARDS).filter(sc => sc.group === 'customer');
             return (
               <>

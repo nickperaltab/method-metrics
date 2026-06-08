@@ -273,12 +273,24 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
-      <h1 style={{
-        fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px',
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        {cfg.title}
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 4px' }}>
+        <h1 style={{
+          fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {cfg.title}
+        </h1>
+        {cfg.status && cfg.status !== 'live' && cfg.status !== 'approved' && (
+          <span style={{
+            fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase',
+            color: '#b45309', background: '#fef3c7', border: '1px solid #fcd34d',
+            borderRadius: 999, padding: '4px 12px', whiteSpace: 'nowrap',
+            fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+          }}>
+            {cfg.status}
+          </span>
+        )}
+      </div>
       {cfg.subtitle && (
         <p style={{
           fontSize: 13, color: '#6b7280', margin: '0 0 24px',

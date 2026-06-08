@@ -9,7 +9,8 @@ export const netSaasScorecard = {
   // Looker's "Total Net SaaS", which nets out SaaS Expense; expense is a cost line,
   // not a customer movement, so the movement bridge tracks gross.
   subtitle: 'Gross SaaS MRR — matches verified v_saas_mrr. Runs slightly above Looker “Total Net SaaS”, which subtracts SaaS Expense.',
-  status: 'live',
+  status: 'beta',           // drives the top-right pill on the page + amber dot in nav
+  labs: true,               // surfaces in the always-visible "Labs" nav section (experimental, not fully reviewed)
   group: 'revenue',
   grain: 'month',            // V1: month only
   defaultRange: 'latest-complete-month',
