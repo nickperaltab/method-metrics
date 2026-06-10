@@ -14,8 +14,46 @@ const SIZE_BUCKET = `CASE
       ELSE '4 · 11+ (Mid)'
     END`;
 
+// Attended/committed sales-onboarding touches that count as "assisted" (excludes
+// 'booked'/'missed'/'follow up' as ambiguous; 'AI Summary - *' = a real Zoom session
+// happened). Tracking began ~Jun 2026, so this is sparse for older cohorts.
+const SALES_ASSIST_TYPES = [
+  'Demo', 'AI Summary - Demo',
+  'Free Consulting Session', 'AI Summary - Free Hour',
+  'Consulting Agreement', 'AI Summary - Customization', 'Monthly Dedicated Services',
+];
+const ASSIST_IN_LIST = SALES_ASSIST_TYPES.map(sqlStr).join(', ');
+
 export function buildFunnelSpineSql({ startDate, endDate, segment = null }) {
-  const seg = segment === 'CompanySize';
+  const isSize = segment === 'CompanySize';
+  const isAssist = segment === 'Assisted';
+  const seg = isSize || isAssist;
+
+  const sizesCte = isSize ? `,
+sizes AS (
+  SELECT EntityRecordID, MAX(LicenseCount) AS licenses
+  FROM ${fqn('Account')}
+  GROUP BY EntityRecordID
+)` : '';
+  const assistCte = isAssist ? `,
+assist AS (
+  SELECT DISTINCT a.EntityRecordID
+  FROM ${fqn('Activity')} a
+  JOIN stages s ON s.EntityRecordID = a.EntityRecordID
+  WHERE a.IsDeleted = FALSE
+    AND a.ActivityType IN (${ASSIST_IN_LIST})
+    AND a.DueDateStart >= s.trial_date
+)` : '';
+
+  const segExpr = isSize
+      ? `${SIZE_BUCKET} AS segment,`
+    : isAssist
+      ? `IF(asst.EntityRecordID IS NOT NULL, 'Assisted', 'Not assisted') AS segment,`
+    : '';
+  const segJoin = isSize ? 'LEFT JOIN sizes sz USING (EntityRecordID)'
+    : isAssist ? 'LEFT JOIN assist asst USING (EntityRecordID)'
+    : '';
+
   return `WITH stages AS (
   SELECT EntityRecordID,
     MIN(IF(EventType='Trial', Date, NULL))      AS trial_date,
@@ -23,19 +61,13 @@ export function buildFunnelSpineSql({ startDate, endDate, segment = null }) {
     MIN(IF(EventType='Conversion', Date, NULL)) AS conversion_date
   FROM ${fqn('Funnel')}
   GROUP BY EntityRecordID
-),
-sizes AS (
-  SELECT EntityRecordID, MAX(LicenseCount) AS licenses
-  FROM ${fqn('Account')}
-  GROUP BY EntityRecordID
-)
+)${sizesCte}${assistCte}
 SELECT
-${seg ? `  ${SIZE_BUCKET} AS segment,\n` : ''}  COUNT(*) AS trials,
+${seg ? `  ${segExpr}\n` : ''}  COUNT(*) AS trials,
   COUNTIF(s.sync_date IS NOT NULL AND s.sync_date >= s.trial_date)             AS synced,
   COUNTIF(s.conversion_date IS NOT NULL AND s.conversion_date >= s.trial_date) AS converted
 FROM stages s
-LEFT JOIN sizes sz USING (EntityRecordID)
-WHERE s.trial_date BETWEEN ${sqlStr(startDate)} AND ${sqlStr(endDate)}
+${segJoin ? segJoin + '\n' : ''}WHERE s.trial_date BETWEEN ${sqlStr(startDate)} AND ${sqlStr(endDate)}
 ${seg ? 'GROUP BY segment\nORDER BY segment' : ''}`.trimEnd();
 }
 

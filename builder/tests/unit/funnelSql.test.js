@@ -24,6 +24,18 @@ describe('buildFunnelSpineSql', () => {
     expect(sql).toContain('ORDER BY segment');
   });
 
+  it('groups by Assisted vs Not when segment=Assisted (Activity join, attended types, on/after trial)', () => {
+    const sql = buildFunnelSpineSql({ startDate: '2026-01-01', endDate: '2026-05-31', segment: 'Assisted' });
+    expect(sql).toContain('revenue.Activity');
+    expect(sql).toContain('a.ActivityType IN (');
+    expect(sql).toContain("'AI Summary - Demo'");
+    expect(sql).toContain("'Consulting Agreement'");
+    expect(sql).toContain('a.DueDateStart >= s.trial_date');
+    expect(sql).toContain("IF(asst.EntityRecordID IS NOT NULL, 'Assisted', 'Not assisted') AS segment");
+    expect(sql).toContain('a.IsDeleted = FALSE');
+    expect(sql).toContain('GROUP BY segment');
+  });
+
   it('escapes single quotes in startDate (injection guard)', () => {
     const sql = buildFunnelSpineSql({ startDate: "2026-01-01' OR '1'='1", endDate: '2026-02-28' });
     expect(sql).toContain("'2026-01-01'' OR ''1''=''1'");

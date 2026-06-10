@@ -9,6 +9,7 @@ export const funnelAcquisitionScorecard = {
   segments: [
     { key: null, label: 'All' },
     { key: 'CompanySize', label: 'Company size' },
+    { key: 'Assisted', label: 'Assisted (demo/PS touch)' },
   ],
   maturityDays: 90,
 };
