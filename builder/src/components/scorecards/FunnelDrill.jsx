@@ -18,27 +18,8 @@ import { fetchFunnelSpine, fetchConversionMrr, fetchFunnelAccounts } from '../..
 import { fetchAccountHistory, fetchAccountLifecycle } from '../../lib/netSaasData';
 
 // ── date helpers ────────────────────────────────────────────────────────────
-function pad2(n) { return String(n).padStart(2, '0'); }
-function monthStartISO(d) {
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-01`; // 'YYYY-MM-01'
-}
-function todayISO() {
-  const n = new Date();
-  return `${n.getUTCFullYear()}-${pad2(n.getUTCMonth() + 1)}-${pad2(n.getUTCDate())}`;
-}
-function monthLabel(iso) {
-  const d = new Date(iso + 'T00:00:00Z');
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-// Last N month-start ISO strings, most recent first, anchored to this month.
-function recentMonths(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = 0; i < n; i++) {
-    out.push(monthStartISO(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))));
-  }
-  return out;
-}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function isoNDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }
 
 // L3 funnel account-table columns (rows = output of fetchFunnelAccounts).
 const FUNNEL_L3_COLUMNS = [
@@ -54,14 +35,16 @@ const STAGE_LABEL = { trial: 'Trial', synced: 'Sync', converted: 'Converted' };
 const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
 export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
-  const months = recentMonths(24);
   const maturityDays = cfg.maturityDays;
   const today = todayISO();
 
-  // Default cohort = most recent mature month, else the oldest listed month.
-  const defaultMonth = months.find((m) => isCohortMature(m, today, maturityDays)) || months[months.length - 1];
+  // Mature defaults: End = the maturity cutoff (maturityDays ago); Start = 365 days
+  // before that → a mature trailing ~12-month trial-cohort window.
+  const defaultEnd = isoNDaysAgo(cfg.maturityDays || 90);
+  const defaultStart = isoNDaysAgo((cfg.maturityDays || 90) + 365);
 
-  const [cohortMonth, setCohortMonth] = useState(defaultMonth);
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
   const [segment, setSegment] = useState(null);
   const [stage, setStage] = useState(null);
   const [account, setAccount] = useState(null);
@@ -79,10 +62,10 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
   const [accountLoading, setAccountLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const mature = isCohortMature(cohortMonth, today, maturityDays);
+  const mature = isCohortMature(endDate, today, maturityDays);
   const stages = normalizeFunnel((spine && spine[0]) || {});
 
-  // ── L1: fetch funnel spine + conversion $ whenever cohort month changes ──────
+  // ── L1: fetch funnel spine + conversion $ whenever the date range changes ────
   useEffect(() => {
     if (!bqConnected) return;
     let cancelled = false;
@@ -96,8 +79,8 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
     setAccountLifecycle(null);
 
     Promise.all([
-      fetchFunnelSpine({ cohortMonth, segment: null }),
-      fetchConversionMrr({ cohortMonth }),
+      fetchFunnelSpine({ startDate, endDate, segment: null }),
+      fetchConversionMrr({ startDate, endDate }),
     ])
       .then(([spineRows, mrr]) => {
         if (cancelled) return;
@@ -108,19 +91,19 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
       .finally(() => { if (!cancelled) setFunnelLoading(false); });
 
     return () => { cancelled = true; };
-  }, [cohortMonth]);
+  }, [startDate, endDate]);
 
   // ── segment-compare rows: only when a segment lens is selected ───────────────
   useEffect(() => {
     if (!segment) { setSegmentRows(null); return; }
     let cancelled = false;
     setSegmentLoading(true);
-    fetchFunnelSpine({ cohortMonth, segment })
+    fetchFunnelSpine({ startDate, endDate, segment })
       .then((rows) => { if (!cancelled) setSegmentRows(rows); })
       .catch((e) => { if (!cancelled) setError(e); })
       .finally(() => { if (!cancelled) setSegmentLoading(false); });
     return () => { cancelled = true; };
-  }, [cohortMonth, segment]);
+  }, [startDate, endDate, segment]);
 
   // ── handlers ─────────────────────────────────────────────────────────────────
   const clearAccount = () => {
@@ -142,7 +125,7 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
     clearAccount();
     setL3Loading(true);
     setError(null);
-    fetchFunnelAccounts({ cohortMonth, stage: stageKey })
+    fetchFunnelAccounts({ startDate, endDate, stage: stageKey })
       .then((rows) => setL3(rows))
       .catch((e) => setError(e))
       .finally(() => setL3Loading(false));
@@ -225,23 +208,36 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
         </p>
       )}
 
-      {/* cohort month + segment controls */}
+      {/* trial-cohort date range + segment controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', margin: '8px 0 20px' }}>
         <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
-          Cohort
-          <select
-            value={cohortMonth}
-            onChange={(e) => setCohortMonth(e.target.value)}
+          Trials started — Start
+          <input
+            type="date"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
             style={{
-              padding: '5px 8px', fontSize: 16, fontWeight: 700, borderRadius: 6,
+              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
               border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
               background: '#fff', color: '#1a1a1a',
             }}
-          >
-            {months.map((m) => (
-              <option key={m} value={m}>{monthLabel(m)}</option>
-            ))}
-          </select>
+          />
+        </label>
+        <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+          End
+          <input
+            type="date"
+            value={endDate}
+            min={startDate}
+            max={todayISO()}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{
+              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
+              border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
+              background: '#fff', color: '#1a1a1a',
+            }}
+          />
         </label>
 
         {cfg.segments && cfg.segments.length > 0 && (
