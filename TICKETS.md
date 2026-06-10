@@ -74,6 +74,18 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 
 ## Improvements
 
+### Acquisition Funnel — Deferred V1 Layers
+**Status:** Open (funnel V1 shipped 2026-06-10 to Labs/Beta; these are the planned follow-ons)
+The Acquisition Funnel dashboard (Labs → Beta) shipped with the cohort spine (Trial → Sync → Converted), $ at conversion (DEP/Core split), Company-Size segment, and a Start/End date range. Spec: `docs/superpowers/specs/2026-06-10-acquisition-funnel-design.md`; plan: `docs/superpowers/plans/2026-06-10-acquisition-funnel-phase1.md`. Deferred layers, in priority order:
+- **Treatment-lift table** — Demo / Free Consulting / Paid PS as conversion lift (with-vs-without) + effect on time-to-first-impact. Source: `revenue.Activity` (`ActivityType`, join on `EntityRecordID`); tracking began ~Jun 2026 so it fills in over time. Demo counts as *attended* (exclude no-shows).
+- **More segments** — DEP (lead with segment lens, then treatment), Payment Type (Monthly/Prepay), Pay-per-use (needs a canonical billing definition first), plus channel/vertical/country (already in `revenue.Funnel`).
+- **First Impact stage** — post-conversion product milestone (Δt₆). NOT in BQ today; requires Amplitude product events, and the Amplitude-id ↔ `EntityRecordID` join must be validated first (see Syncs-redefinition work). This is the long pole.
+- **$ refinement** — replace the V1 approximation (converts' MRR at the latest `int_customer_mrr_lines` month) with at-conversion MRR.
+- **Full-bowtie overview (optional)** — one screen stitching this funnel (left) to the SaaS MRR Movement dashboard (right), cross-linked at the conversion handoff.
+**Files:** `builder/src/lib/funnelSql.js`, `funnelData.js`, `funnelTransform.js`, `builder/src/components/scorecards/FunnelDrill.jsx`, `FunnelChart.jsx`, `builder/src/config/scorecards/funnel-acquisition-scorecard.js`
+
+---
+
 ### Clean Up Customer Segments — Remove Hardcoded Segments from BQ
 **Status:** Open
 `v_customer_segments` has a `Segment` CASE column and we created 4 separate metrics (374-377) with hardcoded filters. This is the "sprawling segments" anti-pattern. Should be: one base view with raw fields (entity, user count, has_dep), one metric with dimensions, and segmentation via query-level filters — same as how Trials breaks down by channel without a separate view per channel. Also need to support range filters (e.g. `TotalUsers BETWEEN 2 AND 3`) in `buildSemanticSql` or add a `UserTier` bucketed dimension.
