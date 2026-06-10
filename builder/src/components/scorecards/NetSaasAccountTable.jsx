@@ -30,12 +30,17 @@ const thL = { ...th, textAlign: 'left' };
 const td = { textAlign: 'right', padding: '7px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#374151', borderBottom: '1px solid #f1f3f5', whiteSpace: 'nowrap' };
 const tdL = { ...td, textAlign: 'left', fontFamily: "'DM Sans', sans-serif", fontWeight: 600 };
 
-export default function NetSaasAccountTable({ rows, drill, config, onRowClick }) {
+// `columns` (optional) lets a caller supply an explicit column list
+// ([{key,label,format}]) — used by the funnel drill, whose rows don't map onto
+// the netSaas config.l3 shape. When omitted, columns derive from config.l3 as
+// before (unchanged for DecompositionDrill).
+export default function NetSaasAccountTable({ rows, drill, config, onRowClick, columns: columnsProp }) {
   const columns = useMemo(() => {
+    if (columnsProp) return columnsProp;
     const core = config?.l3?.core || [];
     const extras = (config?.l3?.extras && drill && config.l3.extras[drill]) || [];
     return [...core, ...extras];
-  }, [config, drill]);
+  }, [columnsProp, config, drill]);
 
   // First text column renders left-aligned (e.g. Company); rest right-aligned.
   const firstTextKey = columns.find((c) => c.format === 'text')?.key;
