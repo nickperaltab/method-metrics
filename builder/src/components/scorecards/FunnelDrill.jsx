@@ -65,6 +65,14 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
   const mature = isCohortMature(endDate, today, maturityDays);
   const stages = normalizeFunnel((spine && spine[0]) || {});
 
+  // Quick-range presets: anchor End at the maturity cutoff so the window stays
+  // fully matured, and reach back N*30 days further for Start.
+  const applyPreset = (months) => {
+    const md = cfg.maturityDays || 90;
+    setEndDate(isoNDaysAgo(md));
+    setStartDate(isoNDaysAgo(md + months * 30));
+  };
+
   // ── L1: fetch funnel spine + conversion $ whenever the date range changes ────
   useEffect(() => {
     if (!bqConnected) return;
@@ -239,6 +247,24 @@ export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
             }}
           />
         </label>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {[3, 6, 12].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => applyPreset(m)}
+              style={{
+                padding: '5px 12px', fontSize: 13, fontWeight: 600, borderRadius: 999,
+                border: '1px solid #d1d5db', background: '#fff', color: '#374151',
+                cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Last {m} mo
+            </button>
+          ))}
+          <span style={{ ...sectionLabel, fontSize: 12 }}>(mature window)</span>
+        </div>
 
         {cfg.segments && cfg.segments.length > 0 && (
           <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
