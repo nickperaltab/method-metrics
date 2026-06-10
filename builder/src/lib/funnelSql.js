@@ -14,7 +14,7 @@ const SIZE_BUCKET = `CASE
       ELSE '4 · 11+ (Mid)'
     END`;
 
-export function buildFunnelSpineSql({ cohortMonth, segment = null }) {
+export function buildFunnelSpineSql({ startDate, endDate, segment = null }) {
   const seg = segment === 'CompanySize';
   return `WITH stages AS (
   SELECT EntityRecordID,
@@ -35,7 +35,7 @@ ${seg ? `  ${SIZE_BUCKET} AS segment,\n` : ''}  COUNT(*) AS trials,
   COUNTIF(s.conversion_date IS NOT NULL AND s.conversion_date >= s.trial_date) AS converted
 FROM stages s
 LEFT JOIN sizes sz USING (EntityRecordID)
-WHERE DATE_TRUNC(s.trial_date, MONTH) = ${sqlStr(cohortMonth)}
+WHERE s.trial_date BETWEEN ${sqlStr(startDate)} AND ${sqlStr(endDate)}
 ${seg ? 'GROUP BY segment\nORDER BY segment' : ''}`.trimEnd();
 }
 
@@ -46,7 +46,7 @@ const DEP_ITEM = `(LOWER(l.item) LIKE '%premium app%' OR LOWER(l.item) LIKE '%en
 // LATEST int_customer_mrr_lines month (their current book), not the value at their
 // exact conversion date. Good enough for V1's "value of this cohort's converts";
 // refine to at-conversion MRR in a later phase.
-export function buildConversionMrrSql({ cohortMonth }) {
+export function buildConversionMrrSql({ startDate, endDate }) {
   return `WITH stages AS (
   SELECT EntityRecordID,
     MIN(IF(EventType='Trial', Date, NULL))      AS trial_date,
@@ -57,7 +57,7 @@ export function buildConversionMrrSql({ cohortMonth }) {
 converted AS (
   SELECT EntityRecordID
   FROM stages
-  WHERE DATE_TRUNC(trial_date, MONTH) = ${sqlStr(cohortMonth)}
+  WHERE trial_date BETWEEN ${sqlStr(startDate)} AND ${sqlStr(endDate)}
     AND conversion_date IS NOT NULL AND conversion_date >= trial_date
 ),
 latest AS ( SELECT MAX(month) AS m FROM ${fqn('int_customer_mrr_lines')} )
@@ -69,7 +69,7 @@ JOIN converted c ON c.EntityRecordID = l.entity_record_id
 WHERE l.month = (SELECT m FROM latest) AND l.saas != 0`.trimEnd();
 }
 
-export function buildFunnelAccountTableSql({ cohortMonth, stage }) {
+export function buildFunnelAccountTableSql({ startDate, endDate, stage }) {
   const cond = stage === 'synced'
       ? 'AND s.sync_date IS NOT NULL AND s.sync_date >= s.trial_date'
     : stage === 'converted'
@@ -94,7 +94,7 @@ SELECT
   s.country  AS SignupCountry,
   ROUND(s.mrr, 2) AS deltaMrr
 FROM stages s
-WHERE DATE_TRUNC(s.trial_date, MONTH) = ${sqlStr(cohortMonth)}
+WHERE s.trial_date BETWEEN ${sqlStr(startDate)} AND ${sqlStr(endDate)}
   ${cond}
 ORDER BY s.mrr DESC
 LIMIT 50`.trimEnd();
