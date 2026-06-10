@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildFunnelSpineSql } from '../../src/lib/funnelSql.js';
 import { buildConversionMrrSql } from '../../src/lib/funnelSql.js';
+import { buildFunnelAccountTableSql } from '../../src/lib/funnelSql.js';
 
 describe('buildFunnelSpineSql', () => {
   it('builds an entity-level cohort spine for one trial-month', () => {
@@ -40,5 +41,23 @@ describe('buildConversionMrrSql', () => {
     expect(sql).toContain('AS core_mrr');
     expect(sql).toContain('AS dep_mrr');
     expect(sql).toContain('l.month = (SELECT m FROM latest)');
+  });
+});
+
+describe('buildFunnelAccountTableSql', () => {
+  it('lists converted-stage accounts for a cohort, with mrr as deltaMrr', () => {
+    const sql = buildFunnelAccountTableSql({ cohortMonth: '2026-01-01', stage: 'converted' });
+    expect(sql).toContain('revenue.Funnel');
+    expect(sql).toContain('entity_record_id');
+    expect(sql).toContain('AS deltaMrr');
+    expect(sql).toContain('s.conversion_date IS NOT NULL AND s.conversion_date >= s.trial_date');
+    expect(sql).toContain('LIMIT 50');
+  });
+  it('synced stage filters on sync_date; trial stage has no extra filter', () => {
+    expect(buildFunnelAccountTableSql({ cohortMonth: '2026-01-01', stage: 'synced' }))
+      .toContain('s.sync_date IS NOT NULL AND s.sync_date >= s.trial_date');
+    const trial = buildFunnelAccountTableSql({ cohortMonth: '2026-01-01', stage: 'trial' });
+    expect(trial).not.toContain('sync_date IS NOT NULL');
+    expect(trial).not.toContain('conversion_date IS NOT NULL');
   });
 });

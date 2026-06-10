@@ -68,3 +68,34 @@ FROM ${fqn('int_customer_mrr_lines')} l
 JOIN converted c ON c.EntityRecordID = l.entity_record_id
 WHERE l.month = (SELECT m FROM latest) AND l.saas != 0`.trimEnd();
 }
+
+export function buildFunnelAccountTableSql({ cohortMonth, stage }) {
+  const cond = stage === 'synced'
+      ? 'AND s.sync_date IS NOT NULL AND s.sync_date >= s.trial_date'
+    : stage === 'converted'
+      ? 'AND s.conversion_date IS NOT NULL AND s.conversion_date >= s.trial_date'
+    : '';
+  return `WITH stages AS (
+  SELECT EntityRecordID,
+    ANY_VALUE(CompanyAccount)     AS company,
+    ANY_VALUE(Vertical)           AS vertical,
+    ANY_VALUE(SignupCountry)      AS country,
+    MAX(CustDatLastSaasAmount)    AS mrr,
+    MIN(IF(EventType='Trial', Date, NULL))      AS trial_date,
+    MIN(IF(EventType='Sync', Date, NULL))       AS sync_date,
+    MIN(IF(EventType='Conversion', Date, NULL)) AS conversion_date
+  FROM ${fqn('Funnel')}
+  GROUP BY EntityRecordID
+)
+SELECT
+  s.EntityRecordID AS entity_record_id,
+  s.company  AS Company,
+  s.vertical AS Vertical,
+  s.country  AS SignupCountry,
+  ROUND(s.mrr, 2) AS deltaMrr
+FROM stages s
+WHERE DATE_TRUNC(s.trial_date, MONTH) = ${sqlStr(cohortMonth)}
+  ${cond}
+ORDER BY s.mrr DESC
+LIMIT 50`.trimEnd();
+}
