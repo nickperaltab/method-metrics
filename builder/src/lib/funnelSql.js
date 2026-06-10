@@ -1,0 +1,40 @@
+// builder/src/lib/funnelSql.js
+// Pure SQL builders for the Acquisition Funnel. No I/O. Unit-tested.
+
+const fqn = (view) => `\`project-for-method-dw.revenue.${view}\``;
+function sqlStr(v) { return `'${String(v).replace(/'/g, "''")}'`; }
+
+// Company-size buckets from per-entity MAX(LicenseCount). A leading sort index
+// keeps buckets in numeric order (labels would otherwise sort lexically).
+const SIZE_BUCKET = `CASE
+      WHEN sz.licenses IS NULL THEN '5 · Unknown'
+      WHEN sz.licenses <= 1     THEN '1 · 1 seat (VSB)'
+      WHEN sz.licenses <= 4     THEN '2 · 2-4 (SB)'
+      WHEN sz.licenses <= 10    THEN '3 · 5-10 (SMB)'
+      ELSE '4 · 11+ (Mid)'
+    END`;
+
+export function buildFunnelSpineSql({ cohortMonth, segment = null }) {
+  const seg = segment === 'CompanySize';
+  return `WITH stages AS (
+  SELECT EntityRecordID,
+    MIN(IF(EventType='Trial', Date, NULL))      AS trial_date,
+    MIN(IF(EventType='Sync', Date, NULL))       AS sync_date,
+    MIN(IF(EventType='Conversion', Date, NULL)) AS conversion_date
+  FROM ${fqn('Funnel')}
+  GROUP BY EntityRecordID
+),
+sizes AS (
+  SELECT EntityRecordID, MAX(LicenseCount) AS licenses
+  FROM ${fqn('Account')}
+  GROUP BY EntityRecordID
+)
+SELECT
+${seg ? `  ${SIZE_BUCKET} AS segment,\n` : ''}  COUNT(*) AS trials,
+  COUNTIF(s.sync_date IS NOT NULL AND s.sync_date >= s.trial_date)             AS synced,
+  COUNTIF(s.conversion_date IS NOT NULL AND s.conversion_date >= s.trial_date) AS converted
+FROM stages s
+LEFT JOIN sizes sz USING (EntityRecordID)
+WHERE DATE_TRUNC(s.trial_date, MONTH) = ${sqlStr(cohortMonth)}
+${seg ? 'GROUP BY segment\nORDER BY segment' : ''}`.trimEnd();
+}
