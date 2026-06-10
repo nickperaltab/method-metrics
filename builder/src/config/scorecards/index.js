@@ -14,6 +14,7 @@ import customerSegments from './customer-segments-scorecard.js';
 import revenueEngine from './revenue-engine-scorecard.js';
 import channelArr from './channel-arr-scorecard.js';
 import netSaas from './net-saas-scorecard.js';
+import funnelAcquisition from './funnel-acquisition-scorecard.js';
 
 export const SCORECARDS = {
   'sales-scorecard': salesScorecard,
@@ -30,6 +31,7 @@ export const SCORECARDS = {
   'revenue-engine': revenueEngine,
   'channel-arr': channelArr,
   'net-saas': netSaas,
+  'acquisition-funnel': funnelAcquisition,
   'customers': customers,
   'customer-segments': customerSegments,
 };

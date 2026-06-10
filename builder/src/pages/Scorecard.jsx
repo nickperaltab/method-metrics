@@ -5,6 +5,7 @@ import posthog from '../lib/posthog';
 import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
 import DecompositionDrill from '../components/scorecards/DecompositionDrill';
+import FunnelDrill from '../components/scorecards/FunnelDrill';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -138,6 +139,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   // fetching + layout; they have no `sections`, so branch before the section loop.
   if (config.renderer === 'netSaasDrill') {
     return <DecompositionDrill config={config} bqConnected={bqConnected} onConnect={onConnect} />;
+  }
+  if (config.renderer === 'funnelDrill') {
+    return <FunnelDrill cfg={config} />;
   }
 
   if (needsBq && dataMap.size === 0) {
