@@ -53,7 +53,7 @@ const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', s
 const STAGE_LABEL = { trial: 'Trial', synced: 'Sync', converted: 'Converted' };
 const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
-export default function FunnelDrill({ cfg }) {
+export default function FunnelDrill({ cfg, bqConnected, onConnect }) {
   const months = recentMonths(24);
   const maturityDays = cfg.maturityDays;
   const today = todayISO();
@@ -84,6 +84,7 @@ export default function FunnelDrill({ cfg }) {
 
   // ── L1: fetch funnel spine + conversion $ whenever cohort month changes ──────
   useEffect(() => {
+    if (!bqConnected) return;
     let cancelled = false;
     setFunnelLoading(true);
     setError(null);
@@ -173,6 +174,25 @@ export default function FunnelDrill({ cfg }) {
   if (stage) {
     trail.push({ level: 1, label: STAGE_LABEL[stage] || stage });
     if (account) trail.push({ level: 2, label: account.Company || 'Account' });
+  }
+
+  // ── unauthed state: mirror the Scorecard router's connect prompt ─────────────
+  if (!bqConnected) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <h2 style={{ fontSize: 20, color: '#1a1a1a', marginBottom: 8 }}>{cfg.title}</h2>
+        <p style={{ color: '#6b7280', marginBottom: 16 }}>Connect to BigQuery to load scorecard data.</p>
+        <button
+          onClick={onConnect}
+          style={{
+            background: '#059669', color: '#fff', border: 'none', borderRadius: 8,
+            padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Connect BigQuery
+        </button>
+      </div>
+    );
   }
 
   return (

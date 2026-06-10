@@ -141,7 +141,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     return <DecompositionDrill config={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
   if (config.renderer === 'funnelDrill') {
-    return <FunnelDrill cfg={config} />;
+    return <FunnelDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
 
   if (needsBq && dataMap.size === 0) {
