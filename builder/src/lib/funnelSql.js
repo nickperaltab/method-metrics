@@ -38,3 +38,33 @@ LEFT JOIN sizes sz USING (EntityRecordID)
 WHERE DATE_TRUNC(s.trial_date, MONTH) = ${sqlStr(cohortMonth)}
 ${seg ? 'GROUP BY segment\nORDER BY segment' : ''}`.trimEnd();
 }
+
+// DEP-revenue classification (same item patterns proven in the MRR-movement work).
+const DEP_ITEM = `(LOWER(l.item) LIKE '%premium app%' OR LOWER(l.item) LIKE '%enhancement plan%' OR LOWER(l.item) LIKE '%dedicated%')`;
+
+// V1 approximation: "$ at conversion" uses each converted entity's MRR at the
+// LATEST int_customer_mrr_lines month (their current book), not the value at their
+// exact conversion date. Good enough for V1's "value of this cohort's converts";
+// refine to at-conversion MRR in a later phase.
+export function buildConversionMrrSql({ cohortMonth }) {
+  return `WITH stages AS (
+  SELECT EntityRecordID,
+    MIN(IF(EventType='Trial', Date, NULL))      AS trial_date,
+    MIN(IF(EventType='Conversion', Date, NULL)) AS conversion_date
+  FROM ${fqn('Funnel')}
+  GROUP BY EntityRecordID
+),
+converted AS (
+  SELECT EntityRecordID
+  FROM stages
+  WHERE DATE_TRUNC(trial_date, MONTH) = ${sqlStr(cohortMonth)}
+    AND conversion_date IS NOT NULL AND conversion_date >= trial_date
+),
+latest AS ( SELECT MAX(month) AS m FROM ${fqn('int_customer_mrr_lines')} )
+SELECT
+  ROUND(SUM(IF(NOT ${DEP_ITEM}, l.saas, 0)), 2) AS core_mrr,
+  ROUND(SUM(IF(${DEP_ITEM}, l.saas, 0)), 2)      AS dep_mrr
+FROM ${fqn('int_customer_mrr_lines')} l
+JOIN converted c ON c.EntityRecordID = l.entity_record_id
+WHERE l.month = (SELECT m FROM latest) AND l.saas != 0`.trimEnd();
+}
