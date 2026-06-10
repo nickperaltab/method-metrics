@@ -101,3 +101,22 @@ First Impact is required by the framework ("recurring revenue is the result of r
 - Not rebuilding retention/expansion/churn (that's the SaaS MRR Movement dashboard).
 - No pre-trial / lead stages (mature top-of-funnel; no lead data today).
 - No expected/pipeline dollars on pre-conversion stages.
+
+## 12. Build approach — new dashboard, shared plumbing
+
+**Decision (2026-06-10):** the funnel is a **separate dashboard** that reuses existing building blocks. The SaaS MRR Movement dashboard is **not modified**. This is the building-block philosophy: reuse the primitives, don't duplicate the engine, don't merge two different data models into one view.
+
+**New (funnel-specific):**
+- `funnel-acquisition-scorecard.js` — config (Labs / Beta, `renderer: 'funnelDrill'`)
+- `funnelDrill` controller — cohort + stage + treatment/segment state
+- funnel-step chart component — narrowing bars + drop-off %
+- treatment-lift table + segment-compare control
+- `funnelSql.js` / `funnelData.js` / `funnelTransform.js` — cohort spine SQL + wrappers (mirror the netSaas trio)
+
+**Reused as-is / lightly generalized:**
+- scorecard registry, `renderer` branching, Labs/Beta + status pill
+- `DrillBreadcrumb`, `GlobalFilterBar`, `ChartErrorBoundary`
+- L3 `NetSaasAccountTable`, L4 `AccountDetail` — clicking a stage/segment → accounts → account-history timeline
+- `queryBq` session cache, BQ OAuth, ECharts `method` theme
+
+**MRR dashboard:** untouched. The only future touch is an optional cross-link (funnel "Converted" → MRR dashboard "New" bar), which is Phase 3.
