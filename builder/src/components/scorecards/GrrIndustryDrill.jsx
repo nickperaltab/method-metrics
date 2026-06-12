@@ -84,7 +84,6 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       .then(([l1, om, headline]) => {
         if (cancelled) return;
         setL1Rows(l1);
-        setIndustryRows(l1);
         setOmRows(om);
         setHeadlineGrr(headline);
       })
@@ -104,7 +103,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       .catch((e) => { if (!cancelled) setError(e); })
       .finally(() => { if (!cancelled) setChartsLoading(false); });
     return () => { cancelled = true; };
-  }, [path]); // intentionally omits month/chartDim/pathFilters — only re-runs when path changes
+  }, [path, l1Rows]); // intentionally omits month/chartDim/pathFilters — re-runs when path changes or fresh L1 rows arrive
 
   // ── handlers ───────────────────────────────────────────────────────────────
   const loadIndustryAccounts = (filters, label) => {
