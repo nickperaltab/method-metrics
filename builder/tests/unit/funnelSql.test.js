@@ -32,7 +32,7 @@ describe('buildFunnelSpineSql', () => {
     expect(sql).toContain("'Consulting Agreement'");
     expect(sql).toContain('a.DueDateStart >= s.trial_date');
     expect(sql).toContain("IF(asst.EntityRecordID IS NOT NULL, 'Assisted', 'Not assisted') AS segment");
-    expect(sql).toContain('a.IsDeleted = FALSE');
+    expect(sql).toContain('COALESCE(a.IsDeleted, FALSE) = FALSE');
     expect(sql).toContain('GROUP BY segment');
   });
 

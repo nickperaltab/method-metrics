@@ -40,7 +40,9 @@ assist AS (
   SELECT DISTINCT a.EntityRecordID
   FROM ${fqn('Activity')} a
   JOIN stages s ON s.EntityRecordID = a.EntityRecordID
-  WHERE a.IsDeleted = FALSE
+  -- Historical Activity rows have IsDeleted IS NULL (only recent rows set it),
+  -- so IsDeleted = FALSE would silently drop all pre-2026 touches. COALESCE keeps them.
+  WHERE COALESCE(a.IsDeleted, FALSE) = FALSE
     AND a.ActivityType IN (${ASSIST_IN_LIST})
     AND a.DueDateStart >= s.trial_date
 )` : '';

@@ -74,12 +74,22 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 
 ## Improvements
 
+### Labs — Live-Query Exploration Pages (Lab 01: Revenue Architecture Story)
+**Status:** Open (proposed 2026-06-11)
+A `/labs` route in the builder for narrative data explorations ("story" pages: chapters, verdicts, embedded charts) that render **every number live from BigQuery behind the existing OAuth**. Hard rule, because the repo is public: commit narrative structure + SQL only — no values, dollar figures, or customer identifiers in source; prose must be number-free, with all stats computed client-side at view time (same security model as the tracker).
+- **Lab template route** — `/labs` index card list + a lab-page layout (kicker, chapters, verdict callouts, "what we got wrong" section, owner/KPI plan table).
+- **Query-block component** — shows the SQL (collapsible "▸ source"), runs it through the existing BQ OAuth client, renders the result as an inline stat, CSS bar row, table, or EChart. This is the core building block; everything else is composition.
+- **Lab 01: port the Revenue Architecture story** (private original + all SQL live in the Obsidian vault, `Rev Ops System/05-SCRATCH/2026-06-10-revenue-architecture-loop/`: `revenue-architecture-story.html` + `verification-queries.md`). Queries are already written and keyed to claims; the port is template + scrubbed prose.
+- Reuse `EChart.jsx` + Method dark theme; no build-step changes. Brainstorm/spec before building per repo workflow.
+
+---
+
 ### Acquisition Funnel — Deferred V1 Layers
 **Status:** Open (funnel V1 shipped 2026-06-10 to Labs/Beta; these are the planned follow-ons)
 The Acquisition Funnel dashboard (Labs → Beta) shipped with the cohort spine (Trial → Sync → Converted), $ at conversion (DEP/Core split), Company-Size segment, and a Start/End date range. Spec: `docs/superpowers/specs/2026-06-10-acquisition-funnel-design.md`; plan: `docs/superpowers/plans/2026-06-10-acquisition-funnel-phase1.md`. Deferred layers, in priority order:
-- **Treatment-lift table** — Demo / Free Consulting / Paid PS as conversion lift (with-vs-without) + effect on time-to-first-impact. Source: `revenue.Activity` (`ActivityType`, join on `EntityRecordID`); tracking began ~Jun 2026 so it fills in over time. Demo counts as *attended* (exclude no-shows).
+- **Treatment-lift table** — Demo / Free Consulting / Paid PS as conversion lift (with-vs-without) + effect on time-to-first-impact. Source correction (2026-06-11): for *paid* help, billing (`TransLineFlattened` Pro Services/Customization items) is the source of truth — the Activity-log "paid" signal mislabels ~1,200 accounts. Activity occurrence history goes back YEARS for Demo/Free-Hour/Consulting types, but historical rows have `IsDeleted IS NULL` — filter with `COALESCE(IsDeleted,FALSE)=FALSE` (plain `= FALSE` drops all pre-2026 rows; fixed in `funnelSql.js`). Demo counts as *attended* (exclude no-shows).
 - **More segments** — DEP (lead with segment lens, then treatment), Payment Type (Monthly/Prepay), Pay-per-use (needs a canonical billing definition first), plus channel/vertical/country (already in `revenue.Funnel`).
-- **First Impact stage** — post-conversion product milestone (Δt₆). NOT in BQ today; requires Amplitude product events, and the Amplitude-id ↔ `EntityRecordID` join must be validated first (see Syncs-redefinition work). This is the long pole.
+- **First Impact stage** — post-conversion product milestone (Δt₆). NOT in BQ today; requires Amplitude product events. Join UNBLOCKED (2026-06-11): Amplitude `gp:companyAccountName` = `revenue.Account.CompanyAccount`, validated 102/102 exact with ~95% activity coverage; Amplitude history reaches ≥ May 2025. Remaining work is the event pull + metric definition, not the join.
 - **$ refinement** — replace the V1 approximation (converts' MRR at the latest `int_customer_mrr_lines` month) with at-conversion MRR.
 - **Full-bowtie overview (optional)** — one screen stitching this funnel (left) to the SaaS MRR Movement dashboard (right), cross-linked at the conversion handoff.
 **Files:** `builder/src/lib/funnelSql.js`, `funnelData.js`, `funnelTransform.js`, `builder/src/components/scorecards/FunnelDrill.jsx`, `FunnelChart.jsx`, `builder/src/config/scorecards/funnel-acquisition-scorecard.js`
