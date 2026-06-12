@@ -5,6 +5,7 @@ import {
   buildLabelFilterClauses,
   GRR_DIMENSIONS,
 } from '../../src/lib/grrIndustrySql.js';
+import { computeAllUpGrr } from '../../src/lib/grrIndustryData.js';
 
 describe('GRR_DIMENSIONS', () => {
   it('allows exactly the four label dimensions', () => {
@@ -100,5 +101,21 @@ describe('buildGrrAccountsSql', () => {
   it('only includes accounts in the annual GRR base (StartMRR > 0)', () => {
     const sql = buildGrrAccountsSql({ month: '2026-05-01', filters: { operating_model: 'Service_Only' } });
     expect(sql).toContain('HAVING SUM(c.StartMRR) > 0');
+  });
+});
+
+describe('computeAllUpGrr', () => {
+  it('recombines segment rows into the all-up annual GRR (parity-gate input)', () => {
+    const segments = [
+      { start_mrr: 600, churn_mrr: 60, downgrade_mrr: 20 },
+      { start_mrr: 400, churn_mrr: 40, downgrade_mrr: 12 }, // incl. Unclassified
+    ];
+    // (1000 - 100 - 32) / 1000 = 0.868
+    expect(computeAllUpGrr(segments)).toBeCloseTo(0.868, 10);
+  });
+
+  it('returns null on an empty or zero base', () => {
+    expect(computeAllUpGrr([])).toBeNull();
+    expect(computeAllUpGrr([{ start_mrr: 0, churn_mrr: 0, downgrade_mrr: 0 }])).toBeNull();
   });
 });

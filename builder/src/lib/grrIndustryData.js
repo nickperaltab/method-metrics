@@ -1,0 +1,48 @@
+// builder/src/lib/grrIndustryData.js
+// Fetch wrappers for the GRR by Industry page. SQL lives in grrIndustrySql.js;
+// the headline rate reuses netSaasSql's buildRateSql (canonical metric view).
+import { queryBq } from './bigquery.js';
+import { buildRateSql } from './netSaasSql.js';
+import { buildGrrBySegmentSql, buildGrrAccountsSql } from './grrIndustrySql.js';
+
+const num = (v) => Number(v) || 0;
+
+// Returns [{ segment, start_mrr, churn_mrr, downgrade_mrr, grr, customers }]
+export async function fetchGrrSegments({ month, dimension, filters }) {
+  const { rows } = await queryBq(buildGrrBySegmentSql({ month, dimension, filters }));
+  return rows.map((r) => ({
+    segment: r.segment,
+    start_mrr: num(r.start_mrr),
+    churn_mrr: num(r.churn_mrr),
+    downgrade_mrr: num(r.downgrade_mrr),
+    grr: r.grr == null ? null : Number(r.grr),
+    customers: num(r.customers),
+  }));
+}
+
+// Returns account rows with labels + reasoning (already sorted by lost $ in SQL).
+export async function fetchGrrAccounts({ month, filters }) {
+  const { rows } = await queryBq(buildGrrAccountsSql({ month, filters }));
+  return rows.map((r) => ({
+    ...r,
+    start_mrr: num(r.start_mrr),
+    churn_mrr: num(r.churn_mrr),
+    downgrade_mrr: num(r.downgrade_mrr),
+    confidence: r.confidence == null ? null : Number(r.confidence),
+  }));
+}
+
+// Canonical all-up annual GRR from revenue_metrics — never recomputed here.
+export async function fetchAnnualGrrHeadline({ month }) {
+  const { rows } = await queryBq(buildRateSql({ metric: 'v_metric__annual_grr', period: month }));
+  return rows.length && rows[0].value != null ? Number(rows[0].value) : null;
+}
+
+// All-up GRR recombined from the page's own L1 segment rows (Unclassified
+// included). The page compares this to fetchAnnualGrrHeadline and surfaces a
+// visible warning on divergence — the spec's parity gate.
+export function computeAllUpGrr(segments) {
+  const start = segments.reduce((s, r) => s + num(r.start_mrr), 0);
+  const lost = segments.reduce((s, r) => s + num(r.churn_mrr) + num(r.downgrade_mrr), 0);
+  return start > 0 ? (start - lost) / start : null;
+}
