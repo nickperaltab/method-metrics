@@ -6,6 +6,7 @@ import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
 import DecompositionDrill from '../components/scorecards/DecompositionDrill';
 import FunnelDrill from '../components/scorecards/FunnelDrill';
+import GrrIndustryDrill from '../components/scorecards/GrrIndustryDrill';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -142,6 +143,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   }
   if (config.renderer === 'funnelDrill') {
     return <FunnelDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
+  }
+  if (config.renderer === 'grrIndustry') {
+    return <GrrIndustryDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
 
   if (needsBq && dataMap.size === 0) {
