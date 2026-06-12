@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildGrrBySegmentSql,
   buildGrrAccountsSql,
+  buildGrrTrendSql,
   buildLabelFilterClauses,
   GRR_DIMENSIONS,
 } from '../../src/lib/grrIndustrySql.js';
@@ -101,6 +102,33 @@ describe('buildGrrAccountsSql', () => {
   it('only includes accounts in the annual GRR base (StartMRR > 0)', () => {
     const sql = buildGrrAccountsSql({ month: '2026-05-01', filters: { operating_model: 'Service_Only' } });
     expect(sql).toContain('HAVING SUM(c.StartMRR) > 0');
+  });
+});
+
+describe('buildGrrTrendSql', () => {
+  it('computes annual GRR per L1 per month over the trailing window', () => {
+    const sql = buildGrrTrendSql({ endMonth: '2026-05-01' });
+    expect(sql).toContain('revenue.int_customer_annual_mrr');
+    expect(sql).toContain('QUALIFY ROW_NUMBER() OVER');
+    expect(sql).toContain('c.Month AS month');
+    expect(sql).toContain("COALESCE(lb.l1, 'Unclassified') AS segment");
+    expect(sql).toContain(
+      'SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr'
+    );
+    expect(sql).toContain("BETWEEN DATE_SUB(DATE '2026-05-01', INTERVAL 11 MONTH) AND '2026-05-01'");
+    expect(sql).toContain('GROUP BY month, segment');
+    expect(sql).toContain('HAVING SUM(c.StartMRR) > 0');
+    expect(sql).toContain('ORDER BY month, segment');
+  });
+
+  it('honors a custom window length', () => {
+    const sql = buildGrrTrendSql({ endMonth: '2026-05-01', months: 6 });
+    expect(sql).toContain('INTERVAL 5 MONTH');
+  });
+
+  it('escapes single quotes in endMonth (injection guard)', () => {
+    const sql = buildGrrTrendSql({ endMonth: "2026-05-01' OR '1'='1" });
+    expect(sql).toContain("'2026-05-01'' OR ''1''=''1'");
   });
 });
 

@@ -7,9 +7,10 @@ import { useState, useEffect } from 'react';
 import { ChartErrorBoundary } from '../EChart';
 import GrrSegmentBars from './GrrSegmentBars';
 import GrrAccountTable from './GrrAccountTable';
+import GrrTrendChart from './GrrTrendChart';
 import DrillBreadcrumb from './DrillBreadcrumb';
 import {
-  fetchGrrSegments, fetchGrrAccounts, fetchAnnualGrrHeadline, computeAllUpGrr,
+  fetchGrrSegments, fetchGrrAccounts, fetchGrrTrend, fetchAnnualGrrHeadline, computeAllUpGrr,
 } from '../../lib/grrIndustryData';
 
 // ── date helpers (same approach as DecompositionDrill) ──────────────────────
@@ -58,6 +59,12 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const [omSel, setOmSel] = useState(null);
   const [omAccounts, setOmAccounts] = useState(null);
 
+  // Industry section view: 'breakdown' (bars + drill) | 'trend' (12-mo lines).
+  // Trend rows are fetched lazily on first tab open, then cached per month.
+  const [view, setView] = useState('breakdown');
+  const [trendRows, setTrendRows] = useState(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+
   const [chartsLoading, setChartsLoading] = useState(false);
   const [industryAccountsLoading, setIndustryAccountsLoading] = useState(false);
   const [omAccountsLoading, setOmAccountsLoading] = useState(false);
@@ -76,6 +83,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     setError(null);
     setPath([]);
     clearAccounts();
+    setTrendRows(null); // trend window ends at the cohort month — refetch on change
     Promise.all([
       fetchGrrSegments({ month, dimension: 'l1', filters: {} }),
       fetchGrrSegments({ month, dimension: 'operating_model', filters: {} }),
@@ -104,6 +112,18 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       .finally(() => { if (!cancelled) setChartsLoading(false); });
     return () => { cancelled = true; };
   }, [path, l1Rows]); // intentionally omits month/chartDim/pathFilters — re-runs when path changes or fresh L1 rows arrive
+
+  // ── trend rows: lazy-fetched the first time the Trend tab opens ────────────
+  useEffect(() => {
+    if (!bqConnected || view !== 'trend' || trendRows) return;
+    let cancelled = false;
+    setTrendLoading(true);
+    fetchGrrTrend({ month })
+      .then((rows) => { if (!cancelled) setTrendRows(rows); })
+      .catch((e) => { if (!cancelled) setError(e); })
+      .finally(() => { if (!cancelled) setTrendLoading(false); });
+    return () => { cancelled = true; };
+  }, [view, month, trendRows, bqConnected]);
 
   // ── handlers ───────────────────────────────────────────────────────────────
   const loadIndustryAccounts = (filters, label) => {
@@ -213,20 +233,54 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       )}
 
       {/* ── Section 1: GRR by industry ── */}
-      <h2 style={h2}>GRR by industry</h2>
-      <p style={{ ...sectionLabel, margin: '0 0 8px' }}>
-        Click a bar to see its accounts{chartDim !== 'l3' ? ' and drill one level deeper' : ''}.
-      </p>
-      {path.length > 0 && <DrillBreadcrumb trail={trail} onNavigate={handleNavigate} />}
-      {chartsLoading && !industryRows
-        ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading segments…</p>
-        : <ChartErrorBoundary><GrrSegmentBars rows={industryRows} onSelect={handleIndustryBarClick} /></ChartErrorBoundary>}
-      {industrySel && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '32px 0 4px' }}>
+        <h2 style={{ ...h2, margin: 0 }}>GRR by industry</h2>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[['breakdown', 'Breakdown'], ['trend', 'Trend']].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              style={{
+                padding: '4px 12px', fontSize: 12,
+                fontWeight: view === key ? 600 : 400,
+                fontFamily: fontSans,
+                background: view === key ? '#2563eb' : '#f3f4f6',
+                color: view === key ? '#fff' : '#6b7280',
+                border: 'none', borderRadius: 16, cursor: 'pointer',
+                transition: 'background 150ms, color 150ms',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === 'breakdown' ? (
         <>
-          <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {industrySel}</h3>
-          {industryAccountsLoading
-            ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-            : <ChartErrorBoundary><GrrAccountTable key={industrySel} rows={industryAccounts} /></ChartErrorBoundary>}
+          <p style={{ ...sectionLabel, margin: '0 0 8px' }}>
+            Click a bar to see its accounts{chartDim !== 'l3' ? ' and drill one level deeper' : ''}.
+          </p>
+          {path.length > 0 && <DrillBreadcrumb trail={trail} onNavigate={handleNavigate} />}
+          {chartsLoading && !industryRows
+            ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading segments…</p>
+            : <ChartErrorBoundary><GrrSegmentBars rows={industryRows} onSelect={handleIndustryBarClick} /></ChartErrorBoundary>}
+          {industrySel && (
+            <>
+              <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {industrySel}</h3>
+              {industryAccountsLoading
+                ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
+                : <ChartErrorBoundary><GrrAccountTable key={industrySel} rows={industryAccounts} /></ChartErrorBoundary>}
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <p style={{ ...sectionLabel, margin: '0 0 8px' }}>
+            Trailing 12 months of annual GRR per L1, ending at the selected cohort month. Click legend items to toggle lines.
+          </p>
+          {trendLoading && !trendRows
+            ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading trend…</p>
+            : <ChartErrorBoundary><GrrTrendChart rows={trendRows} /></ChartErrorBoundary>}
         </>
       )}
 

@@ -95,3 +95,22 @@ HAVING SUM(c.StartMRR) > 0
 ORDER BY (SUM(c.Cancellations) + SUM(c.Downgrades)) DESC, start_mrr DESC
 LIMIT 200`.trimEnd();
 }
+
+// Annual GRR per L1 per month over the trailing `months` window ending at
+// `endMonth` (inclusive). Always L1 grain, independent of the drill state —
+// answers "is this industry's retention rising or falling".
+export function buildGrrTrendSql({ endMonth, months = 12 }) {
+  const back = Math.max(1, parseInt(months, 10) || 12) - 1;
+  return `${labelsCte()}
+SELECT
+  c.Month AS month,
+  COALESCE(lb.l1, 'Unclassified') AS segment,
+  SUM(c.StartMRR) AS start_mrr,
+  SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr
+FROM ${MRR_VIEW} c
+LEFT JOIN labels lb ON lb.company_account = c.Company
+WHERE c.Month BETWEEN DATE_SUB(DATE ${sqlStr(endMonth)}, INTERVAL ${back} MONTH) AND ${sqlStr(endMonth)}
+GROUP BY month, segment
+HAVING SUM(c.StartMRR) > 0
+ORDER BY month, segment`.trimEnd();
+}

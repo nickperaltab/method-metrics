@@ -3,7 +3,7 @@
 // the headline rate reuses netSaasSql's buildRateSql (canonical metric view).
 import { queryBq } from './bigquery.js';
 import { buildRateSql } from './netSaasSql.js';
-import { buildGrrBySegmentSql, buildGrrAccountsSql } from './grrIndustrySql.js';
+import { buildGrrBySegmentSql, buildGrrAccountsSql, buildGrrTrendSql } from './grrIndustrySql.js';
 
 const num = (v) => Number(v) || 0;
 
@@ -29,6 +29,17 @@ export async function fetchGrrAccounts({ month, filters }) {
     churn_mrr: num(r.churn_mrr),
     downgrade_mrr: num(r.downgrade_mrr),
     confidence: r.confidence == null ? null : Number(r.confidence),
+  }));
+}
+
+// Returns [{ month, segment, start_mrr, grr }] — trailing-12m L1 trend rows.
+export async function fetchGrrTrend({ month, months = 12 }) {
+  const { rows } = await queryBq(buildGrrTrendSql({ endMonth: month, months }));
+  return rows.map((r) => ({
+    month: r.month,
+    segment: r.segment,
+    start_mrr: num(r.start_mrr),
+    grr: r.grr == null ? null : Number(r.grr),
   }));
 }
 
