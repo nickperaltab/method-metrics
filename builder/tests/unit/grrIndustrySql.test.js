@@ -112,6 +112,8 @@ describe('buildGrrTrendSql', () => {
     expect(sql).toContain('QUALIFY ROW_NUMBER() OVER');
     expect(sql).toContain('c.Month AS month');
     expect(sql).toContain("COALESCE(lb.l1, 'Unclassified') AS segment");
+    // base size travels with each point so a thin segment can't read as a confident trend
+    expect(sql).toContain('COUNT(DISTINCT IF(c.StartMRR > 0, c.Company, NULL)) AS customers');
     expect(sql).toContain(
       'SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr'
     );

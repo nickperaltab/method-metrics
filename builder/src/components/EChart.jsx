@@ -51,7 +51,7 @@ const METHOD_THEME = {
 
 echarts.registerTheme('method', METHOD_THEME);
 
-export default function EChart({ option, style }) {
+export default function EChart({ option, style, onEvents }) {
   const mergedStyle = useMemo(() => ({
     height: '100%',
     width: '100%',
@@ -68,6 +68,7 @@ export default function EChart({ option, style }) {
         style={mergedStyle}
         opts={{ renderer: 'canvas' }}
         notMerge={true}
+        onEvents={onEvents}
       />
     </ChartErrorBoundary>
   );

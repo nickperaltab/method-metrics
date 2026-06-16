@@ -126,14 +126,22 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   }, [view, month, trendRows, bqConnected]);
 
   // ── handlers ───────────────────────────────────────────────────────────────
-  const loadIndustryAccounts = (filters, label) => {
+  // monthArg defaults to the selected cohort month (Breakdown clicks); the Trend
+  // tab passes the clicked point's own month so the accounts match that point.
+  const loadIndustryAccounts = (filters, label, monthArg = month) => {
     setIndustrySel(label);
     setIndustryAccounts(null);
     setIndustryAccountsLoading(true);
-    fetchGrrAccounts({ month, filters })
+    fetchGrrAccounts({ month: monthArg, filters })
       .then(setIndustryAccounts)
       .catch(setError)
       .finally(() => setIndustryAccountsLoading(false));
+  };
+
+  // Trend points are always L1 grain; clicking one shows that L1's accounts for
+  // that point's cohort month — the "where did this move come from" drill.
+  const handleTrendPointClick = (segment, monthIso) => {
+    loadIndustryAccounts({ l1: segment }, `${segment} — ${monthLabel(monthIso)}`, monthIso);
   };
 
   const handleIndustryBarClick = (segment) => {
@@ -239,7 +247,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
           {[['breakdown', 'Breakdown'], ['trend', 'Trend']].map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setView(key)}
+              onClick={() => { setView(key); clearAccounts(); }}
               style={{
                 padding: '4px 12px', fontSize: 12,
                 fontWeight: view === key ? 600 : 400,
@@ -264,23 +272,23 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
           {chartsLoading && !industryRows
             ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading segments…</p>
             : <ChartErrorBoundary><GrrSegmentBars rows={industryRows} onSelect={handleIndustryBarClick} /></ChartErrorBoundary>}
-          {industrySel && (
-            <>
-              <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {industrySel}</h3>
-              {industryAccountsLoading
-                ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-                : <ChartErrorBoundary><GrrAccountTable key={industrySel} rows={industryAccounts} /></ChartErrorBoundary>}
-            </>
-          )}
         </>
       ) : (
         <>
           <p style={{ ...sectionLabel, margin: '0 0 8px' }}>
-            Trailing 12 months of annual GRR per L1, ending at the selected cohort month. Click legend items to toggle lines.
+            Trailing 12 months of annual GRR per L1, ending at the selected cohort month. Hover a point for its $ base and account count; click a point to see the accounts behind it. Click legend items to toggle lines.
           </p>
           {trendLoading && !trendRows
             ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading trend…</p>
-            : <ChartErrorBoundary><GrrTrendChart rows={trendRows} /></ChartErrorBoundary>}
+            : <ChartErrorBoundary><GrrTrendChart rows={trendRows} onPointClick={handleTrendPointClick} /></ChartErrorBoundary>}
+        </>
+      )}
+      {industrySel && (
+        <>
+          <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {industrySel}</h3>
+          {industryAccountsLoading
+            ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
+            : <ChartErrorBoundary><GrrAccountTable key={industrySel} rows={industryAccounts} /></ChartErrorBoundary>}
         </>
       )}
 

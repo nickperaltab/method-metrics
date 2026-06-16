@@ -106,6 +106,7 @@ SELECT
   c.Month AS month,
   COALESCE(lb.l1, 'Unclassified') AS segment,
   SUM(c.StartMRR) AS start_mrr,
+  COUNT(DISTINCT IF(c.StartMRR > 0, c.Company, NULL)) AS customers,
   SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr
 FROM ${MRR_VIEW} c
 LEFT JOIN labels lb ON lb.company_account = c.Company

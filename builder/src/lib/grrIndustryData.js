@@ -32,13 +32,14 @@ export async function fetchGrrAccounts({ month, filters }) {
   }));
 }
 
-// Returns [{ month, segment, start_mrr, grr }] — trailing-12m L1 trend rows.
+// Returns [{ month, segment, start_mrr, customers, grr }] — trailing-12m L1 trend rows.
 export async function fetchGrrTrend({ month, months = 12 }) {
   const { rows } = await queryBq(buildGrrTrendSql({ endMonth: month, months }));
   return rows.map((r) => ({
     month: r.month,
     segment: r.segment,
     start_mrr: num(r.start_mrr),
+    customers: num(r.customers),
     grr: r.grr == null ? null : Number(r.grr),
   }));
 }
