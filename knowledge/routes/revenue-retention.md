@@ -170,3 +170,20 @@ Table: `project-for-method-dw.revenue.TransLineFlattened`
 - `AccountFullName` = identifies transaction type (MethodNew, Classic, Prepay Expiry, DEP, discounts, etc.) — useful for debugging but NOT for filtering
 - `SaaSPayType` = Monthly or Prepay
 - `TxnDate` = transaction date
+
+## Gotcha: GRR sliced by industry is noise below a few hundred accounts
+
+(Methodology only — no figures here; this is a public repo. Real numbers live in the gitignored `scripts/audit/retail-grr-diagnostic.json` and Obsidian.)
+
+GRR is a ratio over a subpopulation. Slice it thin enough and month-to-month moves are dominated by one or two accounts, not by retention.
+
+What the 2026-06 Retail investigation found (source: `int_customer_annual_mrr` + `v7_classification.account_labels`):
+
+- The real L1 industries cluster in a narrow GRR band, and each line's month-to-month standard deviation is about the same size as the gaps *between* industries. So crossings (one industry dipping under another) are regression to the mean, not signal.
+- The smallest industry book is low-hundreds of accounts, so ~1pp of its GRR equals a single mid-size account's seats. A multi-month "drop" resolved to a handful of accounts trimming seats; removing the single largest leaker erased ~2pp of it.
+- It was **not** an age artifact: age-standardizing the gap between two industries left it ~unchanged. Annual GRR is structurally year-2+ anyway (you must have existed a year ago to be in the base).
+
+Rules:
+- Read industry GRR **with the base, not the rate.** A high GRR on a tiny book is tiny. The Trend tooltip now shows `$ base · N cust`; the Breakdown bars always have. Click a Trend point to see the accounts behind a move.
+- Don't chase "why did industry X move" until N and concentration clear it. Below ~a few hundred accounts the answer is usually one named account — an account story, not an industry one.
+- Reproduce / extend with `scripts/retail_grr_diagnostic.py` (significance, concentration/jackknife, age-mix decomposition).
