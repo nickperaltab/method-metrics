@@ -117,9 +117,77 @@ lasts AS (
 }
 const COHORT_TENURE_EXPR = 'DATE_DIFF(l.last_month, f.first_month, MONTH)';
 
-export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed' }) {
+// ── Health tier (End-MRR "current book" drill) ───────────────────────────────
+// Deduped per-account attributes. Account has ~1.22 rows per EntityRecordID, so
+// joining it raw fans out the standing-book account list — MUST dedup. Carries
+// HealthScore (0-100) and first paid month (for the tenure/cohort filter).
+function accountAttrsCte() {
+  return `accts AS (
+  SELECT EntityRecordID,
+    MAX(HealthScore) AS health_score,
+    DATE_TRUNC(MIN(NULLIF(FirstSaaSInvoiceTxnDate, DATE '0001-01-01')), MONTH) AS first_month
+  FROM ${fqn('Account')}
+  GROUP BY EntityRecordID
+)`;
+}
+// Tier bands match the scorecard heatmap: Critical <10 / Red 10-39 / Orange
+// 40-54 / Yellow 55-69 / Green 70+ / No score (null). Alias `a` = accts CTE.
+const HEALTH_TIER_CASE = `CASE
+    WHEN a.health_score IS NULL THEN 'No score'
+    WHEN a.health_score < 10 THEN 'Critical'
+    WHEN a.health_score < 40 THEN 'Red'
+    WHEN a.health_score < 55 THEN 'Orange'
+    WHEN a.health_score < 70 THEN 'Yellow'
+    ELSE 'Green' END`;
+// Sort rank so tiers read Critical → Green, No score last.
+const HEALTH_TIER_RANK = `CASE
+    WHEN a.health_score IS NULL THEN 9
+    WHEN a.health_score < 10 THEN 0
+    WHEN a.health_score < 40 THEN 1
+    WHEN a.health_score < 55 THEN 2
+    WHEN a.health_score < 70 THEN 3
+    ELSE 4 END`;
+const HEALTH_TIER_BOUNDS = { Critical: [null, 10], Red: [10, 40], Orange: [40, 55], Yellow: [55, 70], Green: [70, null] };
+// Reproduce a tier's score range when drilling its accounts (slice is a tier label).
+function healthTierClause(slice, hsExpr) {
+  if (slice === 'No score') return `  AND ${hsExpr} IS NULL\n`;
+  const b = HEALTH_TIER_BOUNDS[slice];
+  if (!b) return '';
+  const [lo, hi] = b;
+  const parts = [];
+  if (lo != null) parts.push(`${hsExpr} >= ${lo}`);
+  if (hi != null) parts.push(`${hsExpr} < ${hi}`);
+  return parts.length ? `  AND ${parts.join(' AND ')}\n` : '';
+}
+// Optional tenure-cohort filter (e.g. 48 = 4yr+): months from first paid month
+// to the analysis month. Empty when minAgeMonths <= 0.
+function bookAgeClause(month, minAgeMonths) {
+  return minAgeMonths > 0
+    ? `  AND DATE_DIFF(DATE ${sqlStr(month)}, a.first_month, MONTH) >= ${Number(minAgeMonths)}\n`
+    : '';
+}
+
+export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0 }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
+  // End-MRR "current book" drill: standing accounts (end MRR > 0) at `month`,
+  // optionally sliced to a health tier and/or a tenure cohort, riskiest first.
+  if (drill === 'book') {
+    return `WITH ${accountAttrsCte()}
+SELECT
+  c.EntityRecordID AS entity_record_id,
+  c.Company, c.Segment, c.UserTier,
+  c.p2_saas AS deltaMrr,
+  a.health_score,
+  DATE_DIFF(DATE ${sqlStr(month)}, a.first_month, MONTH) AS age_mo
+FROM ${icm} c
+JOIN accts a ON a.EntityRecordID = c.EntityRecordID
+WHERE c.Month = ${sqlStr(month)}
+  AND c.p2_saas > 0
+${bookAgeClause(month, minAgeMonths)}${slice ? healthTierClause(slice, 'a.health_score') : ''}${buildFilterClauses(filters, 'c')}
+ORDER BY a.health_score IS NULL, a.health_score ASC, c.p2_saas DESC
+LIMIT 50`.trimEnd();
+  }
   if (drill === 'expansion' || drill === 'downgrade') {
     const orderCol = ORDER_COL[slice] || 'seat_mrr';
     return `SELECT
@@ -190,6 +258,25 @@ WHERE c.Month = ${sqlStr(month)}
 ${buildFilterClauses(filters, 'c')}
 GROUP BY bucket
 ORDER BY MIN(${age})`.trimEnd();
+}
+
+// L2 for the End-MRR "current book" drill: standing accounts (end MRR > 0) at
+// `month`, split by health tier with both MRR and account count. `minAgeMonths`
+// scopes to a tenure cohort (48 = 4yr+). Deduped Account join (accountAttrsCte).
+export function buildBookSplitSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+  const icm = fqn(bridgeView);
+  return `WITH ${accountAttrsCte()}
+SELECT
+  ${HEALTH_TIER_CASE} AS bucket,
+  SUM(c.p2_saas) AS value,
+  COUNT(*) AS accounts
+FROM ${icm} c
+JOIN accts a ON a.EntityRecordID = c.EntityRecordID
+WHERE c.Month = ${sqlStr(month)}
+  AND c.p2_saas > 0
+${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+GROUP BY bucket, ${HEALTH_TIER_RANK}
+ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 }
 
 // Distinct values per filter dimension, scoped to recent months for relevance.

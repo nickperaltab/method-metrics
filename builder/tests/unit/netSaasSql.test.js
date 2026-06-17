@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -212,5 +212,57 @@ describe('buildAccountLifecycleSql', () => {
     expect(sql).toContain('MIN(NULLIF(FirstSaaSInvoiceTxnDate');
     expect(sql).toContain("DATE '0001-01-01'");   // sentinel ignored
     expect(sql).not.toContain('CancellationDate'); // no cancellation marker
+  });
+});
+
+describe('buildBookSplitSql (End-MRR current book by health tier)', () => {
+  it('splits standing accounts (end MRR > 0) by health tier with MRR + count', () => {
+    const sql = buildBookSplitSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain('FROM `project-for-method-dw.revenue.int_customer_mrr` c');
+    expect(sql).toContain('JOIN accts a ON a.EntityRecordID = c.EntityRecordID');
+    expect(sql).toContain('MAX(HealthScore) AS health_score'); // deduped Account join
+    expect(sql).toContain('c.p2_saas > 0');                    // current book = end MRR > 0
+    expect(sql).toContain('SUM(c.p2_saas) AS value');
+    expect(sql).toContain('COUNT(*) AS accounts');
+    expect(sql).not.toContain('AND DATE_DIFF');                // no cohort filter by default
+  });
+
+  it('adds a tenure-cohort floor when minAgeMonths is set (4yr+ = 48)', () => {
+    const sql = buildBookSplitSql({ month: '2026-05-01', filters: {}, minAgeMonths: 48 });
+    expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
+  });
+
+  it('applies global filters against the bridge alias', () => {
+    const sql = buildBookSplitSql({ month: '2026-05-01', filters: { Segment: 'SMB' } });
+    expect(sql).toContain("AND c.Segment = 'SMB'");
+  });
+});
+
+describe('buildAccountTableSql — book drill', () => {
+  it('lists current accounts with health score + age, deduped, riskiest first', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: null, filters: {} });
+    expect(sql).toContain('WITH accts AS');                 // deduped CTE
+    expect(sql).toContain('a.health_score');
+    expect(sql).toContain('c.p2_saas AS deltaMrr');
+    expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) AS age_mo");
+    expect(sql).toContain('c.p2_saas > 0');
+    expect(sql).toContain('ORDER BY a.health_score IS NULL, a.health_score ASC');
+    expect(sql).toContain('LIMIT 50');
+  });
+
+  it('reproduces a tier score range when sliced by tier (no HealthTier column)', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'Red', filters: {} });
+    expect(sql).toContain('a.health_score >= 10 AND a.health_score < 40');
+    expect(sql).not.toContain("= 'Red'"); // never filters a nonexistent column
+  });
+
+  it('handles the No score tier as IS NULL', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'No score', filters: {} });
+    expect(sql).toContain('a.health_score IS NULL');
+  });
+
+  it('scopes to a tenure cohort when minAgeMonths is set', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'Red', filters: {}, minAgeMonths: 48 });
+    expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
   });
 });

@@ -11,6 +11,7 @@ import {
   buildDimSplitSql,
   buildComponentSplitSql,
   buildAccountTableSql,
+  buildBookSplitSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -52,6 +53,12 @@ export async function fetchCohortAgeChurn({ month, filters, bridgeView }) {
   return rows.map((r) => ({ bucket: r.bucket, value: num(r.value) }));
 }
 
+// End-MRR "current book" split by health tier: MRR + account count per tier.
+export async function fetchBookSplit({ month, filters, bridgeView, minAgeMonths }) {
+  const { rows } = await queryBq(buildBookSplitSql({ month, filters, bridgeView, minAgeMonths }));
+  return rows.map((r) => ({ bucket: r.bucket, value: num(r.value), accounts: num(r.accounts) }));
+}
+
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {
   const { rows } = await queryBq(buildComponentSplitSql({ month, movementKind, filters, decompView, bridgeView }));
   const r = rows[0];
@@ -59,14 +66,17 @@ export async function fetchComponentSplit({ month, movementKind, filters, decomp
   return { seats: num(r.seats), apps: num(r.apps), price: num(r.price) };
 }
 
-export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView }) {
-  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView }));
+export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths }) {
+  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths }));
   return rows.map((r) => {
     const out = { ...r, deltaMrr: num(r.deltaMrr) };
     // seat/app/price columns only exist on expansion/downgrade rows.
     if (r.seat_mrr !== undefined) out.seat_mrr = num(r.seat_mrr);
     if (r.app_mrr !== undefined) out.app_mrr = num(r.app_mrr);
     if (r.price_mrr !== undefined) out.price_mrr = num(r.price_mrr);
+    // health_score / age_mo only exist on book (current-book) rows.
+    if (r.health_score !== undefined) out.health_score = r.health_score == null ? null : num(r.health_score);
+    if (r.age_mo !== undefined) out.age_mo = num(r.age_mo);
     return out;
   });
 }
