@@ -369,6 +369,37 @@ GROUP BY tier, ${HEALTH_TIER_RANK}
 ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 }
 
+// Predictor diagnostic: trailing-year MRR churn by tenure band × health band.
+// Shows which signal separates churn better (health dominates; tenure adds a
+// smaller, mostly-within-unhealthy effect). Cohort = accounts paying 12 months
+// before `month`; churned if not paying at `month`. MRR-weighted churn = start
+// MRR of churned ÷ start MRR. Tenure is measured at the anchor (clean point-in-
+// time); health is the current snapshot (correlation, not forecast).
+export function buildPredictorGridSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+  const icm = fqn(bridgeView);
+  const anchorTenure = `DATE_DIFF(DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH), a.first_month, MONTH)`;
+  return `WITH ${accountAttrsCte()},
+kept AS (SELECT EntityRecordID FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)
+SELECT
+  CASE WHEN ${anchorTenure} <= 11 THEN '<1yr'
+       WHEN ${anchorTenure} <= 35 THEN '1-3yr'
+       ELSE '4yr+' END AS tenure_band,
+  CASE WHEN a.health_score IS NULL THEN 'No score'
+       WHEN a.health_score < 40 THEN '<40'
+       WHEN a.health_score < 70 THEN '40-69'
+       ELSE '70+' END AS health_band,
+  COUNT(*) AS n,
+  ROUND(100 * SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0)) / NULLIF(SUM(c.p2_saas), 0), 1) AS mrr_churn_pct
+FROM ${icm} c
+JOIN accts a ON a.EntityRecordID = c.EntityRecordID
+LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
+WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
+  AND c.p2_saas > 0
+${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+GROUP BY tenure_band, health_band
+ORDER BY tenure_band, health_band`.trimEnd();
+}
+
 // Distinct values per filter dimension, scoped to recent months for relevance.
 // `dims` are trusted config identifiers (column names on int_customer_mrr), so
 // they're interpolated directly — both as the 'dim' literal label and as the

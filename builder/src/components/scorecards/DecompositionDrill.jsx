@@ -12,6 +12,7 @@ import { ChartErrorBoundary } from '../EChart';
 import NetSaasBridge from './NetSaasBridge';
 import L2Panel from './L2Panel';
 import BookHeatmap from './BookHeatmap';
+import PredictorGrid from './PredictorGrid';
 import NetSaasAccountTable from './NetSaasAccountTable';
 import AccountDetail from './AccountDetail';
 import DrillBreadcrumb from './DrillBreadcrumb';
@@ -24,6 +25,7 @@ import {
   fetchAccountTable,
   fetchBookHeatmap,
   fetchHealthChurnBenchmark,
+  fetchPredictorGrid,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -87,6 +89,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [l2, setL2] = useState(null);
   const [l3, setL3] = useState(null);
   const [healthBenchmark, setHealthBenchmark] = useState(null); // churn/yr per tier (End MRR drill)
+  const [predictorGrid, setPredictorGrid] = useState(null); // tenure × health churn diagnostic
 
   const [account, setAccount] = useState(null);
   const [accountHistory, setAccountHistory] = useState(null);
@@ -156,6 +159,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setL2Loading(true);
     setError(null);
     setHealthBenchmark(null);
+    setPredictorGrid(null);
     // Clear stale L2 data before the async fetch. Without this, switching from a
     // component-mode bar (data = {seats,apps,price}) to a dimension-mode bar
     // (data = [{bucket,value}]) would briefly render L2Panel with the previous
@@ -174,6 +178,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       if (dim === 'HealthTier') {
         fetchHealthChurnBenchmark({ month: m, filters, bridgeView })
           .then(setHealthBenchmark).catch(() => setHealthBenchmark(null));
+        fetchPredictorGrid({ month: m, filters, bridgeView })
+          .then(setPredictorGrid).catch(() => setPredictorGrid(null));
         return fetchBookHeatmap({ month: m, filters, bridgeView });
       }
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
@@ -445,7 +451,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
           : drill.bar === 'end'
-            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /></ChartErrorBoundary>
+            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /><PredictorGrid data={predictorGrid} /></ChartErrorBoundary>
             : (
               <ChartErrorBoundary>
                 <L2Panel

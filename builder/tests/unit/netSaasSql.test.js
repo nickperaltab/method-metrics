@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildHealthChurnBenchmarkSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildHealthChurnBenchmarkSql, buildPredictorGridSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -307,6 +307,18 @@ describe('buildHealthChurnBenchmarkSql (trailing-year churn by health tier)', ()
     expect(sql).toContain('COUNTIF(k.EntityRecordID IS NULL)');               // churned = not in kept
     expect(sql).toContain('AS churn_pct');
     expect(sql).toContain('MAX(HealthScore) AS health_score');                // deduped Account
+  });
+});
+
+describe('buildPredictorGridSql (tenure × health churn diagnostic)', () => {
+  it('buckets MRR churn by tenure (measured at anchor) × health band', () => {
+    const sql = buildPredictorGridSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 12 MONTH)"); // anchor a year back
+    expect(sql).toContain('AS tenure_band');
+    expect(sql).toContain('AS health_band');
+    expect(sql).toContain('SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0))'); // MRR-weighted churn
+    expect(sql).toContain('NULLIF(SUM(c.p2_saas), 0)');
+    expect(sql).toContain('GROUP BY tenure_band, health_band');
   });
 });
 

@@ -14,6 +14,7 @@ import {
   buildBookSplitSql,
   buildBookHeatmapSql,
   buildHealthChurnBenchmarkSql,
+  buildPredictorGridSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -88,6 +89,12 @@ export async function fetchHealthChurnBenchmark({ month, filters, bridgeView, mi
   const out = {};
   for (const r of rows) out[r.tier] = { churn: num(r.churn_pct), n: num(r.n) };
   return out;
+}
+
+// Predictor diagnostic: trailing-year MRR churn by tenure × health band.
+export async function fetchPredictorGrid({ month, filters, bridgeView, minAgeMonths }) {
+  const { rows } = await queryBq(buildPredictorGridSql({ month, filters, bridgeView, minAgeMonths }));
+  return rows.map((r) => ({ tenureBand: r.tenure_band, healthBand: r.health_band, n: num(r.n), churn: num(r.mrr_churn_pct) }));
 }
 
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {
