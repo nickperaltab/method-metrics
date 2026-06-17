@@ -343,6 +343,32 @@ GROUP BY tier, license_band, ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}
 ORDER BY ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}`.trimEnd();
 }
 
+// Trailing-12-month churn rate by health tier — the correlation shown on the
+// heatmap. Cohort = accounts paying 12 months before `month`; churned if not
+// paying at `month`. Health tier is the current Account snapshot (HealthScore
+// isn't historized), so read it as "tier today × survived the last year" — a
+// stable correlation, not a forward forecast. Same tiers as the heatmap rows.
+export function buildHealthChurnBenchmarkSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+  const icm = fqn(bridgeView);
+  return `WITH ${accountAttrsCte()},
+kept AS (
+  SELECT EntityRecordID FROM ${icm}
+  WHERE Month = ${sqlStr(month)} AND p2_saas > 0
+)
+SELECT
+  ${HEALTH_TIER_CASE} AS tier,
+  COUNT(*) AS n,
+  ROUND(100 * COUNTIF(k.EntityRecordID IS NULL) / COUNT(*), 1) AS churn_pct
+FROM ${icm} c
+JOIN accts a ON a.EntityRecordID = c.EntityRecordID
+LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
+WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
+  AND c.p2_saas > 0
+${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+GROUP BY tier, ${HEALTH_TIER_RANK}
+ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
+}
+
 // Distinct values per filter dimension, scoped to recent months for relevance.
 // `dims` are trusted config identifiers (column names on int_customer_mrr), so
 // they're interpolated directly — both as the 'dim' literal label and as the

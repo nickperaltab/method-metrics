@@ -13,6 +13,7 @@ import {
   buildAccountTableSql,
   buildBookSplitSql,
   buildBookHeatmapSql,
+  buildHealthChurnBenchmarkSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -78,6 +79,15 @@ export async function fetchBookSplit({ month, filters, bridgeView, minAgeMonths 
 export async function fetchBookHeatmap({ month, filters, bridgeView, minAgeMonths }) {
   const { rows } = await queryBq(buildBookHeatmapSql({ month, filters, bridgeView, minAgeMonths }));
   return rows.map((r) => ({ tier: r.tier, licenseBand: r.license_band, accounts: num(r.accounts), mrr: num(r.mrr) }));
+}
+
+// Trailing-year churn rate per health tier (the correlation). Returns a map
+// { [tier]: { churn, n } } for annotating the heatmap rows.
+export async function fetchHealthChurnBenchmark({ month, filters, bridgeView, minAgeMonths }) {
+  const { rows } = await queryBq(buildHealthChurnBenchmarkSql({ month, filters, bridgeView, minAgeMonths }));
+  const out = {};
+  for (const r of rows) out[r.tier] = { churn: num(r.churn_pct), n: num(r.n) };
+  return out;
 }
 
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {

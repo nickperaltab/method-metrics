@@ -15,6 +15,11 @@ const TIER_COLOR = {
   Green: '#059669', Yellow: '#ca8a04', Orange: '#ea580c', Red: '#dc2626',
   Critical: '#991b1b', 'No score': '#6b7280',
 };
+// HealthScore range per tier (shown under the tier name).
+const TIER_RANGE = {
+  Green: '70–100', Yellow: '55–69', Orange: '40–54', Red: '10–39',
+  Critical: '0–9', 'No score': 'n/a',
+};
 const BAND_LABEL = { '0': 'No bill', '10+': '10+' };
 
 function fmtUsd(v) {
@@ -42,7 +47,7 @@ function cellBg(frac) {
 
 const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', sans-serif" };
 
-export default function BookHeatmap({ data, onCellClick }) {
+export default function BookHeatmap({ data, benchmark, onCellClick }) {
   const [metric, setMetric] = useState('mrr'); // 'mrr' | 'accounts'
 
   const { grid, bands, tiers, maxVal, totals } = useMemo(() => {
@@ -91,11 +96,16 @@ export default function BookHeatmap({ data, onCellClick }) {
         <span style={{ ...sectionLabel, fontSize: 12 }}>color = {metric === 'mrr' ? 'MRR' : 'account'} concentration · click a cell to drill</span>
       </div>
 
+      <div style={{ ...sectionLabel, fontSize: 11, marginBottom: 8 }}>
+        Churn / yr = share of each tier that churned over the trailing 12 months. Health is a current snapshot, so read it as correlation, not a forecast.
+      </div>
+
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'separate', borderSpacing: 3, fontFamily: "'DM Sans', sans-serif" }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left', fontSize: 11, color: '#6b7280', padding: '0 8px' }}>Health \ Licenses</th>
+              <th style={{ fontSize: 11, color: '#6b7280', padding: '4px 8px' }} title="Trailing-12-month churn rate for accounts in this health tier">Churn&nbsp;/&nbsp;yr</th>
               {bands.map((b) => (
                 <th key={b} style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '4px 8px', minWidth: 78 }}>
                   {BAND_LABEL[b] || b}
@@ -106,7 +116,15 @@ export default function BookHeatmap({ data, onCellClick }) {
           <tbody>
             {tiers.map((t) => (
               <tr key={t}>
-                <td style={{ fontSize: 12, fontWeight: 700, color: TIER_COLOR[t] || '#374151', padding: '0 8px', whiteSpace: 'nowrap' }}>{t}</td>
+                <td style={{ padding: '0 8px', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: TIER_COLOR[t] || '#374151' }}>{t}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>{TIER_RANGE[t] || ''}</div>
+                </td>
+                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} title={benchmark?.[t] ? `${benchmark[t].n} accounts a year ago` : ''}>
+                  {benchmark?.[t]
+                    ? <span style={{ fontSize: 12.5, fontWeight: 700, color: TIER_COLOR[t] || '#374151' }}>{benchmark[t].churn}%</span>
+                    : <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>}
+                </td>
                 {bands.map((b) => {
                   const r = grid[`${t}|${b}`];
                   if (!r) return <td key={b} style={{ background: '#f8fafc', borderRadius: 6 }} />;
@@ -129,6 +147,7 @@ export default function BookHeatmap({ data, onCellClick }) {
             ))}
             <tr>
               <td style={{ fontSize: 10.5, color: '#9ca3af', padding: '4px 8px' }}>Total</td>
+              <td />
               {bands.map((b) => (
                 <td key={b} style={{ textAlign: 'center', fontSize: 11, color: '#6b7280', paddingTop: 4 }}>
                   {metric === 'mrr' ? fmtUsd(totals[b]) : (totals[b] || 0).toLocaleString()}

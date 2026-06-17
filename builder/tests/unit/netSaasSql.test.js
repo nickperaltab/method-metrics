@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildHealthChurnBenchmarkSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -296,6 +296,17 @@ describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
   it('honors the tenure-cohort floor', () => {
     const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {}, minAgeMonths: 48 });
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
+  });
+});
+
+describe('buildHealthChurnBenchmarkSql (trailing-year churn by health tier)', () => {
+  it('anchors 12 months before the month and measures churn to the month', () => {
+    const sql = buildHealthChurnBenchmarkSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 12 MONTH)"); // anchor a year back
+    expect(sql).toContain("Month = '2026-05-01'");                            // kept = paying now
+    expect(sql).toContain('COUNTIF(k.EntityRecordID IS NULL)');               // churned = not in kept
+    expect(sql).toContain('AS churn_pct');
+    expect(sql).toContain('MAX(HealthScore) AS health_score');                // deduped Account
   });
 });
 

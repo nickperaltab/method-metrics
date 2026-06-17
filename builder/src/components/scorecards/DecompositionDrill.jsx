@@ -23,6 +23,7 @@ import {
   fetchComponentSplit,
   fetchAccountTable,
   fetchBookHeatmap,
+  fetchHealthChurnBenchmark,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -85,6 +86,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [rate, setRate] = useState(null);
   const [l2, setL2] = useState(null);
   const [l3, setL3] = useState(null);
+  const [healthBenchmark, setHealthBenchmark] = useState(null); // churn/yr per tier (End MRR drill)
 
   const [account, setAccount] = useState(null);
   const [accountHistory, setAccountHistory] = useState(null);
@@ -153,6 +155,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     if (!spec) return;
     setL2Loading(true);
     setError(null);
+    setHealthBenchmark(null);
     // Clear stale L2 data before the async fetch. Without this, switching from a
     // component-mode bar (data = {seats,apps,price}) to a dimension-mode bar
     // (data = [{bucket,value}]) would briefly render L2Panel with the previous
@@ -166,8 +169,13 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         return fetchComponentSplit({ month: m, movementKind: spec.movementKind, filters, decompView, bridgeView });
       }
       // dimension mode
-      // End MRR "current book" → standing accounts as a health × license heatmap.
-      if (dim === 'HealthTier') return fetchBookHeatmap({ month: m, filters, bridgeView });
+      // End MRR "current book" → standing accounts as a health × license heatmap,
+      // annotated with each tier's trailing-year churn rate (the correlation).
+      if (dim === 'HealthTier') {
+        fetchHealthChurnBenchmark({ month: m, filters, bridgeView })
+          .then(setHealthBenchmark).catch(() => setHealthBenchmark(null));
+        return fetchBookHeatmap({ month: m, filters, bridgeView });
+      }
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
       return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
     };
@@ -437,7 +445,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
           : drill.bar === 'end'
-            ? <ChartErrorBoundary><BookHeatmap data={l2} onCellClick={handleCellClick} /></ChartErrorBoundary>
+            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /></ChartErrorBoundary>
             : (
               <ChartErrorBoundary>
                 <L2Panel
