@@ -391,3 +391,42 @@ export function buildAccountLifecycleSql({ entityRecordId }) {
 FROM \`project-for-method-dw.revenue.Account\`
 WHERE EntityRecordID = ${id}`;
 }
+
+// Recent activities for one account (calls, emails, summaries). Comments is raw
+// HTML, capped to 4 KB to bound payload; the UI strips tags for display.
+// entityRecordId coerced to a number (injection-safe, cf. buildAccountHistorySql).
+export function buildAccountActivitiesSql({ entityRecordId, limit = 40 }) {
+  const id = parseInt(entityRecordId, 10);
+  const n = parseInt(limit, 10) || 40;
+  return `SELECT
+  RecordID AS record_id,
+  ActivityType AS activity_type,
+  CAST(DueDateStart AS STRING) AS date,
+  SUBSTR(Comments, 1, 4000) AS body
+FROM \`project-for-method-dw.revenue.Activity\`
+WHERE EntityRecordID = ${id}
+  AND COALESCE(IsDeleted, FALSE) = FALSE
+  AND DueDateStart IS NOT NULL
+  AND DueDateStart <= CURRENT_DATE()
+ORDER BY DueDateStart DESC
+LIMIT ${n}`;
+}
+
+// Support cases for one account. Description capped to 4 KB; UI strips tags.
+export function buildAccountCasesSql({ entityRecordId, limit = 40 }) {
+  const id = parseInt(entityRecordId, 10);
+  const n = parseInt(limit, 10) || 40;
+  return `SELECT
+  RecordID AS record_id,
+  COALESCE(NULLIF(Subject, ''), CaseSubject) AS subject,
+  CaseStatus AS status,
+  CaseCategory AS category,
+  CAST(DATE(CreatedDate) AS STRING) AS date,
+  CAST(DATE(ClosedDate) AS STRING) AS closed,
+  SUBSTR(Description, 1, 4000) AS body
+FROM \`project-for-method-dw.revenue.Cases\`
+WHERE EntityRecordID = ${id}
+  AND COALESCE(IsDeleted, FALSE) = FALSE
+ORDER BY CreatedDate DESC
+LIMIT ${n}`;
+}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 // Side-effect import: registers the 'method' ECharts theme + chart/component
 // modules (echarts.use([...])) so `theme="method"` below resolves.
@@ -90,10 +90,12 @@ function monthIndex(key) {
  *   ascending by month; month is 'YYYY-MM-01'. May be empty.
  * @param {{signup?:string|null, firstSync?:string|null, firstInvoice?:string|null, cancelled?:string|null}} props.lifecycle
  */
-export default function AccountDetail({ account, history, lifecycle }) {
+export default function AccountDetail({ account, history, lifecycle, timeline }) {
   const acct = account || {};
   const rows = Array.isArray(history) ? history : [];
   const lc = lifecycle || {};
+  const events = Array.isArray(timeline) ? timeline : [];
+  const [openId, setOpenId] = useState(null);
 
   // Per-month metadata: category label + comparable month index. Stable across
   // the chart option + markLine mapping.
@@ -306,6 +308,58 @@ export default function AccountDetail({ account, history, lifecycle }) {
           fontFamily: fontSans,
         }}>
           No history for this account
+        </div>
+      )}
+
+      {/* Activity + case timeline — click a row to read the body */}
+      {timeline != null && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+            Timeline · activities &amp; cases
+          </div>
+          {events.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: '#9ca3af' }}>No activities or cases on record.</div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #eef0f2', borderRadius: 8 }}>
+              {events.map((ev) => {
+                const open = openId === ev.id;
+                const isCase = ev.kind === 'case';
+                return (
+                  <div key={ev.id} style={{ borderBottom: '1px solid #f1f3f5' }}>
+                    <div
+                      onClick={() => setOpenId(open ? null : ev.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px',
+                        cursor: ev.body ? 'pointer' : 'default',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                    >
+                      <span style={{ fontFamily: fontMono, fontSize: 11.5, color: COLOR_GREY, width: 82, flexShrink: 0 }}>{ev.date}</span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase',
+                        color: isCase ? '#b45309' : '#3b6ea5', background: isCase ? '#fef3c7' : '#eff4fb',
+                        borderRadius: 4, padding: '1px 6px', flexShrink: 0,
+                      }}>{isCase ? 'Case' : 'Activity'}</span>
+                      <span style={{ fontSize: 13, color: '#374151', fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ev.title}
+                      </span>
+                      {ev.meta && <span style={{ fontSize: 11.5, color: COLOR_GREY, flexShrink: 0 }}>{ev.meta}</span>}
+                      {ev.body && <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>}
+                    </div>
+                    {open && ev.body && (
+                      <div style={{
+                        padding: '4px 12px 12px 104px', fontSize: 12.5, color: '#4b5563',
+                        lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      }}>
+                        {ev.body}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -28,6 +28,7 @@ import {
   fetchRate,
   fetchAccountHistory,
   fetchAccountLifecycle,
+  fetchAccountTimeline,
 } from '../../lib/netSaasData';
 
 // ── date helpers ────────────────────────────────────────────────────────────
@@ -88,6 +89,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [account, setAccount] = useState(null);
   const [accountHistory, setAccountHistory] = useState(null);
   const [accountLifecycle, setAccountLifecycle] = useState(null);
+  const [accountTimeline, setAccountTimeline] = useState(null);
   const [accountLoading, setAccountLoading] = useState(false);
 
   const [bridgeLoading, setBridgeLoading] = useState(false);
@@ -108,6 +110,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setAccount(null);
     setAccountHistory(null);
     setAccountLifecycle(null);
+    setAccountTimeline(null);
 
     const bridgeView = grainCfg.bridgeView;
 
@@ -180,6 +183,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setAccount(null);
     setAccountHistory(null);
     setAccountLifecycle(null);
+    setAccountTimeline(null);
   };
 
   const handleBarClick = (barKey) => {
@@ -226,11 +230,13 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setAccountLoading(true);
     setAccountHistory(null);
     setAccountLifecycle(null);
+    setAccountTimeline(null);
     Promise.all([
       fetchAccountHistory({ entityRecordId: row.entity_record_id }),
       fetchAccountLifecycle({ entityRecordId: row.entity_record_id }),
+      fetchAccountTimeline({ entityRecordId: row.entity_record_id }),
     ])
-      .then(([hist, life]) => { setAccountHistory(hist); setAccountLifecycle(life); })
+      .then(([hist, life, tl]) => { setAccountHistory(hist); setAccountLifecycle(life); setAccountTimeline(tl); })
       .catch((e) => setError(e))
       .finally(() => setAccountLoading(false));
   };
@@ -241,6 +247,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       setAccount(null);
       setAccountHistory(null);
       setAccountLifecycle(null);
+      setAccountTimeline(null);
     }
     if (level === 0) {
       setDrill(null);
@@ -459,7 +466,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {account && (
         accountLoading && !accountHistory
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading account history…</p>
-          : <ChartErrorBoundary><AccountDetail account={account} history={accountHistory} lifecycle={accountLifecycle} /></ChartErrorBoundary>
+          : <ChartErrorBoundary><AccountDetail account={account} history={accountHistory} lifecycle={accountLifecycle} timeline={accountTimeline} /></ChartErrorBoundary>
       )}
     </div>
   );

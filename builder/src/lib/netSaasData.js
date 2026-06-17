@@ -18,9 +18,23 @@ import {
   buildRateSql,
   buildAccountHistorySql,
   buildAccountLifecycleSql,
+  buildAccountActivitiesSql,
+  buildAccountCasesSql,
 } from './netSaasSql.js';
 
 const num = (v) => Number(v) || 0;
+
+// Strip HTML tags + collapse whitespace + decode the few common entities that
+// show up in Method's rich-text Comments/Description bodies. Display-only.
+function stripHtml(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 export async function fetchBridge({ month, filters, bridgeView }) {
   const { rows } = await queryBq(buildBridgeSql({ month, filters, bridgeView }));
@@ -112,4 +126,26 @@ export async function fetchAccountLifecycle({ entityRecordId }) {
   const { rows } = await queryBq(buildAccountLifecycleSql({ entityRecordId }));
   const r = rows[0] || {};
   return { signup: r.signup || null, firstSync: r.first_sync || null, firstInvoice: r.first_invoice || null };
+}
+
+// Account timeline: activities + cases merged, newest first, bodies cleaned for
+// reading. Each item: { id, kind, date, title, meta, body }.
+export async function fetchAccountTimeline({ entityRecordId }) {
+  const [acts, cases] = await Promise.all([
+    queryBq(buildAccountActivitiesSql({ entityRecordId })),
+    queryBq(buildAccountCasesSql({ entityRecordId })),
+  ]);
+  const items = [
+    ...acts.rows.map((r) => ({
+      id: `a${r.record_id}`, kind: 'activity', date: r.date,
+      title: r.activity_type || 'Activity', meta: '', body: stripHtml(r.body),
+    })),
+    ...cases.rows.map((r) => ({
+      id: `c${r.record_id}`, kind: 'case', date: r.date,
+      title: r.subject || 'Case', meta: [r.status, r.category].filter(Boolean).join(' · '),
+      body: stripHtml(r.body),
+    })),
+  ].filter((x) => x.date);
+  items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return items;
 }

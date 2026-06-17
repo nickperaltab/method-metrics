@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -296,5 +296,32 @@ describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
   it('honors the tenure-cohort floor', () => {
     const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {}, minAgeMonths: 48 });
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
+  });
+});
+
+describe('buildAccountActivitiesSql / buildAccountCasesSql (timeline)', () => {
+  it('pulls recent non-deleted activities for one account, body capped', () => {
+    const sql = buildAccountActivitiesSql({ entityRecordId: 186459 });
+    expect(sql).toContain('revenue.Activity');
+    expect(sql).toContain('EntityRecordID = 186459');
+    expect(sql).toContain('COALESCE(IsDeleted, FALSE) = FALSE');
+    expect(sql).toContain('SUBSTR(Comments, 1, 4000)');
+    expect(sql).toContain('ORDER BY DueDateStart DESC');
+  });
+
+  it('pulls non-deleted cases with subject/status/category + capped body', () => {
+    const sql = buildAccountCasesSql({ entityRecordId: 186459 });
+    expect(sql).toContain('revenue.Cases');
+    expect(sql).toContain('EntityRecordID = 186459');
+    expect(sql).toContain('COALESCE(IsDeleted, FALSE) = FALSE');
+    expect(sql).toContain('COALESCE(NULLIF(Subject');
+    expect(sql).toContain('SUBSTR(Description, 1, 4000)');
+    expect(sql).toContain('ORDER BY CreatedDate DESC');
+  });
+
+  it('coerces entityRecordId to a number (injection-safe)', () => {
+    const sql = buildAccountActivitiesSql({ entityRecordId: '186459; DROP' });
+    expect(sql).toContain('EntityRecordID = 186459');
+    expect(sql).not.toContain('DROP');
   });
 });
