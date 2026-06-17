@@ -102,6 +102,7 @@ export const netSaasScorecard = {
                    { key: 'signupMonth',        label: 'Signed up', format: 'month' }],
       churn:      [{ key: 'cohortAgeMonths',    label: 'Cohort age (mo)', format: 'number' }],
       end:        [{ key: 'health_score',       label: 'Health', format: 'number' },
+                   { key: 'seats',              label: 'Seats', format: 'number' },
                    { key: 'age_mo',             label: 'Age (mo)', format: 'number' }],
       expansion:  [{ key: 'seat_mrr', label: 'Seats $', format: 'currency' },
                    { key: 'app_mrr',  label: 'Apps $',  format: 'currency' },

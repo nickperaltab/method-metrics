@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChartErrorBoundary } from '../EChart';
 import NetSaasBridge from './NetSaasBridge';
 import L2Panel from './L2Panel';
+import BookHeatmap from './BookHeatmap';
 import NetSaasAccountTable from './NetSaasAccountTable';
 import AccountDetail from './AccountDetail';
 import DrillBreadcrumb from './DrillBreadcrumb';
@@ -21,7 +22,7 @@ import {
   fetchDimSplit,
   fetchComponentSplit,
   fetchAccountTable,
-  fetchBookSplit,
+  fetchBookHeatmap,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -162,8 +163,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         return fetchComponentSplit({ month: m, movementKind: spec.movementKind, filters, decompView, bridgeView });
       }
       // dimension mode
-      // End MRR "current book" → standing accounts split by HealthScore tier.
-      if (dim === 'HealthTier') return fetchBookSplit({ month: m, filters, bridgeView });
+      // End MRR "current book" → standing accounts as a health × license heatmap.
+      if (dim === 'HealthTier') return fetchBookHeatmap({ month: m, filters, bridgeView });
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
       return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
     };
@@ -185,7 +186,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     const spec = cfg.drills[barKey];
     if (!spec) return;
     const dim = spec.mode === 'dimension' ? (spec.defaultDim || null) : null;
-    setDrill({ bar: barKey, dim, slice: null });
+    setDrill({ bar: barKey, dim, slice: null, licenseBand: null });
     setL3(null);
     clearAccount();
     loadL2(barKey, dim);
@@ -193,23 +194,31 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
   const handleDimChange = (dim) => {
     if (!drill) return;
-    setDrill((d) => ({ ...d, dim, slice: null }));
+    setDrill((d) => ({ ...d, dim, slice: null, licenseBand: null }));
     setL3(null);
     clearAccount();
     loadL2(drill.bar, dim);
   };
 
-  const handleSliceClick = (slice) => {
-    if (!drill) return;
-    setDrill((d) => ({ ...d, slice }));
+  const loadL3 = (patch) => {
+    setDrill((d) => ({ ...d, ...patch }));
     setL3Loading(true);
     setError(null);
     clearAccount();
-    fetchAccountTable({ month, drill: drill.bar, dim: drill.dim, slice, filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView })
+    fetchAccountTable({
+      month, drill: drill.bar, dim: drill.dim,
+      slice: patch.slice, licenseBand: patch.licenseBand ?? null,
+      filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView,
+    })
       .then((rows) => setL3(rows))
       .catch((e) => setError(e))
       .finally(() => setL3Loading(false));
   };
+
+  // L2Panel slice (dimension/component drills): single slice, no license band.
+  const handleSliceClick = (slice) => { if (drill) loadL3({ slice, licenseBand: null }); };
+  // Heatmap cell (End MRR book drill): health tier + license band together.
+  const handleCellClick = (tier, band) => { if (drill) loadL3({ slice: tier, licenseBand: band }); };
 
   const handleAccountClick = (row) => {
     if (!row?.entity_record_id) return;
@@ -249,7 +258,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   if (drill) {
     const bar = cfg.bridge.find((b) => b.key === drill.bar);
     trail.push({ level: 1, label: bar?.label || drill.bar });
-    if (drill.slice) trail.push({ level: 2, label: String(drill.slice) });
+    if (drill.slice) trail.push({ level: 2, label: drill.licenseBand ? `${drill.slice} · ${drill.licenseBand} lic` : String(drill.slice) });
     if (account) trail.push({ level: 4, label: account.Company || 'Account' });
   }
 
@@ -416,25 +425,27 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {/* 4. breadcrumb */}
       {drill && <DrillBreadcrumb trail={trail} onNavigate={handleNavigate} />}
 
-      {/* 5. L2 split panel */}
+      {/* 5. L2 split — heatmap for the End-MRR book drill, bar/component split otherwise */}
       {drill && (
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
-          : (
-            <ChartErrorBoundary>
-              <L2Panel
-                drill={drill.bar}
-                mode={activeSpec?.mode}
-                data={l2}
-                dims={activeSpec?.dims}
-                activeDim={drill.dim}
-                onDimChange={handleDimChange}
-                onSliceClick={handleSliceClick}
-                showDelta={false}
-                priorData={null}
-              />
-            </ChartErrorBoundary>
-          )
+          : drill.bar === 'end'
+            ? <ChartErrorBoundary><BookHeatmap data={l2} onCellClick={handleCellClick} /></ChartErrorBoundary>
+            : (
+              <ChartErrorBoundary>
+                <L2Panel
+                  drill={drill.bar}
+                  mode={activeSpec?.mode}
+                  data={l2}
+                  dims={activeSpec?.dims}
+                  activeDim={drill.dim}
+                  onDimChange={handleDimChange}
+                  onSliceClick={handleSliceClick}
+                  showDelta={false}
+                  priorData={null}
+                />
+              </ChartErrorBoundary>
+            )
       )}
 
       {/* 6. L3 account table */}

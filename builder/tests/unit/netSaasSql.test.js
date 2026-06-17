@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -263,6 +263,38 @@ describe('buildAccountTableSql — book drill (End MRR)', () => {
 
   it('scopes to a tenure cohort when minAgeMonths is set', () => {
     const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', filters: {}, minAgeMonths: 48 });
+    expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
+  });
+
+  it('filters by license band when a heatmap cell is drilled (joins seatcount)', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', licenseBand: '4-5', filters: {} });
+    expect(sql).toContain('seatcount AS');
+    expect(sql).toContain('s.seats >= 4 AND s.seats <= 5');
+    expect(sql).toContain('IFNULL(s.seats, 0) AS seats');
+  });
+
+  it('treats the 10+ band as an open upper bound', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Green', licenseBand: '10+', filters: {} });
+    expect(sql).toContain('s.seats >= 10');
+    expect(sql).not.toContain('s.seats <= '); // no upper bound for 10+
+  });
+});
+
+describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
+  it('groups the current book by health tier × license band with count + MRR', () => {
+    const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {} });
+    expect(sql).toContain('accts AS');       // deduped health
+    expect(sql).toContain('seatcount AS');   // seats
+    expect(sql).toContain('AS tier');
+    expect(sql).toContain('AS license_band');
+    expect(sql).toContain('COUNT(*) AS accounts');
+    expect(sql).toContain('SUM(c.p2_saas) AS mrr');
+    expect(sql).toContain('c.p2_saas > 0');
+    expect(sql).toContain('LEFT JOIN seatcount s');
+  });
+
+  it('honors the tenure-cohort floor', () => {
+    const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {}, minAgeMonths: 48 });
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
   });
 });

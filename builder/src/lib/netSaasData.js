@@ -12,6 +12,7 @@ import {
   buildComponentSplitSql,
   buildAccountTableSql,
   buildBookSplitSql,
+  buildBookHeatmapSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -59,6 +60,12 @@ export async function fetchBookSplit({ month, filters, bridgeView, minAgeMonths 
   return rows.map((r) => ({ bucket: r.bucket, value: num(r.value), accounts: num(r.accounts) }));
 }
 
+// End-MRR heatmap: health tier × license band, account count + MRR per cell.
+export async function fetchBookHeatmap({ month, filters, bridgeView, minAgeMonths }) {
+  const { rows } = await queryBq(buildBookHeatmapSql({ month, filters, bridgeView, minAgeMonths }));
+  return rows.map((r) => ({ tier: r.tier, licenseBand: r.license_band, accounts: num(r.accounts), mrr: num(r.mrr) }));
+}
+
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {
   const { rows } = await queryBq(buildComponentSplitSql({ month, movementKind, filters, decompView, bridgeView }));
   const r = rows[0];
@@ -66,16 +73,17 @@ export async function fetchComponentSplit({ month, movementKind, filters, decomp
   return { seats: num(r.seats), apps: num(r.apps), price: num(r.price) };
 }
 
-export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths }) {
-  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths }));
+export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, licenseBand }) {
+  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, licenseBand }));
   return rows.map((r) => {
     const out = { ...r, deltaMrr: num(r.deltaMrr) };
     // seat/app/price columns only exist on expansion/downgrade rows.
     if (r.seat_mrr !== undefined) out.seat_mrr = num(r.seat_mrr);
     if (r.app_mrr !== undefined) out.app_mrr = num(r.app_mrr);
     if (r.price_mrr !== undefined) out.price_mrr = num(r.price_mrr);
-    // health_score / age_mo only exist on book (current-book) rows.
+    // health_score / seats / age_mo only exist on book (current-book) rows.
     if (r.health_score !== undefined) out.health_score = r.health_score == null ? null : num(r.health_score);
+    if (r.seats !== undefined) out.seats = num(r.seats);
     if (r.age_mo !== undefined) out.age_mo = num(r.age_mo);
     return out;
   });
