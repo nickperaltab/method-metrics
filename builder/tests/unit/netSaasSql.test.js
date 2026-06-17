@@ -238,9 +238,9 @@ describe('buildBookSplitSql (End-MRR current book by health tier)', () => {
   });
 });
 
-describe('buildAccountTableSql — book drill', () => {
+describe('buildAccountTableSql — book drill (End MRR)', () => {
   it('lists current accounts with health score + age, deduped, riskiest first', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: null, filters: {} });
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: null, filters: {} });
     expect(sql).toContain('WITH accts AS');                 // deduped CTE
     expect(sql).toContain('a.health_score');
     expect(sql).toContain('c.p2_saas AS deltaMrr');
@@ -251,18 +251,18 @@ describe('buildAccountTableSql — book drill', () => {
   });
 
   it('reproduces a tier score range when sliced by tier (no HealthTier column)', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'Red', filters: {} });
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', filters: {} });
     expect(sql).toContain('a.health_score >= 10 AND a.health_score < 40');
     expect(sql).not.toContain("= 'Red'"); // never filters a nonexistent column
   });
 
   it('handles the No score tier as IS NULL', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'No score', filters: {} });
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'No score', filters: {} });
     expect(sql).toContain('a.health_score IS NULL');
   });
 
   it('scopes to a tenure cohort when minAgeMonths is set', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'book', slice: 'Red', filters: {}, minAgeMonths: 48 });
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', filters: {}, minAgeMonths: 48 });
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
   });
 });

@@ -49,7 +49,7 @@ export const netSaasScorecard = {
     { key: 'expansion',  label: 'Expansion',  type: 'delta',  sign: +1, column: 'Expansions',    drill: 'expansion' },
     { key: 'downgrade',  label: 'Downgrades', type: 'delta',  sign: -1, column: 'Downgrades',    drill: 'downgrade' },
     { key: 'churn',      label: 'Churn',      type: 'delta',  sign: -1, column: 'Cancellations', drill: 'churn' },
-    { key: 'end',        label: 'End MRR',    type: 'total',  column: 'p2_saas' },
+    { key: 'end',        label: 'End MRR',    type: 'total',  column: 'p2_saas', drill: 'end' },
   ],
 
   drills: {
@@ -79,6 +79,15 @@ export const netSaasScorecard = {
       movementKind: 'downgrade',
       components: ['seats', 'apps', 'price'],
     },
+    // End MRR → the current standing book, split by HealthScore tier (derived,
+    // not a column — fetched via buildBookSplitSql). Click a tier → its accounts.
+    end: {
+      mode: 'dimension',
+      source: 'int_customer_mrr',
+      measure: 'p2_saas',
+      defaultDim: 'HealthTier',
+      dims: ['HealthTier'],
+    },
   },
 
   l3: {
@@ -92,6 +101,8 @@ export const netSaasScorecard = {
       new:        [{ key: 'AttributionChannel', label: 'Channel', format: 'text' },
                    { key: 'signupMonth',        label: 'Signed up', format: 'month' }],
       churn:      [{ key: 'cohortAgeMonths',    label: 'Cohort age (mo)', format: 'number' }],
+      end:        [{ key: 'health_score',       label: 'Health', format: 'number' },
+                   { key: 'age_mo',             label: 'Age (mo)', format: 'number' }],
       expansion:  [{ key: 'seat_mrr', label: 'Seats $', format: 'currency' },
                    { key: 'app_mrr',  label: 'Apps $',  format: 'currency' },
                    { key: 'price_mrr',label: 'Price $', format: 'currency' }],

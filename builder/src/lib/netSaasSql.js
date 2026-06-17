@@ -170,9 +170,10 @@ function bookAgeClause(month, minAgeMonths) {
 export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0 }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
-  // End-MRR "current book" drill: standing accounts (end MRR > 0) at `month`,
-  // optionally sliced to a health tier and/or a tenure cohort, riskiest first.
-  if (drill === 'book') {
+  // End-MRR "current book" drill (drill key matches the End MRR bar): standing
+  // accounts (end MRR > 0) at `month`, optionally sliced to a health tier and/or
+  // a tenure cohort, riskiest first.
+  if (drill === 'end') {
     return `WITH ${accountAttrsCte()}
 SELECT
   c.EntityRecordID AS entity_record_id,

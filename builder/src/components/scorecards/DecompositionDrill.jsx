@@ -21,6 +21,7 @@ import {
   fetchDimSplit,
   fetchComponentSplit,
   fetchAccountTable,
+  fetchBookSplit,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -161,6 +162,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         return fetchComponentSplit({ month: m, movementKind: spec.movementKind, filters, decompView, bridgeView });
       }
       // dimension mode
+      // End MRR "current book" → standing accounts split by HealthScore tier.
+      if (dim === 'HealthTier') return fetchBookSplit({ month: m, filters, bridgeView });
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
       return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
     };

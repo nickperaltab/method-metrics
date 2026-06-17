@@ -19,7 +19,7 @@ export function normalizeBridge(row, config) {
     const field = COLUMN_TO_FIELD[bar.column];
     const raw = Number(row[field] ?? 0);
     const sign = bar.sign ?? 1;            // totals have no sign -> +1
-    return { key: bar.key, label: bar.label, type: bar.type, value: raw * sign };
+    return { key: bar.key, label: bar.label, type: bar.type, value: raw * sign, drill: bar.drill };
   });
 }
 

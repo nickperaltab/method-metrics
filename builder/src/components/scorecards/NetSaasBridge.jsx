@@ -240,7 +240,9 @@ export default function NetSaasBridge({ bars, lens, onBarClick }) {
           based vertical positioning keyed to the same baseline as the SVG. */}
       <div style={{ position: 'absolute', inset: 0, top: 0 }}>
         {placed.map((bar, i) => {
-          const isClickable = bar.type === 'delta' && bar.visible && !bar.hidden;
+          // Clickable when the bar has a configured drill (all delta bars do; the
+          // End MRR total now does too → the current-book health drill).
+          const isClickable = !!bar.drill && bar.visible !== false && !bar.hidden;
           const fill = colorFor(bar);
 
           // Vertical placement: bar top edge (px from SVG top).
