@@ -278,6 +278,26 @@ describe('buildAccountTableSql — book drill (End MRR)', () => {
     expect(sql).toContain('s.seats >= 10');
     expect(sql).not.toContain('s.seats <= '); // no upper bound for 10+
   });
+
+  it('includes a trailing-6-month MRR trend column', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: null, filters: {} });
+    expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 6 MONTH)"); // prior MRR anchor
+    expect(sql).toContain('c.p2_saas - p.prior_mrr');
+    expect(sql).toContain('AS trend6');
+  });
+
+  it('excludes paid-PS accounts when excludePS is set', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: null, filters: {}, excludePS: true });
+    expect(sql).toContain('ps_accts AS');
+    expect(sql).toContain('LEFT JOIN ps_accts pe');
+    expect(sql).toContain('AND pe.EntityRecordID IS NULL');
+  });
+
+  it('excludes DEP accounts via HasDEP when excludeDEP is set', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: null, filters: {}, excludeDEP: true });
+    expect(sql).toContain('AND c.HasDEP = FALSE');
+    expect(sql).not.toContain('ps_accts AS'); // PS CTE only when excludePS
+  });
 });
 
 describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
@@ -296,6 +316,13 @@ describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
   it('honors the tenure-cohort floor', () => {
     const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {}, minAgeMonths: 48 });
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
+  });
+
+  it('applies the untouched-cohort exclusions (no PS, no DEP)', () => {
+    const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {}, excludePS: true, excludeDEP: true });
+    expect(sql).toContain('ps_accts AS');
+    expect(sql).toContain('AND pe.EntityRecordID IS NULL');
+    expect(sql).toContain('AND c.HasDEP = FALSE');
   });
 });
 

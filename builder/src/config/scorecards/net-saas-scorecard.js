@@ -103,6 +103,7 @@ export const netSaasScorecard = {
       churn:      [{ key: 'cohortAgeMonths',    label: 'Cohort age (mo)', format: 'number' }],
       end:        [{ key: 'health_score',       label: 'Health', format: 'number' },
                    { key: 'seats',              label: 'Seats', format: 'number' },
+                   { key: 'trend6',             label: 'Δ 6mo', format: 'delta' },
                    { key: 'age_mo',             label: 'Age (mo)', format: 'number' }],
       expansion:  [{ key: 'seat_mrr', label: 'Seats $', format: 'currency' },
                    { key: 'app_mrr',  label: 'Apps $',  format: 'currency' },

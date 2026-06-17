@@ -90,6 +90,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [l3, setL3] = useState(null);
   const [healthBenchmark, setHealthBenchmark] = useState(null); // churn/yr per tier (End MRR drill)
   const [predictorGrid, setPredictorGrid] = useState(null); // tenure × health churn diagnostic
+  const [bookExclude, setBookExclude] = useState({ ps: false, dep: false }); // "untouched cohort" toggles (End MRR drill)
 
   const [account, setAccount] = useState(null);
   const [accountHistory, setAccountHistory] = useState(null);
@@ -153,7 +154,9 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   }, [bqConnected, cfg, grainCfg]);
 
   // ── L2 fetch (shared by bar click + dim change) ─────────────────────────────
-  const loadL2 = useCallback((barKey, dim) => {
+  // `exclude` defaults to current book toggles; the toggle handler passes the
+  // next value explicitly to avoid a stale closure on the setState.
+  const loadL2 = useCallback((barKey, dim, exclude = bookExclude) => {
     const spec = cfg.drills[barKey];
     if (!spec) return;
     setL2Loading(true);
@@ -176,11 +179,12 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       // End MRR "current book" → standing accounts as a health × license heatmap,
       // annotated with each tier's trailing-year churn rate (the correlation).
       if (dim === 'HealthTier') {
-        fetchHealthChurnBenchmark({ month: m, filters, bridgeView })
+        const ex = { excludePS: exclude.ps, excludeDEP: exclude.dep };
+        fetchHealthChurnBenchmark({ month: m, filters, bridgeView, ...ex })
           .then(setHealthBenchmark).catch(() => setHealthBenchmark(null));
-        fetchPredictorGrid({ month: m, filters, bridgeView })
+        fetchPredictorGrid({ month: m, filters, bridgeView, ...ex })
           .then(setPredictorGrid).catch(() => setPredictorGrid(null));
-        return fetchBookHeatmap({ month: m, filters, bridgeView });
+        return fetchBookHeatmap({ month: m, filters, bridgeView, ...ex });
       }
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
       return fetchDimSplit({ month: m, measure: spec.measure, dim, filters, bridgeView });
@@ -190,7 +194,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       .then((cur) => setL2(cur))
       .catch((e) => setError(e))
       .finally(() => setL2Loading(false));
-  }, [cfg, filters, month, grainCfg]);
+  }, [cfg, filters, month, grainCfg, bookExclude]);
 
   // ── handlers ────────────────────────────────────────────────────────────────
   const clearAccount = () => {
@@ -227,6 +231,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       month, drill: drill.bar, dim: drill.dim,
       slice: patch.slice, licenseBand: patch.licenseBand ?? null,
       filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView,
+      excludePS: bookExclude.ps, excludeDEP: bookExclude.dep,
     })
       .then((rows) => setL3(rows))
       .catch((e) => setError(e))
@@ -237,6 +242,19 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const handleSliceClick = (slice) => { if (drill) loadL3({ slice, licenseBand: null }); };
   // Heatmap cell (End MRR book drill): health tier + license band together.
   const handleCellClick = (tier, band) => { if (drill) loadL3({ slice: tier, licenseBand: band }); };
+
+  // "Untouched cohort" toggles (End MRR drill): exclude paid-PS / DEP accounts.
+  // Pass `next` into loadL2 explicitly (setState is async) and reset the drill.
+  const handleBookExclude = (key, val) => {
+    const next = { ...bookExclude, [key]: val };
+    setBookExclude(next);
+    if (drill?.bar === 'end') {
+      setDrill((d) => ({ ...d, slice: null, licenseBand: null }));
+      setL3(null);
+      clearAccount();
+      loadL2('end', 'HealthTier', next);
+    }
+  };
 
   const handleAccountClick = (row) => {
     if (!row?.entity_record_id) return;
@@ -445,6 +463,24 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
       {/* 4. breadcrumb */}
       {drill && <DrillBreadcrumb trail={trail} onNavigate={handleNavigate} />}
+
+      {/* 4b. "untouched cohort" toggles — only on the End-MRR book drill */}
+      {drill?.bar === 'end' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '8px 0 4px' }}>
+          <span style={{ ...sectionLabel, fontWeight: 700 }}>Cohort:</span>
+          {[['ps', 'Exclude PS'], ['dep', 'Exclude DEP']].map(([k, label]) => (
+            <label key={k} style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={bookExclude[k]} onChange={(e) => handleBookExclude(k, e.target.checked)} />
+              {label}
+            </label>
+          ))}
+          {(bookExclude.ps || bookExclude.dep) && (
+            <span style={{ ...sectionLabel, fontSize: 12, color: '#b45309' }}>
+              showing the untouched book{bookExclude.ps && bookExclude.dep ? ' (no PS, no DEP)' : bookExclude.ps ? ' (no PS)' : ' (no DEP)'}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 5. L2 split — heatmap for the End-MRR book drill, bar/component split otherwise */}
       {drill && (

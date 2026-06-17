@@ -23,7 +23,20 @@ const fmt = {
   number: (v) => (v == null || v === '' || isNaN(v)) ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }),
   month: (v) => (v == null || v === '') ? '—' : String(v).slice(0, 7),
   text: (v) => (v == null || v === '') ? '—' : String(v),
+  // Signed trend: ▲ up / ▼ down / · flat / — new (no prior). Colored in-cell.
+  delta: (v) => {
+    if (v == null || v === '' || isNaN(v)) return '—';
+    const n = Number(v);
+    if (n === 0) return '·';
+    return `${n > 0 ? '▲' : '▼'} ${formatUsd(Math.abs(n))}`;
+  },
 };
+
+// Cell text color for the signed 'delta' (trend) column.
+function deltaColor(v) {
+  if (v == null || v === '' || isNaN(v) || Number(v) === 0) return null;
+  return Number(v) > 0 ? '#059669' : '#dc2626';
+}
 
 const th = { textAlign: 'right', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.04em', borderBottom: '2px solid #e2e5e9', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' };
 const thL = { ...th, textAlign: 'left' };
@@ -102,11 +115,15 @@ export default function NetSaasAccountTable({ rows, drill, config, onRowClick, c
                 onMouseEnter={onRowClick ? (e) => { e.currentTarget.style.background = '#f1f5f9'; } : undefined}
                 onMouseLeave={onRowClick ? (e) => { e.currentTarget.style.background = ''; } : undefined}
               >
-                {columns.map((c) => (
-                  <td key={c.key} style={c.key === firstTextKey ? tdL : td}>
-                    {(fmt[c.format] || fmt.text)(r[c.key])}
-                  </td>
-                ))}
+                {columns.map((c) => {
+                  const dc = c.format === 'delta' ? deltaColor(r[c.key]) : null;
+                  const base = c.key === firstTextKey ? tdL : td;
+                  return (
+                    <td key={c.key} style={dc ? { ...base, color: dc, fontWeight: 700 } : base}>
+                      {(fmt[c.format] || fmt.text)(r[c.key])}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

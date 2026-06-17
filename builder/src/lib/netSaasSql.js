@@ -204,7 +204,31 @@ function licenseBandClause(band, seatsExpr) {
   return parts.length ? `  AND ${parts.join(' AND ')}\n` : '';
 }
 
-export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0, licenseBand = null }) {
+// "Untouched cohort" exclusions for the book views. PS = ever bought paid
+// professional services (the Paid help tier, NOT DEP — that's separate).
+// DEP uses the HasDEP column on the bridge view. Each returns SQL fragments
+// the four book builders splice in: a CTE, a join, and WHERE clauses.
+function psExcludeCte(excludePS) {
+  return excludePS
+    ? `,\nps_accts AS (
+  SELECT DISTINCT EntityRecordID
+  FROM ${fqn('TransLineFlattened')}
+  WHERE Amount > 0
+    AND REGEXP_CONTAINS(ItemFullName, r'Premium App Configuration|Offline Consulting Services|Customization:Meetings|Pro Services:Meetings')
+)`
+    : '';
+}
+function psExcludeJoin(excludePS) {
+  return excludePS ? `LEFT JOIN ps_accts pe ON pe.EntityRecordID = c.EntityRecordID\n` : '';
+}
+function cohortExcludeClause(excludePS, excludeDEP) {
+  let s = '';
+  if (excludePS) s += `  AND pe.EntityRecordID IS NULL\n`;
+  if (excludeDEP) s += `  AND c.HasDEP = FALSE\n`;
+  return s;
+}
+
+export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0, licenseBand = null, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
   // End-MRR "current book" drill (drill key matches the End MRR bar): standing
@@ -213,20 +237,27 @@ export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, b
   // cohort, riskiest first.
   if (drill === 'end') {
     return `WITH ${accountAttrsCte()},
-${seatsCte(month)}
+${seatsCte(month)},
+prior AS (
+  SELECT EntityRecordID, p2_saas AS prior_mrr
+  FROM ${icm}
+  WHERE Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 6 MONTH) AND p2_saas > 0
+)${psExcludeCte(excludePS)}
 SELECT
   c.EntityRecordID AS entity_record_id,
   c.Company, c.Segment, c.UserTier,
   c.p2_saas AS deltaMrr,
   a.health_score,
   IFNULL(s.seats, 0) AS seats,
+  ROUND(c.p2_saas - p.prior_mrr, 0) AS trend6,
   DATE_DIFF(DATE ${sqlStr(month)}, a.first_month, MONTH) AS age_mo
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN seatcount s ON s.EntityRecordID = c.EntityRecordID
-WHERE c.Month = ${sqlStr(month)}
+LEFT JOIN prior p ON p.EntityRecordID = c.EntityRecordID
+${psExcludeJoin(excludePS)}WHERE c.Month = ${sqlStr(month)}
   AND c.p2_saas > 0
-${bookAgeClause(month, minAgeMonths)}${slice ? healthTierClause(slice, 'a.health_score') : ''}${licenseBand ? licenseBandClause(licenseBand, 's.seats') : ''}${buildFilterClauses(filters, 'c')}
+${bookAgeClause(month, minAgeMonths)}${slice ? healthTierClause(slice, 'a.health_score') : ''}${licenseBand ? licenseBandClause(licenseBand, 's.seats') : ''}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 ORDER BY a.health_score IS NULL, a.health_score ASC, c.p2_saas DESC
 LIMIT 50`.trimEnd();
   }
@@ -324,10 +355,10 @@ ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 // L2 for the End-MRR drill, 2-D heatmap form: current book split by health tier
 // (rows) × license band (cols), each cell carrying account count + MRR. Click a
 // cell → its accounts (buildAccountTableSql with both slice + licenseBand).
-export function buildBookHeatmapSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+export function buildBookHeatmapSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   return `WITH ${accountAttrsCte()},
-${seatsCte(month)}
+${seatsCte(month)}${psExcludeCte(excludePS)}
 SELECT
   ${HEALTH_TIER_CASE} AS tier,
   ${LICENSE_BAND_CASE} AS license_band,
@@ -336,9 +367,9 @@ SELECT
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN seatcount s ON s.EntityRecordID = c.EntityRecordID
-WHERE c.Month = ${sqlStr(month)}
+${psExcludeJoin(excludePS)}WHERE c.Month = ${sqlStr(month)}
   AND c.p2_saas > 0
-${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+${bookAgeClause(month, minAgeMonths)}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 GROUP BY tier, license_band, ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}
 ORDER BY ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}`.trimEnd();
 }
@@ -348,13 +379,13 @@ ORDER BY ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}`.trimEnd();
 // paying at `month`. Health tier is the current Account snapshot (HealthScore
 // isn't historized), so read it as "tier today × survived the last year" — a
 // stable correlation, not a forward forecast. Same tiers as the heatmap rows.
-export function buildHealthChurnBenchmarkSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+export function buildHealthChurnBenchmarkSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   return `WITH ${accountAttrsCte()},
 kept AS (
   SELECT EntityRecordID FROM ${icm}
   WHERE Month = ${sqlStr(month)} AND p2_saas > 0
-)
+)${psExcludeCte(excludePS)}
 SELECT
   ${HEALTH_TIER_CASE} AS tier,
   COUNT(*) AS n,
@@ -362,9 +393,9 @@ SELECT
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
-WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
+${psExcludeJoin(excludePS)}WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
   AND c.p2_saas > 0
-${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+${bookAgeClause(month, minAgeMonths)}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 GROUP BY tier, ${HEALTH_TIER_RANK}
 ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 }
@@ -375,11 +406,11 @@ ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 // before `month`; churned if not paying at `month`. MRR-weighted churn = start
 // MRR of churned ÷ start MRR. Tenure is measured at the anchor (clean point-in-
 // time); health is the current snapshot (correlation, not forecast).
-export function buildPredictorGridSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0 }) {
+export function buildPredictorGridSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   const anchorTenure = `DATE_DIFF(DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH), a.first_month, MONTH)`;
   return `WITH ${accountAttrsCte()},
-kept AS (SELECT EntityRecordID FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)
+kept AS (SELECT EntityRecordID FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)${psExcludeCte(excludePS)}
 SELECT
   CASE WHEN ${anchorTenure} <= 11 THEN '<1yr'
        WHEN ${anchorTenure} <= 35 THEN '1-3yr'
@@ -393,9 +424,9 @@ SELECT
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
-WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
+${psExcludeJoin(excludePS)}WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
   AND c.p2_saas > 0
-${bookAgeClause(month, minAgeMonths)}${buildFilterClauses(filters, 'c')}
+${bookAgeClause(month, minAgeMonths)}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 GROUP BY tenure_band, health_band
 ORDER BY tenure_band, health_band`.trimEnd();
 }
