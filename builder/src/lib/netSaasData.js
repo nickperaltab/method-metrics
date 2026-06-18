@@ -15,6 +15,7 @@ import {
   buildBookHeatmapSql,
   buildHealthChurnBenchmarkSql,
   buildPredictorGridSql,
+  buildPredictorAccountsSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -91,10 +92,24 @@ export async function fetchHealthChurnBenchmark({ month, filters, bridgeView, mi
   return out;
 }
 
-// Predictor diagnostic: trailing-year MRR churn by tenure × health band.
+// Bleeding map: trailing-year gross MRR loss (churn + downgrades) by tenure ×
+// health band. `lost` = dollars, `lossPct` = % of the band's starting MRR.
 export async function fetchPredictorGrid({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }) {
   const { rows } = await queryBq(buildPredictorGridSql({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }));
-  return rows.map((r) => ({ tenureBand: r.tenure_band, healthBand: r.health_band, n: num(r.n), churn: num(r.mrr_churn_pct) }));
+  return rows.map((r) => ({ tenureBand: r.tenure_band, healthBand: r.health_band, n: num(r.n), lost: num(r.lost_mrr), lossPct: num(r.loss_pct) }));
+}
+
+// Accounts behind one bleeding-map cell: the trailing-year cohort in that
+// tenure × health band, each with MRR a year ago → now, $ lost, and outcome.
+export async function fetchPredictorAccounts({ month, tenureBand, healthBand, filters, bridgeView, excludePS, excludeDEP }) {
+  const { rows } = await queryBq(buildPredictorAccountsSql({ month, tenureBand, healthBand, filters, bridgeView, excludePS, excludeDEP }));
+  return rows.map((r) => ({
+    ...r,
+    start_mrr: num(r.start_mrr),
+    end_mrr: num(r.end_mrr),
+    lost_mrr: num(r.lost_mrr),
+    health_score: r.health_score == null ? null : num(r.health_score),
+  }));
 }
 
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {

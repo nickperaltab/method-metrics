@@ -406,21 +406,27 @@ ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 // before `month`; churned if not paying at `month`. MRR-weighted churn = start
 // MRR of churned ÷ start MRR. Tenure is measured at the anchor (clean point-in-
 // time); health is the current snapshot (correlation, not forecast).
+// Gross retention loss = full MRR of churned accounts + the shed delta of
+// survivors who downgraded (expansion is NOT netted — this is bleeding, not net).
+const GROSS_LOSS = 'SUM(GREATEST(c.p2_saas - IFNULL(k.end_mrr, 0), 0))';
+
 export function buildPredictorGridSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   const anchorTenure = `DATE_DIFF(DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH), a.first_month, MONTH)`;
   return `WITH ${accountAttrsCte()},
-kept AS (SELECT EntityRecordID FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)${psExcludeCte(excludePS)}
+kept AS (SELECT EntityRecordID, p2_saas AS end_mrr FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)${psExcludeCte(excludePS)}
 SELECT
   CASE WHEN ${anchorTenure} <= 11 THEN '<1yr'
-       WHEN ${anchorTenure} <= 35 THEN '1-3yr'
-       ELSE '4yr+' END AS tenure_band,
+       WHEN ${anchorTenure} <= 35 THEN '1-2yr'
+       ELSE '3yr+' END AS tenure_band,
   CASE WHEN a.health_score IS NULL THEN 'No score'
-       WHEN a.health_score < 40 THEN '<40'
-       WHEN a.health_score < 70 THEN '40-69'
+       WHEN a.health_score < 30 THEN '<30'
+       WHEN a.health_score < 50 THEN '30-49'
+       WHEN a.health_score < 70 THEN '50-69'
        ELSE '70+' END AS health_band,
   COUNT(*) AS n,
-  ROUND(100 * SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0)) / NULLIF(SUM(c.p2_saas), 0), 1) AS mrr_churn_pct
+  ROUND(${GROSS_LOSS}, 0) AS lost_mrr,
+  ROUND(100 * ${GROSS_LOSS} / NULLIF(SUM(c.p2_saas), 0), 1) AS loss_pct
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
@@ -429,6 +435,51 @@ ${psExcludeJoin(excludePS)}WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTER
 ${bookAgeClause(month, minAgeMonths)}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 GROUP BY tenure_band, health_band
 ORDER BY tenure_band, health_band`.trimEnd();
+}
+
+// Tenure / coarse-health band clauses for drilling a predictor-grid cell.
+function predictorTenureClause(band, ageExpr) {
+  if (band === '<1yr') return `  AND ${ageExpr} <= 11\n`;
+  if (band === '1-2yr') return `  AND ${ageExpr} BETWEEN 12 AND 35\n`;
+  if (band === '3yr+') return `  AND ${ageExpr} >= 36\n`;
+  return '';
+}
+function healthCoarseClause(band, hsExpr) {
+  if (band === 'No score') return `  AND ${hsExpr} IS NULL\n`;
+  if (band === '<30') return `  AND ${hsExpr} < 30\n`;
+  if (band === '30-49') return `  AND ${hsExpr} >= 30 AND ${hsExpr} < 50\n`;
+  if (band === '50-69') return `  AND ${hsExpr} >= 50 AND ${hsExpr} < 70\n`;
+  if (band === '70+') return `  AND ${hsExpr} >= 70\n`;
+  return '';
+}
+
+// Accounts behind a predictor-grid cell: the trailing-year cohort (paying 12mo
+// before `month`) in a tenure × health band, with what happened to each — MRR a
+// year ago, MRR now, $ lost, and outcome (Churned / Downgraded / Held-Grew),
+// ordered by $ lost so the biggest bleeders surface first.
+export function buildPredictorAccountsSql({ month, tenureBand, healthBand, filters = {}, bridgeView = 'int_customer_mrr', excludePS = false, excludeDEP = false }) {
+  const icm = fqn(bridgeView);
+  const anchorTenure = `DATE_DIFF(DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH), a.first_month, MONTH)`;
+  return `WITH ${accountAttrsCte()},
+nowmrr AS (SELECT EntityRecordID, p2_saas AS end_mrr FROM ${icm} WHERE Month = ${sqlStr(month)} AND p2_saas > 0)${psExcludeCte(excludePS)}
+SELECT
+  c.EntityRecordID AS entity_record_id,
+  c.Company, c.Segment, c.UserTier,
+  ROUND(c.p2_saas, 0) AS start_mrr,
+  ROUND(IFNULL(n.end_mrr, 0), 0) AS end_mrr,
+  ROUND(GREATEST(c.p2_saas - IFNULL(n.end_mrr, 0), 0), 0) AS lost_mrr,
+  CASE WHEN n.EntityRecordID IS NULL THEN 'Churned'
+       WHEN n.end_mrr < c.p2_saas THEN 'Downgraded'
+       ELSE 'Held/Grew' END AS outcome,
+  a.health_score
+FROM ${icm} c
+JOIN accts a ON a.EntityRecordID = c.EntityRecordID
+LEFT JOIN nowmrr n ON n.EntityRecordID = c.EntityRecordID
+${psExcludeJoin(excludePS)}WHERE c.Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 12 MONTH)
+  AND c.p2_saas > 0
+${predictorTenureClause(tenureBand, anchorTenure)}${healthCoarseClause(healthBand, 'a.health_score')}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
+ORDER BY lost_mrr DESC, c.p2_saas DESC
+LIMIT 50`.trimEnd();
 }
 
 // Distinct values per filter dimension, scoped to recent months for relevance.

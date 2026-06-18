@@ -26,6 +26,7 @@ import {
   fetchBookHeatmap,
   fetchHealthChurnBenchmark,
   fetchPredictorGrid,
+  fetchPredictorAccounts,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -70,6 +71,19 @@ function isAuthError(err) {
 const sectionLabel = {
   fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', sans-serif",
 };
+
+// Columns for the bleeding-map cell drill. Its rows are a backward-looking
+// cohort (paying a year ago) with start→now MRR + outcome — a different shape
+// than the config.l3 current-book columns, so we hand them in explicitly.
+const PREDICTOR_COLS = [
+  { key: 'Company',    label: 'Company',       format: 'text' },
+  { key: 'lost_mrr',   label: '$ Lost',        format: 'currency' },
+  { key: 'start_mrr',  label: 'MRR (1yr ago)', format: 'currency' },
+  { key: 'end_mrr',    label: 'MRR (now)',     format: 'currency' },
+  { key: 'outcome',    label: 'Outcome',       format: 'text' },
+  { key: 'health_score', label: 'Health',      format: 'number' },
+  { key: 'Segment',    label: 'Segment',       format: 'text' },
+];
 
 export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const cfg = config;
@@ -223,7 +237,8 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   };
 
   const loadL3 = (patch) => {
-    setDrill((d) => ({ ...d, ...patch }));
+    // Clear any prior bleeding-map cell when drilling a normal slice/heatmap cell.
+    setDrill((d) => ({ ...d, predictor: null, ...patch }));
     setL3Loading(true);
     setError(null);
     clearAccount();
@@ -242,6 +257,25 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const handleSliceClick = (slice) => { if (drill) loadL3({ slice, licenseBand: null }); };
   // Heatmap cell (End MRR book drill): health tier + license band together.
   const handleCellClick = (tier, band) => { if (drill) loadL3({ slice: tier, licenseBand: band }); };
+
+  // Bleeding-map cell (tenure × health): drill the trailing-year cohort that bled
+  // in that band → accounts with start→now MRR + outcome. Backward-looking cohort
+  // + custom columns, so it bypasses loadL3 (which queries the current book).
+  const handlePredictorCellClick = (tenureBand, healthBand) => {
+    if (!drill) return;
+    setDrill((d) => ({ ...d, slice: `${tenureBand} · ${healthBand}`, licenseBand: null, predictor: { tenureBand, healthBand } }));
+    setL3(null);
+    setL3Loading(true);
+    setError(null);
+    clearAccount();
+    fetchPredictorAccounts({
+      month, tenureBand, healthBand, filters,
+      bridgeView: grainCfg.bridgeView, excludePS: bookExclude.ps, excludeDEP: bookExclude.dep,
+    })
+      .then((rows) => setL3(rows))
+      .catch((e) => setError(e))
+      .finally(() => setL3Loading(false));
+  };
 
   // "Untouched cohort" toggles (End MRR drill): exclude paid-PS / DEP accounts.
   // Pass `next` into loadL2 explicitly (setState is async) and reset the drill.
@@ -487,7 +521,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
           : drill.bar === 'end'
-            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /><PredictorGrid data={predictorGrid} /></ChartErrorBoundary>
+            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /><PredictorGrid data={predictorGrid} onCellClick={handlePredictorCellClick} /></ChartErrorBoundary>
             : (
               <ChartErrorBoundary>
                 <L2Panel
@@ -509,7 +543,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {drill?.slice && (
         l3Loading && !l3
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} onRowClick={handleAccountClick} /></ChartErrorBoundary>
+          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} columns={drill.predictor ? PREDICTOR_COLS : undefined} onRowClick={handleAccountClick} /></ChartErrorBoundary>
       )}
 
       {/* 7. L4 account detail (history timeline) */}

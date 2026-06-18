@@ -1,19 +1,27 @@
-// PredictorGrid — a small diagnostic shown under the End-MRR heatmap. Answers
-// "what predicts MRR churn better, tenure or health?" with the control test:
-// trailing-year MRR churn by tenure band (rows) × health band (cols). Health
-// dominates (columns swing hard), tenure adds a smaller within-unhealthy effect.
-// Display-only; cells colored by churn rate.
+// PredictorGrid — the "bleeding map" shown under the End-MRR heatmap. Answers
+// "where's the biggest dollar bleeding?" with trailing-year gross MRR loss
+// (full churn + downgrades — expansion is NOT netted) by tenure band (rows) ×
+// health band (cols). Toggle $ lost vs % of the band's starting MRR. Reddest =
+// most lost. Click a cell to drill into the accounts that bled.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
-const TENURE_ORDER = ['<1yr', '1-3yr', '4yr+'];
-const HEALTH_ORDER = ['<40', '40-69', '70+', 'No score'];
-const HEALTH_LABEL = { '<40': 'Health <40', '40-69': 'Health 40–69', '70+': 'Health 70+', 'No score': 'No score' };
+const TENURE_ORDER = ['<1yr', '1-2yr', '3yr+'];
+const HEALTH_ORDER = ['<30', '30-49', '50-69', '70+', 'No score'];
+const HEALTH_LABEL = { '<30': 'Health <30', '30-49': 'Health 30–49', '50-69': 'Health 50–69', '70+': 'Health 70+', 'No score': 'No score' };
 
 const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', sans-serif" };
 
-// Green (low churn) → amber → red (high churn). frac = churn/maxChurn.
-function churnBg(frac) {
+function formatUsd(v) {
+  if (v == null || isNaN(v)) return '—';
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${(abs / 1_000).toFixed(0)}K`;
+  return `$${Math.round(abs)}`;
+}
+
+// Green (low loss) → amber → red (high loss). frac = value/max.
+function lossBg(frac) {
   if (frac <= 0) return '#ecfdf5';
   const stops = [[0, [167, 243, 208]], [0.4, [253, 230, 138]], [0.7, [251, 146, 60]], [1, [239, 68, 68]]];
   let lo = stops[0], hi = stops[stops.length - 1];
@@ -25,36 +33,54 @@ function churnBg(frac) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-export default function PredictorGrid({ data }) {
-  const { grid, tenures, healths, maxChurn } = useMemo(() => {
+export default function PredictorGrid({ data, onCellClick }) {
+  const [metric, setMetric] = useState('dollars'); // 'dollars' | 'rate'
+  const { grid, tenures, healths, maxVal } = useMemo(() => {
     const map = {};
     const tSet = new Set(), hSet = new Set();
     let mx = 0;
     for (const r of data || []) {
       map[`${r.tenureBand}|${r.healthBand}`] = r;
       tSet.add(r.tenureBand); hSet.add(r.healthBand);
-      mx = Math.max(mx, r.churn || 0);
+      mx = Math.max(mx, metric === 'dollars' ? (r.lost || 0) : (r.lossPct || 0));
     }
     return {
       grid: map,
       tenures: TENURE_ORDER.filter((t) => tSet.has(t)),
       healths: HEALTH_ORDER.filter((h) => hSet.has(h)),
-      maxChurn: mx || 1,
+      maxVal: mx || 1,
     };
-  }, [data]);
+  }, [data, metric]);
 
   if (!data || data.length === 0) return null;
+
+  const clickable = typeof onCellClick === 'function';
 
   return (
     <div style={{ margin: '18px 0 8px' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 2 }}>
-        What predicts MRR churn — health or tenure?
+        Where’s the bleeding? Gross MRR lost by tenure × health
       </div>
       <div style={{ ...sectionLabel, fontSize: 11, marginBottom: 8 }}>
-        Trailing-year MRR churn by tenure × health. Read across a row: health swings churn hard (it's the stronger
-        signal). Read down a column: tenure adds a smaller effect, mostly among unhealthy accounts. Health is a current
-        snapshot, so read as correlation, not forecast.
+        Trailing-year gross retention loss — full churn + downgrades, expansion not netted — per tenure × health band.
+        Reddest = most lost. Toggle $ lost vs % of the band’s starting MRR. Click a cell to see the accounts that bled.
+        Health is a current snapshot, so read as correlation, not forecast.
       </div>
+
+      {/* $ / % toggle */}
+      <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid #d1d5db', marginBottom: 10 }}>
+        {[['dollars', '$ lost'], ['rate', '% lost']].map(([k, label]) => (
+          <button key={k} onClick={() => setMetric(k)}
+            style={{
+              padding: '3px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+              fontFamily: "'DM Sans', sans-serif", background: metric === k ? '#059669' : '#fff',
+              color: metric === k ? '#fff' : '#374151',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <table style={{ borderCollapse: 'separate', borderSpacing: 3, fontFamily: "'DM Sans', sans-serif" }}>
         <thead>
           <tr>
@@ -73,13 +99,18 @@ export default function PredictorGrid({ data }) {
               {healths.map((h) => {
                 const r = grid[`${t}|${h}`];
                 if (!r) return <td key={h} style={{ background: '#f8fafc', borderRadius: 6 }} />;
-                const frac = (r.churn || 0) / maxChurn;
+                const val = metric === 'dollars' ? (r.lost || 0) : (r.lossPct || 0);
+                const frac = val / maxVal;
                 const dark = frac > 0.6;
+                const display = metric === 'dollars' ? formatUsd(r.lost) : `${r.lossPct}%`;
+                const sub = metric === 'dollars' ? `${r.lossPct}% · n=${r.n}` : `${formatUsd(r.lost)} · n=${r.n}`;
                 return (
-                  <td key={h} title={`${t} · ${HEALTH_LABEL[h]} → ${r.churn}% MRR churn (n=${r.n})`}
-                    style={{ background: churnBg(frac), borderRadius: 6, padding: '7px 10px', textAlign: 'center', minWidth: 92 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: dark ? '#fff' : '#111827' }}>{r.churn}%</div>
-                    <div style={{ fontSize: 10, color: dark ? 'rgba(255,255,255,.85)' : '#6b7280' }}>n={r.n}</div>
+                  <td key={h}
+                    onClick={clickable ? () => onCellClick(t, h) : undefined}
+                    title={`${t} · ${HEALTH_LABEL[h] || h} → ${formatUsd(r.lost)} lost (${r.lossPct}% of band, n=${r.n})${clickable ? ' — click to see accounts' : ''}`}
+                    style={{ background: lossBg(frac), borderRadius: 6, padding: '7px 10px', textAlign: 'center', minWidth: 92, cursor: clickable ? 'pointer' : 'default' }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: dark ? '#fff' : '#111827' }}>{display}</div>
+                    <div style={{ fontSize: 10, color: dark ? 'rgba(255,255,255,.85)' : '#6b7280' }}>{sub}</div>
                   </td>
                 );
               })}

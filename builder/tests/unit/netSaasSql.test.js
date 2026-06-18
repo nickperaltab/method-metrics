@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildHealthChurnBenchmarkSql, buildPredictorGridSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
+import { buildBridgeSql, buildDimSplitSql, buildComponentSplitSql, buildAccountTableSql, buildBookSplitSql, buildBookHeatmapSql, buildHealthChurnBenchmarkSql, buildPredictorGridSql, buildPredictorAccountsSql, buildCohortAgeChurnSql, buildDistinctValuesSql, buildRateSql, buildAccountHistorySql, buildAccountLifecycleSql, buildAccountActivitiesSql, buildAccountCasesSql } from '../../src/lib/netSaasSql.js';
 
 describe('buildBridgeSql', () => {
   it('selects all six bridge aggregates for the given month, no filters', () => {
@@ -337,15 +337,74 @@ describe('buildHealthChurnBenchmarkSql (trailing-year churn by health tier)', ()
   });
 });
 
-describe('buildPredictorGridSql (tenure × health churn diagnostic)', () => {
-  it('buckets MRR churn by tenure (measured at anchor) × health band', () => {
+describe('buildPredictorGridSql (tenure × health bleeding map)', () => {
+  it('buckets gross MRR loss by tenure (measured at anchor) × health band', () => {
     const sql = buildPredictorGridSql({ month: '2026-05-01', filters: {} });
     expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 12 MONTH)"); // anchor a year back
     expect(sql).toContain('AS tenure_band');
     expect(sql).toContain('AS health_band');
-    expect(sql).toContain('SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0))'); // MRR-weighted churn
-    expect(sql).toContain('NULLIF(SUM(c.p2_saas), 0)');
     expect(sql).toContain('GROUP BY tenure_band, health_band');
+  });
+
+  it('reports gross loss = churn + downgrades (expansion not netted), as $ and %', () => {
+    const sql = buildPredictorGridSql({ month: '2026-05-01', filters: {} });
+    // GREATEST(start - end, 0): full start for churn (end=0 via IFNULL), shed delta
+    // for downgrades, 0 for held/grew — so expansion never offsets the loss.
+    expect(sql).toContain('GREATEST(c.p2_saas - IFNULL(k.end_mrr, 0), 0)');
+    expect(sql).toContain('AS lost_mrr');
+    expect(sql).toContain('AS loss_pct');
+    expect(sql).toContain('NULLIF(SUM(c.p2_saas), 0)');
+    // `kept` must carry end MRR so survivors' shed can be computed.
+    expect(sql).toContain('p2_saas AS end_mrr');
+  });
+
+  it('threads the no-PS / no-DEP cohort exclusions', () => {
+    const sql = buildPredictorGridSql({ month: '2026-05-01', filters: {}, excludePS: true, excludeDEP: true });
+    expect(sql).toContain('ps_accts');
+    expect(sql).toContain('HasDEP');
+  });
+});
+
+describe('buildPredictorAccountsSql (bleeding-map cell drill)', () => {
+  it('lists the trailing-year cohort in a tenure × health cell with start→now MRR + outcome', () => {
+    const sql = buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '3yr+', healthBand: '<30', filters: {} });
+    expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 12 MONTH)"); // cohort anchored a year back
+    expect(sql).toContain('c.EntityRecordID AS entity_record_id'); // clickable into L4 detail
+    expect(sql).toContain('AS start_mrr');
+    expect(sql).toContain('AS end_mrr');
+    expect(sql).toContain('GREATEST(c.p2_saas - IFNULL(n.end_mrr, 0), 0)');
+    expect(sql).toContain('AS lost_mrr');
+    expect(sql).toContain("'Churned'");
+    expect(sql).toContain("'Downgraded'");
+    expect(sql).toContain('ORDER BY lost_mrr DESC');
+    expect(sql).toContain('LIMIT 50');
+  });
+
+  it('applies the tenure band clause at anchor (3yr+ → >= 36 months)', () => {
+    const sql = buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '3yr+', healthBand: '<30', filters: {} });
+    expect(sql).toContain('>= 36');
+    expect(sql).toContain('a.health_score < 30');
+  });
+
+  it('maps each tenure band to its month range', () => {
+    expect(buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '<1yr', healthBand: '70+', filters: {} })).toContain('<= 11');
+    expect(buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '1-2yr', healthBand: '50-69', filters: {} })).toContain('BETWEEN 12 AND 35');
+  });
+
+  it('maps the mid health band to its score range (30–49)', () => {
+    const sql = buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '<1yr', healthBand: '30-49', filters: {} });
+    expect(sql).toContain('a.health_score >= 30 AND a.health_score < 50');
+  });
+
+  it('handles the No-score health band', () => {
+    const sql = buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '3yr+', healthBand: 'No score', filters: {} });
+    expect(sql).toContain('a.health_score IS NULL');
+  });
+
+  it('threads the no-PS / no-DEP cohort exclusions', () => {
+    const sql = buildPredictorAccountsSql({ month: '2026-05-01', tenureBand: '3yr+', healthBand: '<30', filters: {}, excludePS: true, excludeDEP: true });
+    expect(sql).toContain('ps_accts');
+    expect(sql).toContain('HasDEP');
   });
 });
 
