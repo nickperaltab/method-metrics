@@ -2,15 +2,15 @@
 // standing book as a health-tier (rows) × license-band (cols) grid. Each cell
 // shows account count + MRR; clicking a cell drills to that segment's accounts.
 //
-// Pure display: takes the rows from fetchBookHeatmap ([{tier, licenseBand,
+// Pure display: takes the rows from fetchBookHeatmap ([{tier, sizeBand,
 // accounts, mrr}]) and a metric toggle. Color encodes the chosen metric so the
-// concentration reads at a glance (cf. the Health × License heatmap mockup).
+// concentration reads at a glance.
 
 import { useMemo, useState } from 'react';
 
 // Row order: healthiest at top (mirrors the mockup). Cols left→right by size.
 const TIER_ORDER = ['Green', 'Yellow', 'Orange', 'Red', 'Critical', 'No score'];
-const BAND_ORDER = ['1', '2', '3', '4-5', '6-9', '10+', '0'];
+const BAND_ORDER = ['<$100', '$100-300', '$300-1k', '$1k+'];
 const TIER_COLOR = {
   Green: '#059669', Yellow: '#ca8a04', Orange: '#ea580c', Red: '#dc2626',
   Critical: '#991b1b', 'No score': '#6b7280',
@@ -20,7 +20,7 @@ const TIER_RANGE = {
   Green: '70–100', Yellow: '55–69', Orange: '40–54', Red: '10–39',
   Critical: '0–9', 'No score': 'n/a',
 };
-const BAND_LABEL = { '0': 'No bill', '10+': '10+' };
+const BAND_LABEL = {}; // MRR-size bands display as-is
 
 function fmtUsd(v) {
   if (!v) return '$0';
@@ -57,10 +57,10 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
     let mx = 0;
     const colTot = {};
     for (const r of data || []) {
-      map[`${r.tier}|${r.licenseBand}`] = r;
-      bandSet.add(r.licenseBand); tierSet.add(r.tier);
+      map[`${r.tier}|${r.sizeBand}`] = r;
+      bandSet.add(r.sizeBand); tierSet.add(r.tier);
       mx = Math.max(mx, r[metric] || 0);
-      colTot[r.licenseBand] = (colTot[r.licenseBand] || 0) + (r[metric] || 0);
+      colTot[r.sizeBand] = (colTot[r.sizeBand] || 0) + (r[metric] || 0);
     }
     return {
       grid: map,
@@ -82,7 +82,7 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
     <div style={{ margin: '12px 0 8px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <span style={{ ...sectionLabel, fontWeight: 700, color: '#1a1a1a' }}>
-          Current book · health × licenses
+          Current book · health × MRR size
         </span>
         <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid #d1d5db' }}>
           {[['mrr', 'MRR'], ['accounts', 'Accounts']].map(([k, lbl]) => (
@@ -104,7 +104,7 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
         <table style={{ borderCollapse: 'separate', borderSpacing: 3, fontFamily: "'DM Sans', sans-serif" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', fontSize: 11, color: '#6b7280', padding: '0 8px' }}>Health \ Licenses</th>
+              <th style={{ textAlign: 'left', fontSize: 11, color: '#6b7280', padding: '0 8px' }}>Health \ MRR size</th>
               <th style={{ fontSize: 11, color: '#6b7280', padding: '4px 8px' }} title="Trailing-12-month churn rate for accounts in this health tier">Churn&nbsp;/&nbsp;yr</th>
               {bands.map((b) => (
                 <th key={b} style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '4px 8px', minWidth: 78 }}>
@@ -133,7 +133,7 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
                   return (
                     <td key={b}
                       onClick={() => onCellClick?.(t, b)}
-                      title={`${t} · ${b} licenses → ${r.accounts} accounts · ${fmtUsd(r.mrr)}`}
+                      title={`${t} · ${b} MRR → ${r.accounts} accounts · ${fmtUsd(r.mrr)}`}
                       style={{
                         background: cellBg(frac), borderRadius: 6, padding: '6px 8px', cursor: 'pointer',
                         textAlign: 'center', minWidth: 78,

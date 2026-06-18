@@ -266,17 +266,16 @@ describe('buildAccountTableSql — book drill (End MRR)', () => {
     expect(sql).toContain("DATE_DIFF(DATE '2026-05-01', a.first_month, MONTH) >= 48");
   });
 
-  it('filters by license band when a heatmap cell is drilled (joins seatcount)', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', licenseBand: '4-5', filters: {} });
-    expect(sql).toContain('seatcount AS');
-    expect(sql).toContain('s.seats >= 4 AND s.seats <= 5');
-    expect(sql).toContain('IFNULL(s.seats, 0) AS seats');
+  it('filters by MRR-size band when a heatmap cell is drilled (still selects seats)', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Red', sizeBand: '$300-1k', filters: {} });
+    expect(sql).toContain('c.p2_saas >= 300 AND c.p2_saas < 1000');
+    expect(sql).toContain('IFNULL(s.seats, 0) AS seats'); // seats column still present
   });
 
-  it('treats the 10+ band as an open upper bound', () => {
-    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Green', licenseBand: '10+', filters: {} });
-    expect(sql).toContain('s.seats >= 10');
-    expect(sql).not.toContain('s.seats <= '); // no upper bound for 10+
+  it('treats the $1k+ band as an open upper bound', () => {
+    const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: 'Green', sizeBand: '$1k+', filters: {} });
+    expect(sql).toContain('c.p2_saas >= 1000');
+    expect(sql).not.toContain('c.p2_saas <'); // no upper bound for $1k+
   });
 
   it('includes a trailing-6-month MRR trend column', () => {
@@ -300,17 +299,16 @@ describe('buildAccountTableSql — book drill (End MRR)', () => {
   });
 });
 
-describe('buildBookHeatmapSql (End MRR health × license heatmap)', () => {
-  it('groups the current book by health tier × license band with count + MRR', () => {
+describe('buildBookHeatmapSql (End MRR health × MRR-size heatmap)', () => {
+  it('groups the current book by health tier × MRR-size band with count + MRR', () => {
     const sql = buildBookHeatmapSql({ month: '2026-05-01', filters: {} });
     expect(sql).toContain('accts AS');       // deduped health
-    expect(sql).toContain('seatcount AS');   // seats
     expect(sql).toContain('AS tier');
-    expect(sql).toContain('AS license_band');
+    expect(sql).toContain('AS mrr_band');
     expect(sql).toContain('COUNT(*) AS accounts');
     expect(sql).toContain('SUM(c.p2_saas) AS mrr');
     expect(sql).toContain('c.p2_saas > 0');
-    expect(sql).toContain('LEFT JOIN seatcount s');
+    expect(sql).not.toContain('seatcount'); // size axis is MRR, not seats
   });
 
   it('honors the tenure-cohort floor', () => {

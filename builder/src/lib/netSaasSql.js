@@ -168,7 +168,8 @@ function bookAgeClause(month, minAgeMonths) {
 }
 
 // Paid seats per account at `month` (billed UserPaidCount). Backs the End-MRR
-// health × license heatmap and the Seats column on the book account list.
+// Seats per account at `month` — for the Seats column on the book account list
+// (the heatmap's size axis is MRR, not seats; see MRR_BAND_CASE).
 function seatsCte(month) {
   return `seatcount AS (
   SELECT EntityRecordID, MAX(IFNULL(UserPaidCount, 0)) AS seats
@@ -177,30 +178,27 @@ function seatsCte(month) {
   GROUP BY EntityRecordID
 )`;
 }
-// License bands. 10+ = >=10 (matches our standing seat-utilization convention,
-// so '6-9' rather than the screenshot's overlapping '6-10'). Alias `s` = seatcount.
-const LICENSE_BAND_CASE = `CASE
-    WHEN s.seats >= 10 THEN '10+'
-    WHEN s.seats >= 6 THEN '6-9'
-    WHEN s.seats >= 4 THEN '4-5'
-    WHEN s.seats >= 1 THEN CAST(s.seats AS STRING)
-    ELSE '0' END`;
-const LICENSE_BAND_RANK = `CASE
-    WHEN s.seats >= 10 THEN 6
-    WHEN s.seats >= 6 THEN 5
-    WHEN s.seats >= 4 THEN 4
-    WHEN s.seats = 3 THEN 3
-    WHEN s.seats = 2 THEN 2
-    WHEN s.seats = 1 THEN 1
-    ELSE 0 END`;
-const LICENSE_BAND_BOUNDS = { '1': [1, 1], '2': [2, 2], '3': [3, 3], '4-5': [4, 5], '6-9': [6, 9], '10+': [10, null] };
-function licenseBandClause(band, seatsExpr) {
-  const b = LICENSE_BAND_BOUNDS[band];
+// MRR-size bands — the account's own SaaS MRR at the anchor month (`c.p2_saas`).
+// The grid's second axis: where the dollars concentrate (vs health, the risk axis).
+// Bands chosen from the size distribution: <$100 / $100-300 / $300-1k / $1k+.
+const MRR_BAND_CASE = `CASE
+    WHEN c.p2_saas >= 1000 THEN '$1k+'
+    WHEN c.p2_saas >= 300 THEN '$300-1k'
+    WHEN c.p2_saas >= 100 THEN '$100-300'
+    ELSE '<$100' END`;
+const MRR_BAND_RANK = `CASE
+    WHEN c.p2_saas >= 1000 THEN 4
+    WHEN c.p2_saas >= 300 THEN 3
+    WHEN c.p2_saas >= 100 THEN 2
+    ELSE 1 END`;
+const MRR_BAND_BOUNDS = { '<$100': [null, 100], '$100-300': [100, 300], '$300-1k': [300, 1000], '$1k+': [1000, null] };
+function mrrBandClause(band, mrrExpr) {
+  const b = MRR_BAND_BOUNDS[band];
   if (!b) return '';
   const [lo, hi] = b;
   const parts = [];
-  if (lo != null) parts.push(`${seatsExpr} >= ${lo}`);
-  if (hi != null) parts.push(`${seatsExpr} <= ${hi}`);
+  if (lo != null) parts.push(`${mrrExpr} >= ${lo}`);
+  if (hi != null) parts.push(`${mrrExpr} < ${hi}`);
   return parts.length ? `  AND ${parts.join(' AND ')}\n` : '';
 }
 
@@ -228,13 +226,12 @@ function cohortExcludeClause(excludePS, excludeDEP) {
   return s;
 }
 
-export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0, licenseBand = null, excludePS = false, excludeDEP = false }) {
+export function buildAccountTableSql({ month, drill, dim, slice, filters = {}, bridgeView = 'int_customer_mrr', decompView = 'int_mrr_movement_decomposed', minAgeMonths = 0, sizeBand = null, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
   const decomp = fqn(decompView);
   // End-MRR "current book" drill (drill key matches the End MRR bar): standing
   // accounts (end MRR > 0) at `month`, optionally sliced to a health tier (slice)
-  // and/or a license band (licenseBand, from the heatmap cell) and/or a tenure
-  // cohort, riskiest first.
+  // and/or an MRR-size band (sizeBand, from the heatmap cell), riskiest first.
   if (drill === 'end') {
     return `WITH ${accountAttrsCte()},
 ${seatsCte(month)},
@@ -257,7 +254,7 @@ LEFT JOIN seatcount s ON s.EntityRecordID = c.EntityRecordID
 LEFT JOIN prior p ON p.EntityRecordID = c.EntityRecordID
 ${psExcludeJoin(excludePS)}WHERE c.Month = ${sqlStr(month)}
   AND c.p2_saas > 0
-${bookAgeClause(month, minAgeMonths)}${slice ? healthTierClause(slice, 'a.health_score') : ''}${licenseBand ? licenseBandClause(licenseBand, 's.seats') : ''}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
+${bookAgeClause(month, minAgeMonths)}${slice ? healthTierClause(slice, 'a.health_score') : ''}${sizeBand ? mrrBandClause(sizeBand, 'c.p2_saas') : ''}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
 ORDER BY a.health_score IS NULL, a.health_score ASC, c.p2_saas DESC
 LIMIT 50`.trimEnd();
   }
@@ -353,25 +350,23 @@ ORDER BY ${HEALTH_TIER_RANK}`.trimEnd();
 }
 
 // L2 for the End-MRR drill, 2-D heatmap form: current book split by health tier
-// (rows) × license band (cols), each cell carrying account count + MRR. Click a
-// cell → its accounts (buildAccountTableSql with both slice + licenseBand).
+// (rows) × MRR-size band (cols), each cell carrying account count + MRR. Click a
+// cell → its accounts (buildAccountTableSql with both slice + sizeBand).
 export function buildBookHeatmapSql({ month, filters = {}, bridgeView = 'int_customer_mrr', minAgeMonths = 0, excludePS = false, excludeDEP = false }) {
   const icm = fqn(bridgeView);
-  return `WITH ${accountAttrsCte()},
-${seatsCte(month)}${psExcludeCte(excludePS)}
+  return `WITH ${accountAttrsCte()}${psExcludeCte(excludePS)}
 SELECT
   ${HEALTH_TIER_CASE} AS tier,
-  ${LICENSE_BAND_CASE} AS license_band,
+  ${MRR_BAND_CASE} AS mrr_band,
   COUNT(*) AS accounts,
   SUM(c.p2_saas) AS mrr
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
-LEFT JOIN seatcount s ON s.EntityRecordID = c.EntityRecordID
 ${psExcludeJoin(excludePS)}WHERE c.Month = ${sqlStr(month)}
   AND c.p2_saas > 0
 ${bookAgeClause(month, minAgeMonths)}${cohortExcludeClause(excludePS, excludeDEP)}${buildFilterClauses(filters, 'c')}
-GROUP BY tier, license_band, ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}
-ORDER BY ${HEALTH_TIER_RANK}, ${LICENSE_BAND_RANK}`.trimEnd();
+GROUP BY tier, mrr_band, ${HEALTH_TIER_RANK}, ${MRR_BAND_RANK}
+ORDER BY ${HEALTH_TIER_RANK}, ${MRR_BAND_RANK}`.trimEnd();
 }
 
 // Trailing-12-month churn rate by health tier — the correlation shown on the

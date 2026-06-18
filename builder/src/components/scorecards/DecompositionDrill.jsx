@@ -12,7 +12,6 @@ import { ChartErrorBoundary } from '../EChart';
 import NetSaasBridge from './NetSaasBridge';
 import L2Panel from './L2Panel';
 import BookHeatmap from './BookHeatmap';
-import PredictorGrid from './PredictorGrid';
 import NetSaasAccountTable from './NetSaasAccountTable';
 import AccountDetail from './AccountDetail';
 import DrillBreadcrumb from './DrillBreadcrumb';
@@ -25,8 +24,6 @@ import {
   fetchAccountTable,
   fetchBookHeatmap,
   fetchHealthChurnBenchmark,
-  fetchPredictorGrid,
-  fetchPredictorAccounts,
   fetchCohortAgeChurn,
   fetchFilterOptions,
   fetchRate,
@@ -72,19 +69,6 @@ const sectionLabel = {
   fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', sans-serif",
 };
 
-// Columns for the bleeding-map cell drill. Its rows are a backward-looking
-// cohort (paying a year ago) with start→now MRR + outcome — a different shape
-// than the config.l3 current-book columns, so we hand them in explicitly.
-const PREDICTOR_COLS = [
-  { key: 'Company',    label: 'Company',       format: 'text' },
-  { key: 'lost_mrr',   label: '$ Lost',        format: 'currency' },
-  { key: 'start_mrr',  label: 'MRR (1yr ago)', format: 'currency' },
-  { key: 'end_mrr',    label: 'MRR (now)',     format: 'currency' },
-  { key: 'outcome',    label: 'Outcome',       format: 'text' },
-  { key: 'health_score', label: 'Health',      format: 'number' },
-  { key: 'Segment',    label: 'Segment',       format: 'text' },
-];
-
 export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const cfg = config;
 
@@ -103,7 +87,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   const [l2, setL2] = useState(null);
   const [l3, setL3] = useState(null);
   const [healthBenchmark, setHealthBenchmark] = useState(null); // churn/yr per tier (End MRR drill)
-  const [predictorGrid, setPredictorGrid] = useState(null); // tenure × health churn diagnostic
   const [bookExclude, setBookExclude] = useState({ ps: false, dep: false }); // "untouched cohort" toggles (End MRR drill)
 
   const [account, setAccount] = useState(null);
@@ -176,7 +159,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     setL2Loading(true);
     setError(null);
     setHealthBenchmark(null);
-    setPredictorGrid(null);
     // Clear stale L2 data before the async fetch. Without this, switching from a
     // component-mode bar (data = {seats,apps,price}) to a dimension-mode bar
     // (data = [{bucket,value}]) would briefly render L2Panel with the previous
@@ -196,8 +178,6 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         const ex = { excludePS: exclude.ps, excludeDEP: exclude.dep };
         fetchHealthChurnBenchmark({ month: m, filters, bridgeView, ...ex })
           .then(setHealthBenchmark).catch(() => setHealthBenchmark(null));
-        fetchPredictorGrid({ month: m, filters, bridgeView, ...ex })
-          .then(setPredictorGrid).catch(() => setPredictorGrid(null));
         return fetchBookHeatmap({ month: m, filters, bridgeView, ...ex });
       }
       if (dim === 'CohortAge') return fetchCohortAgeChurn({ month: m, filters, bridgeView });
@@ -222,7 +202,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     const spec = cfg.drills[barKey];
     if (!spec) return;
     const dim = spec.mode === 'dimension' ? (spec.defaultDim || null) : null;
-    setDrill({ bar: barKey, dim, slice: null, licenseBand: null });
+    setDrill({ bar: barKey, dim, slice: null, sizeBand: null });
     setL3(null);
     clearAccount();
     loadL2(barKey, dim);
@@ -230,21 +210,20 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
 
   const handleDimChange = (dim) => {
     if (!drill) return;
-    setDrill((d) => ({ ...d, dim, slice: null, licenseBand: null }));
+    setDrill((d) => ({ ...d, dim, slice: null, sizeBand: null }));
     setL3(null);
     clearAccount();
     loadL2(drill.bar, dim);
   };
 
   const loadL3 = (patch) => {
-    // Clear any prior bleeding-map cell when drilling a normal slice/heatmap cell.
-    setDrill((d) => ({ ...d, predictor: null, ...patch }));
+    setDrill((d) => ({ ...d, ...patch }));
     setL3Loading(true);
     setError(null);
     clearAccount();
     fetchAccountTable({
       month, drill: drill.bar, dim: drill.dim,
-      slice: patch.slice, licenseBand: patch.licenseBand ?? null,
+      slice: patch.slice, sizeBand: patch.sizeBand ?? null,
       filters, bridgeView: grainCfg.bridgeView, decompView: grainCfg.decompView,
       excludePS: bookExclude.ps, excludeDEP: bookExclude.dep,
     })
@@ -254,28 +233,9 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   };
 
   // L2Panel slice (dimension/component drills): single slice, no license band.
-  const handleSliceClick = (slice) => { if (drill) loadL3({ slice, licenseBand: null }); };
-  // Heatmap cell (End MRR book drill): health tier + license band together.
-  const handleCellClick = (tier, band) => { if (drill) loadL3({ slice: tier, licenseBand: band }); };
-
-  // Bleeding-map cell (tenure × health): drill the trailing-year cohort that bled
-  // in that band → accounts with start→now MRR + outcome. Backward-looking cohort
-  // + custom columns, so it bypasses loadL3 (which queries the current book).
-  const handlePredictorCellClick = (tenureBand, healthBand) => {
-    if (!drill) return;
-    setDrill((d) => ({ ...d, slice: `${tenureBand} · ${healthBand}`, licenseBand: null, predictor: { tenureBand, healthBand } }));
-    setL3(null);
-    setL3Loading(true);
-    setError(null);
-    clearAccount();
-    fetchPredictorAccounts({
-      month, tenureBand, healthBand, filters,
-      bridgeView: grainCfg.bridgeView, excludePS: bookExclude.ps, excludeDEP: bookExclude.dep,
-    })
-      .then((rows) => setL3(rows))
-      .catch((e) => setError(e))
-      .finally(() => setL3Loading(false));
-  };
+  const handleSliceClick = (slice) => { if (drill) loadL3({ slice, sizeBand: null }); };
+  // Heatmap cell (End MRR book drill): health tier + MRR-size band together.
+  const handleCellClick = (tier, band) => { if (drill) loadL3({ slice: tier, sizeBand: band }); };
 
   // "Untouched cohort" toggles (End MRR drill): exclude paid-PS / DEP accounts.
   // Pass `next` into loadL2 explicitly (setState is async) and reset the drill.
@@ -283,7 +243,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
     const next = { ...bookExclude, [key]: val };
     setBookExclude(next);
     if (drill?.bar === 'end') {
-      setDrill((d) => ({ ...d, slice: null, licenseBand: null }));
+      setDrill((d) => ({ ...d, slice: null, sizeBand: null }));
       setL3(null);
       clearAccount();
       loadL2('end', 'HealthTier', next);
@@ -331,7 +291,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
   if (drill) {
     const bar = cfg.bridge.find((b) => b.key === drill.bar);
     trail.push({ level: 1, label: bar?.label || drill.bar });
-    if (drill.slice) trail.push({ level: 2, label: drill.licenseBand ? `${drill.slice} · ${drill.licenseBand} lic` : String(drill.slice) });
+    if (drill.slice) trail.push({ level: 2, label: drill.sizeBand ? `${drill.slice} · ${drill.sizeBand}` : String(drill.slice) });
     if (account) trail.push({ level: 4, label: account.Company || 'Account' });
   }
 
@@ -521,7 +481,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
         l2Loading && !l2
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading split…</p>
           : drill.bar === 'end'
-            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /><PredictorGrid data={predictorGrid} onCellClick={handlePredictorCellClick} /></ChartErrorBoundary>
+            ? <ChartErrorBoundary><BookHeatmap data={l2} benchmark={healthBenchmark} onCellClick={handleCellClick} /></ChartErrorBoundary>
             : (
               <ChartErrorBoundary>
                 <L2Panel
@@ -543,7 +503,7 @@ export default function DecompositionDrill({ config, bqConnected, onConnect }) {
       {drill?.slice && (
         l3Loading && !l3
           ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
-          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} columns={drill.predictor ? PREDICTOR_COLS : undefined} onRowClick={handleAccountClick} /></ChartErrorBoundary>
+          : <ChartErrorBoundary><NetSaasAccountTable rows={l3} drill={drill.bar} config={cfg} onRowClick={handleAccountClick} /></ChartErrorBoundary>
       )}
 
       {/* 7. L4 account detail (history timeline) */}

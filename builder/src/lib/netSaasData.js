@@ -14,8 +14,6 @@ import {
   buildBookSplitSql,
   buildBookHeatmapSql,
   buildHealthChurnBenchmarkSql,
-  buildPredictorGridSql,
-  buildPredictorAccountsSql,
   buildCohortAgeChurnSql,
   buildDistinctValuesSql,
   buildRateSql,
@@ -80,7 +78,7 @@ export async function fetchBookSplit({ month, filters, bridgeView, minAgeMonths 
 // End-MRR heatmap: health tier × license band, account count + MRR per cell.
 export async function fetchBookHeatmap({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }) {
   const { rows } = await queryBq(buildBookHeatmapSql({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }));
-  return rows.map((r) => ({ tier: r.tier, licenseBand: r.license_band, accounts: num(r.accounts), mrr: num(r.mrr) }));
+  return rows.map((r) => ({ tier: r.tier, sizeBand: r.mrr_band, accounts: num(r.accounts), mrr: num(r.mrr) }));
 }
 
 // Trailing-year churn rate per health tier (the correlation). Returns a map
@@ -92,26 +90,6 @@ export async function fetchHealthChurnBenchmark({ month, filters, bridgeView, mi
   return out;
 }
 
-// Bleeding map: trailing-year gross MRR loss (churn + downgrades) by tenure ×
-// health band. `lost` = dollars, `lossPct` = % of the band's starting MRR.
-export async function fetchPredictorGrid({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }) {
-  const { rows } = await queryBq(buildPredictorGridSql({ month, filters, bridgeView, minAgeMonths, excludePS, excludeDEP }));
-  return rows.map((r) => ({ tenureBand: r.tenure_band, healthBand: r.health_band, n: num(r.n), lost: num(r.lost_mrr), lossPct: num(r.loss_pct) }));
-}
-
-// Accounts behind one bleeding-map cell: the trailing-year cohort in that
-// tenure × health band, each with MRR a year ago → now, $ lost, and outcome.
-export async function fetchPredictorAccounts({ month, tenureBand, healthBand, filters, bridgeView, excludePS, excludeDEP }) {
-  const { rows } = await queryBq(buildPredictorAccountsSql({ month, tenureBand, healthBand, filters, bridgeView, excludePS, excludeDEP }));
-  return rows.map((r) => ({
-    ...r,
-    start_mrr: num(r.start_mrr),
-    end_mrr: num(r.end_mrr),
-    lost_mrr: num(r.lost_mrr),
-    health_score: r.health_score == null ? null : num(r.health_score),
-  }));
-}
-
 export async function fetchComponentSplit({ month, movementKind, filters, decompView, bridgeView }) {
   const { rows } = await queryBq(buildComponentSplitSql({ month, movementKind, filters, decompView, bridgeView }));
   const r = rows[0];
@@ -119,8 +97,8 @@ export async function fetchComponentSplit({ month, movementKind, filters, decomp
   return { seats: num(r.seats), apps: num(r.apps), price: num(r.price) };
 }
 
-export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, licenseBand, excludePS, excludeDEP }) {
-  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, licenseBand, excludePS, excludeDEP }));
+export async function fetchAccountTable({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, sizeBand, excludePS, excludeDEP }) {
+  const { rows } = await queryBq(buildAccountTableSql({ month, drill, dim, slice, filters, bridgeView, decompView, minAgeMonths, sizeBand, excludePS, excludeDEP }));
   return rows.map((r) => {
     const out = { ...r, deltaMrr: num(r.deltaMrr) };
     // seat/app/price columns only exist on expansion/downgrade rows.
