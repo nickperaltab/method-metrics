@@ -160,6 +160,28 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
           </tbody>
         </table>
       </div>
+
+      <details style={{ marginTop: 12 }}>
+        <summary style={{ ...sectionLabel, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Why these buckets?</summary>
+        <div style={{ ...sectionLabel, fontSize: 11, marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
+          <p style={{ margin: '0 0 6px' }}>
+            <strong>Health (rows)</strong> are Method's standard health tiers (Critical / Red / Orange / Yellow / Green).
+            We validated that health genuinely ranks churn risk a year out — a real forward signal, not just coincidence —
+            so the tiers carry meaning. Two caveats: the lowest tiers <em>saturate</em> (health can't cleanly separate
+            'bad' from 'very bad'), and the trailing-churn column is a coincident rate, not a forecast.
+          </p>
+          <p style={{ margin: '0 0 6px' }}>
+            <strong>MRR size (columns)</strong> — &lt;$100 / $100–300 / $300–1k / $1k+ — are chosen to keep every band
+            populated (so each cell is a stable read, not one or two accounts) and to separate where the dollars
+            concentrate. They're the book's natural size classes.
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>How we pick buckets in general:</strong> cut where behavior actually changes and the boundary holds
+            across time periods; keep enough accounts per bucket to be reliable; never carve buckets just to maximize the
+            gap between them — that overfits to noise.
+          </p>
+        </div>
+      </details>
     </div>
   );
 }
