@@ -329,7 +329,8 @@ describe('buildHealthChurnBenchmarkSql (trailing-year churn by health tier)', ()
     const sql = buildHealthChurnBenchmarkSql({ month: '2026-05-01', filters: {} });
     expect(sql).toContain("DATE_SUB(DATE '2026-05-01', INTERVAL 12 MONTH)"); // anchor a year back
     expect(sql).toContain("Month = '2026-05-01'");                            // kept = paying now
-    expect(sql).toContain('COUNTIF(k.EntityRecordID IS NULL)');               // churned = not in kept
+    expect(sql).toContain('SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0))'); // MRR-weighted churn ($, not logos)
+    expect(sql).toContain('NULLIF(SUM(c.p2_saas), 0)');
     expect(sql).toContain('AS churn_pct');
     expect(sql).toContain('MAX(HealthScore) AS health_score');                // deduped Account
   });

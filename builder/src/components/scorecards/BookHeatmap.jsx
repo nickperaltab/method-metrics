@@ -97,7 +97,7 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
       </div>
 
       <div style={{ ...sectionLabel, fontSize: 11, marginBottom: 8 }}>
-        Trailing churn = share of each tier that churned over the prior 12 months, bucketed by <em>today's</em> health.
+        Trailing MRR churn = share of each tier's <em>MRR</em> lost to full churn over the prior 12 months, bucketed by <em>today's</em> health.
         It's a coincident rate, not a forecast: a churned account carries its near-death (low) score, so this overstates the
         spread — healthy tiers look safer, and the worst tiers more extreme, than health actually predicts a year ahead.
         A true forward rate needs health history the warehouse doesn't yet store.
@@ -108,7 +108,7 @@ export default function BookHeatmap({ data, benchmark, onCellClick }) {
           <thead>
             <tr>
               <th style={{ textAlign: 'left', fontSize: 11, color: '#6b7280', padding: '0 8px' }}>Health \ MRR size</th>
-              <th style={{ fontSize: 11, color: '#6b7280', padding: '4px 8px' }} title="Trailing-12-month churn, bucketed by current health. A coincident rate — churned accounts carry their near-death (low) score, so it overstates the spread. Not a forward forecast.">Trailing&nbsp;churn</th>
+              <th style={{ fontSize: 11, color: '#6b7280', padding: '4px 8px' }} title="Trailing-12-month MRR churn (share of the tier's dollars lost to full churn), bucketed by current health. A coincident rate — churned accounts carry their near-death (low) score, so it overstates the spread. Not a forward forecast.">Trailing&nbsp;MRR&nbsp;churn</th>
               {bands.map((b) => (
                 <th key={b} style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '4px 8px', minWidth: 78 }}>
                   {BAND_LABEL[b] || b}
