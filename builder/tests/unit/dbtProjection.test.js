@@ -23,6 +23,17 @@ const MANIFEST = {
       schema: 'analytics_staging', relation_name: '`p`.`analytics_staging`.`staging_thing`',
       description: '', original_file_path: 'models/x.sql', compiled_code: '', columns: {}, depends_on: { nodes: [] },
     },
+    'test.method_metrics.not_null_int_customer_survival_vintage': {
+      resource_type: 'test', name: 'not_null_int_customer_survival_vintage',
+      test_metadata: { name: 'not_null', kwargs: { column_name: 'vintage' } },
+      depends_on: { nodes: ['model.method_metrics.int_customer_survival'] },
+    },
+    // Duplicate test node for the same test — should be deduped in output.
+    'test.method_metrics.not_null_int_customer_survival_vintage_dup': {
+      resource_type: 'test', name: 'not_null_int_customer_survival_vintage_dup',
+      test_metadata: { name: 'not_null', kwargs: { column_name: 'vintage' } },
+      depends_on: { nodes: ['model.method_metrics.int_customer_survival'] },
+    },
   },
   sources: { 'source.method_metrics.revenue.Funnel': { name: 'Funnel', schema: 'revenue' } },
 };
@@ -41,7 +52,20 @@ describe('projectManifest', () => {
     expect(m.sources).toEqual(['Funnel']);
     expect(m.compiled_sql).toBe('SELECT 1');
     expect(m.columns).toEqual([{ name: 'vintage', description: 'year' }]);
-    expect(m.tests).toEqual([]); // no test nodes in fixture
     expect(m.original_file_path).toBe('models/intermediate/int_customer_survival.sql');
+  });
+
+  it('qualifies tests with column name and deduplicates', () => {
+    const m = projectManifest(MANIFEST).models.find(x => x.name === 'int_customer_survival');
+    // Should contain 'not_null(vintage)' exactly once, even though two test nodes exist.
+    expect(m.tests).toContain('not_null(vintage)');
+    const count = m.tests.filter(t => t === 'not_null(vintage)').length;
+    expect(count).toBe(1);
+  });
+
+  it('uses bare test name when no column_name is present', () => {
+    // int_customer_mrr has no test nodes — its tests array should be empty.
+    const m = projectManifest(MANIFEST).models.find(x => x.name === 'int_customer_mrr');
+    expect(m.tests).toEqual([]);
   });
 });

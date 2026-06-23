@@ -505,6 +505,7 @@ function DbtPanel({ modelName }) {
   if (loading) return <div style={{ padding: 16, color: '#6b7280' }}>Loading dbt model…</div>;
   if (error || !model) return <div style={{ padding: 16, color: '#6b7280' }}>No dbt model found for <code>{modelName}</code>.</div>;
   const gh = dbtModelLink(model.original_file_path);
+  const sql = model.compiled_sql && model.compiled_sql !== '--placeholder--' ? model.compiled_sql : null;
   return (
     <div style={{ padding: '4px 0' }}>
       <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>{model.name}</div>
@@ -525,10 +526,10 @@ function DbtPanel({ modelName }) {
         </div>
       )}
 
-      {model.compiled_sql && (
+      {sql && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>Model SQL (dbt source)</div>
-          <pre style={{ fontSize: 11, background: '#0d1117', color: '#c9d1d9', padding: 12, borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>{model.compiled_sql}</pre>
+          <pre style={{ fontSize: 11, background: '#0d1117', color: '#c9d1d9', padding: 12, borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>{sql}</pre>
         </div>
       )}
 

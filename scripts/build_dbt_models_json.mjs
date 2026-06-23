@@ -18,6 +18,24 @@ try {
   manifest = { nodes: {} };
 }
 const projection = projectManifest(manifest);
+
+// Post-process: replace compiled_sql with the actual SQL file from disk.
+// The manifest's raw_code / compiled_code is often a parse placeholder; the
+// committed .sql file is the real source of truth.
+for (const model of projection.models) {
+  try {
+    if (!model.original_file_path) throw new Error('no original_file_path');
+    const sqlPath = resolve(repoRoot, model.original_file_path);
+    model.compiled_sql = readFileSync(sqlPath, 'utf8');
+  } catch {
+    // Fall back to whatever projectManifest already set; if it's the sentinel
+    // placeholder, treat it as empty.
+    if (model.compiled_sql === '--placeholder--') {
+      model.compiled_sql = '';
+    }
+  }
+}
+
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(projection));
 console.log(`[dbt-models] wrote ${projection.models.length} models -> ${outPath}`);

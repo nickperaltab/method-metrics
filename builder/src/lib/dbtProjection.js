@@ -10,14 +10,17 @@ function bareName(nodeId) {
 export function projectManifest(manifest) {
   const nodes = manifest?.nodes || {};
   // Gather column tests if any test nodes exist (best-effort; may be empty).
-  const testsByModelCol = {}; // `${modelName}` -> [testName]
+  const testsByModelCol = {}; // `${modelName}` -> Set<string>
   for (const node of Object.values(nodes)) {
     if (node.resource_type !== 'test') continue;
     const deps = node.depends_on?.nodes || [];
+    const colName = node.test_metadata?.kwargs?.column_name || node.column_name || null;
+    const testName = node.test_metadata?.name || node.name;
+    const qualified = colName ? `${testName}(${colName})` : testName;
     for (const dep of deps) {
       if (!dep.startsWith('model.')) continue;
       const mn = bareName(dep);
-      (testsByModelCol[mn] ||= []).push(node.test_metadata?.name || node.name);
+      (testsByModelCol[mn] ||= new Set()).add(qualified);
     }
   }
 
@@ -36,7 +39,7 @@ export function projectManifest(manifest) {
       sources: deps.filter(d => d.startsWith('source.')).map(bareName),
       columns: Object.values(node.columns || {}).map(c => ({ name: c.name, description: c.description || '' })),
       compiled_sql: node.compiled_code || node.raw_code || '',
-      tests: testsByModelCol[node.name] || [],
+      tests: testsByModelCol[node.name] ? [...testsByModelCol[node.name]] : [],
     });
   }
   models.sort((a, b) => a.name.localeCompare(b.name));
