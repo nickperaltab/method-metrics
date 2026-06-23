@@ -510,11 +510,11 @@ function DbtPanel({ modelName }) {
       <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>{model.name}</div>
       <div style={{ fontSize: 13, color: '#374151', margin: '6px 0 14px' }}>{model.description || 'No description.'}</div>
 
-      {model.refs?.length > 0 && (
+      {(model.refs?.length > 0 || model.sources?.length > 0) && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>Built from</div>
-          {model.refs.map(r => <span key={r} style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{r}</span>)}
-          {model.sources.map(s => <span key={s} style={{ fontFamily: 'monospace', fontSize: 12, background: '#eef2ff', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{s} (source)</span>)}
+          {model.refs?.map(r => <span key={r} style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{r}</span>)}
+          {model.sources?.map(s => <span key={s} style={{ fontFamily: 'monospace', fontSize: 12, background: '#eef2ff', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{s} (source)</span>)}
         </div>
       )}
 
