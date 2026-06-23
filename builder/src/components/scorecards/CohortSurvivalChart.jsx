@@ -81,7 +81,7 @@ export default function CohortSurvivalChart() {
           <EChart option={option} />
         </ChartErrorBoundary>
       </div>
-      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, maxWidth: 720, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, lineHeight: 1.6 }}>
         Each line is a first-pay vintage: customers grouped by the year they first paid, tracked by
         customer age. Newer vintages are shorter, stopping where their youngest members run out of
         observed months.
