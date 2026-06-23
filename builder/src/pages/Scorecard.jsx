@@ -7,6 +7,7 @@ import ScorecardSection from '../components/scorecards/ScorecardSection';
 import DecompositionDrill from '../components/scorecards/DecompositionDrill';
 import FunnelDrill from '../components/scorecards/FunnelDrill';
 import GrrIndustryDrill from '../components/scorecards/GrrIndustryDrill';
+import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -184,8 +185,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const handleMetricClick = (metricId, value, format, customInfo, deltaInfo) =>
     setInspected({ metricId, value, format, customInfo, deltaInfo });
 
-  const ungrouped = config.sections.filter(s => !s.group);
+  const ungrouped = config.sections.filter(s => !s.group && !s.component);
   const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
+  const customSections = config.sections.filter(s => s.component);
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
@@ -236,6 +238,18 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           grain={null}
         />
       )}
+
+      {customSections.map((section) => (
+        <div key={section.title} style={{ marginTop: 32 }}>
+          <h2 style={{
+            fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {section.title}
+          </h2>
+          {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
+        </div>
+      ))}
 
       <MetricInspector
         metricId={inspected?.metricId}

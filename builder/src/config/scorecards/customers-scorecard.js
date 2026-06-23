@@ -117,5 +117,11 @@ export default {
         },
       ],
     },
+
+    // ── Cohort survival ─────────────────────────────────────────
+    {
+      title: 'Cohort Survival by First-Pay Vintage',
+      component: 'cohortSurvival',
+    },
   ],
 };

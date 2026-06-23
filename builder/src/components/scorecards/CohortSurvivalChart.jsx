@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import EChart from '../EChart';
+import EChart, { ChartErrorBoundary } from '../EChart';
 import { queryBq } from '../../lib/bigquery';
 import { buildCohortSurvivalSql, toSurvivalSeries } from '../../lib/cohortSurvivalSql';
 
@@ -72,7 +72,9 @@ export default function CohortSurvivalChart() {
         ))}
       </div>
       <div style={{ height: 360 }}>
-        <EChart option={option} />
+        <ChartErrorBoundary>
+          <EChart option={option} />
+        </ChartErrorBoundary>
       </div>
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
         <b>What this is.</b> Each line is one first-pay vintage: all entities whose first paying
