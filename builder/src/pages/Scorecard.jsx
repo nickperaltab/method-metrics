@@ -239,17 +239,20 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         />
       )}
 
-      {customSections.map((section) => (
-        <div key={section.title} style={{ marginTop: 32 }}>
-          <h2 style={{
-            fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            {section.title}
-          </h2>
-          {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
-        </div>
-      ))}
+      {customSections.map((section) => {
+        if (section.component !== 'cohortSurvival') return null;
+        return (
+          <div key={section.title} style={{ marginTop: 32 }}>
+            <h2 style={{
+              fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {section.title}
+            </h2>
+            <CohortSurvivalChart />
+          </div>
+        );
+      })}
 
       <MetricInspector
         metricId={inspected?.metricId}

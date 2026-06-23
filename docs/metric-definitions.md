@@ -817,6 +817,7 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 - Entity grain, not CompanyAccount.
 - Younger vintages right-censored.
 - Association not causation.
+- At censored tenures the logo-survival denominator (n_start) is the subset of the vintage old enough to be observed at month k, not the full vintage; GRR is the parity-gated measure while logo survival is derived from the same cells (not independently baselined).
 
 ---
 

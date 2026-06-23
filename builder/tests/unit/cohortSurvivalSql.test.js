@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSurvivalSeries, SURVIVAL_CHECKPOINTS } from '../../src/lib/cohortSurvivalSql.js';
+import { buildCohortSurvivalSql, toSurvivalSeries, SURVIVAL_CHECKPOINTS } from '../../src/lib/cohortSurvivalSql.js';
 
 const rows = [
   // 2024 vintage: m12 present, m24 missing (censored)
@@ -7,6 +7,12 @@ const rows = [
   // 2025 vintage: m12 present
   { vintage: '2025', tenure_k: 12, n_start: 200, n_alive: 130, base_mrr: 2000, retained_mrr: 1158, net_mrr: 1300 },
 ];
+
+describe('buildCohortSurvivalSql', () => {
+  it('references int_customer_survival', () => {
+    expect(buildCohortSurvivalSql()).toContain('int_customer_survival');
+  });
+});
 
 describe('toSurvivalSeries', () => {
   it('derives GRR = retained/base at each checkpoint, null when missing', () => {

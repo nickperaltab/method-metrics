@@ -80,7 +80,8 @@ export default function CohortSurvivalChart() {
         <b>What this is.</b> Each line is one first-pay vintage: all entities whose first paying
         month fell in that calendar year, tracked by account age (not the calendar). A vintage's
         curve stops where its youngest members run out of observed months (right-censoring), so
-        newer vintages are shorter.
+        newer vintages are shorter. At later months, each vintage's curve covers only the accounts
+        old enough to have reached that month.
         <br />
         <b>Two measures.</b> <i>GRR</i> is dollar-weighted: the share of the vintage's starting
         MRR still retained (expansion capped, churned held at $0). <i>Logo survival</i> is
