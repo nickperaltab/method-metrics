@@ -157,12 +157,6 @@ export default {
       ],
     },
 
-    // ── Cohort survival ─────────────────────────────────────────
-    {
-      title: 'Cohort Survival by First-Pay Vintage',
-      component: 'cohortSurvival',
-    },
-
     // ── Monthly Retention ───────────────────────────────────────
     {
       title: 'Monthly Retention',
@@ -225,6 +219,12 @@ export default {
           metrics: [{ id: 389, label: 'NRR %' }],
         },
       ],
+    },
+
+    // ── Cohort survival ─────────────────────────────────────────
+    {
+      title: 'Cohort Survival by First-Pay Vintage',
+      component: 'cohortSurvival',
     },
 
     // ── Customer List ───────────────────────────────────────────
