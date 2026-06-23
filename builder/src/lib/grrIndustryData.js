@@ -3,7 +3,9 @@
 // the headline rate reuses netSaasSql's buildRateSql (canonical metric view).
 import { queryBq } from './bigquery.js';
 import { buildRateSql } from './netSaasSql.js';
-import { buildGrrBySegmentSql, buildGrrAccountsSql, buildGrrTrendSql } from './grrIndustrySql.js';
+import {
+  buildGrrBySegmentSql, buildGrrAccountsSql, buildGrrTrendSql, buildCustomerAccountsSql,
+} from './grrIndustrySql.js';
 
 const num = (v) => Number(v) || 0;
 
@@ -28,6 +30,16 @@ export async function fetchGrrAccounts({ month, filters }) {
     start_mrr: num(r.start_mrr),
     churn_mrr: num(r.churn_mrr),
     downgrade_mrr: num(r.downgrade_mrr),
+    confidence: r.confidence == null ? null : Number(r.confidence),
+  }));
+}
+
+// Returns the constituent accounts behind one billing entity, each with its own
+// label + reasoning — the per-entity drill that makes a multi-client biller legible.
+export async function fetchCustomerAccounts({ entityRecordId }) {
+  const { rows } = await queryBq(buildCustomerAccountsSql({ entityRecordId }));
+  return rows.map((r) => ({
+    ...r,
     confidence: r.confidence == null ? null : Number(r.confidence),
   }));
 }

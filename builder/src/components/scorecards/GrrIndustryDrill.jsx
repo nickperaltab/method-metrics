@@ -147,8 +147,9 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const handleIndustryBarClick = (segment) => {
     const filters = { ...pathFilters, [chartDim]: segment };
     loadIndustryAccounts(filters, `${segment} (${DIM_LABEL[chartDim]})`);
-    // Drill deeper unless at L3 or into Unclassified (children are all Unclassified).
-    if (chartDim !== 'l3' && segment !== 'Unclassified') {
+    // Drill deeper unless at L3 or into a terminal bucket. 'Unclassified' and
+    // 'Multi-client' aren't industries, so they're account-table-only.
+    if (chartDim !== 'l3' && segment !== 'Unclassified' && segment !== 'Multi-client') {
       setPath([...path, { dim: chartDim, value: segment }]);
     }
   };
