@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: int_customer_survival
+    description: >
+      Cohort survival by first-pay vintage, entity grain. One row per
+      (vintage, tenure_k). Logo survival = n_alive / n_start (count-weighted).
+      GRR = retained_mrr / base_mrr (dollar-weighted, expansion capped). The
+      two differ; "still paying" describes only the logo line. Anchor = each
+      entity's first paying month; signup gate Trial >= 2021-06-01; cells with
+      n_start < 30 dropped; right-censored at the latest complete month.
+      Parity: VINTAGE_SQL + §18 verification-queries.md (2026-06).
+    columns:
+      - name: vintage
+        description: Calendar year of the entity's first paying month.
+        tests: [not_null]
+      - name: tenure_k
+        description: Months since first paying month (0–24).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]
+                quote: false
+      - name: n_start
+        tests: [not_null]
+      - name: n_alive
+        tests: [not_null]
+      - name: base_mrr
+        tests: [not_null]
+
+unit_tests:
+  - name: survival_triangle_basic
+    model: int_customer_survival
+    overrides:
+      vars:
+        survival_min_n: 2
+        survival_censor_month: '2024-03-01'
+    given:
+      - input: ref('int_customer_mrr')
+        rows:
+          - { Month: '2024-01-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-02-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-03-01', EntityRecordID: 1, StartMRR: 50 }
+          - { Month: '2024-01-01', EntityRecordID: 2, StartMRR: 200 }
+          # Entity 3 forms a solo 2023 vintage (n_start=1); suppressed by HAVING n_start >= 2
+          - { Month: '2023-01-01', EntityRecordID: 3, StartMRR: 80 }
+      - input: source('revenue', 'Funnel')
+        rows:
+          - { EntityRecordID: 1, Date: '2023-07-01', EventType: 'Trial' }
+          - { EntityRecordID: 2, Date: '2023-08-01', EventType: 'Trial' }
+          - { EntityRecordID: 3, Date: '2022-06-01', EventType: 'Trial' }
+    expect:
+      rows:
+        # 2024 vintage (n_start=2 >= 2) survives; 2023 vintage (n_start=1 < 2) is absent
+        - { vintage: '2024', tenure_k: 0, n_start: 2, n_alive: 2, base_mrr: 300, retained_mrr: 300, net_mrr: 300 }
+        - { vintage: '2024', tenure_k: 1, n_start: 2, n_alive: 1, base_mrr: 300, retained_mrr: 100, net_mrr: 100 }
+        - { vintage: '2024', tenure_k: 2, n_start: 2, n_alive: 1, base_mrr: 300, retained_mrr: 50, net_mrr: 50 }

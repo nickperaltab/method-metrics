@@ -793,4 +793,32 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 ---
 
+### Cohort Survival by First-Pay Vintage (`int_customer_survival`)
+
+**What it answers in one sentence:** Do newer customer vintages retain better than older ones, measured at the same account age?
+
+**Grain:** entity (`EntityRecordID`) / first-pay vintage / tenure-indexed (months since first paying month).
+
+**Measures:** logo survival = `n_alive / n_start` (count-weighted); GRR = `retained_mrr / base_mrr` (dollar-weighted, expansion capped, churned held at $0).
+
+**Filters / exclusions:**
+- `Funnel Trial MIN(Date) >= '2021-06-01'` — ensures the first-pay anchor is genuine, not left-censored by the data start
+- `n_start >= 30` per cell — maintains stability
+- Cell kept only where `t0 + k <= latest complete month` — right-censoring; younger vintages have shorter curves
+
+**Methodology source:** VINTAGE_SQL in `build_expanders_doc.py` + §18 of `verification-queries.md` (revenue-architecture loop, 2026-06).
+
+**Parity-verified against:** §18 GRR baseline — 2022 m12=52.4/m24=39.2, 2023 m12=49.3/m24=36.8, 2024 m12=51.3/m24=37.5, 2025 m12=57.9/m15=50.5 — via `scripts/parity_int_customer_survival.py`, 2026-06-22.
+
+**Note on promotion status:** This is a parity-verified intermediate (`revenue.int_customer_survival`); it has not been promoted to a canonical `v_metric__` view in `revenue_metrics`.
+
+**Known caveats:**
+- GRR is dollar-weighted, logo survival is count-weighted; "still paying" describes only the logo line.
+- Entity grain, not CompanyAccount.
+- Younger vintages right-censored.
+- Association not causation.
+- At censored tenures the logo-survival denominator (n_start) is the subset of the vintage old enough to be observed at month k, not the full vintage; GRR is the parity-gated measure while logo survival is derived from the same cells (not independently baselined).
+
+---
+
 *Started 2026-05-12 after audit of the first 5 dbt-managed metrics surfaced definitional ambiguity in Syncs and Sync Rate. To be extended as each remaining metric is migrated to dbt.*
