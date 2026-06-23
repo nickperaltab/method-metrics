@@ -25,6 +25,11 @@ export default function CohortSurvivalChart() {
   if (!rows) return <div style={{ color: '#6b7280', padding: 16 }}>Loading cohort survival...</div>;
 
   const { ks, vintages, series } = toSurvivalSeries(rows, measure);
+  // Auto-fit the y-axis to the data (padded to the nearest 5%) so the spread
+  // between cohorts is readable instead of squashed into a 0–100% range.
+  const plotted = vintages.flatMap((v) => series[v]).filter((x) => x != null);
+  const yMin = plotted.length ? Math.max(0, Math.floor(Math.min(...plotted) / 5) * 5) : 0;
+  const yMax = plotted.length ? Math.min(100, Math.ceil(Math.max(...plotted) / 5) * 5) : 100;
   const option = {
     grid: { left: 46, right: 18, top: 30, bottom: 42 },
     legend: { top: 0 },
@@ -36,7 +41,7 @@ export default function CohortSurvivalChart() {
       nameLocation: 'middle',
       nameGap: 26,
     },
-    yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+    yAxis: { type: 'value', min: yMin, max: yMax, axisLabel: { formatter: '{value}%' } },
     series: vintages.map((v) => ({
       name: v + ' cohort',
       type: 'line',
