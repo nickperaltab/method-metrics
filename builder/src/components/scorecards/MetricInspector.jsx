@@ -3,6 +3,8 @@ import { formatValue } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
 import { buildSemanticSql } from '../../lib/bigquery';
 import { useViewDefinition } from '../../lib/useViewDefinition';
+import { useDbtModel } from '../../lib/useDbtModel.js';
+import { dbtModelLink } from '../../lib/dbtModels.js';
 
 /**
  * Build a human-readable formula replacing {id} with metric names,
@@ -81,7 +83,7 @@ function FormulaDisplay({ formula, metricsMap, onNavigate }) {
   );
 }
 
-export default function MetricInspector({ metricId, currentValue, valueFormat, metricsCache, customInfo, deltaInfo, onClose }) {
+export default function MetricInspector({ metricId, dbtModel, currentValue, valueFormat, metricsCache, customInfo, deltaInfo, onClose }) {
   const [trail, setTrail] = useState([]);
   const panelRef = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -92,13 +94,13 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
 
   // Build trail on open
   useEffect(() => {
-    if (metricId != null) {
-      setTrail([metricId]);
+    if (metricId != null || dbtModel != null) {
+      setTrail(metricId != null ? [metricId] : []);
       requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
     }
-  }, [metricId]);
+  }, [metricId, dbtModel]);
 
   // Escape key
   useEffect(() => {
@@ -122,7 +124,7 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
     setTrail(prev => prev.slice(0, index + 1));
   }, []);
 
-  if (metricId == null) return null;
+  if (metricId == null && dbtModel == null) return null;
 
   const metricsMap = metricsCache || new Map();
 
@@ -178,7 +180,9 @@ export default function MetricInspector({ metricId, currentValue, valueFormat, m
 
         {/* Body */}
         <div style={ps.body}>
-          {isCustomSql && customInfo ? (
+          {dbtModel != null && metricId == null ? (
+            <DbtPanel modelName={dbtModel} />
+          ) : isCustomSql && customInfo ? (
             <>
               <div style={ps.section}>
                 <div style={ps.metricName}>{customInfo.label}</div>
@@ -492,6 +496,43 @@ function TechnicalDetails({ metric, metricsMap, onNavigate }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function DbtPanel({ modelName }) {
+  const { model, loading, error } = useDbtModel(modelName);
+  if (loading) return <div style={{ padding: 16, color: '#6b7280' }}>Loading dbt model…</div>;
+  if (error || !model) return <div style={{ padding: 16, color: '#6b7280' }}>No dbt model found for <code>{modelName}</code>.</div>;
+  const gh = dbtModelLink(model.original_file_path);
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>{model.name}</div>
+      <div style={{ fontSize: 13, color: '#374151', margin: '6px 0 14px' }}>{model.description || 'No description.'}</div>
+
+      {model.refs?.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>Built from</div>
+          {model.refs.map(r => <span key={r} style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{r}</span>)}
+          {model.sources.map(s => <span key={s} style={{ fontFamily: 'monospace', fontSize: 12, background: '#eef2ff', padding: '2px 6px', borderRadius: 4, marginRight: 6 }}>{s} (source)</span>)}
+        </div>
+      )}
+
+      {model.tests?.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>Tests</div>
+          <div style={{ fontSize: 12, color: '#374151' }}>{model.tests.join(', ')}</div>
+        </div>
+      )}
+
+      {model.compiled_sql && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>Model SQL (dbt source)</div>
+          <pre style={{ fontSize: 11, background: '#0d1117', color: '#c9d1d9', padding: 12, borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>{model.compiled_sql}</pre>
+        </div>
+      )}
+
+      {gh && <a href={gh} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#2563eb' }}>View source on GitHub →</a>}
     </div>
   );
 }
