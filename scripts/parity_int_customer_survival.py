@@ -52,9 +52,14 @@ rows = client.query("""
   SELECT vintage, tenure_k,
          ROUND(SAFE_DIVIDE(retained_mrr, base_mrr) * 100, 1) AS grr
   FROM `project-for-method-dw.revenue.int_customer_survival`
+  WHERE tenure_k IN (3,6,9,12,15,18,21,24)
 """).result()
 
-got = {(r['vintage'], int(r['tenure_k'])): float(r['grr']) for r in rows}
+got = {}
+for r in rows:
+    grr = float(r['grr']) if r['grr'] is not None else None
+    if grr is not None:
+        got[(r['vintage'], int(r['tenure_k']))] = grr
 
 fails = []
 
@@ -78,9 +83,9 @@ for key, baseline in LIVE_BASELINE.items():
         status = 'MISSING'
         fails.append((key, baseline, actual, 'live'))
     else:
-        delta = abs(actual - baseline)
-        within = delta <= LIVE_TOLERANCE
-        status = f"LIVE (still maturing) — actual={actual}, delta={delta:+.1f}pp {'OK' if within else 'OUT OF TOLERANCE'}"
+        delta_signed = actual - baseline
+        within = abs(delta_signed) <= LIVE_TOLERANCE
+        status = f"LIVE (still maturing) — actual={actual}, delta={delta_signed:+.1f}pp {'OK' if within else 'OUT OF TOLERANCE'}"
         if not within:
             fails.append((key, baseline, actual, 'live'))
     print(f"  {key[0]} m{key[1]:<2}  baseline={baseline:<5}  {status}")

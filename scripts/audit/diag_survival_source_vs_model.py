@@ -155,6 +155,7 @@ for k in [12, 15]:
 # 5. Verdict
 # ---------------------------------------------------------------------------
 print("\n=== VERDICT ===")
+# Informational only — this script intentionally does NOT exit non-zero; do not use as a CI gate.
 if all_match_src_mod:
     print("SOURCE-TODAY == MODEL: YES — every overlapping cell matches.")
     print("Interpretation: the model faithfully reproduces the source method.")
