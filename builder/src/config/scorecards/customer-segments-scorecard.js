@@ -225,6 +225,7 @@ export default {
     {
       title: 'Cohort Survival by First-Pay Vintage',
       component: 'cohortSurvival',
+      dbtModel: 'int_customer_survival',
     },
 
     // ── Customer List ───────────────────────────────────────────

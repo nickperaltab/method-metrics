@@ -8,7 +8,7 @@ const MEASURES = [
   { key: 'logo', label: 'Logo survival (% still paying)' },
 ];
 
-export default function CohortSurvivalChart({ onInspect }) {
+export default function CohortSurvivalChart() {
   const [rows, setRows] = useState(null);
   const [measure, setMeasure] = useState('grr');
   const [error, setError] = useState(null);
@@ -70,35 +70,19 @@ export default function CohortSurvivalChart({ onInspect }) {
             {m.label}
           </button>
         ))}
-        {onInspect && (
-          <button
-            onClick={onInspect}
-            title="How this is derived (dbt)"
-            style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff', color: '#374151' }}
-          >
-            ⓘ derivation
-          </button>
-        )}
       </div>
       <div style={{ height: 360 }}>
         <ChartErrorBoundary>
           <EChart option={option} />
         </ChartErrorBoundary>
       </div>
-      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
-        <b>What this is.</b> Each line is one first-pay vintage: all customers whose first paying
-        month fell in that calendar year, tracked by customer age (not the calendar). A vintage's
-        curve stops where its youngest members run out of observed months (right-censoring), so
-        newer vintages are shorter. At later months, each vintage's curve covers only the customers
-        old enough to have reached that month.
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, maxWidth: 720, lineHeight: 1.6 }}>
+        Each line is a first-pay vintage: customers grouped by the year they first paid, tracked by
+        customer age. Newer vintages are shorter, stopping where their youngest members run out of
+        observed months.
         <br />
-        <b>Two measures.</b> <i>GRR</i> is dollar-weighted: the share of the vintage's starting
-        MRR still retained (expansion capped, churned held at $0). <i>Logo survival</i> is
-        count-weighted: the share of customers still paying. They diverge when churned customers
-        are larger or smaller than average. "Still paying" describes only the logo line.
-        Customer grain (one row per <code>EntityRecordID</code>; a customer may own multiple
-        <code>CompanyAccount</code>s). Source: <code>revenue.int_customer_survival</code> (dbt),
-        parity-verified against the §18 baseline.
+        <b>GRR</b> = share of starting MRR retained (dollar-weighted). <b>Logo survival</b> = share
+        of customers still paying (count-weighted). Click the ⓘ by the title for the full definition and SQL.
       </div>
     </div>
   );

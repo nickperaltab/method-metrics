@@ -185,9 +185,10 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const handleMetricClick = (metricId, value, format, customInfo, deltaInfo) =>
     setInspected({ metricId, value, format, customInfo, deltaInfo });
 
-  const ungrouped = config.sections.filter(s => !s.group && !s.component);
+  // Non-breakdown sections render in config order, so a custom-component section
+  // sits exactly where it's placed in the array (e.g. above the Customer List).
+  const mainSections = config.sections.filter(s => s.group !== 'breakdowns');
   const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
-  const customSections = config.sections.filter(s => s.component);
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
@@ -217,16 +218,35 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
 
       <StaleIndicator freshness={freshness} refreshedAt={refreshedAt} />
 
-      {ungrouped.map((section, i) => (
-        <ScorecardSection
-          key={section.title}
-          section={section}
-          dataMap={dataMap}
-          onMetricClick={handleMetricClick}
-          filterLastNMonths={filterLastNMonths}
-          grain={i === 0 && !config.hideGrain ? grain : null}
-          onGrain={i === 0 && !config.hideGrain ? setGrain : null}
-        />
+      {mainSections.map((section, i) => (
+        section.component ? (
+          <div key={section.title} style={{ marginTop: 32 }}>
+            <h2 style={{
+              fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {section.title}
+              {section.dbtModel && (
+                <span
+                  onClick={() => setInspected({ dbtModel: section.dbtModel })}
+                  title="How this is derived (dbt)"
+                  style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', marginLeft: 8 }}
+                >ⓘ</span>
+              )}
+            </h2>
+            {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
+          </div>
+        ) : (
+          <ScorecardSection
+            key={section.title}
+            section={section}
+            dataMap={dataMap}
+            onMetricClick={handleMetricClick}
+            filterLastNMonths={filterLastNMonths}
+            grain={i === 0 && !config.hideGrain ? grain : null}
+            onGrain={i === 0 && !config.hideGrain ? setGrain : null}
+          />
+        )
       ))}
 
       {breakdownSections.length > 0 && (
@@ -238,21 +258,6 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
           grain={null}
         />
       )}
-
-      {customSections.map((section) => {
-        if (section.component !== 'cohortSurvival') return null;
-        return (
-          <div key={section.title} style={{ marginTop: 32 }}>
-            <h2 style={{
-              fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              {section.title}
-            </h2>
-            <CohortSurvivalChart onInspect={() => setInspected({ dbtModel: 'int_customer_survival' })} />
-          </div>
-        );
-      })}
 
       <MetricInspector
         metricId={inspected?.metricId}
