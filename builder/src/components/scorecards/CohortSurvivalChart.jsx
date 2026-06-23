@@ -32,7 +32,7 @@ export default function CohortSurvivalChart() {
     xAxis: {
       type: 'category',
       data: ks.map((k) => 'm' + k),
-      name: 'months into account life',
+      name: 'months into customer life',
       nameLocation: 'middle',
       nameGap: 26,
     },
@@ -77,18 +77,19 @@ export default function CohortSurvivalChart() {
         </ChartErrorBoundary>
       </div>
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
-        <b>What this is.</b> Each line is one first-pay vintage: all entities whose first paying
-        month fell in that calendar year, tracked by account age (not the calendar). A vintage's
+        <b>What this is.</b> Each line is one first-pay vintage: all customers whose first paying
+        month fell in that calendar year, tracked by customer age (not the calendar). A vintage's
         curve stops where its youngest members run out of observed months (right-censoring), so
-        newer vintages are shorter. At later months, each vintage's curve covers only the accounts
+        newer vintages are shorter. At later months, each vintage's curve covers only the customers
         old enough to have reached that month.
         <br />
         <b>Two measures.</b> <i>GRR</i> is dollar-weighted: the share of the vintage's starting
         MRR still retained (expansion capped, churned held at $0). <i>Logo survival</i> is
-        count-weighted: the share of accounts still paying. They diverge when churned accounts
+        count-weighted: the share of customers still paying. They diverge when churned customers
         are larger or smaller than average. "Still paying" describes only the logo line.
-        Entity grain. Source: <code>revenue.int_customer_survival</code> (dbt), parity-verified
-        against the §18 baseline.
+        Customer grain (one row per <code>EntityRecordID</code>; a customer may own multiple
+        <code>CompanyAccount</code>s). Source: <code>revenue.int_customer_survival</code> (dbt),
+        parity-verified against the §18 baseline.
       </div>
     </div>
   );

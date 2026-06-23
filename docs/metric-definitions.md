@@ -795,9 +795,9 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 ### Cohort Survival by First-Pay Vintage (`int_customer_survival`)
 
-**What it answers in one sentence:** Do newer customer vintages retain better than older ones, measured at the same account age?
+**What it answers in one sentence:** Do newer customer vintages retain better than older ones, measured at the same customer age?
 
-**Grain:** entity (`EntityRecordID`) / first-pay vintage / tenure-indexed (months since first paying month).
+**Grain:** customer-level (`EntityRecordID`; a customer can own multiple `CompanyAccount`s) / first-pay vintage / tenure-indexed (months since first paying month).
 
 **Measures:** logo survival = `n_alive / n_start` (count-weighted); GRR = `retained_mrr / base_mrr` (dollar-weighted, expansion capped, churned held at $0).
 
@@ -814,7 +814,7 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 **Known caveats:**
 - GRR is dollar-weighted, logo survival is count-weighted; "still paying" describes only the logo line.
-- Entity grain, not CompanyAccount.
+- Customer grain is `EntityRecordID` (one customer may own several `CompanyAccount`s), consistent with the metric-definitions convention (e.g. Customers #373) and the dbt models. Not rolled to `CompanyAccount`.
 - Younger vintages right-censored.
 - Association not causation.
 - At censored tenures the logo-survival denominator (n_start) is the subset of the vintage old enough to be observed at month k, not the full vintage; GRR is the parity-gated measure while logo survival is derived from the same cells (not independently baselined).
