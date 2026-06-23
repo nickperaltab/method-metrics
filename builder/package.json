@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prebuild": "node ../scripts/build_dbt_models_json.mjs",
+    "predev": "node ../scripts/build_dbt_models_json.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
