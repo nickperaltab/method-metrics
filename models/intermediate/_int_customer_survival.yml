@@ -1,0 +1,25 @@
+version: 2
+
+unit_tests:
+  - name: survival_triangle_basic
+    model: int_customer_survival
+    overrides:
+      vars:
+        survival_min_n: 1
+        survival_censor_month: '2024-03-01'
+    given:
+      - input: ref('int_customer_mrr')
+        rows:
+          - { Month: '2024-01-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-02-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-03-01', EntityRecordID: 1, StartMRR: 50 }
+          - { Month: '2024-01-01', EntityRecordID: 2, StartMRR: 200 }
+      - input: source('revenue', 'Funnel')
+        rows:
+          - { EntityRecordID: 1, Date: '2023-07-01', EventType: 'Trial' }
+          - { EntityRecordID: 2, Date: '2023-08-01', EventType: 'Trial' }
+    expect:
+      rows:
+        - { vintage: '2024', tenure_k: 0, n_start: 2, n_alive: 2, base_mrr: 300, retained_mrr: 300, net_mrr: 300 }
+        - { vintage: '2024', tenure_k: 1, n_start: 2, n_alive: 1, base_mrr: 300, retained_mrr: 100, net_mrr: 100 }
+        - { vintage: '2024', tenure_k: 2, n_start: 2, n_alive: 1, base_mrr: 300, retained_mrr: 50, net_mrr: 50 }
