@@ -810,17 +810,13 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 **Parity-verified against:** §18 GRR baseline — 2022 m12=52.4/m24=39.2, 2023 m12=49.3/m24=36.8, 2024 m12=51.3/m24=37.5, 2025 m12=57.9/m15=50.5 — via `scripts/parity_int_customer_survival.py`, 2026-06-22.
 
-**Status:** **live**
+**Note on promotion status:** This is a parity-verified intermediate (`revenue.int_customer_survival`); it has not been promoted to a canonical `v_metric__` view in `revenue_metrics`.
 
 **Known caveats:**
 - GRR is dollar-weighted, logo survival is count-weighted; "still paying" describes only the logo line.
 - Entity grain, not CompanyAccount.
 - Younger vintages right-censored.
 - Association not causation.
-
-**Used by:**
-- Revenue cohort analysis
-- Customer lifetime value / retention trajectory trending by acquisition cohort
 
 ---
 
