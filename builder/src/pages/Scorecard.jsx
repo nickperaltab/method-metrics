@@ -249,13 +249,14 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
             }}>
               {section.title}
             </h2>
-            <CohortSurvivalChart />
+            <CohortSurvivalChart onInspect={() => setInspected({ dbtModel: 'int_customer_survival' })} />
           </div>
         );
       })}
 
       <MetricInspector
         metricId={inspected?.metricId}
+        dbtModel={inspected?.dbtModel}
         currentValue={inspected?.value}
         valueFormat={inspected?.format}
         metricsCache={metricsCache}

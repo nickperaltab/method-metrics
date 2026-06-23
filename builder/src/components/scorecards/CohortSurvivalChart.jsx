@@ -8,7 +8,7 @@ const MEASURES = [
   { key: 'logo', label: 'Logo survival (% still paying)' },
 ];
 
-export default function CohortSurvivalChart() {
+export default function CohortSurvivalChart({ onInspect }) {
   const [rows, setRows] = useState(null);
   const [measure, setMeasure] = useState('grr');
   const [error, setError] = useState(null);
@@ -52,7 +52,7 @@ export default function CohortSurvivalChart() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         {MEASURES.map((m) => (
           <button
             key={m.key}
@@ -70,6 +70,15 @@ export default function CohortSurvivalChart() {
             {m.label}
           </button>
         ))}
+        {onInspect && (
+          <button
+            onClick={onInspect}
+            title="How this is derived (dbt)"
+            style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff', color: '#374151' }}
+          >
+            ⓘ derivation
+          </button>
+        )}
       </div>
       <div style={{ height: 360 }}>
         <ChartErrorBoundary>
