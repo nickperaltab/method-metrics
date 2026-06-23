@@ -51,6 +51,7 @@ joined AS (
 SELECT
   vintage,
   tenure_k,
+  -- n_start = cohort size, constant across k (UNNEST drives one row per entity per tenure)
   COUNT(*) AS n_start,
   COUNTIF(mrrk > 0) AS n_alive,
   SUM(mrr0) AS base_mrr,
