@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { toTriangle, RETENTION_MAX_TENURE } from '../../src/lib/retentionTriangleSql.js';
+import { buildRetentionTriangleSql, toTriangle, RETENTION_MAX_TENURE } from '../../src/lib/retentionTriangleSql.js';
 
 const rows = [
   { cohort_month: '2024-01-01', tenure_k: 0, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 300 },
   { cohort_month: '2024-01-01', tenure_k: 1, n_start: 2, n_active: 1, mrr_start: 300, mrr_active: 100 },
   { cohort_month: '2024-01-01', tenure_k: 2, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 250 },
 ];
+
+describe('buildRetentionTriangleSql', () => {
+  it('builds SQL referencing the model table, filtered to the display window', () => {
+    const sql = buildRetentionTriangleSql();
+    expect(sql).toContain('int_customer_retention_triangle');
+    expect(sql).toContain(`tenure_k <= ${RETENTION_MAX_TENURE}`);
+  });
+});
 
 describe('toTriangle', () => {
   it('customers from_start = active/start', () => {
