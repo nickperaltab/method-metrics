@@ -823,18 +823,19 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 ### Customer Retention Triangle (`int_customer_retention_triangle`)
 
-**What it answers in one sentence:** For each monthly cohort, what share of customers (and MRR) is retained at each month of tenure, and where does the leak happen?
+**What it answers in one sentence:** For each monthly cohort, what share of customers (and MRR) is retained at each month of tenure, broken down by industry, segment, country, and channel?
 
-**Grain:** customer-level (`EntityRecordID`; a customer may own multiple `CompanyAccount`s) / monthly cohort / tenure-indexed.
+**Grain:** One row per `(cohort_month, tenure_k, l1, segment, country, channel)` cube cell. `EntityRecordID` (customer) is the unit of count; dimensions are frozen at cohort start except `l1`, which is current V7 classification sourced from `v7_classification.v_entity_primary_label` (same join used in GRR-by-Industry).
 
 **Measures (derived in the app):** Customers (count) and MRR (net), each From-start (`active/start`) or Previous-month (`active/prior`). MoM and net-MRR can exceed 100% (reactivation/expansion).
 
 **Filters / exclusions:**
 - `Funnel Trial MIN(Date) >= '2021-06-01'` — signup cohort anchor
-- `n_start >= 20` per cohort — minimum sample threshold
 - Right-censored at the latest complete month
+- No `n_start` threshold in-model; applied at display time (default `n_start >= 20`) as a minimum-cohort threshold to suppress noisy small cells
+- Dimension filters (l1, segment, country, channel) applied in-app as multi-select AND logic; the model stores the full unfiltered cube
 
-**Methodology source:** mirrors `int_customer_survival` at monthly-cohort grain; source `int_customer_mrr` (2026-06).
+**Methodology source:** mirrors `int_customer_survival` at monthly-cohort grain; source `int_customer_mrr` (2026-06). `l1` sourced from `v_entity_primary_label` (customer grain, matches GRR-by-Industry).
 
 **Parity-verified against:** `scripts/parity_int_customer_retention_triangle.py` — model reproduces the source method cell-by-cell; yearly rollup ties to `int_customer_survival` within rounding. Verified 2026-06-23.
 
@@ -843,6 +844,7 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 **Known caveats:**
 - MRR is net (NRR-style), not the survival chart's capped GRR.
 - Customer grain is `EntityRecordID` (one customer may own several `CompanyAccount`s), not rolled to `CompanyAccount`.
+- `l1` uses current-state classification, not classification-at-cohort-start; reclassifications backfill into all historical rows.
 
 ---
 
