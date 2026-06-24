@@ -843,7 +843,6 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 **Known caveats:**
 - MRR is net (NRR-style), not the survival chart's capped GRR.
 - Customer grain is `EntityRecordID` (one customer may own several `CompanyAccount`s), not rolled to `CompanyAccount`.
-- Parity-verified intermediate, not a canonical `v_metric__`.
 
 ---
 

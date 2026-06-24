@@ -22,6 +22,19 @@ function retentionColor(pct, basis) {
 
 const cell = { padding: '4px 6px', fontSize: 11, textAlign: 'center', borderRadius: 3, minWidth: 46 };
 
+function Toggle({ opts, val, set }) {
+  return (
+    <span style={{ display: 'inline-flex', gap: 6, marginRight: 16 }}>
+      {opts.map((o) => (
+        <button key={o.k} onClick={() => set(o.k)} style={{
+          padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: '1px solid #d1d5db',
+          background: val === o.k ? '#059669' : '#fff', color: val === o.k ? '#fff' : '#374151',
+        }}>{o.l}</button>
+      ))}
+    </span>
+  );
+}
+
 export default function RetentionTriangle() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
@@ -40,16 +53,6 @@ export default function RetentionTriangle() {
   if (!rows) return <div style={{ color: '#6b7280', padding: 16 }}>Loading retention triangle…</div>;
 
   const { cohorts, tenures, cells, averages } = toTriangle(rows, measure, basis);
-  const Toggle = ({ opts, val, set }) => (
-    <span style={{ display: 'inline-flex', gap: 6, marginRight: 16 }}>
-      {opts.map((o) => (
-        <button key={o.k} onClick={() => set(o.k)} style={{
-          padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: '1px solid #d1d5db',
-          background: val === o.k ? '#059669' : '#fff', color: val === o.k ? '#fff' : '#374151',
-        }}>{o.l}</button>
-      ))}
-    </span>
-  );
 
   return (
     <div>

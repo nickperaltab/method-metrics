@@ -5,7 +5,7 @@ export function buildRetentionTriangleSql() {
   return `
     SELECT cohort_month, tenure_k, n_start, n_active, mrr_start, mrr_active
     FROM \`project-for-method-dw.revenue.int_customer_retention_triangle\`
-    WHERE tenure_k <= ${RETENTION_MAX_TENURE}
+    WHERE tenure_k <= ${RETENTION_MAX_TENURE}  /* display window; the model stores tenure 0–24 */
     ORDER BY cohort_month, tenure_k
   `;
 }
