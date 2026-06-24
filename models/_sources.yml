@@ -50,7 +50,7 @@ sources:
   - name: v7_classification
     database: project-for-method-dw
     schema: v7_classification
-    description: V7 industry classification enrichment (account_labels). Current-state labels per CompanyAccount.
+    description: V7 industry classification enrichment. v_entity_primary_label = one row per customer (customer_record_id) with the entity's primary l1 + is_multi_client.
     tables:
-      - name: account_labels
-        description: One row per (account_record_id) classification. Keyed to CompanyAccount via company_account. Columns used here, deduped per company_account by confidence then classified_at, l1 + is_multi_client.
+      - name: v_entity_primary_label
+        description: One row per customer_record_id (= EntityRecordID). Columns used, l1, is_multi_client. Same source the GRR-by-Industry page uses.

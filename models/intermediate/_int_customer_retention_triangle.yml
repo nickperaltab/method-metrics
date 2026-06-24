@@ -10,7 +10,7 @@ models:
       l1 is current V7 classification (Multi-client or Unclassified bucket where
       no label exists). No in-model n_start threshold; apply at display time.
       Monthly cohorts; signup gate Trial >= 2021-06-01; right-censored at the
-      latest complete month. Sources: int_customer_mrr + v7_classification.account_labels.
+      latest complete month. Sources: int_customer_mrr + v7_classification.v_entity_primary_label.
     columns:
       - name: cohort_month
         tests: [not_null]
@@ -51,10 +51,10 @@ unit_tests:
         rows:
           - { EntityRecordID: 1, Date: '2023-07-01', EventType: 'Trial' }
           - { EntityRecordID: 2, Date: '2023-08-01', EventType: 'Trial' }
-      - input: source('v7_classification', 'account_labels')
+      - input: source('v7_classification', 'v_entity_primary_label')
         rows:
-          - { company_account: 'CoA', l1: 'Manufacturing', confidence: 0.9, classified_at: '2026-01-01' }
-          - { company_account: 'CoB', l1: 'Retail', confidence: 0.9, classified_at: '2026-01-01' }
+          - { customer_record_id: 1, l1: 'Manufacturing', is_multi_client: false }
+          - { customer_record_id: 2, l1: 'Retail', is_multi_client: false }
     expect:
       rows:
         - { cohort_month: '2024-01-01', tenure_k: 0, l1: 'Manufacturing', segment: 'Solo no DEP', country: 'US', channel: 'SEO', n_start: 1, n_active: 1, mrr_start: 100, mrr_active: 100 }

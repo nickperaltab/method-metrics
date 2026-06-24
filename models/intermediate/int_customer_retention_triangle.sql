@@ -21,21 +21,9 @@ first_pay AS (
   SELECT EntityRecordID, MIN(Month) AS cohort_month
   FROM monthly_mrr WHERE mrr > 0 GROUP BY 1
 ),
-labels AS (  -- one row per company_account, highest-confidence wins
-  SELECT
-    company_account,
-    CASE
-      WHEN l1 IS NULL OR l1 = 'UNCLASSIFIABLE' THEN 'Unclassified'
-      ELSE l1
-    END AS l1
-  FROM {{ source('v7_classification', 'account_labels') }}
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY company_account ORDER BY confidence DESC, classified_at DESC
-  ) = 1
-),
 dims AS (  -- cohort-start attributes, one row per entity at its first paying month
   SELECT
-    d.EntityRecordID, d.Company,
+    d.EntityRecordID,
     COALESCE(d.Segment, '(unknown)') AS segment,
     COALESCE(d.SignupCountry, '(unknown)') AS country,
     COALESCE(d.AttributionChannel, '(unknown)') AS channel
@@ -46,12 +34,12 @@ base AS (
   SELECT
     fp.EntityRecordID AS eid, fp.cohort_month, b.mrr AS mrr0,
     dm.segment, dm.country, dm.channel,
-    COALESCE(lb.l1, 'Unclassified') AS l1
+    CASE WHEN lbl.is_multi_client THEN 'Multi-client' ELSE COALESCE(lbl.l1, 'Unclassified') END AS l1
   FROM first_pay fp
   JOIN monthly_mrr b ON b.EntityRecordID = fp.EntityRecordID AND b.Month = fp.cohort_month
   JOIN signup s ON s.EntityRecordID = fp.EntityRecordID AND s.sd >= '2021-06-01'
   LEFT JOIN dims dm ON dm.EntityRecordID = fp.EntityRecordID
-  LEFT JOIN labels lb ON lb.company_account = dm.Company
+  LEFT JOIN {{ source('v7_classification', 'v_entity_primary_label') }} lbl ON lbl.customer_record_id = fp.EntityRecordID
 ),
 joined AS (
   SELECT
