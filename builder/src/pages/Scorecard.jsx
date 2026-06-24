@@ -8,6 +8,7 @@ import DecompositionDrill from '../components/scorecards/DecompositionDrill';
 import FunnelDrill from '../components/scorecards/FunnelDrill';
 import GrrIndustryDrill from '../components/scorecards/GrrIndustryDrill';
 import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
+import RetentionTriangle from '../components/scorecards/RetentionTriangle';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -235,6 +236,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
               )}
             </h2>
             {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
+            {section.component === 'retentionTriangle' && <RetentionTriangle />}
           </div>
         ) : (
           <ScorecardSection

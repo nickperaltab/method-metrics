@@ -228,6 +228,13 @@ export default {
       dbtModel: 'int_customer_survival',
     },
 
+    // ── Retention triangle ──────────────────────────────────────
+    {
+      title: 'Customer Retention Triangle',
+      component: 'retentionTriangle',
+      dbtModel: 'int_customer_retention_triangle',
+    },
+
     // ── Customer List ───────────────────────────────────────────
     {
       type: 'rawTable',
