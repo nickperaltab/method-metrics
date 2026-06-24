@@ -21,7 +21,9 @@ function round1(x) {
 //   cohorts   — [{cohort_month, n_start}] sorted desc by month
 //   tenures   — [0..RETENTION_MAX_TENURE]
 //   cells     — cells[cohort_month][k] = rounded % or null
-//   averages  — averages[k] = mean of non-null cells at that tenure
+//   averages  — averages[k] = mean of the 6 most-recent cohorts' cells at that tenure (rolling baseline)
+export const ROLLING_COHORTS = 6;
+
 export function toTriangle(rows, measure, basis) {
   const tenures = Array.from({ length: RETENTION_MAX_TENURE + 1 }, (_, k) => k);
   const numKey = measure === 'mrr' ? 'mrr_active' : 'n_active';
@@ -59,8 +61,15 @@ export function toTriangle(rows, measure, basis) {
     });
   }
 
+  // Rolling baseline: the 6 most-recent cohorts with data at each tenure.
+  // `cohorts` is already sorted newest-first, so take the first ROLLING_COHORTS non-null.
   const averages = tenures.map((k) => {
-    const vals = cohorts.map((c) => cells[c.cohort_month][k]).filter((v) => v != null);
+    const vals = [];
+    for (const c of cohorts) {
+      const v = cells[c.cohort_month][k];
+      if (v != null) vals.push(v);
+      if (vals.length === ROLLING_COHORTS) break;
+    }
     return vals.length ? round1(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
   });
 

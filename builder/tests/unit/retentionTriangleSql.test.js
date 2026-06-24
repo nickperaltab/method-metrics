@@ -39,3 +39,21 @@ describe('toTriangle', () => {
     expect(t.averages[0]).toBe(100);
   });
 });
+
+describe('toTriangle rolling 6-cohort average', () => {
+  // 7 cohorts; the oldest (2025-01) has a 0% month-1 that must be EXCLUDED by the
+  // rolling-6 window. All-7 average would be 77.1%; rolling-6 is 90%.
+  const months = ['2025-07', '2025-06', '2025-05', '2025-04', '2025-03', '2025-02', '2025-01'];
+  const rolling = [];
+  for (const m of months) {
+    rolling.push({ cohort_month: `${m}-01`, tenure_k: 0, n_start: 10, n_active: 10, mrr_start: 100, mrr_active: 100 });
+    const active1 = m === '2025-01' ? 0 : 9; // oldest is the outlier
+    rolling.push({ cohort_month: `${m}-01`, tenure_k: 1, n_start: 10, n_active: active1, mrr_start: 100, mrr_active: active1 * 10 });
+  }
+
+  it('averages only the 6 most recent cohorts per tenure', () => {
+    const { averages } = toTriangle(rolling, 'customers', 'from_start');
+    expect(averages[0]).toBe(100); // all k0 = 100
+    expect(averages[1]).toBe(90);  // 6 newest = 90%; the 0% oldest excluded (all-7 = 77.1)
+  });
+});

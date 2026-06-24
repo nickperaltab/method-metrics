@@ -5,13 +5,13 @@ import { buildRetentionTriangleSql, toTriangle } from '../../lib/retentionTriang
 const MEASURES = [{ k: 'customers', l: 'Customers (%)' }, { k: 'mrr', l: 'MRR (net %)' }];
 const BASES = [{ k: 'from_start', l: 'From start' }, { k: 'mom', l: 'Previous month' }];
 
-// Red (low) -> amber -> green (high). pct anchored 0..100 for from-start; for MoM,
-// values cluster near 100, so center the ramp at 100 with a +/-15 band.
-function retentionColor(pct, basis) {
+// Red (low) -> amber -> green (high), auto-scaled to the grid's actual min..max for
+// the current view, so the spread is visible whatever range the data occupies
+// (MoM clusters near 100; from-start spans ~35..100).
+function retentionColor(pct, min, max) {
   if (pct == null) return 'transparent';
-  let frac;
-  if (basis === 'mom') frac = Math.max(0, Math.min(1, (pct - 85) / 30)); // 85..115 -> 0..1
-  else frac = Math.max(0, Math.min(1, pct / 100));
+  const span = max - min;
+  const frac = span > 0 ? Math.max(0, Math.min(1, (pct - min) / span)) : 0.5;
   const stops = [[0, [220, 38, 38]], [0.5, [245, 158, 11]], [1, [5, 150, 105]]];
   let lo = stops[0], hi = stops[2];
   for (let i = 0; i < 2; i++) if (frac >= stops[i][0] && frac <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
@@ -53,6 +53,10 @@ export default function RetentionTriangle() {
   if (!rows) return <div style={{ color: '#6b7280', padding: 16 }}>Loading retention triangle…</div>;
 
   const { cohorts, tenures, cells, averages } = toTriangle(rows, measure, basis);
+  // Auto-scale the color ramp to the values actually on screen for this view.
+  const flat = cohorts.flatMap((c) => cells[c.cohort_month]).filter((v) => v != null);
+  const vmin = flat.length ? Math.min(...flat) : 0;
+  const vmax = flat.length ? Math.max(...flat) : 100;
 
   return (
     <div>
@@ -76,12 +80,12 @@ export default function RetentionTriangle() {
                 <td style={{ ...cell, color: '#6b7280' }}>{c.n_start}</td>
                 {tenures.map((k) => {
                   const v = cells[c.cohort_month][k];
-                  return <td key={k} style={{ ...cell, background: retentionColor(v, basis), color: '#1a1a1a' }}>{v == null ? '' : v + '%'}</td>;
+                  return <td key={k} style={{ ...cell, background: retentionColor(v, vmin, vmax), color: '#1a1a1a' }}>{v == null ? '' : v + '%'}</td>;
                 })}
               </tr>
             ))}
             <tr>
-              <td style={{ ...cell, textAlign: 'left', fontWeight: 700 }}>Average</td>
+              <td style={{ ...cell, textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>Avg (last 6)</td>
               <td style={cell}></td>
               {tenures.map((k) => <td key={k} style={{ ...cell, fontWeight: 700 }}>{averages[k] == null ? '' : averages[k] + '%'}</td>)}
             </tr>
