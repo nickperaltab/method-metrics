@@ -1,8 +1,10 @@
 {{ config(materialized='table') }}
 
--- Customer retention triangle: monthly cohorts x tenure. Customer grain (EntityRecordID).
--- Mirrors int_customer_survival but cohorts by first-paying MONTH (not year).
--- Frontend derives the four views (Customers/MRR x from-start/MoM) from these raw columns.
+-- Customer retention CUBE: monthly cohorts x tenure x (l1, segment, country, channel).
+-- Customer grain (EntityRecordID). Dims frozen at cohort start; l1 is current classification.
+-- Additive measures: the frontend sums the filtered slice and derives the four views.
+-- No in-model n_start threshold: the cube is complete so the "All" rollup is exact;
+-- the min-cohort threshold is applied at display time in the frontend.
 
 WITH monthly_mrr AS (
   SELECT Month, EntityRecordID, SUM(StartMRR) AS mrr
@@ -19,14 +21,42 @@ first_pay AS (
   SELECT EntityRecordID, MIN(Month) AS cohort_month
   FROM monthly_mrr WHERE mrr > 0 GROUP BY 1
 ),
+labels AS (  -- one row per company_account, highest-confidence wins
+  SELECT
+    company_account,
+    CASE
+      WHEN l1 IS NULL OR l1 = 'UNCLASSIFIABLE' THEN 'Unclassified'
+      ELSE l1
+    END AS l1
+  FROM {{ source('v7_classification', 'account_labels') }}
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY company_account ORDER BY confidence DESC, classified_at DESC
+  ) = 1
+),
+dims AS (  -- cohort-start attributes, one row per entity at its first paying month
+  SELECT
+    d.EntityRecordID, d.Company,
+    COALESCE(d.Segment, '(unknown)') AS segment,
+    COALESCE(d.SignupCountry, '(unknown)') AS country,
+    COALESCE(d.AttributionChannel, '(unknown)') AS channel
+  FROM {{ ref('int_customer_mrr') }} d
+  JOIN first_pay fp ON fp.EntityRecordID = d.EntityRecordID AND d.Month = fp.cohort_month
+),
 base AS (
-  SELECT fp.EntityRecordID AS eid, fp.cohort_month, b.mrr AS mrr0
+  SELECT
+    fp.EntityRecordID AS eid, fp.cohort_month, b.mrr AS mrr0,
+    dm.segment, dm.country, dm.channel,
+    COALESCE(lb.l1, 'Unclassified') AS l1
   FROM first_pay fp
   JOIN monthly_mrr b ON b.EntityRecordID = fp.EntityRecordID AND b.Month = fp.cohort_month
   JOIN signup s ON s.EntityRecordID = fp.EntityRecordID AND s.sd >= '2021-06-01'
+  LEFT JOIN dims dm ON dm.EntityRecordID = fp.EntityRecordID
+  LEFT JOIN labels lb ON lb.company_account = dm.Company
 ),
 joined AS (
-  SELECT base.cohort_month, k AS tenure_k, base.mrr0, IFNULL(f.mrr, 0) AS mrrk
+  SELECT
+    base.cohort_month, k AS tenure_k, base.mrr0, IFNULL(f.mrr, 0) AS mrrk,
+    base.l1, base.segment, base.country, base.channel
   FROM base, UNNEST(GENERATE_ARRAY(0, 24)) AS k
   LEFT JOIN monthly_mrr f
     ON f.EntityRecordID = base.eid
@@ -35,17 +65,15 @@ joined AS (
     {%- if var('retention_censor_month', none) is not none %}
     DATE('{{ var("retention_censor_month") }}')
     {%- else %}
-    DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)  -- default: latest complete month
+    DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)
     {%- endif %}
 )
 SELECT
-  cohort_month,
-  tenure_k,
-  COUNT(*) AS n_start,           -- cohort size; equal across k for a cohort because the censor passes/fails a whole (cohort,k) cell at once
+  cohort_month, tenure_k, l1, segment, country, channel,
+  COUNT(*) AS n_start,
   COUNTIF(mrrk > 0) AS n_active,
   SUM(mrr0) AS mrr_start,
   SUM(mrrk) AS mrr_active
 FROM joined
-GROUP BY 1, 2
-HAVING n_start >= {{ var("retention_min_cohort", 20) }}
-ORDER BY 1, 2
+GROUP BY 1, 2, 3, 4, 5, 6
+ORDER BY 1, 2, 3, 4, 5, 6

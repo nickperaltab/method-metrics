@@ -3,13 +3,14 @@ version: 2
 models:
   - name: int_customer_retention_triangle
     description: >
-      Customer retention triangle, customer grain (EntityRecordID). One row per
-      (cohort_month, tenure_k). Frontend derives four views from these raw
-      counts: Customers vs MRR, each From-start (active/start) or Previous-month
-      (active/prior). MRR is net (NRR-style, can exceed 100% on expansion or
-      reactivation), distinct from the survival model's capped GRR. Monthly
-      cohorts; signup gate Trial >= 2021-06-01; n_start >= 20; right-censored at
-      the latest complete month. Source: int_customer_mrr.
+      Customer retention CUBE, customer grain (EntityRecordID). One row per
+      (cohort_month, tenure_k, l1, segment, country, channel). Frontend sums the
+      filtered slice and derives four views: Customers vs MRR, each From-start
+      (active/start) or Previous-month (active/prior). Dims frozen at cohort start;
+      l1 is current V7 classification (Multi-client or Unclassified bucket where
+      no label exists). No in-model n_start threshold; apply at display time.
+      Monthly cohorts; signup gate Trial >= 2021-06-01; right-censored at the
+      latest complete month. Sources: int_customer_mrr + v7_classification.account_labels.
     columns:
       - name: cohort_month
         tests: [not_null]
@@ -20,6 +21,14 @@ models:
               arguments:
                 values: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]
                 quote: false
+      - name: l1
+        tests: [not_null]
+      - name: segment
+        tests: [not_null]
+      - name: country
+        tests: [not_null]
+      - name: channel
+        tests: [not_null]
       - name: n_start
         tests: [not_null]
       - name: n_active
@@ -28,26 +37,25 @@ models:
         tests: [not_null]
 
 unit_tests:
-  - name: retention_triangle_basic
+  - name: retention_triangle_cube_basic
     model: int_customer_retention_triangle
     overrides:
       vars:
-        retention_min_cohort: 1
-        retention_censor_month: '2024-03-01'
+        retention_censor_month: '2024-01-01'
     given:
       - input: ref('int_customer_mrr')
         rows:
-          - { Month: '2024-01-01', EntityRecordID: 1, StartMRR: 100 }
-          - { Month: '2024-02-01', EntityRecordID: 1, StartMRR: 100 }
-          - { Month: '2024-03-01', EntityRecordID: 1, StartMRR: 50 }
-          - { Month: '2024-01-01', EntityRecordID: 2, StartMRR: 200 }
-          - { Month: '2024-03-01', EntityRecordID: 2, StartMRR: 200 }
+          - { Month: '2024-01-01', EntityRecordID: 1, StartMRR: 100, Company: 'CoA', Segment: 'Solo no DEP', SignupCountry: 'US', AttributionChannel: 'SEO' }
+          - { Month: '2024-01-01', EntityRecordID: 2, StartMRR: 200, Company: 'CoB', Segment: 'Team AI Plus', SignupCountry: 'CA', AttributionChannel: 'PPC' }
       - input: source('revenue', 'Funnel')
         rows:
           - { EntityRecordID: 1, Date: '2023-07-01', EventType: 'Trial' }
           - { EntityRecordID: 2, Date: '2023-08-01', EventType: 'Trial' }
+      - input: source('v7_classification', 'account_labels')
+        rows:
+          - { company_account: 'CoA', l1: 'Manufacturing', confidence: 0.9, classified_at: '2026-01-01' }
+          - { company_account: 'CoB', l1: 'Retail', confidence: 0.9, classified_at: '2026-01-01' }
     expect:
       rows:
-        - { cohort_month: '2024-01-01', tenure_k: 0, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 300 }
-        - { cohort_month: '2024-01-01', tenure_k: 1, n_start: 2, n_active: 1, mrr_start: 300, mrr_active: 100 }
-        - { cohort_month: '2024-01-01', tenure_k: 2, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 250 }
+        - { cohort_month: '2024-01-01', tenure_k: 0, l1: 'Manufacturing', segment: 'Solo no DEP', country: 'US', channel: 'SEO', n_start: 1, n_active: 1, mrr_start: 100, mrr_active: 100 }
+        - { cohort_month: '2024-01-01', tenure_k: 0, l1: 'Retail', segment: 'Team AI Plus', country: 'CA', channel: 'PPC', n_start: 1, n_active: 1, mrr_start: 200, mrr_active: 200 }

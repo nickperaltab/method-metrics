@@ -46,3 +46,11 @@ sources:
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
       - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).
+
+  - name: v7_classification
+    database: project-for-method-dw
+    schema: v7_classification
+    description: V7 industry classification enrichment (account_labels). Current-state labels per CompanyAccount.
+    tables:
+      - name: account_labels
+        description: One row per (account_record_id) classification. Keyed to CompanyAccount via company_account. Columns used here, deduped per company_account by confidence then classified_at, l1 + is_multi_client.
