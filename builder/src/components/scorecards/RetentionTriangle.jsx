@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { queryBq } from '../../lib/bigquery';
-import { buildRetentionTriangleSql, toTriangle } from '../../lib/retentionTriangleSql';
+import { buildRetentionTriangleSql, toTriangle, filterOptions, FILTER_DIMS } from '../../lib/retentionTriangleSql';
+import MultiSelect from './MultiSelect';
 
 const MEASURES = [{ k: 'customers', l: 'Customers (%)' }, { k: 'mrr', l: 'MRR (net %)' }];
 const BASES = [{ k: 'from_start', l: 'From start' }, { k: 'mom', l: 'Previous month' }];
@@ -35,11 +36,14 @@ function Toggle({ opts, val, set }) {
   );
 }
 
+const MIN_COHORT = 20;
+
 export default function RetentionTriangle() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const [measure, setMeasure] = useState('customers');
   const [basis, setBasis] = useState('mom');
+  const [filters, setFilters] = useState({ l1: new Set(), segment: new Set(), country: new Set(), channel: new Set() });
 
   useEffect(() => {
     let alive = true;
@@ -52,7 +56,10 @@ export default function RetentionTriangle() {
   if (error) return <div style={{ color: '#b91c1c', padding: 16 }}>Failed to load: {error}</div>;
   if (!rows) return <div style={{ color: '#6b7280', padding: 16 }}>Loading retention triangle…</div>;
 
-  const { cohorts, tenures, cells, averages } = toTriangle(rows, measure, basis);
+  const options = filterOptions(rows);
+  const { cohorts: allCohorts, tenures, cells, averages } = toTriangle(rows, measure, basis, filters);
+  // Apply display threshold: hide cohorts whose filtered n_start < MIN_COHORT.
+  const cohorts = allCohorts.filter((c) => c.n_start != null && c.n_start >= MIN_COHORT);
   // Auto-scale the color ramp to the values actually on screen for this view.
   const flat = cohorts.flatMap((c) => cells[c.cohort_month]).filter((v) => v != null);
   const vmin = flat.length ? Math.min(...flat) : 0;
@@ -60,6 +67,17 @@ export default function RetentionTriangle() {
 
   return (
     <div>
+      <div style={{ marginBottom: 8 }}>
+        {FILTER_DIMS.map((d) => (
+          <MultiSelect
+            key={d.key}
+            label={d.label}
+            options={options[d.key] || []}
+            selected={filters[d.key]}
+            onChange={(s) => setFilters({ ...filters, [d.key]: s })}
+          />
+        ))}
+      </div>
       <div style={{ marginBottom: 10 }}>
         <Toggle opts={MEASURES} val={measure} set={setMeasure} />
         <Toggle opts={BASES} val={basis} set={setBasis} />
