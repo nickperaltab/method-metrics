@@ -1,0 +1,26 @@
+version: 2
+
+unit_tests:
+  - name: retention_triangle_basic
+    model: int_customer_retention_triangle
+    overrides:
+      vars:
+        retention_min_cohort: 1
+        retention_censor_month: '2024-03-01'
+    given:
+      - input: ref('int_customer_mrr')
+        rows:
+          - { Month: '2024-01-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-02-01', EntityRecordID: 1, StartMRR: 100 }
+          - { Month: '2024-03-01', EntityRecordID: 1, StartMRR: 50 }
+          - { Month: '2024-01-01', EntityRecordID: 2, StartMRR: 200 }
+          - { Month: '2024-03-01', EntityRecordID: 2, StartMRR: 200 }
+      - input: source('revenue', 'Funnel')
+        rows:
+          - { EntityRecordID: 1, Date: '2023-07-01', EventType: 'Trial' }
+          - { EntityRecordID: 2, Date: '2023-08-01', EventType: 'Trial' }
+    expect:
+      rows:
+        - { cohort_month: '2024-01-01', tenure_k: 0, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 300 }
+        - { cohort_month: '2024-01-01', tenure_k: 1, n_start: 2, n_active: 1, mrr_start: 300, mrr_active: 100 }
+        - { cohort_month: '2024-01-01', tenure_k: 2, n_start: 2, n_active: 2, mrr_start: 300, mrr_active: 250 }
