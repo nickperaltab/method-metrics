@@ -31,16 +31,20 @@ joined AS (
   LEFT JOIN monthly_mrr f
     ON f.EntityRecordID = base.eid
     AND f.Month = DATE_ADD(base.cohort_month, INTERVAL k MONTH)
-  WHERE DATE_ADD(base.cohort_month, INTERVAL k MONTH)
-        <= DATE('{{ var("retention_censor_month", "2026-05-01") }}')
+  WHERE DATE_ADD(base.cohort_month, INTERVAL k MONTH) <=
+    {%- if var('retention_censor_month', none) is not none %}
+    DATE('{{ var("retention_censor_month") }}')
+    {%- else %}
+    DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)  -- default: latest complete month
+    {%- endif %}
 )
 SELECT
   cohort_month,
   tenure_k,
-  COUNT(*) AS n_start,           -- cohort size (constant across k: a monthly cohort's censor passes/fails per cell uniformly)
+  COUNT(*) AS n_start,           -- cohort size; equal across k for a cohort because the censor passes/fails a whole (cohort,k) cell at once
   COUNTIF(mrrk > 0) AS n_active,
   SUM(mrr0) AS mrr_start,
-  SUM(IF(mrrk > 0, mrrk, 0)) AS mrr_active
+  SUM(mrrk) AS mrr_active
 FROM joined
 GROUP BY 1, 2
 HAVING n_start >= {{ var("retention_min_cohort", 20) }}

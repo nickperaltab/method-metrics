@@ -29,7 +29,7 @@ base AS (SELECT fp.EntityRecordID AS eid, fp.cohort_month, b.mrr AS mrr0 FROM fp
 j AS (SELECT base.cohort_month, k AS tenure_k, IFNULL(f.mrr,0) AS mrrk
       FROM base, UNNEST(GENERATE_ARRAY(0,24)) AS k
       LEFT JOIN monthly_mrr f ON f.EntityRecordID=base.eid AND f.Month=DATE_ADD(base.cohort_month, INTERVAL k MONTH)
-      WHERE DATE_ADD(base.cohort_month, INTERVAL k MONTH) <= DATE('2026-05-01'))
+      WHERE DATE_ADD(base.cohort_month, INTERVAL k MONTH) <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH))
 SELECT cohort_month, tenure_k, COUNT(*) AS n_start, COUNTIF(mrrk>0) AS n_active
 FROM j GROUP BY 1,2 HAVING n_start>=20 ORDER BY 1,2
 """
