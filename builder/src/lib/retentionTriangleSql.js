@@ -74,7 +74,7 @@ export function toTriangle(rows, measure, basis, filters) {
   // cohorts sorted descending (most recent first); n_start = summed at k=0
   const cohorts = [...agg.keys()].sort().reverse().map((cm) => ({
     cohort_month: cm,
-    n_start: agg.get(cm).get(0)?.[startKey === 'mrr_start' ? 'mrr_start' : 'n_start'] ?? null,
+    n_start: agg.get(cm).get(0)?.n_start ?? null,
   }));
 
   const cells = {};

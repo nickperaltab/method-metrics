@@ -87,4 +87,8 @@ describe('cube filtering', () => {
     const sql = buildRetentionTriangleSql();
     ['l1', 'segment', 'country', 'channel'].forEach((d) => expect(sql).toContain(d));
   });
+  it('MRR measure: cohort n_start is still customer count, not mrr_start', () => {
+    const t = toTriangle(cubeRows, 'mrr', 'from_start');
+    expect(t.cohorts[0].n_start).toBe(15); // 10+5 customers, not 100+200 dollars
+  });
 });
