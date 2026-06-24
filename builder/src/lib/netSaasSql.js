@@ -384,9 +384,7 @@ kept AS (
 SELECT
   ${HEALTH_TIER_CASE} AS tier,
   COUNT(*) AS n,
-  -- MRR-weighted: share of the tier's starting MRR lost to full churn (dollars,
-  -- not logos). Coincident with current health — overstates the spread (see UI caption).
-  ROUND(100 * SUM(IF(k.EntityRecordID IS NULL, c.p2_saas, 0)) / NULLIF(SUM(c.p2_saas), 0), 1) AS churn_pct
+  ROUND(100 * COUNTIF(k.EntityRecordID IS NULL) / COUNT(*), 1) AS churn_pct
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID
 LEFT JOIN kept k ON k.EntityRecordID = c.EntityRecordID
