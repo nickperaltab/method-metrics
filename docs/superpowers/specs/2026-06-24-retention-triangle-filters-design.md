@@ -19,7 +19,7 @@ dbt-traceable via the ⓘ panel.
 
 | Filter | Source column | Notes |
 |---|---|---|
-| Industry (L1) | `v7_classification.account_labels.l1` | join on the customer's `Company`; deduped; Multi-client/Unclassified buckets (GRR-by-industry pattern) |
+| Industry (L1) | `v7_classification.account_labels.l1` | join on the customer's `Company`; deduped; Multi-client/Unclassified buckets (GRR-by-industry pattern) — **Superseded:** l1 is sourced from `v_entity_primary_label` on `customer_record_id = EntityRecordID` (customer grain), not `account_labels`/`Company` |
 | Customer type | `int_customer_mrr.Segment` | values: Solo no DEP / 2-3 no DEP / 4+ no DEP / Team AI Plus — the CRO's "solo, dep, etc." |
 | Country | `int_customer_mrr.SignupCountry` | already on the model source |
 | Channel | `int_customer_mrr.AttributionChannel` | already on the model source |

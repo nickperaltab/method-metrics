@@ -57,9 +57,7 @@ export default function RetentionTriangle() {
   if (!rows) return <div style={{ color: '#6b7280', padding: 16 }}>Loading retention triangle…</div>;
 
   const options = filterOptions(rows);
-  const { cohorts: allCohorts, tenures, cells, averages } = toTriangle(rows, measure, basis, filters);
-  // Apply display threshold: hide cohorts whose filtered n_start < MIN_COHORT.
-  const cohorts = allCohorts.filter((c) => c.n_start != null && c.n_start >= MIN_COHORT);
+  const { cohorts, tenures, cells, averages } = toTriangle(rows, measure, basis, filters, MIN_COHORT);
   // Auto-scale the color ramp to the values actually on screen for this view.
   const flat = cohorts.flatMap((c) => cells[c.cohort_month]).filter((v) => v != null);
   const vmin = flat.length ? Math.min(...flat) : 0;

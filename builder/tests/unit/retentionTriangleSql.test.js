@@ -58,6 +58,22 @@ describe('toTriangle rolling 6-cohort average', () => {
   });
 });
 
+// ── display threshold: sub-min cohorts excluded from grid AND averages ──────
+
+describe('toTriangle display threshold (minCohort)', () => {
+  it('display threshold excludes sub-min cohorts from grid AND averages', () => {
+    const rows = [
+      { cohort_month: '2025-02-01', tenure_k: 0, l1: 'X', segment: 'S', country: 'US', channel: 'C', n_start: 30, n_active: 30, mrr_start: 300, mrr_active: 300 },
+      { cohort_month: '2025-02-01', tenure_k: 1, l1: 'X', segment: 'S', country: 'US', channel: 'C', n_start: 30, n_active: 27, mrr_start: 300, mrr_active: 270 },
+      { cohort_month: '2025-01-01', tenure_k: 0, l1: 'X', segment: 'S', country: 'US', channel: 'C', n_start: 5, n_active: 5, mrr_start: 50, mrr_active: 50 },
+      { cohort_month: '2025-01-01', tenure_k: 1, l1: 'X', segment: 'S', country: 'US', channel: 'C', n_start: 5, n_active: 0, mrr_start: 50, mrr_active: 0 },
+    ];
+    const t = toTriangle(rows, 'customers', 'from_start', undefined, 20);
+    expect(t.cohorts.map((c) => c.cohort_month)).toEqual(['2025-02-01']); // 5-customer cohort hidden
+    expect(t.averages[1]).toBe(90); // avg over kept cohort only (27/30), NOT (90+0)/2=45
+  });
+});
+
 // ── cube-filter tests (Task 4) ──────────────────────────────────────────────
 
 const cubeRows = [

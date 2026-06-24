@@ -12,6 +12,8 @@
 
 - Grain: customer (`EntityRecordID`). Dims frozen at cohort start (the customer's `Segment`/`SignupCountry`/`AttributionChannel` in its first paying month; L1 = current classification).
 - Dims: `l1` (from `account_labels`, deduped, Multi-client/Unclassified buckets), `segment` (`int_customer_mrr.Segment`), `country` (`SignupCountry`), `channel` (`AttributionChannel`).
+
+> **Superseded:** l1 is sourced from `v_entity_primary_label` on `customer_record_id = EntityRecordID` (customer grain), not `account_labels`/`Company`. The join to `account_labels` via `Company = company_account` described below was replaced in the implementation.
 - **Drop the in-model `HAVING n_start >= 20`.** The cube stores every cell so the "All" rollup is exact; the min-cohort threshold (default 20) moves to display-time in the frontend (hide cohorts whose *filtered* n_start < 20).
 - Filters multi-select, combined with AND. Empty/absent selection = "All". No-filter rollup must equal today's numbers (regression + parity check).
 - Censor logic unchanged (dynamic latest-complete-month default, `retention_censor_month` var override for tests).

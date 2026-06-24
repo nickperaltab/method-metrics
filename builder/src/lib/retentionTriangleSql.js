@@ -47,7 +47,7 @@ function rowMatches(r, filters) {
 //   averages  — averages[k] = mean of the 6 most-recent cohorts' cells at that tenure (rolling baseline)
 export const ROLLING_COHORTS = 6;
 
-export function toTriangle(rows, measure, basis, filters) {
+export function toTriangle(rows, measure, basis, filters, minCohort = 0) {
   const tenures = Array.from({ length: RETENTION_MAX_TENURE + 1 }, (_, k) => k);
   const numKey = measure === 'mrr' ? 'mrr_active' : 'n_active';
   const startKey = measure === 'mrr' ? 'mrr_start' : 'n_start';
@@ -72,10 +72,14 @@ export function toTriangle(rows, measure, basis, filters) {
   }
 
   // cohorts sorted descending (most recent first); n_start = summed at k=0
-  const cohorts = [...agg.keys()].sort().reverse().map((cm) => ({
+  const allCohorts = [...agg.keys()].sort().reverse().map((cm) => ({
     cohort_month: cm,
     n_start: agg.get(cm).get(0)?.n_start ?? null,
   }));
+
+  // Apply display threshold: drop cohorts whose filtered n_start is below minCohort.
+  // This ensures averages are computed over the same set that gets rendered.
+  const keptCohorts = allCohorts.filter((c) => (c.n_start ?? 0) >= minCohort);
 
   const cells = {};
   for (const cm of agg.keys()) {
@@ -95,11 +99,11 @@ export function toTriangle(rows, measure, basis, filters) {
     });
   }
 
-  // Rolling baseline: the 6 most-recent cohorts with data at each tenure.
-  // `cohorts` is already sorted newest-first, so take the first ROLLING_COHORTS non-null.
+  // Rolling baseline: the 6 most-recent KEPT cohorts with data at each tenure.
+  // Uses keptCohorts (already threshold-filtered) so hidden cohorts don't skew the average.
   const averages = tenures.map((k) => {
     const vals = [];
-    for (const c of cohorts) {
+    for (const c of keptCohorts) {
       const v = cells[c.cohort_month][k];
       if (v != null) vals.push(v);
       if (vals.length === ROLLING_COHORTS) break;
@@ -107,5 +111,5 @@ export function toTriangle(rows, measure, basis, filters) {
     return vals.length ? round1(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
   });
 
-  return { cohorts, tenures, cells, averages };
+  return { cohorts: keptCohorts, tenures, cells, averages };
 }
