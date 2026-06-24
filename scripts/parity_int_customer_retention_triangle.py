@@ -31,13 +31,15 @@ j AS (SELECT base.cohort_month, k AS tenure_k, IFNULL(f.mrr,0) AS mrrk
       LEFT JOIN monthly_mrr f ON f.EntityRecordID=base.eid AND f.Month=DATE_ADD(base.cohort_month, INTERVAL k MONTH)
       WHERE DATE_ADD(base.cohort_month, INTERVAL k MONTH) <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH))
 SELECT cohort_month, tenure_k, COUNT(*) AS n_start, COUNTIF(mrrk>0) AS n_active
-FROM j GROUP BY 1,2 HAVING n_start>=20 ORDER BY 1,2
+FROM j GROUP BY 1,2 ORDER BY 1,2
 """
 src = {(str(r['cohort_month']), int(r['tenure_k'])): (int(r['n_start']), int(r['n_active']))
        for r in client.query(SRC).result()}
 mdl = {(str(r['cohort_month']), int(r['tenure_k'])): (int(r['n_start']), int(r['n_active']))
-       for r in client.query("SELECT cohort_month, tenure_k, n_start, n_active "
-                             "FROM `project-for-method-dw.revenue.int_customer_retention_triangle`").result()}
+       for r in client.query(
+         "SELECT cohort_month, tenure_k, SUM(n_start) n_start, SUM(n_active) n_active "
+         "FROM `project-for-method-dw.revenue.int_customer_retention_triangle` "
+         "GROUP BY 1,2").result()}
 mismatch = [k for k in set(src) | set(mdl) if src.get(k) != mdl.get(k)]
 print(f"source-method cells: {len(src)} | model cells: {len(mdl)} | mismatches: {len(mismatch)}")
 for k in mismatch[:10]:
