@@ -22,6 +22,7 @@ const fmt = {
   currency: (v) => formatUsd(v),
   number: (v) => (v == null || v === '' || isNaN(v)) ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }),
   month: (v) => (v == null || v === '') ? '—' : String(v).slice(0, 7),
+  date: (v) => (v == null || v === '') ? '—' : String(v).slice(0, 10),
   text: (v) => (v == null || v === '') ? '—' : String(v),
   // Signed trend: ▲ up / ▼ down / · flat / — new (no prior). Colored in-cell.
   delta: (v) => {

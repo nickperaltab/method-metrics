@@ -110,6 +110,9 @@ export async function fetchAccountTable({ month, drill, dim, slice, filters, bri
     if (r.seats !== undefined) out.seats = num(r.seats);
     if (r.trend6 !== undefined) out.trend6 = r.trend6 == null ? null : num(r.trend6);
     if (r.age_mo !== undefined) out.age_mo = num(r.age_mo);
+    // projected prepay run-out (current-book rows): date string + $ balance
+    if (r.prepay_expires !== undefined) out.prepay_expires = r.prepay_expires || null;
+    if (r.prepay_balance !== undefined) out.prepay_balance = r.prepay_balance == null ? null : num(r.prepay_balance);
     return out;
   });
 }
