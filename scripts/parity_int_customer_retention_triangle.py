@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Verify int_customer_retention_triangle two ways:
-1. Source-method reproduction on current data (cell-by-cell, must match exactly).
-2. Yearly-rollup tie: rolling monthly cohorts up to first-pay YEAR and computing
-   from-start GRR-style (LEAST cap) should reconcile with int_customer_survival.
-   NOTE: the triangle stores net mrr_active (no cap), so the tie is a sanity band
-   (within ~1pp at settled checkpoints), not bit-exact.
+"""Verify int_customer_retention_triangle via source-method reproduction.
+
+Runs the same SQL the dbt model encodes directly against the source tables, then
+compares it cell-by-cell against the materialized model. Exits non-zero on any
+mismatch — this is the correctness gate.
+
+DEFERRED: a yearly-rollup sanity tie against int_customer_survival (rolling monthly
+cohorts → first-pay year, LEAST-cap GRR band) is not implemented here. Because the
+triangle stores net mrr_active (no cap), such a tie would be a fuzzy ~1pp band, not
+bit-exact — it is not suitable as a hard gate and has not been added.
 """
 import sys
 from google.cloud import bigquery
