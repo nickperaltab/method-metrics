@@ -821,4 +821,30 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 
 ---
 
+### Customer Retention Triangle (`int_customer_retention_triangle`)
+
+**What it answers in one sentence:** For each monthly cohort, what share of customers (and MRR) is retained at each month of tenure, and where does the leak happen?
+
+**Grain:** customer-level (`EntityRecordID`; a customer may own multiple `CompanyAccount`s) / monthly cohort / tenure-indexed.
+
+**Measures (derived in the app):** Customers (count) and MRR (net), each From-start (`active/start`) or Previous-month (`active/prior`). MoM and net-MRR can exceed 100% (reactivation/expansion).
+
+**Filters / exclusions:**
+- `Funnel Trial MIN(Date) >= '2021-06-01'` — signup cohort anchor
+- `n_start >= 20` per cohort — minimum sample threshold
+- Right-censored at the latest complete month
+
+**Methodology source:** mirrors `int_customer_survival` at monthly-cohort grain; source `int_customer_mrr` (2026-06).
+
+**Parity-verified against:** `scripts/parity_int_customer_retention_triangle.py` — model reproduces the source method cell-by-cell; yearly rollup ties to `int_customer_survival` within rounding. Verified 2026-06-23.
+
+**Note on promotion status:** This is a parity-verified intermediate (`revenue.int_customer_retention_triangle`); it has not been promoted to a canonical `v_metric__` view in `revenue_metrics`.
+
+**Known caveats:**
+- MRR is net (NRR-style), not the survival chart's capped GRR.
+- Customer grain is `EntityRecordID` (one customer may own several `CompanyAccount`s), not rolled to `CompanyAccount`.
+- Parity-verified intermediate, not a canonical `v_metric__`.
+
+---
+
 *Started 2026-05-12 after audit of the first 5 dbt-managed metrics surfaced definitional ambiguity in Syncs and Sync Rate. To be extended as each remaining metric is migrated to dbt.*
