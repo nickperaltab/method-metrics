@@ -101,8 +101,8 @@ export default function NetSaasAccountTable({ rows, drill, config, onRowClick, c
             <tr>
               {columns.map((c) => (
                 <th key={c.key} style={c.key === firstTextKey ? thL : th} onClick={() => toggleSort(c.key)}
-                  title="Click header to sort">
-                  {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  title={c.help || 'Click header to sort'}>
+                  {c.label}{c.help ? ' ⓘ' : ''}{sortKey === c.key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
                 </th>
               ))}
             </tr>
