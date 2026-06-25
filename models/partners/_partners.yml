@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: int_partner_accounts
+    description: >
+      One row per (Partner, CompanyAccount) — the accounts a referring partner
+      brought in. Partner = raw revenue.Account.Partner string (no normalization
+      in v1). IsActive is a lifecycle flag (FirstSaaSInvoiceTxnDate set AND no
+      CancellationDate), matching the partner CRM "Active?" view (validated to an
+      exact match against a reference partner's CRM export).
+      MRR and Licenses are point-in-time billing for the latest complete month;
+      they are 0 for accounts that did not bill that month — including hard-hold
+      accounts that are still lifecycle-active. Excludes the internal
+      "Method Integration" partner and m11/m18 test accounts. Account is deduped
+      to one row per CompanyAccount. See spec
+      docs/superpowers/specs/2026-06-25-partner-referral-views-design.md.
+    columns:
+      - name: Partner
+        description: Referring partner, raw Account.Partner string (not normalized in v1).
+        tests: [not_null]
+      - name: CompanyAccount
+        description: Method account identifier. One row per account.
+        tests:
+          - not_null
+          - unique
+      - name: EntityRecordID
+        description: Customer-level key. One customer can own accounts referred by different partners.
+        tests: [not_null]
+      - name: SignupDate
+        description: Account.FirstSaaSInvoiceTxnDate — first paid invoice date.
+      - name: CancellationDate
+        description: Account cancellation date; NULL when not cancelled (the 0001-01-01 sentinel is normalized to NULL).
+      - name: IsActive
+        description: Lifecycle active — has a SignupDate and no CancellationDate. NOT the same as billing > 0 (hard-hold accounts are active but bill $0).
+        tests: [not_null]
+      - name: MRR
+        description: SaaS billed by this account in the latest complete month (0 if none). Point-in-time, financially correct.
+        tests: [not_null]
+      - name: Licenses
+        description: Paid user count billed in the latest complete month (0 if none).
+        tests: [not_null]
+
+  - name: v_partner_scorecard
+    description: >
+      One row per partner: roll-up of int_partner_accounts. AccountsReferred is
+      all-time; ActiveAccounts is a lifecycle count (not cancelled); TotalLicenses
+      and TotalMRR are actual billing for the latest complete month. Active count
+      and TotalMRR intentionally do not reconcile (hard-hold accounts are active
+      but bill $0). Raw partner strings in v1, so a partner with name variants can
+      appear as more than one row (3 partners affected; see spec follow-ups).
+    columns:
+      - name: Partner
+        description: Referring partner, raw string (not normalized in v1).
+        tests:
+          - not_null
+          - unique
+      - name: AccountsReferred
+        description: All-time count of accounts referred by this partner.
+        tests: [not_null]
+      - name: ActiveAccounts
+        description: Lifecycle-active accounts (SignupDate set, not cancelled).
+        tests: [not_null]
+      - name: TotalLicenses
+        description: Sum of paid licenses billed across the partner's accounts in the latest complete month.
+      - name: TotalMRR
+        description: Sum of SaaS billed across the partner's accounts in the latest complete month (financially correct run-rate).

@@ -1,0 +1,66 @@
+{{ config(materialized='table') }}
+
+-- One row per (Partner, CompanyAccount): the accounts a partner referred.
+--
+-- Partner = revenue.Account.Partner (raw string; NO normalization in v1, so a
+--   partner whose name has a punctuation variant (", Inc" vs " Inc") stays split
+--   across rows — see spec follow-ups).
+-- IsActive uses the LIFECYCLE definition (first paid + not cancelled). It matches
+--   a reference partner's CRM "Active?" export exactly, and is the first
+--   account-grain active definition in the project (int_customers is
+--   customer-grain). MRR/Licenses are POINT-IN-TIME (latest complete month).
+-- IsActive and MRR intentionally do not reconcile: an account on a hard hold has
+--   no CancellationDate (IsActive = true) but bills $0 (MRR = 0), which is the
+--   financially correct figure. See memory project_hard_hold_billing_state and
+--   spec docs/superpowers/specs/2026-06-25-partner-referral-views-design.md.
+
+WITH latest_month AS (
+  -- Latest COMPLETE month, so the in-progress month never shows false zeros.
+  SELECT DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH) AS m
+),
+accounts AS (
+  -- revenue.Account fans out (~1.22 rows per EntityRecordID); dedup to one row
+  -- per CompanyAccount. See memory account_table_dedup.
+  SELECT
+    Partner,
+    CompanyAccount,
+    EntityRecordID,
+    FirstSaaSInvoiceTxnDate AS SignupDate,
+    NULLIF(CancellationDate, DATE '0001-01-01') AS CancellationDate
+  FROM (
+    SELECT
+      a.Partner, a.CompanyAccount, a.EntityRecordID,
+      a.FirstSaaSInvoiceTxnDate, a.CancellationDate,
+      ROW_NUMBER() OVER (PARTITION BY a.CompanyAccount ORDER BY a.RecordID DESC) AS rn
+    FROM {{ source('revenue', 'Account') }} a
+    WHERE a.Partner IS NOT NULL
+      AND a.Partner != ''
+      AND a.Partner != 'Method Integration'          -- internal partner
+      AND a.CompanyAccount NOT LIKE 'm11%'            -- test accounts
+      AND a.CompanyAccount NOT LIKE 'm18%'
+  )
+  WHERE rn = 1
+),
+billing AS (
+  -- Point-in-time billing for the latest complete month, account grain.
+  SELECT
+    t.CompanyAccount,
+    SUM(t.SaaSAmount) AS MRR,
+    MAX(t.UserPaidCount) AS Licenses
+  FROM {{ source('revenue', 'TransLineFlattened') }} t, latest_month
+  WHERE DATE_TRUNC(t.TxnDate, MONTH) = latest_month.m
+    AND t.CompanyAccount NOT LIKE 'm11%'
+    AND t.CompanyAccount NOT LIKE 'm18%'
+  GROUP BY 1
+)
+SELECT
+  ac.Partner,
+  ac.CompanyAccount,
+  ac.EntityRecordID,
+  ac.SignupDate,
+  ac.CancellationDate,
+  (ac.SignupDate IS NOT NULL AND ac.CancellationDate IS NULL) AS IsActive,
+  CAST(COALESCE(b.MRR, 0) AS NUMERIC) AS MRR,
+  COALESCE(b.Licenses, 0) AS Licenses
+FROM accounts ac
+LEFT JOIN billing b ON ac.CompanyAccount = b.CompanyAccount
