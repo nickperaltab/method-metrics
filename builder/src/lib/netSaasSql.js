@@ -240,35 +240,19 @@ prior AS (
   FROM ${icm}
   WHERE Month = DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 6 MONTH) AND p2_saas > 0
 ),
--- Projected prepay run-out, reconstructed from the prepayment-liability ledger
--- (no contractual ExpiresDate in BQ): current balance ÷ recent monthly drawdown.
--- It's an estimate ("when the prepaid money runs out at current burn"), capped at
--- 36 mo so a near-zero burn can't produce an absurd date.
+-- Current prepay balance per account, reconstructed from the prepayment-liability
+-- ledger (no contractual ExpiresDate in BQ). The run-out date is computed in the
+-- SELECT as balance ÷ current monthly SaaS (c.p2_saas) — i.e. burn = current MRR,
+-- NOT a trailing-average drawdown, which smears across MRR regimes for accounts
+-- that recently expanded/renewed (a 6-mo avg made a $16.7K balance read 21 mo
+-- when the real burn put it at ~10).
 prepay AS (
-  SELECT EntityRecordID,
-    DATE_ADD(DATE ${sqlStr(month)}, INTERVAL months_left MONTH) AS prepay_expires,
-    cur_balance AS prepay_balance
-  FROM (
-    SELECT b.EntityRecordID, ROUND(b.cur_balance) AS cur_balance,
-      LEAST(CAST(CEIL(b.cur_balance / d.mo_draw) AS INT64), 36) AS months_left
-    FROM (
-      SELECT EntityRecordID, SUM(Amount) AS cur_balance
-      FROM ${fqn('TransLineFlattened')}
-      WHERE AccountFullName IN ('US-Client Prepayments', 'CAN-Client Prepayments')
-        AND TxnDate < DATE_ADD(DATE ${sqlStr(month)}, INTERVAL 1 MONTH)
-      GROUP BY EntityRecordID
-    ) b
-    JOIN (
-      SELECT EntityRecordID, AVG(-Amount) AS mo_draw
-      FROM ${fqn('TransLineFlattened')}
-      WHERE AccountFullName IN ('US-Client Prepayments', 'CAN-Client Prepayments')
-        AND Qty = 1 AND Amount < 0
-        AND TxnDate >= DATE_SUB(DATE ${sqlStr(month)}, INTERVAL 6 MONTH)
-        AND TxnDate < DATE_ADD(DATE ${sqlStr(month)}, INTERVAL 1 MONTH)
-      GROUP BY EntityRecordID
-    ) d USING (EntityRecordID)
-    WHERE b.cur_balance > 100 AND d.mo_draw > 0
-  )
+  SELECT EntityRecordID, ROUND(SUM(Amount)) AS prepay_balance
+  FROM ${fqn('TransLineFlattened')}
+  WHERE AccountFullName IN ('US-Client Prepayments', 'CAN-Client Prepayments')
+    AND TxnDate < DATE_ADD(DATE ${sqlStr(month)}, INTERVAL 1 MONTH)
+  GROUP BY EntityRecordID
+  HAVING SUM(Amount) > 100
 )${psExcludeCte(excludePS)}
 SELECT
   c.EntityRecordID AS entity_record_id,
@@ -278,7 +262,7 @@ SELECT
   IFNULL(s.seats, 0) AS seats,
   ROUND(c.p2_saas - p.prior_mrr, 0) AS trend6,
   DATE_DIFF(DATE ${sqlStr(month)}, a.first_month, MONTH) AS age_mo,
-  pp.prepay_expires,
+  DATE_ADD(DATE ${sqlStr(month)}, INTERVAL LEAST(GREATEST(CAST(CEIL(pp.prepay_balance / c.p2_saas) AS INT64), 1), 36) MONTH) AS prepay_expires,
   pp.prepay_balance
 FROM ${icm} c
 JOIN accts a ON a.EntityRecordID = c.EntityRecordID

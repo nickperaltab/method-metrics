@@ -285,15 +285,15 @@ describe('buildAccountTableSql — book drill (End MRR)', () => {
     expect(sql).toContain('AS trend6');
   });
 
-  it('projects prepay run-out from the prepayment-liability ledger (balance ÷ burn)', () => {
+  it('projects prepay run-out: balance from the ledger ÷ current MRR as burn', () => {
     const sql = buildAccountTableSql({ month: '2026-05-01', drill: 'end', slice: null, filters: {} });
-    expect(sql).toContain("'US-Client Prepayments'");          // liability account
-    expect(sql).toContain('SUM(Amount) AS cur_balance');       // current balance
-    expect(sql).toContain('AVG(-Amount) AS mo_draw');          // recent monthly drawdown
-    expect(sql).toContain('CEIL(b.cur_balance / d.mo_draw)');  // months left = balance / burn
-    expect(sql).toContain('36');                               // capped projection
+    expect(sql).toContain("'US-Client Prepayments'");                  // liability account
+    expect(sql).toContain('ROUND(SUM(Amount)) AS prepay_balance');     // current balance
+    expect(sql).toContain('HAVING SUM(Amount) > 100');                 // active prepay only
+    expect(sql).toContain('CEIL(pp.prepay_balance / c.p2_saas)');      // months left = balance / current MRR
+    expect(sql).not.toContain('mo_draw');                              // NOT the trailing-avg drawdown (regime-smear bug)
+    expect(sql).toContain('36');                                       // capped projection
     expect(sql).toContain('AS prepay_expires');
-    expect(sql).toContain('AS prepay_balance');
     expect(sql).toContain('LEFT JOIN prepay pp');
   });
 
