@@ -106,7 +106,7 @@ export const netSaasScorecard = {
                    { key: 'trend6',             label: 'Δ 6mo', format: 'delta' },
                    { key: 'age_mo',             label: 'Age (mo)', format: 'number' },
                    { key: 'prepay_expires',     label: 'Prepay out~', format: 'date',
-                     help: 'Projected prepay run-out = current prepay balance ÷ current monthly MRR. Why it matters: accounts rarely churn while prepaid — the MRR bleed shows up AFTER the prepay runs out, and it concentrates in low-health accounts (hospital report §5h: expiry is the timing, health is the who). So low health + a near-term prepay run-out is the renewal-risk window to work. Note: a burn estimate (runs out sooner if they add seats), not the contractual ~18-month expiry date.' },
+                     help: 'Projected prepay run-out = current prepay balance ÷ actual recent monthly drawdown (covers SaaS + DEP, from the prepayment ledger). Why it matters: accounts rarely churn while prepaid — the MRR bleed shows up AFTER the prepay runs out, and it concentrates in low-health accounts (hospital report §5h: expiry is the timing, health is the who). So low health + a near-term prepay run-out is the renewal-risk window to work. Note: a burn estimate (runs out sooner if they add seats), not the contractual ~18-month expiry date.' },
                    { key: 'prepay_balance',     label: 'Prepay bal', format: 'currency' }],
       expansion:  [{ key: 'seat_mrr', label: 'Seats $', format: 'currency' },
                    { key: 'app_mrr',  label: 'Apps $',  format: 'currency' },
