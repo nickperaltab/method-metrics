@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: v_motion_funnel
+    description: >
+      Motion + lifecycle acquisition funnel, aggregated to (signup_month, motion).
+      Counts only: trials → synced → demo booked/attended → converted → customized →
+      retained at 1/3/6/12 months (each with an eligibility denominator for maturity).
+      The talked-to-us fork is only valid for 2024+ cohorts. Directional — inputs
+      (Activity, V7) are partial; not a verified metric.
+    config:
+      labels:
+        layer: intermediate
+        status: directional
+        source_table: int_motion_funnel
+    columns:
+      - name: signup_month
+        tests: [not_null]
+      - name: motion
+        tests: [not_null]

@@ -1,0 +1,113 @@
+version: 2
+
+unit_tests:
+  - name: motion_assignment_and_retention
+    model: int_motion_funnel
+    overrides:
+      vars:
+        motion_censor_month: '2024-12-01'
+    given:
+      - input: ref('int_trials')
+        rows:
+          - { EntityRecordID: 1, SignupDate: '2024-01-15' }
+          - { EntityRecordID: 2, SignupDate: '2024-02-20' }
+      - input: ref('int_syncs')
+        rows:
+          - { EntityRecordID: 1, SyncDate: '2024-01-20' }
+          - { EntityRecordID: 2, SyncDate: '2024-02-25' }
+      - input: ref('int_customer_mrr')
+        rows:
+          - { EntityRecordID: 1, Month: '2024-02-01', StartMRR: 100 }  # converts Feb
+          - { EntityRecordID: 1, Month: '2024-03-01', StartMRR: 100 }  # alive at +1mo
+          - { EntityRecordID: 2, Month: '2024-03-01', StartMRR: 200 }  # converts Mar
+      - input: ref('int_customers')
+        rows:
+          - { EntityRecordID: 1, HasDEP: true }
+          - { EntityRecordID: 2, HasDEP: false }
+      - input: ref('int_presale_touches')
+        rows:
+          # entity 1 attended a demo before converting -> talked
+          - { EntityRecordID: 1, demo_booked: true, demo_attended: true, demo_first_date: '2024-01-25', free_booked: false, free_attended: false, free_first_date: null, attended_any: true, first_attended_date: '2024-01-25' }
+      - input: ref('int_customer_proserv')
+        rows:
+          - { EntityRecordID: 1, ps_gross: 500, first_ps_date: '2024-02-15', is_customized: true }
+      - input: source('revenue', 'TransLineFlattened')
+        rows:
+          - { EntityRecordID: 1, InvoiceGrouping: 'SaaS', SaaSPayType: 'Prepay',  SaaSAmount: 100 }
+          - { EntityRecordID: 2, InvoiceGrouping: 'SaaS', SaaSPayType: 'Monthly', SaaSAmount: 200 }
+      - input: source('v7_classification', 'v_entity_primary_label')
+        rows:
+          - { customer_record_id: 1, l1: 'Construction' }
+    expect:
+      rows:
+        - EntityRecordID: 1
+          signup_month: '2024-01-01'
+          synced: true
+          converted: true
+          convert_month: '2024-02-01'
+          mrr0: 100
+          motion: 'talked'
+          motion_trackable: true
+          demo_booked: true
+          demo_attended: true
+          free_booked: false
+          free_attended: false
+          is_customized: true
+          ps_gross: 500
+          has_dep: true
+          is_prepay: true
+          industry_l1: 'Construction'
+          retained_1mo: true
+          eligible_1mo: true
+          retained_3mo: false
+          eligible_3mo: true
+          retained_6mo: false
+          eligible_6mo: true
+          retained_12mo: false
+          eligible_12mo: false
+        - EntityRecordID: 2
+          signup_month: '2024-02-01'
+          synced: true
+          converted: true
+          convert_month: '2024-03-01'
+          mrr0: 200
+          motion: 'self_serve'
+          motion_trackable: true
+          demo_booked: false
+          demo_attended: false
+          free_booked: false
+          free_attended: false
+          is_customized: false
+          ps_gross: 0
+          has_dep: false
+          is_prepay: false
+          industry_l1: null
+          retained_1mo: false
+          eligible_1mo: true
+          retained_3mo: false
+          eligible_3mo: true
+          retained_6mo: false
+          eligible_6mo: true
+          retained_12mo: false
+          eligible_12mo: false
+
+models:
+  - name: int_motion_funnel
+    description: >
+      Per-customer motion + lifecycle funnel, entity grain — one row per trialer.
+      Spine (trial/sync/convert) + talked-to-us fork (demo or free consulting,
+      attended, pre-convert) + customization + DEP/prepay/industry lenses + a
+      1/3/6/12-month retention curve (numerator retained_Kmo, denominator eligible_Kmo).
+      Directional: motion is only trustworthy for 2024+ cohorts (motion_trackable).
+      Status directional; lives in revenue, not revenue_metrics.
+    columns:
+      - name: EntityRecordID
+        tests: [not_null, unique]
+      - name: signup_month
+        tests: [not_null]
+      - name: motion
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['talked', 'self_serve']

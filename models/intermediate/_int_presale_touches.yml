@@ -1,0 +1,35 @@
+version: 2
+
+unit_tests:
+  - name: presale_touch_states
+    model: int_presale_touches
+    given:
+      - input: source('revenue', 'Activity')
+        rows:
+          # entity 1: booked then attended a demo
+          - { EntityRecordID: 1, ActivityType: 'Demo booked',            DueDateStart: '2024-05-01', IsDeleted: false }
+          - { EntityRecordID: 1, ActivityType: 'Demo',                   DueDateStart: '2024-05-08', IsDeleted: false }
+          # entity 2: booked a free hour, never showed (no attended row)
+          - { EntityRecordID: 2, ActivityType: 'Free Consulting Booked', DueDateStart: '2024-06-01', IsDeleted: false }
+          # entity 3: attended free hour only
+          - { EntityRecordID: 3, ActivityType: 'Free Consulting Session',DueDateStart: '2024-07-02', IsDeleted: false }
+          # deleted row must be ignored
+          - { EntityRecordID: 4, ActivityType: 'Demo',                   DueDateStart: '2024-01-01', IsDeleted: true }
+    expect:
+      rows:
+        - { EntityRecordID: 1, demo_booked: true,  demo_attended: true,  demo_first_date: '2024-05-08', free_booked: false, free_attended: false, free_first_date: null, attended_any: true,  first_attended_date: '2024-05-08' }
+        - { EntityRecordID: 2, demo_booked: false, demo_attended: false, demo_first_date: null,         free_booked: true,  free_attended: false, free_first_date: null, attended_any: false, first_attended_date: null }
+        - { EntityRecordID: 3, demo_booked: false, demo_attended: false, demo_first_date: null,         free_booked: false, free_attended: true,  free_first_date: '2024-07-02', attended_any: true, first_attended_date: '2024-07-02' }
+
+models:
+  - name: int_presale_touches
+    description: >
+      Pre-sale human-touch signals per customer (entity grain), from the Activity
+      table. Demo and free-consulting booked/attended states + first attended dates.
+      attended_any drives the funnel's talked-to-us fork. Date is DueDateStart;
+      tracking effectively starts 2024 (older cohorts read as untouched).
+    columns:
+      - name: EntityRecordID
+        tests: [not_null, unique]
+      - name: attended_any
+        tests: [not_null]
