@@ -849,3 +849,167 @@ Account-grain is canonical for Method's funnel reporting. A customer with 2 tria
 ---
 
 *Started 2026-05-12 after audit of the first 5 dbt-managed metrics surfaced definitional ambiguity in Syncs and Sync Rate. To be extended as each remaining metric is migrated to dbt.*
+
+---
+
+## 4e. Motion funnel (`int_motion_funnel` / `v_motion_funnel`) — directional, NOT live
+
+These four models form the motion + lifecycle funnel layer. They extend the shipped acquisition funnel spine with a sales-vs-self-serve fork, presale-touch signals, customization, DEP/prepay dimensions, and multi-horizon retention. All four live in the `revenue` dataset (not `revenue_metrics`) and carry `status: directional`.
+
+### Shared grain and scope
+
+**Entity grain — one row per trialer (`EntityRecordID`)** in `int_motion_funnel`. `v_motion_funnel` aggregates that to one row per `(signup_month, motion)`. A customer with multiple Method accounts is keyed by their shared `EntityRecordID` and appears once.
+
+**Scope:** trialing entities with `signup_month >= 2020-01-01`. The motion fork (`talked` vs `self_serve`) is only trustworthy for cohorts starting 2024-01-01 and later, because Activity-table tracking is sparse before that. The `motion_trackable` flag marks those cohorts.
+
+---
+
+### `int_customer_proserv` — per-entity professional-services billing signal
+
+**What it answers in one sentence:** Has a customer ever purchased professional-services (customization) hours, and how much have they spent in gross billing?
+
+**The math:**
+```sql
+SELECT EntityRecordID,
+  CAST(SUM(PSBeforeDiscount) AS NUMERIC) AS ps_gross,
+  MIN(TxnDate) AS first_ps_date,
+  TRUE AS is_customized
+FROM revenue.TransLineFlattened
+WHERE InvoiceGrouping = 'PS' AND PSBeforeDiscount > 0
+GROUP BY 1
+```
+
+**Grain:** entity-level (one row per `EntityRecordID` that has any PS billing). Entities with no PS lines are absent; downstream models LEFT JOIN and COALESCE the flag to FALSE.
+
+**Filters / exclusions:**
+- `InvoiceGrouping = 'PS'` — PS-grouped billing lines only.
+- `PSBeforeDiscount > 0` — gross positive charges only; credits and zero-value lines excluded.
+
+**Customization definition:** customization = any customer who received a PS billing line with positive gross. Project-hour magnitude is intentionally excluded from this model — the `revenue.TimeTracking` table is empty in BigQuery. Hour-level detail is deferred to V2. `is_customized = TRUE` signals presence only.
+
+**Gross vs net:** `PSBeforeDiscount` (gross, pre-discount) is used instead of `PSAmount` (net-of-discount), because `PSAmount` has historically drifted. No dollar figures are quoted externally.
+
+**Methodology source:** derived from `TransLineFlattened` billing-line data. No external verification source; first-pass internal model.
+
+**Parity-verified against:** no external source (billing-system data is the primary record). Internal consistency checked via `dbt build`.
+
+**Status:** **directional**
+
+**Known caveats:**
+- Hour magnitude is absent (TimeTracking is empty in BQ). Presence-of-PS-billing is a proxy for customization, not a measure of engagement depth.
+- `ps_gross` is pre-FX; currencies are at face value (USD, CAD, GBP).
+
+---
+
+### `int_presale_touches` — per-entity presale human-touch signals
+
+**What it answers in one sentence:** Before converting, did a trialing entity attend a demo or free consulting session?
+
+**The math:**
+```sql
+WITH acts AS (
+  SELECT EntityRecordID, ActivityType, DueDateStart
+  FROM revenue.Activity
+  WHERE COALESCE(IsDeleted, FALSE) = FALSE AND EntityRecordID IS NOT NULL
+)
+SELECT EntityRecordID,
+  LOGICAL_OR(ActivityType IN ('Demo booked', 'Phone Call Demo Booked'))   AS demo_booked,
+  LOGICAL_OR(ActivityType IN ('Demo', 'Pre-sales Demo'))                   AS demo_attended,
+  MIN(IF(ActivityType IN ('Demo', 'Pre-sales Demo'), DueDateStart, NULL))  AS demo_first_date,
+  LOGICAL_OR(ActivityType = 'Free Consulting Booked')                       AS free_booked,
+  LOGICAL_OR(ActivityType = 'Free Consulting Session')                      AS free_attended,
+  MIN(IF(ActivityType = 'Free Consulting Session', DueDateStart, NULL))     AS free_first_date,
+  LOGICAL_OR(ActivityType IN ('Demo', 'Pre-sales Demo', 'Free Consulting Session')) AS attended_any,
+  MIN(IF(ActivityType IN ('Demo', 'Pre-sales Demo', 'Free Consulting Session'), DueDateStart, NULL)) AS first_attended_date
+FROM acts GROUP BY 1
+```
+
+**Grain:** entity-level (one row per `EntityRecordID` with any Activity record matching the presale types). Entities with no matching activity are absent; downstream LEFT JOIN + COALESCE to FALSE.
+
+**Filters / exclusions:**
+- `COALESCE(IsDeleted, FALSE) = FALSE` — active Activity rows only. `IsDeleted` is NULL on older rows (pre-deletion-tracking period); COALESCE treats NULL as not-deleted, which is the correct assumption.
+- `EntityRecordID IS NOT NULL` — excludes unmatched activity records.
+
+**Date field:** `DueDateStart` (not `CreatedDate`). `CreatedDate` is NULL on approximately 93% of Activity rows; `DueDateStart` is the reliable date for when the activity occurred.
+
+**Tracking gate:** Activity-based signals are sparse before 2024. The downstream `motion_trackable` flag (`signup_month >= 2024-01-01`) gates which cohorts the motion fork is trusted for. Do not read pre-2024 `motion = 'self_serve'` as confirmed self-serve — it often means "no Activity record found."
+
+**Methodology source:** derived from the `revenue.Activity` table. ActivityType values confirmed against live Activity rows.
+
+**Parity-verified against:** no external source; internal consistency verified via `dbt build` and `scripts/parity_int_motion_funnel.py` (spine match at entity grain).
+
+**Status:** **directional**
+
+**Known caveats:**
+- Pre-2024 data has sparse coverage. Absence of a touch record does not mean the entity was never touched — earlier sales activity may not have been captured in Activity.
+- `demo_booked` / `free_booked` are booking signals (not attendance). Show rate = attended / booked. These flags are set in this model; the rate is computed by the consumer.
+- This model includes all entities in Activity that match presale types, regardless of whether they trialed. The downstream join to `int_motion_funnel` applies the "trialer" filter.
+
+---
+
+### `int_motion_funnel` — per-customer motion + lifecycle funnel
+
+**What it answers in one sentence:** For each trialing customer, what motion path did they take (sales-touched or self-serve), did they convert, and what are their retention outcomes at 1, 3, 6, and 12 months post-conversion?
+
+**The math (summary):** one row per trialing `EntityRecordID` joining trials spine → syncs → first-pay anchor → presale touches → PS billing → DEP → prepay → industry → per-horizon retention LEFT JOINs from `int_customer_mrr`.
+
+**Grain:** entity-level. One row per trialing `EntityRecordID`. A customer with multiple accounts appears once, keyed by the shared entity ID.
+
+**Motion classification:**
+
+`motion = 'talked'` when `attended_any = TRUE` AND the first attended date is before the end of the customer's conversion month (or any time for non-converters).
+`motion = 'self_serve'` otherwise.
+
+Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for the fork. All cohorts back to 2020 are in the model for spine completeness; earlier rows carry a motion label but it reflects data availability, not confirmed sales behavior.
+
+**Retention numerator / denominator method:**
+- `retained_Kmo = TRUE` when `int_customer_mrr` has a row with `StartMRR > 0` for the customer at exactly `convert_month + K months`.
+- `eligible_Kmo = TRUE` when `convert_month + K months <= censor_month` (the latest complete month). Customers too recent to have reached horizon K are ineligible and excluded from that rate's denominator.
+- The consumer computes retention rate as `SUM(retained_Kmo AND eligible_Kmo) / SUM(eligible_Kmo)`.
+- The censor month defaults to the last complete calendar month (`DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)`). It can be overridden via the `motion_censor_month` dbt variable for reproducible backtesting.
+
+**DEP and prepay are independent dimensions:**
+- `has_dep`: `LOGICAL_OR(HasDEP)` from `int_customers` — TRUE if the customer ever had a DEP module on their subscription.
+- `is_prepay`: TRUE if the customer ever had a SaaS line with `SaaSPayType = 'Prepay'` and a non-zero amount in `TransLineFlattened`. These are measured on the subscription line, not on any prepay-drawdown or ledger table.
+- DEP and prepay are separate flags; a customer can have one, both, or neither. They are not derived from each other.
+
+**Industry dimension:** sourced from `v7_classification.v_entity_primary_label` (`l1`). This is current-state classification; reclassifications backfill into historical rows.
+
+**Filters / exclusions:**
+- `signup_month >= 2020-01-01` — scope floor.
+- `COALESCE(IsDeleted, FALSE) = FALSE` on Activity rows (inherited from `int_presale_touches`).
+- Internal Method accounts excluded upstream in `int_trials` and `int_customer_mrr`.
+
+**Methodology source:** spec `docs/superpowers/specs/2026-06-29-acquisition-funnel-phase2-motion-lifecycle-design.md`.
+
+**Parity-verified against:** `scripts/parity_int_motion_funnel.py` — spine trial counts match the shipped Funnel-based count across all 30 months from 2024-01 through 2026-06, with 0.0% delta on every month (2026-06-29).
+
+**Status:** **directional**
+
+**⚠️ Limitations / use-with-care:**
+- Pre-2024 motion labels are unreliable. Always filter to `motion_trackable = TRUE` before drawing fork comparisons.
+- Retention rates at long horizons (12mo) have narrow eligible populations for recent cohorts. Cell counts shrink; trust quarterly cohort views, not individual-month points.
+- This model is in the `revenue` dataset (not `revenue_metrics`). It has not been parity-verified against an accounting source. Do not quote its numbers as authoritative.
+
+**Known caveats:**
+- `mrr0` (MRR at conversion month) is pre-FX at face value.
+- `is_customized` signals presence of PS billing, not engagement depth (hours unavailable; see `int_customer_proserv`).
+- Industry `l1` is current-state. Customers who changed industry classification have revised history.
+
+---
+
+### `v_motion_funnel` — aggregated motion funnel for charts
+
+**What it answers in one sentence:** By signup month and motion path, how many customers reached each funnel stage and how many are retained at each horizon?
+
+**The math:** `COUNT(*)` and `COUNTIF(...)` over `int_motion_funnel`, grouped by `(signup_month, motion)`. All retention counts are raw numerators and denominators — the frontend computes rates.
+
+**Grain:** one row per `(signup_month, motion)`. Customer grain underneath (same entity-grain as `int_motion_funnel`).
+
+**Columns (stage counts):** `trials`, `synced`, `demo_booked`, `demo_attended`, `free_booked`, `free_attended`, `converted`, `customized`, plus per-horizon `eligible_Kmo` and `retained_Kmo` for K ∈ {1, 3, 6, 12}.
+
+**Status:** **directional** (materialized as a view; refreshes when `int_motion_funnel` refreshes)
+
+**Known caveats:** same as `int_motion_funnel` — pre-2024 motion fork is unreliable; long-horizon retention cells are narrow for recent cohorts.
+
+**Used by:** Phase B frontend (in-progress) — the motion funnel page in the chart builder.
