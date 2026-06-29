@@ -6,6 +6,7 @@ import useScorecardData from '../hooks/useScorecardData';
 import ScorecardSection from '../components/scorecards/ScorecardSection';
 import DecompositionDrill from '../components/scorecards/DecompositionDrill';
 import FunnelDrill from '../components/scorecards/FunnelDrill';
+import MotionFunnelDrill from '../components/scorecards/MotionFunnelDrill';
 import GrrIndustryDrill from '../components/scorecards/GrrIndustryDrill';
 import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
 import RetentionTriangle from '../components/scorecards/RetentionTriangle';
@@ -145,6 +146,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   }
   if (config.renderer === 'funnelDrill') {
     return <FunnelDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
+  }
+  if (config.renderer === 'motionFunnelDrill') {
+    return <MotionFunnelDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
   if (config.renderer === 'grrIndustry') {
     return <GrrIndustryDrill cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
