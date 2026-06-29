@@ -33,6 +33,8 @@ sources:
         description: One row per lifecycle event (Sync, Conversion, etc.). EntityRecordID maps back to a customer.
       - name: TransLineFlattened
         description: One row per invoice line. Source of truth for all revenue computation. SaaSAmount is the canonical revenue column.
+      - name: Activity
+        description: One row per CRM activity (demo, free-consulting session, call, etc.). EntityRecordID maps to a customer. ActivityType is the kind of touch; DueDateStart is the activity date (CreatedDate is NULL on most rows). Demo/free-consulting tracking effectively starts 2024.
       - name: method_forecast
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
 
