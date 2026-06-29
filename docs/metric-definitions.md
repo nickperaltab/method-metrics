@@ -982,7 +982,7 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 
 **Methodology source:** spec `docs/superpowers/specs/2026-06-29-acquisition-funnel-phase2-motion-lifecycle-design.md`.
 
-**Parity-verified against:** `scripts/parity_int_motion_funnel.py` — spine trial counts match the shipped Funnel-based count across all 30 months from 2024-01 through 2026-06, with 0.0% delta on every month (2026-06-29).
+**Parity-verified against:** `scripts/parity_int_motion_funnel.py` — matched the Funnel-based trial counts exactly (0.0% delta) in the 2026-06-29 validation run; the automated gate enforces ≤5%.
 
 **Status:** **directional**
 

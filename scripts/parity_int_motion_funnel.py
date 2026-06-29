@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Parity: int_motion_funnel spine (trial/sync/convert counts by signup month)
-vs the shipped Funnel-based spine. Different sources -> report the delta; a small
+"""Parity: int_motion_funnel trial counts by signup month
+vs the shipped Funnel-based trial counts. Different sources -> report the delta; a small
 stable delta is acceptable and gets documented, a large/structural one stops the build.
+Gate: ≤5% worst-month delta. Sync and convert counts are not diffed here.
 """
 import sys
 from google.cloud import bigquery

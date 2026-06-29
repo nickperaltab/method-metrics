@@ -26,4 +26,3 @@ SELECT
   COUNTIF(converted AND eligible_12mo AND retained_12mo) AS retained_12mo
 FROM {{ ref('int_motion_funnel') }}
 GROUP BY 1, 2
-ORDER BY 1, 2
