@@ -3,6 +3,7 @@
 const fqn = (v) => `\`project-for-method-dw.revenue.${v}\``;
 const sqlStr = (v) => `'${String(v).replace(/'/g, "''")}'`;
 
+// free_booked / free_attended fetched for a future free-hour show-rate metric; unused in V1 transform/chart.
 const COUNT_COLS = [
   'trials', 'synced', 'demo_booked', 'demo_attended', 'free_booked', 'free_attended',
   'converted', 'customized',

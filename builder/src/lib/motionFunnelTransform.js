@@ -19,7 +19,7 @@ function stagesFor(row) {
   return STAGE_DEFS.map((def, i) => {
     const count = counts[i];
     const next = counts[i + 1];
-    const dropToNext = i === counts.length - 1 ? null : (count > 0 ? r4(1 - next / count) : 0);
+    const dropToNext = i === counts.length - 1 ? null : (count > 0 ? r4(Math.max(0, 1 - next / count)) : 0);
     return { ...def, count, pctOfTrials: trials > 0 ? r4(count / trials) : 0, dropToNext };
   });
 }

@@ -36,4 +36,15 @@ describe('toMotionFunnel', () => {
     expect(r6.rate).toBe(null);   // eligible_6mo = 0
     expect(r6.mature).toBe(false);
   });
+
+  it('clamps negative drop to zero when a later stage exceeds an earlier one', () => {
+    // synced=30, converted=40 → 1 - 40/30 = -0.333… would be negative without clamp
+    const inverted = [{ motion: 'talked', trials: 100, synced: 30, converted: 40, customized: 10,
+      demo_booked: 0, demo_attended: 0, free_booked: 0, free_attended: 0,
+      retained_1mo: 0, eligible_1mo: 0, retained_3mo: 0, eligible_3mo: 0,
+      retained_6mo: 0, eligible_6mo: 0, retained_12mo: 0, eligible_12mo: 0 }];
+    const out = toMotionFunnel(inverted);
+    // stages[1] = synced; its dropToNext is sync→convert drop (1 - converted/synced)
+    expect(out.talked.stages[1].dropToNext).toBe(0);
+  });
 });
