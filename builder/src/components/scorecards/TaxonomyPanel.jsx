@@ -1,9 +1,9 @@
 // builder/src/components/scorecards/TaxonomyPanel.jsx
-// "What these labels mean & how we assign them" — an expandable reference panel
-// on the GRR by Industry page so the industry/bucket labels are legible to
-// anyone, including leadership. Content is static (industryTaxonomy.js), sourced
-// from the V7.1 classification documentation. L1 + special buckets for now;
-// L2/L3 definitions are a later pass.
+// "What these labels mean & how we assign them" reference panel on the GRR by
+// Industry page, so the industry and bucket labels are legible to anyone,
+// including leadership. Content is static (industryTaxonomy.js), sourced from the
+// V7.1 classification documentation. Each L1 card expands to its L2
+// sub-industries. L3 definitions are a later pass.
 import { useState } from 'react';
 import {
   L1_DEFINITIONS, SPECIAL_BUCKETS, HOW_WE_LABEL, TAXONOMY_VERSION, TAXONOMY_SOURCE,
@@ -17,6 +17,34 @@ const cardName = { fontSize: 14, fontWeight: 700, color: '#1a1a1a', fontFamily: 
 const cardOne = { fontSize: 12.5, color: '#059669', fontWeight: 600, fontFamily: fontSans, margin: '2px 0 6px' };
 const cardDesc = { fontSize: 12.5, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.45 };
 const sub = { fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: fontSans, margin: '18px 0 10px' };
+const l2link = { marginTop: 8, fontSize: 11.5, fontWeight: 700, color: '#2563eb', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: fontSans };
+
+function L1Card({ d }) {
+  const [showL2, setShowL2] = useState(false);
+  return (
+    <div style={card}>
+      <div style={cardName}>{d.name}</div>
+      <div style={cardOne}>{d.oneLiner}</div>
+      <div style={cardDesc}>{d.description}</div>
+      {d.l2?.length > 0 && (
+        <>
+          <button style={l2link} onClick={() => setShowL2((s) => !s)}>
+            {showL2 ? '▾' : '▸'} {d.l2.length} sub-industries (L2)
+          </button>
+          {showL2 && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {d.l2.map((s) => (
+                <div key={s.name} style={{ fontSize: 12, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.4 }}>
+                  <span style={{ fontWeight: 700, color: '#1a1a1a' }}>{s.name}.</span> {s.oneLiner}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function TaxonomyPanel() {
   const [open, setOpen] = useState(true);
@@ -45,19 +73,13 @@ export default function TaxonomyPanel() {
             {HOW_WE_LABEL.summary}
           </p>
 
-          <div style={sub}>Industries (L1)</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-            {L1_DEFINITIONS.map((d) => (
-              <div key={d.name} style={card}>
-                <div style={cardName}>{d.name}</div>
-                <div style={cardOne}>{d.oneLiner}</div>
-                <div style={cardDesc}>{d.description}</div>
-              </div>
-            ))}
+          <div style={sub}>Industries (L1, click for sub-industries)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
+            {L1_DEFINITIONS.map((d) => <L1Card key={d.name} d={d} />)}
           </div>
 
           <div style={sub}>Other buckets on the chart</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
             {SPECIAL_BUCKETS.map((d) => (
               <div key={d.name} style={{ ...card, background: '#f8fafc' }}>
                 <div style={cardName}>{d.name}</div>
@@ -79,7 +101,7 @@ export default function TaxonomyPanel() {
           </p>
 
           <p style={{ fontSize: 11, color: '#9ca3af', fontFamily: fontSans, margin: '14px 0 0' }}>
-            {TAXONOMY_SOURCE}. L2/L3 sub-industry definitions coming next.
+            {TAXONOMY_SOURCE}. L3 sub-industry definitions are a later pass.
           </p>
         </div>
       )}
