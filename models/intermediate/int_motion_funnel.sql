@@ -101,7 +101,12 @@ SELECT
 FROM trials t
 CROSS JOIN censor c
 LEFT JOIN syncs s        ON s.EntityRecordID = t.EntityRecordID
+-- Signup gate: a conversion only counts for this cohort if it happened at/after
+-- the trial. Drops returning customers whose first-ever paying month predates
+-- their (latest) trial signup — otherwise an old conversion pollutes a recent
+-- cohort and shows as bogus "mature" retention. Mirrors int_customer_survival.
 LEFT JOIN conv_mrr cm    ON cm.EntityRecordID = t.EntityRecordID
+                        AND cm.convert_month >= t.signup_month
 LEFT JOIN {{ ref('int_presale_touches') }} pt ON pt.EntityRecordID = t.EntityRecordID
 LEFT JOIN {{ ref('int_customer_proserv') }} ps ON ps.EntityRecordID = t.EntityRecordID
 LEFT JOIN dep d          ON d.EntityRecordID = t.EntityRecordID
