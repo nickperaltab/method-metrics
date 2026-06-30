@@ -72,6 +72,9 @@ const presetBtn = {
 // ── retention helpers ─────────────────────────────────────────────────────────
 
 const RETENTION_MONTHS = [1, 3, 6, 12];
+// Below this many mature (eligible) customers, a retention % is noise — show
+// "too few" instead of a confident number (e.g. "100% of n=1").
+const MIN_RETENTION_N = 20;
 
 function retentionRate(row, k) {
   const e = Number(row?.[`e${k}`] ?? 0);
@@ -429,7 +432,10 @@ export default function MotionFunnelDrill({ cfg, bqConnected, onConnect }) {
                 const point = retentionRow ? retentionRate(retentionRow, k) : null;
                 const rate = point?.rate ?? null;
                 const n = point?.n ?? 0;
-                const mature = point !== null && n > 0;
+                const enough = point !== null && n >= MIN_RETENTION_N;
+                const subLabel = point === null
+                  ? 'not mature yet'
+                  : (n < MIN_RETENTION_N ? `too few · n=${n.toLocaleString()}` : `n=${n.toLocaleString()}`);
                 return (
                   <div key={k} style={{
                     background: '#f9fafb', border: '1px solid #e5e7eb',
@@ -439,11 +445,11 @@ export default function MotionFunnelDrill({ cfg, bqConnected, onConnect }) {
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4, fontFamily: font }}>
                       {k} mo
                     </div>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: mature ? '#1a1a1a' : '#d1d5db', fontFamily: mono }}>
-                      {mature ? pctFmt(rate) : '—'}
+                    <div style={{ fontSize: 26, fontWeight: 800, color: enough ? '#1a1a1a' : '#d1d5db', fontFamily: mono }}>
+                      {enough ? pctFmt(rate) : '—'}
                     </div>
                     <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, fontFamily: font }}>
-                      {mature ? `n=${n.toLocaleString()}` : 'n/a / not mature'}
+                      {subLabel}
                     </div>
                   </div>
                 );
