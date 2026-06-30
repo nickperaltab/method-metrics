@@ -82,7 +82,7 @@ unit_tests:
           ps_gross: 0
           has_dep: false
           is_prepay: false
-          industry_l1: null
+          industry_l1: 'Unclassified'
           retained_1mo: false
           eligible_1mo: true
           retained_3mo: false
