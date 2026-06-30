@@ -57,6 +57,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
 
   // Per-section account drill: { label, filters } + fetched rows.
   const [industrySel, setIndustrySel] = useState(null);
+  const [industrySeg, setIndustrySeg] = useState(null); // raw clicked segment, for its definition
   const [industryAccounts, setIndustryAccounts] = useState(null);
   const [omSel, setOmSel] = useState(null);
   const [omAccounts, setOmAccounts] = useState(null);
@@ -73,7 +74,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const [error, setError] = useState(null);
 
   const clearAccounts = () => {
-    setIndustrySel(null); setIndustryAccounts(null);
+    setIndustrySel(null); setIndustrySeg(null); setIndustryAccounts(null);
     setOmSel(null); setOmAccounts(null);
   };
 
@@ -143,10 +144,12 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   // Trend points are always L1 grain; clicking one shows that L1's accounts for
   // that point's cohort month — the "where did this move come from" drill.
   const handleTrendPointClick = (segment, monthIso) => {
+    setIndustrySeg(segment);
     loadIndustryAccounts({ l1: segment }, `${segment} — ${monthLabel(monthIso)}`, monthIso);
   };
 
   const handleIndustryBarClick = (segment) => {
+    setIndustrySeg(segment);
     const filters = { ...pathFilters, [chartDim]: segment };
     loadIndustryAccounts(filters, `${segment} (${DIM_LABEL[chartDim]})`);
     // Drill deeper unless at L3 or into a terminal bucket. 'Unclassified' and
@@ -169,6 +172,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const handleNavigate = (level) => {
     setPath(path.slice(0, level));
     setIndustrySel(null);
+    setIndustrySeg(null);
     setIndustryAccounts(null);
   };
 
@@ -290,7 +294,18 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       )}
       {industrySel && (
         <>
-          <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {industrySel}</h3>
+          {(() => {
+            const def = industrySeg ? getSegmentDefinition(industrySeg) : null;
+            if (!def) return null;
+            return (
+              <div style={{ border: '1px solid #e2e5e9', borderLeft: '3px solid #059669', borderRadius: 8, background: '#f9fafb', padding: '10px 14px', margin: '16px 0 8px', maxWidth: 880 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', fontFamily: fontSans }}>{def.name}</div>
+                <div style={{ fontSize: 12.5, color: '#059669', fontWeight: 600, fontFamily: fontSans, margin: '2px 0' }}>{def.oneLiner}</div>
+                {def.description && <div style={{ fontSize: 12.5, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.45 }}>{def.description}</div>}
+              </div>
+            );
+          })()}
+          <h3 style={{ ...h2, fontSize: 15, margin: '8px 0 4px' }}>Accounts — {industrySel}</h3>
           {industryAccountsLoading
             ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
             : <ChartErrorBoundary><GrrAccountTable key={industrySel} rows={industryAccounts} /></ChartErrorBoundary>}

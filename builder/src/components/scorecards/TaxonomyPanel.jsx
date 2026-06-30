@@ -47,7 +47,10 @@ function L1Card({ d }) {
 }
 
 export default function TaxonomyPanel() {
-  const [open, setOpen] = useState(true);
+  // Collapsed by default. The clicked industry's definition shows in context
+  // above its accounts table; this panel is the full reference for when someone
+  // wants every label at once.
+  const [open, setOpen] = useState(false);
 
   return (
     <div style={{ border: '1px solid #e2e5e9', borderRadius: 10, background: '#f9fafb', margin: '8px 0 20px', overflow: 'hidden' }}>
