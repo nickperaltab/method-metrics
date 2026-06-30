@@ -1,50 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { toMotionFunnel, RETENTION_HORIZONS } from '../../src/lib/motionFunnelTransform.js';
+import { toSankey } from '../../src/lib/motionFunnelTransform.js';
+import { buildJointSql } from '../../src/lib/motionFunnelSql.js';
 
+// rows: {synced,demo_attended,free_attended,converted,is_customized,n}
 const rows = [
-  { motion: 'talked', trials: 100, synced: 80, demo_booked: 60, demo_attended: 45,
-    free_booked: 10, free_attended: 8, converted: 40, customized: 12,
-    retained_1mo: 38, eligible_1mo: 40, retained_3mo: 30, eligible_3mo: 35,
-    retained_6mo: 0, eligible_6mo: 0, retained_12mo: 0, eligible_12mo: 0 },
-  { motion: 'self_serve', trials: 300, synced: 150, demo_booked: 0, demo_attended: 0,
-    free_booked: 0, free_attended: 0, converted: 60, customized: 5,
-    retained_1mo: 50, eligible_1mo: 60, retained_3mo: 40, eligible_3mo: 55,
-    retained_6mo: 0, eligible_6mo: 0, retained_12mo: 0, eligible_12mo: 0 },
+  { synced:1, demo_attended:1, free_attended:1, converted:1, is_customized:1, n:100 },
+  { synced:1, demo_attended:1, free_attended:0, converted:1, is_customized:0, n:50 },
+  { synced:0, demo_attended:0, free_attended:0, converted:0, is_customized:0, n:300 },
 ];
 
-describe('toMotionFunnel', () => {
-  it('splits into talked + self_serve with conversion %', () => {
-    const out = toMotionFunnel(rows);
-    expect(out.talked.stages.map((s) => s.key)).toEqual(['trial', 'synced', 'converted', 'customized']);
-    expect(out.talked.stages[0].count).toBe(100);
-    expect(out.talked.stages[1].pctOfTrials).toBe(0.8);   // 80/100
-    expect(out.self_serve.stages[2].count).toBe(60);
+describe('buildJointSql — boolean split filter', () => {
+  const base = { startMonth: '2024-01-01', endMonth: '2026-06-01' };
+
+  it('emits unquoted boolean true for has_dep split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'has_dep', splitValue: 'true' });
+    expect(sql).toContain('has_dep = true');
+    expect(sql).not.toContain("has_dep = 'true'");
   });
 
-  it('computes show rate = demo_attended / demo_booked (talked only)', () => {
-    const out = toMotionFunnel(rows);
-    expect(out.talked.showRate).toBe(0.75);   // 45/60
-    expect(out.self_serve.showRate).toBe(null); // no booked
+  it('emits unquoted boolean false for has_dep split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'has_dep', splitValue: 'false' });
+    expect(sql).toContain('has_dep = false');
+    expect(sql).not.toContain("has_dep = 'false'");
   });
 
-  it('computes retention rate = retained/eligible, null when eligible 0', () => {
-    const out = toMotionFunnel(rows);
-    expect(out.talked.retention.map((r) => r.k)).toEqual(RETENTION_HORIZONS);
-    expect(out.talked.retention[0].rate).toBe(0.95); // 38/40
-    expect(out.talked.retention[0].mature).toBe(true);
-    const r6 = out.talked.retention.find((r) => r.k === 6);
-    expect(r6.rate).toBe(null);   // eligible_6mo = 0
-    expect(r6.mature).toBe(false);
+  it('emits unquoted boolean true for is_prepay split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'is_prepay', splitValue: 'true' });
+    expect(sql).toContain('is_prepay = true');
+    expect(sql).not.toContain("is_prepay = 'true'");
   });
 
-  it('clamps negative drop to zero when a later stage exceeds an earlier one', () => {
-    // synced=30, converted=40 → 1 - 40/30 = -0.333… would be negative without clamp
-    const inverted = [{ motion: 'talked', trials: 100, synced: 30, converted: 40, customized: 10,
-      demo_booked: 0, demo_attended: 0, free_booked: 0, free_attended: 0,
-      retained_1mo: 0, eligible_1mo: 0, retained_3mo: 0, eligible_3mo: 0,
-      retained_6mo: 0, eligible_6mo: 0, retained_12mo: 0, eligible_12mo: 0 }];
-    const out = toMotionFunnel(inverted);
-    // stages[1] = synced; its dropToNext is sync→convert drop (1 - converted/synced)
-    expect(out.talked.stages[1].dropToNext).toBe(0);
+  it('emits quoted string for user_tier split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'user_tier', splitValue: 'Solo' });
+    expect(sql).toContain("user_tier = 'Solo'");
+  });
+});
+
+describe('toSankey', () => {
+  it('builds Trial source + yes/no nodes per stage, conserving flow', () => {
+    const { total, nodes, links } = toSankey(rows, 'paid');
+    expect(total).toBe(450);
+    // Trial -> Sync(yes) = 150 (two synced rows), Trial -> No sync = 300
+    const tSyncYes = links.find(l => l.source === 'Trial' && l.target === 'Sync');
+    const tSyncNo  = links.find(l => l.source === 'Trial' && l.target === 'No sync');
+    expect(tSyncYes.value).toBe(150);
+    expect(tSyncNo.value).toBe(300);
+    // Paid stage present under 'paid' goal
+    expect(nodes.some(n => n.name === 'Paid project hours')).toBe(true);
+  });
+
+  it("convert goal truncates after Converted (no Paid node)", () => {
+    const { nodes } = toSankey(rows, 'convert');
+    expect(nodes.some(n => n.name === 'Paid project hours')).toBe(false);
+    expect(nodes.some(n => n.name === 'Converted')).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
-import React, { useMemo, Component } from 'react';
+import React, { useMemo, useRef, useImperativeHandle, Component } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts/core';
-import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart } from 'echarts/charts';
+import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
+echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
 
 // Error boundary prevents a single broken chart from crashing the entire page
 export class ChartErrorBoundary extends Component {
@@ -51,7 +51,15 @@ const METHOD_THEME = {
 
 echarts.registerTheme('method', METHOD_THEME);
 
-export default function EChart({ option, style, onEvents }) {
+const EChart = React.forwardRef(function EChart({ option, style, onEvents }, ref) {
+  const echartsRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    getEchartsInstance() {
+      return echartsRef.current?.getEchartsInstance() ?? null;
+    },
+  }));
+
   const mergedStyle = useMemo(() => ({
     height: '100%',
     width: '100%',
@@ -63,6 +71,7 @@ export default function EChart({ option, style, onEvents }) {
   return (
     <ChartErrorBoundary>
       <ReactECharts
+        ref={echartsRef}
         option={option}
         theme="method"
         style={mergedStyle}
@@ -72,4 +81,6 @@ export default function EChart({ option, style, onEvents }) {
       />
     </ChartErrorBoundary>
   );
-}
+});
+
+export default EChart;

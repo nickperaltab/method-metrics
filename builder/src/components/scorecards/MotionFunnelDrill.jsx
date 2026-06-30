@@ -1,55 +1,49 @@
 // builder/src/components/scorecards/MotionFunnelDrill.jsx
-// Controller for the Motion + Lifecycle Funnel scorecard.
-// Wires together date-window / lens controls, fetchMotionFunnel → toMotionFunnel
-// → MotionFunnelChart, and an optional lens-compare table.
+// Controller for the Motion & Lifecycle Funnel Sankey scorecard.
+// Wires together goal toggle, split-by controls, fetchJoint → MotionSankeyChart,
+// and a 1/3/6/12-month retention panel below.
 //
-// Props contract mirrors FunnelDrill exactly: { cfg, bqConnected, onConnect }.
+// Props contract: { cfg, bqConnected, onConnect }.
 
 import { useState, useEffect } from 'react';
 import { ChartErrorBoundary } from '../EChart';
-import MotionFunnelChart from './MotionFunnelChart';
-import { fetchMotionFunnel, fetchMotionLens } from '../../lib/motionFunnelData';
-import { LENSES } from '../../lib/motionFunnelSql';
-import { toMotionFunnel } from '../../lib/motionFunnelTransform';
-import { isCohortMature } from '../../lib/funnelTransform';
+import MotionSankeyChart from './MotionSankeyChart';
+import { fetchJoint, fetchSplitValues, fetchGoalRetention } from '../../lib/motionFunnelData';
+import { SPLITS } from '../../lib/motionFunnelSql';
 
-// ── date helpers ────────────────────────────────────────────────────────────
+// ── date helpers ─────────────────────────────────────────────────────────────
 
 // Earliest allowed start: Activity tracking begins in 2024.
-const MIN_START = '2024-01-01';
+const MIN_START = '2024-01';
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
-// Return a YYYY-MM-01 string N months before a given YYYY-MM-01 string.
-function monthFloorNMonthsAgo(isoMonth, n) {
-  const d = new Date(isoMonth + 'T00:00:00Z');
-  d.setUTCMonth(d.getUTCMonth() - n);
-  d.setUTCDate(1);
-  return d.toISOString().slice(0, 7) + '-01';
+// Return a YYYY-MM string N months before a given YYYY-MM string.
+function monthNMonthsAgo(isoMonth, n) {
+  const [y, m] = isoMonth.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 - n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-// Convert any ISO date string to its month floor: YYYY-MM-01.
-function toMonthFloor(iso) {
-  return iso.slice(0, 7) + '-01';
+// Current month as YYYY-MM.
+function currentMonth() {
+  return todayISO().slice(0, 7);
 }
 
-// Current month floor.
-function currentMonthFloor() {
-  return toMonthFloor(todayISO());
+// Clamp a YYYY-MM value to MIN_START.
+function clampStart(val) {
+  return val < MIN_START ? MIN_START : val;
 }
 
-// Default start: 24 months ago, clamped to MIN_START.
-function defaultStart(endMonthFloor) {
-  const s = monthFloorNMonthsAgo(endMonthFloor, 24);
-  return s < MIN_START ? MIN_START : s;
-}
+// Convert YYYY-MM to the YYYY-MM-01 floor that the SQL layer expects.
+function toFloor(ym) { return ym + '-01'; }
 
-// For isCohortMature we need a scalar day, use the end-month floor as cohort month.
-const MATURITY_DAYS = 365; // 12-month horizon is the longest retention bucket
+// ── style tokens ─────────────────────────────────────────────────────────────
 
-const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: "'DM Sans', sans-serif" };
+const font = "'DM Sans', sans-serif";
+const mono = "'JetBrains Mono', monospace";
 
-const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: font };
 
 const AMBER_BANNER = {
   background: '#fef3c7',
@@ -59,114 +53,190 @@ const AMBER_BANNER = {
   padding: '8px 14px',
   fontSize: 13,
   fontWeight: 600,
-  fontFamily: "'DM Sans', sans-serif",
+  fontFamily: font,
   marginBottom: 10,
 };
 
-// ── component ───────────────────────────────────────────────────────────────
+const inputStyle = {
+  padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
+  border: '1px solid #d1d5db', fontFamily: font,
+  background: '#fff', color: '#1a1a1a',
+};
+
+const presetBtn = {
+  padding: '5px 12px', fontSize: 13, fontWeight: 600, borderRadius: 999,
+  border: '1px solid #d1d5db', background: '#fff', color: '#374151',
+  cursor: 'pointer', fontFamily: font,
+};
+
+// ── retention helpers ─────────────────────────────────────────────────────────
+
+const RETENTION_MONTHS = [1, 3, 6, 12];
+
+function retentionRate(row, k) {
+  const e = Number(row?.[`e${k}`] ?? 0);
+  const r = Number(row?.[`r${k}`] ?? 0);
+  if (e === 0) return null;
+  return { rate: r / e, n: e };
+}
+
+function pctFmt(v) {
+  return v == null ? null : `${Math.round(v * 100)}%`;
+}
+
+const goalLabels = {
+  paid: { short: 'Paid project hours', cohort: 'customers who bought project hours' },
+  convert: { short: 'Convert', cohort: 'converted customers' },
+};
+
+// ── component ─────────────────────────────────────────────────────────────────
 
 export default function MotionFunnelDrill({ cfg, bqConnected, onConnect }) {
-  const endDefault = currentMonthFloor();
-  const startDefault = defaultStart(endDefault);
+  const endDefault = currentMonth();
+  const startDefault = clampStart(monthNMonthsAgo(endDefault, 24));
 
-  const [startMonth, setStartMonth] = useState(startDefault); // YYYY-MM-01
-  const [endMonth, setEndMonth] = useState(endDefault);       // YYYY-MM-01
-  const [lens, setLens] = useState(null);
+  // Goal: 'paid' | 'convert'
+  const [goal, setGoal] = useState('paid');
 
-  const [paths, setPaths] = useState(null);
-  const [lensRows, setLensRows] = useState(null);
+  // Signup-month window (YYYY-MM values for <input type="month">)
+  const [startMonth, setStartMonth] = useState(startDefault);
+  const [endMonth, setEndMonth] = useState(endDefault);
 
-  const [funnelLoading, setFunnelLoading] = useState(false);
-  const [lensLoading, setLensLoading] = useState(false);
+  // Split-by
+  const [splitKey, setSplitKey] = useState(null);
+  const [splitValue, setSplitValue] = useState(null);
+  const [splitOptions, setSplitOptions] = useState([]); // [{value, n}]
+
+  // Data
+  const [jointRows, setJointRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [retentionRow, setRetentionRow] = useState(null);
+
+  // Loading / error
+  const [jointLoading, setJointLoading] = useState(false);
+  const [splitValLoading, setSplitValLoading] = useState(false);
+  const [retentionLoading, setRetentionLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Is the latest selected end-month fully mature (12-month horizon elapsed)?
-  const mature = isCohortMature(endMonth, todayISO(), MATURITY_DAYS);
-  // Show a softer "recent cohorts still maturing" note when end is within 12 months.
-  const recentEndWarning = !mature;
-
-  // ── month-input helpers ──────────────────────────────────────────────────
-
-  // Convert a month input value (YYYY-MM) to a YYYY-MM-01 floor, clamped.
-  const parseMonthInput = (val, clampMin, clampMax) => {
-    if (!val) return clampMin;
-    const floor = val.length === 7 ? val + '-01' : toMonthFloor(val);
-    if (clampMin && floor < clampMin) return clampMin;
-    if (clampMax && floor > clampMax) return clampMax;
-    return floor;
-  };
-
-  // For <input type="month"> we need YYYY-MM; strip the day.
-  const toMonthInputVal = (isoFloor) => isoFloor.slice(0, 7);
+  // ── month-input helpers ───────────────────────────────────────────────────
 
   const handleStartChange = (e) => {
-    const val = parseMonthInput(e.target.value, MIN_START, endMonth);
+    let val = e.target.value; // YYYY-MM
+    if (!val) return;
+    if (val < MIN_START) val = MIN_START;
+    if (val > endMonth) val = endMonth;
     setStartMonth(val);
+    setSplitValue(null);
   };
 
   const handleEndChange = (e) => {
-    const val = parseMonthInput(e.target.value, startMonth, currentMonthFloor());
+    let val = e.target.value;
+    if (!val) return;
+    const cur = currentMonth();
+    if (val > cur) val = cur;
+    if (val < startMonth) val = startMonth;
     setEndMonth(val);
+    setSplitValue(null);
   };
 
   const applyPreset = (months) => {
-    const end = currentMonthFloor();
-    const start = monthFloorNMonthsAgo(end, months);
+    const end = currentMonth();
+    const start = clampStart(monthNMonthsAgo(end, months));
     setEndMonth(end);
-    setStartMonth(start < MIN_START ? MIN_START : start);
+    setStartMonth(start);
+    setSplitValue(null);
   };
 
-  // ── fetch funnel on window change ────────────────────────────────────────
+  // ── split-key change ──────────────────────────────────────────────────────
+
+  const handleSplitKeyChange = (e) => {
+    const val = e.target.value || null;
+    setSplitKey(val);
+    setSplitValue(null);
+    setSplitOptions([]);
+  };
+
+  const handleSplitValueChange = (e) => {
+    const val = e.target.value || null;
+    setSplitValue(val);
+  };
+
+  // ── fetch joint distribution ──────────────────────────────────────────────
 
   useEffect(() => {
     if (!bqConnected) return;
     let cancelled = false;
-    setFunnelLoading(true);
+    setJointLoading(true);
     setError(null);
-    setPaths(null);
+    setJointRows([]);
+    setTotal(0);
 
-    fetchMotionFunnel({ startMonth, endMonth })
-      .then((rows) => {
+    fetchJoint({
+      startMonth: toFloor(startMonth),
+      endMonth: toFloor(endMonth),
+      splitKey: splitKey || null,
+      splitValue: splitValue || null,
+    })
+      .then(({ rows }) => {
         if (cancelled) return;
-        setPaths(toMotionFunnel(rows));
+        setJointRows(rows);
+        const t = rows.reduce((a, r) => a + (Number(r.n) || 0), 0);
+        setTotal(t);
       })
       .catch((e) => { if (!cancelled) setError(e); })
-      .finally(() => { if (!cancelled) setFunnelLoading(false); });
+      .finally(() => { if (!cancelled) setJointLoading(false); });
 
     return () => { cancelled = true; };
-  }, [bqConnected, startMonth, endMonth]);
+  }, [bqConnected, startMonth, endMonth, splitKey, splitValue]);
 
-  // ── fetch lens breakdown when lens changes ───────────────────────────────
+  // ── fetch split values when splitKey changes ──────────────────────────────
 
   useEffect(() => {
-    if (!lens) { setLensRows(null); return; }
+    if (!splitKey || !bqConnected) { setSplitOptions([]); return; }
+    let cancelled = false;
+    setSplitValLoading(true);
+
+    fetchSplitValues({
+      startMonth: toFloor(startMonth),
+      endMonth: toFloor(endMonth),
+      splitKey,
+    })
+      .then(({ rows }) => {
+        if (cancelled) return;
+        setSplitOptions(rows ?? []);
+      })
+      .catch(() => { if (!cancelled) setSplitOptions([]); })
+      .finally(() => { if (!cancelled) setSplitValLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [bqConnected, startMonth, endMonth, splitKey]);
+
+  // ── fetch retention curve ─────────────────────────────────────────────────
+
+  useEffect(() => {
     if (!bqConnected) return;
     let cancelled = false;
-    setLensLoading(true);
-    fetchMotionLens({ startMonth, endMonth, lens })
-      .then((rows) => { if (!cancelled) setLensRows(rows); })
-      .catch((e) => { if (!cancelled) setError(e); })
-      .finally(() => { if (!cancelled) setLensLoading(false); });
+    setRetentionLoading(true);
+    setRetentionRow(null);
+
+    fetchGoalRetention({
+      startMonth: toFloor(startMonth),
+      endMonth: toFloor(endMonth),
+      goal,
+      splitKey: splitKey || null,
+      splitValue: splitValue || null,
+    })
+      .then(({ rows }) => {
+        if (cancelled) return;
+        setRetentionRow(rows?.[0] ?? null);
+      })
+      .catch(() => { if (!cancelled) setRetentionRow(null); })
+      .finally(() => { if (!cancelled) setRetentionLoading(false); });
+
     return () => { cancelled = true; };
-  }, [bqConnected, startMonth, endMonth, lens]);
+  }, [bqConnected, startMonth, endMonth, goal, splitKey, splitValue]);
 
-  // ── stage-click: V1 stub (L3 account drill is out of V1 scope) ───────────
-
-  const handleStageClick = (motion, stageKey) => {
-    // V1: no-op. Future: fetch accounts filtered by motion + stageKey using
-    // buildMotionLensSql-style account queries for L3 drill-through.
-    console.debug('[MotionFunnelDrill] stage clicked (L3 drill not yet implemented):', motion, stageKey);
-  };
-
-  // ── lens change handler ──────────────────────────────────────────────────
-
-  const handleLensChange = (e) => {
-    const val = e.target.value || null;
-    setLens(val);
-    setLensRows(null);
-  };
-
-  // ── unauthed prompt (mirrors FunnelDrill) ────────────────────────────────
+  // ── unauthed prompt (mirrors FunnelDrill) ─────────────────────────────────
 
   if (!bqConnected) {
     return (
@@ -186,13 +256,16 @@ export default function MotionFunnelDrill({ cfg, bqConnected, onConnect }) {
     );
   }
 
+  // ── render ────────────────────────────────────────────────────────────────
+
+  const goalLabel = goalLabels[goal] ?? goalLabels.paid;
+
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       {/* header + Beta pill */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 4px' }}>
         <h1 style={{
-          fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
-          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0, fontFamily: font,
         }}>
           {cfg.title}
         </h1>
@@ -201,194 +274,184 @@ export default function MotionFunnelDrill({ cfg, bqConnected, onConnect }) {
             fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase',
             color: '#b45309', background: '#fef3c7', border: '1px solid #fcd34d',
             borderRadius: 999, padding: '4px 12px', whiteSpace: 'nowrap',
-            fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+            fontFamily: font, flexShrink: 0,
           }}>
             {cfg.status}
           </span>
         )}
       </div>
       {cfg.subtitle && (
-        <p style={{
-          fontSize: 13, color: '#6b7280', margin: '0 0 20px',
-          fontFamily: "'DM Sans', sans-serif", maxWidth: 760,
-        }}>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px', fontFamily: font, maxWidth: 760 }}>
           {cfg.subtitle}
         </p>
       )}
 
-      {/* always-on caveat banners */}
+      {/* always-on caveat banner */}
       <div style={{ ...AMBER_BANNER }}>
-        ⚠ Talked-to-us is tracked from 2024; earlier sign-ups read as self-serve.
-      </div>
-      <div style={{ ...AMBER_BANNER }}>
-        ⚠ Industry breakdown is sparse for trials, fuller for converts — expect a large Unclassified bucket up top.
+        ⚠ Engagement tracked from 2024; ~477 bought project hours without a SaaS conversion
+        (the Not-converted → Paid cross-flow); association, not proof.
       </div>
 
-      {/* signup-month window + preset buttons + lens selector */}
+      {/* controls row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', margin: '8px 0 20px' }}>
+
+        {/* goal toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ ...sectionLabel, marginRight: 2 }}>Goal</span>
+          {[
+            { key: 'paid', label: 'Paid project hours' },
+            { key: 'convert', label: 'Convert' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setGoal(key)}
+              style={{
+                padding: '5px 14px', fontSize: 13, fontWeight: 600, borderRadius: 999,
+                border: '1px solid',
+                borderColor: goal === key ? '#7c3aed' : '#d1d5db',
+                background: goal === key ? '#7c3aed' : '#fff',
+                color: goal === key ? '#fff' : '#374151',
+                cursor: 'pointer', fontFamily: font,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* signup-month window */}
         <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
           Signup month — Start
           <input
             type="month"
-            value={toMonthInputVal(startMonth)}
-            min={toMonthInputVal(MIN_START)}
-            max={toMonthInputVal(endMonth)}
+            value={startMonth}
+            min={MIN_START}
+            max={endMonth}
             onChange={handleStartChange}
-            style={{
-              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
-              border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
-              background: '#fff', color: '#1a1a1a',
-            }}
+            style={inputStyle}
           />
         </label>
         <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
           End
           <input
             type="month"
-            value={toMonthInputVal(endMonth)}
-            min={toMonthInputVal(startMonth)}
-            max={toMonthInputVal(currentMonthFloor())}
+            value={endMonth}
+            min={startMonth}
+            max={currentMonth()}
             onChange={handleEndChange}
-            style={{
-              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
-              border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
-              background: '#fff', color: '#1a1a1a',
-            }}
+            style={inputStyle}
           />
         </label>
 
+        {/* preset buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[6, 12, 24].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => applyPreset(m)}
-              style={{
-                padding: '5px 12px', fontSize: 13, fontWeight: 600, borderRadius: 999,
-                border: '1px solid #d1d5db', background: '#fff', color: '#374151',
-                cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
+            <button key={m} type="button" onClick={() => applyPreset(m)} style={presetBtn}>
               Last {m} mo
             </button>
           ))}
         </div>
 
+        {/* split-by key select */}
         <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
-          Lens
+          Split by
           <select
-            value={lens ?? ''}
-            onChange={handleLensChange}
-            style={{
-              padding: '5px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6,
-              border: '1px solid #d1d5db', fontFamily: "'DM Sans', sans-serif",
-              background: '#fff', color: '#1a1a1a',
-            }}
+            value={splitKey ?? ''}
+            onChange={handleSplitKeyChange}
+            style={inputStyle}
           >
-            {LENSES.map((l) => (
-              <option key={l.key ?? 'none'} value={l.key ?? ''}>{l.label}</option>
+            {SPLITS.map((s) => (
+              <option key={s.key ?? 'none'} value={s.key ?? ''}>{s.label}</option>
             ))}
           </select>
         </label>
-      </div>
 
-      {/* recent-cohorts maturing note */}
-      {recentEndWarning && (
-        <div style={{
-          fontSize: 12, fontWeight: 600, color: '#b45309',
-          background: '#fef3c7', borderRadius: 6,
-          padding: '6px 10px', marginBottom: 14,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          ⚠ Recent cohorts are still maturing — later retention buckets may be incomplete.
-        </div>
-      )}
+        {/* split value select — shown only when a splitKey is active */}
+        {splitKey && (
+          <label style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {SPLITS.find((s) => s.key === splitKey)?.label ?? splitKey}
+            {splitValLoading
+              ? <span style={{ fontSize: 13, color: '#9ca3af', fontFamily: font }}>loading…</span>
+              : (
+                <select
+                  value={splitValue ?? ''}
+                  onChange={handleSplitValueChange}
+                  style={inputStyle}
+                >
+                  <option value="">All</option>
+                  {splitOptions.map((opt) => {
+                    const v = String(opt.value ?? '');
+                    return (
+                      <option key={v} value={v}>
+                        {v || '(blank)'} ({Number(opt.n ?? 0).toLocaleString()})
+                      </option>
+                    );
+                  })}
+                </select>
+              )
+            }
+          </label>
+        )}
+      </div>
 
       {/* error banner */}
       {error && (
         <div style={{
           background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c',
           borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13,
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: font,
         }}>
           {`Could not load data: ${error.message}`}
         </div>
       )}
 
-      {/* funnel chart */}
-      {funnelLoading && !paths && (
+      {/* Sankey chart */}
+      {jointLoading && jointRows.length === 0 && (
         <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading motion funnel…</p>
       )}
-      {paths && (
-        <ChartErrorBoundary>
-          <MotionFunnelChart
-            paths={paths}
-            mature={!recentEndWarning}
-            onStageClick={handleStageClick}
-          />
-        </ChartErrorBoundary>
-      )}
+      <ChartErrorBoundary>
+        <MotionSankeyChart jointRows={jointRows} goal={goal} total={total} />
+      </ChartErrorBoundary>
 
-      {/* lens-compare table */}
-      {lens && (
-        lensLoading && !lensRows
-          ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading lens breakdown…</p>
-          : lensRows && lensRows.length > 0 && (
-            <div style={{ overflowX: 'auto', margin: '24px 0 0' }}>
-              <div style={{
-                fontSize: 13, fontWeight: 700, color: '#374151',
-                marginBottom: 8, fontFamily: "'DM Sans', sans-serif",
-              }}>
-                Breakdown by {LENSES.find((l) => l.key === lens)?.label ?? lens}
-              </div>
-              <table style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 740 }}>
-                <thead>
-                  <tr>
-                    {['Motion', 'Lens value', 'Trials', 'Sync %', 'Convert %'].map((h, i) => (
-                      <th key={h} style={{
-                        textAlign: i < 2 ? 'left' : 'right',
-                        padding: '8px 12px',
-                        fontSize: 11, fontWeight: 700, color: '#6b7280',
-                        textTransform: 'uppercase', letterSpacing: '.04em',
-                        borderBottom: '2px solid #e2e5e9', whiteSpace: 'nowrap',
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lensRows.map((row, idx) => {
-                    const trials = Number(row.trials) || 0;
-                    const synced = Number(row.synced) || 0;
-                    const converted = Number(row.converted) || 0;
-                    const syncPct = trials > 0 ? synced / trials : null;
-                    const convertPct = trials > 0 ? converted / trials : null;
-                    return (
-                      <tr key={`${row.motion}:${row.lens_value}:${idx}`}>
-                        <td style={tdText}>{row.motion ?? '—'}</td>
-                        <td style={tdText}>{row.lens_value ?? '—'}</td>
-                        <td style={tdNum}>{trials.toLocaleString()}</td>
-                        <td style={tdNum}>{pct(syncPct)}</td>
-                        <td style={tdNum}>{pct(convertPct)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* retention panel */}
+      <div style={{ margin: '32px 0 0' }}>
+        <div style={{
+          fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 10, fontFamily: font,
+        }}>
+          Retention of {goalLabel.cohort}
+        </div>
+        {retentionLoading && !retentionRow
+          ? <p style={{ ...sectionLabel, padding: '8px 0' }}>Loading retention…</p>
+          : (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {RETENTION_MONTHS.map((k) => {
+                const point = retentionRow ? retentionRate(retentionRow, k) : null;
+                const rate = point?.rate ?? null;
+                const n = point?.n ?? 0;
+                const mature = point !== null && n > 0;
+                return (
+                  <div key={k} style={{
+                    background: '#f9fafb', border: '1px solid #e5e7eb',
+                    borderRadius: 10, padding: '14px 20px', minWidth: 110,
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4, fontFamily: font }}>
+                      {k} mo
+                    </div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: mature ? '#1a1a1a' : '#d1d5db', fontFamily: mono }}>
+                      {mature ? pctFmt(rate) : '—'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, fontFamily: font }}>
+                      {mature ? `n=${n.toLocaleString()}` : 'n/a / not mature'}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )
-      )}
+        }
+      </div>
     </div>
   );
 }
-
-const tdText = {
-  textAlign: 'left', padding: '7px 12px', fontSize: 13, fontWeight: 600,
-  color: '#374151', borderBottom: '1px solid #f1f3f5',
-  fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap',
-};
-
-const tdNum = {
-  textAlign: 'right', padding: '7px 12px', fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 13, color: '#374151', borderBottom: '1px solid #f1f3f5', whiteSpace: 'nowrap',
-};

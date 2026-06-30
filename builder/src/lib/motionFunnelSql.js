@@ -1,55 +1,30 @@
 // builder/src/lib/motionFunnelSql.js
-// Pure SQL builders for the Motion + Lifecycle funnel. No I/O.
 const fqn = (v) => `\`project-for-method-dw.revenue.${v}\``;
-const sqlStr = (v) => `'${String(v).replace(/'/g, "''")}'`;
-
-// free_booked / free_attended fetched for a future free-hour show-rate metric; unused in V1 transform/chart.
-const COUNT_COLS = [
-  'trials', 'synced', 'demo_booked', 'demo_attended', 'free_booked', 'free_attended',
-  'converted', 'customized',
-  'retained_1mo', 'eligible_1mo', 'retained_3mo', 'eligible_3mo',
-  'retained_6mo', 'eligible_6mo', 'retained_12mo', 'eligible_12mo',
+const s = (v) => `'${String(v).replace(/'/g, "''")}'`;
+export const SPLITS = [
+  { key:null, label:'None' },
+  { key:'user_tier', label:'Customer size' },
+  { key:'has_dep', label:'DEP' },
+  { key:'industry_l1', label:'Industry' },
+  { key:'is_prepay', label:'Prepay vs Monthly' },
 ];
+const FLAGS = 'synced, demo_attended, free_attended, converted, is_customized';
+const win = (a, b) => `signup_month BETWEEN ${s(a)} AND ${s(b)}`;
+const BOOL_SPLITS = new Set(['has_dep', 'is_prepay']);
+const splitFilter = (k, v) => (k && v != null && v !== '') ? ` AND ${k} = ${BOOL_SPLITS.has(k) ? (v === true || v === 'true') : s(v)}` : '';
 
-// Sum the aggregated view over a signup-month window, per motion.
-export function buildMotionFunnelSql({ startMonth, endMonth }) {
-  const sums = COUNT_COLS.map((c) => `  SUM(${c}) AS ${c}`).join(',\n');
-  return `SELECT
-  motion,
-${sums}
-FROM ${fqn('v_motion_funnel')}
-WHERE signup_month BETWEEN ${sqlStr(startMonth)} AND ${sqlStr(endMonth)}
-GROUP BY motion
-ORDER BY motion`;
+export function buildJointSql({ startMonth, endMonth, splitKey, splitValue }) {
+  return `SELECT ${FLAGS}, COUNT(*) AS n FROM ${fqn('int_motion_funnel')}
+WHERE ${win(startMonth, endMonth)}${splitFilter(splitKey, splitValue)}
+GROUP BY 1,2,3,4,5`;
 }
-
-// Lens breakdown from the per-customer table: spine counts by motion × lens value.
-const LENS_EXPR = {
-  industry:      `COALESCE(industry_l1, 'Unclassified')`,
-  dep:           `IF(has_dep, 'DEP', 'No DEP')`,
-  prepay:        `IF(is_prepay, 'Prepay', 'Monthly')`,
-  customization: `IF(is_customized, 'Customized', 'No customization')`,
-};
-
-export function buildMotionLensSql({ startMonth, endMonth, lens }) {
-  const expr = LENS_EXPR[lens];
-  if (!expr) throw new Error(`unknown lens: ${lens}`);
-  return `SELECT
-  motion,
-  ${expr} AS lens_value,
-  COUNT(*) AS trials,
-  COUNTIF(synced) AS synced,
-  COUNTIF(converted) AS converted
-FROM ${fqn('int_motion_funnel')}
-WHERE signup_month BETWEEN ${sqlStr(startMonth)} AND ${sqlStr(endMonth)}
-GROUP BY motion, lens_value
-ORDER BY motion, trials DESC`;
+export function buildSplitValuesSql({ startMonth, endMonth, splitKey }) {
+  return `SELECT ${splitKey} AS value, COUNT(*) AS n FROM ${fqn('int_motion_funnel')}
+WHERE ${win(startMonth, endMonth)} GROUP BY 1 ORDER BY n DESC`;
 }
-
-export const LENSES = [
-  { key: null, label: 'None' },
-  { key: 'industry', label: 'Industry (V7)' },
-  { key: 'dep', label: 'DEP' },
-  { key: 'prepay', label: 'Prepay vs Monthly' },
-  { key: 'customization', label: 'Customized' },
-];
+export function buildGoalRetentionSql({ startMonth, endMonth, goal, splitKey, splitValue }) {
+  const gate = goal === 'convert' ? 'converted' : 'is_customized';
+  const f = (k) => `COUNTIF(eligible_${k}mo) AS e${k}, COUNTIF(retained_${k}mo) AS r${k}`;
+  return `SELECT ${[1,3,6,12].map(f).join(', ')} FROM ${fqn('int_motion_funnel')}
+WHERE ${win(startMonth, endMonth)} AND ${gate}${splitFilter(splitKey, splitValue)}`;
+}

@@ -41,6 +41,11 @@ dep AS (
   FROM {{ ref('int_customers') }}
   GROUP BY 1
 ),
+sizes AS (
+  SELECT EntityRecordID, MAX(TotalUsers) AS users
+  FROM {{ ref('int_customers') }}
+  GROUP BY 1
+),
 prepay AS (
   SELECT EntityRecordID,
     LOGICAL_OR(InvoiceGrouping = 'SaaS' AND SaaSPayType = 'Prepay' AND SaaSAmount != 0) AS is_prepay
@@ -75,7 +80,15 @@ SELECT
   COALESCE(ps.ps_gross, 0)                         AS ps_gross,
   COALESCE(d.has_dep, FALSE)                        AS has_dep,
   COALESCE(pp.is_prepay, FALSE)                     AS is_prepay,
-  ind.l1                                            AS industry_l1,
+  COALESCE(ind.l1, 'Unclassified')                  AS industry_l1,
+  -- customer size bucket derived from peak user count
+  CASE
+    WHEN sz.users IS NULL THEN 'Unknown'
+    WHEN sz.users <= 1     THEN 'Solo'
+    WHEN sz.users <= 4     THEN 'Small (2-4)'
+    WHEN sz.users <= 10    THEN 'SMB (5-10)'
+    ELSE                        'Mid (11+)'
+  END                                               AS user_tier,
   -- retention horizons (numerator = alive at t0+K; eligible = t0+K observable)
   COALESCE(r1.m, 0) > 0                             AS retained_1mo,
   DATE_ADD(cm.convert_month, INTERVAL 1 MONTH)  <= c.censor_month AS eligible_1mo,
@@ -92,6 +105,7 @@ LEFT JOIN conv_mrr cm    ON cm.EntityRecordID = t.EntityRecordID
 LEFT JOIN {{ ref('int_presale_touches') }} pt ON pt.EntityRecordID = t.EntityRecordID
 LEFT JOIN {{ ref('int_customer_proserv') }} ps ON ps.EntityRecordID = t.EntityRecordID
 LEFT JOIN dep d          ON d.EntityRecordID = t.EntityRecordID
+LEFT JOIN sizes sz       ON sz.EntityRecordID = t.EntityRecordID
 LEFT JOIN prepay pp      ON pp.EntityRecordID = t.EntityRecordID
 LEFT JOIN {{ source('v7_classification', 'v_entity_primary_label') }} ind
                          ON ind.customer_record_id = t.EntityRecordID
