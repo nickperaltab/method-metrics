@@ -1,4 +1,4 @@
-import React, { useMemo, Component } from 'react';
+import React, { useMemo, useRef, useImperativeHandle, Component } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart } from 'echarts/charts';
@@ -51,7 +51,15 @@ const METHOD_THEME = {
 
 echarts.registerTheme('method', METHOD_THEME);
 
-export default function EChart({ option, style, onEvents }) {
+const EChart = React.forwardRef(function EChart({ option, style, onEvents }, ref) {
+  const echartsRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    getEchartsInstance() {
+      return echartsRef.current?.getEchartsInstance() ?? null;
+    },
+  }));
+
   const mergedStyle = useMemo(() => ({
     height: '100%',
     width: '100%',
@@ -63,6 +71,7 @@ export default function EChart({ option, style, onEvents }) {
   return (
     <ChartErrorBoundary>
       <ReactECharts
+        ref={echartsRef}
         option={option}
         theme="method"
         style={mergedStyle}
@@ -72,4 +81,6 @@ export default function EChart({ option, style, onEvents }) {
       />
     </ChartErrorBoundary>
   );
-}
+});
+
+export default EChart;

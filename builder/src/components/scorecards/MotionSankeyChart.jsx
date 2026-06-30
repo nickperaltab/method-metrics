@@ -3,8 +3,7 @@
 // Props: jointRows (raw joint-distribution rows), goal ('convert' | 'paid'), total (trial count).
 // Handles: trajectory-focus highlighting, click-to-pin, default focus on goal node.
 
-import { useMemo, useEffect, useRef, useState } from 'react';
-import * as echarts from 'echarts/core';
+import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import EChart, { ChartErrorBoundary } from '../EChart';
 import { toSankey, goalNodeName } from '../../lib/motionFunnelTransform';
 
@@ -18,7 +17,7 @@ function pct(value, total) {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total = 0 }) {
-  const containerRef = useRef(null);
+  const echartsRef = useRef(null);
   const [pinnedNode, setPinnedNode] = useState(null);
 
   const { nodes, links } = useMemo(
@@ -85,24 +84,15 @@ export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total
     ],
   }), [nodes, links, total]);
 
-  // Get the chart instance via the container DOM node
-  const getChartInstance = () => {
-    if (!containerRef.current) return null;
-    const dom = containerRef.current.querySelector('canvas')?.closest('[_echarts_instance_]')
-      ?? containerRef.current.querySelector('[_echarts_instance_]');
-    if (!dom) return null;
-    return echarts.getInstanceByDom(dom);
-  };
-
-  // Dispatch highlight for a given node name; clears previous highlight first.
-  const focusNode = (name) => {
-    const inst = getChartInstance();
+  // Dispatch highlight for a given node name via the EChart ref.
+  const focusNode = useCallback((name) => {
+    const inst = echartsRef.current?.getEchartsInstance();
     if (!inst) return;
     inst.dispatchAction({ type: 'downplay', seriesIndex: 0 });
     if (name) {
       inst.dispatchAction({ type: 'highlight', seriesIndex: 0, name });
     }
-  };
+  }, []); // echartsRef is a stable ref object — no deps needed
 
   // On mount and whenever goal / jointRows / pinnedNode change, focus the
   // correct node. Run in a rAF so ECharts has finished its render pass.
@@ -110,10 +100,10 @@ export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total
     const target = pinnedNode ?? goalNodeName(goal);
     const raf = requestAnimationFrame(() => focusNode(target));
     return () => cancelAnimationFrame(raf);
-  }, [goal, jointRows, nodes, links, pinnedNode]); // focusNode reads only stable refs
+  }, [goal, jointRows, nodes, links, pinnedNode, focusNode]);
 
   // Click handler: pin focus to clicked node, or reset to goal on blank click.
-  const handleClick = (params) => {
+  const handleClick = useCallback((params) => {
     if (params.dataType === 'node' || params.dataType === 'edge') {
       const name = params.dataType === 'node'
         ? (params.data?.name ?? params.name)
@@ -127,17 +117,16 @@ export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total
       setPinnedNode(null);
       focusNode(goalNodeName(goal));
     }
-  };
+  }, [goal, focusNode]);
 
   return (
     <ChartErrorBoundary>
-      <div ref={containerRef} style={{ width: '100%', height: 480 }}>
-        <EChart
-          option={option}
-          style={{ height: 480, width: '100%' }}
-          onEvents={{ click: handleClick }}
-        />
-      </div>
+      <EChart
+        ref={echartsRef}
+        option={option}
+        style={{ height: 480, width: '100%' }}
+        onEvents={{ click: handleClick }}
+      />
     </ChartErrorBoundary>
   );
 }
