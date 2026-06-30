@@ -22,8 +22,8 @@ unit_tests:
           - { EntityRecordID: 2, Month: '2024-03-01', StartMRR: 200 }  # converts Mar
       - input: ref('int_customers')
         rows:
-          - { EntityRecordID: 1, HasDEP: true }
-          - { EntityRecordID: 2, HasDEP: false }
+          - { EntityRecordID: 1, HasDEP: true,  TotalUsers: 1  }
+          - { EntityRecordID: 2, HasDEP: false, TotalUsers: 3  }
       - input: ref('int_presale_touches')
         rows:
           # entity 1 attended a demo before converting -> talked
@@ -65,6 +65,7 @@ unit_tests:
           eligible_6mo: true
           retained_12mo: false
           eligible_12mo: false
+          user_tier: 'Solo'
         - EntityRecordID: 2
           signup_month: '2024-02-01'
           synced: true
@@ -90,6 +91,7 @@ unit_tests:
           eligible_6mo: true
           retained_12mo: false
           eligible_12mo: false
+          user_tier: 'Small (2-4)'
 
 models:
   - name: int_motion_funnel
@@ -111,3 +113,9 @@ models:
           - accepted_values:
               arguments:
                 values: ['talked', 'self_serve']
+      - name: user_tier
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Solo', 'Small (2-4)', 'SMB (5-10)', 'Mid (11+)', 'Unknown']
