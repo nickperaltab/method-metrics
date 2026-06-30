@@ -94,6 +94,9 @@ export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total
     }
   }, []); // echartsRef is a stable ref object — no deps needed
 
+  // Reset pinned node when goal changes so stale focus doesn't survive a goal switch.
+  useEffect(() => { setPinnedNode(null); }, [goal]);
+
   // On mount and whenever goal / jointRows / pinnedNode change, focus the
   // correct node. Run in a rAF so ECharts has finished its render pass.
   useEffect(() => {
@@ -118,6 +121,14 @@ export default function MotionSankeyChart({ jointRows = [], goal = 'paid', total
       focusNode(goalNodeName(goal));
     }
   }, [goal, focusNode]);
+
+  if (total === 0 || jointRows.length === 0) {
+    return (
+      <div style={{ height: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}>
+        No data for this window.
+      </div>
+    );
+  }
 
   return (
     <ChartErrorBoundary>

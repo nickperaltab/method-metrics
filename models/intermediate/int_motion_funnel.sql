@@ -80,7 +80,7 @@ SELECT
   COALESCE(ps.ps_gross, 0)                         AS ps_gross,
   COALESCE(d.has_dep, FALSE)                        AS has_dep,
   COALESCE(pp.is_prepay, FALSE)                     AS is_prepay,
-  ind.l1                                            AS industry_l1,
+  COALESCE(ind.l1, 'Unclassified')                  AS industry_l1,
   -- customer size bucket derived from peak user count
   CASE
     WHEN sz.users IS NULL THEN 'Unknown'
