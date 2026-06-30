@@ -1,11 +1,11 @@
 import React, { useMemo, Component } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts/core';
-import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart } from 'echarts/charts';
+import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
+echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
 
 // Error boundary prevents a single broken chart from crashing the entire page
 export class ChartErrorBoundary extends Component {
