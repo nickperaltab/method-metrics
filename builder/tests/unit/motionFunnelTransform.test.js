@@ -54,4 +54,23 @@ describe('toSankey', () => {
     expect(nodes.some(n => n.name === 'Paid project hours')).toBe(false);
     expect(nodes.some(n => n.name === 'Converted')).toBe(true);
   });
+
+  // Regression: BigQuery REST returns BOOL columns as the strings "true"/"false".
+  // The transform must treat those as yes/no, not coerce them to 0 (which sent
+  // every customer down the "No" path in prod).
+  it('handles BigQuery string booleans ("true"/"false")', () => {
+    const bqRows = [
+      { synced:'true',  demo_attended:'true',  free_attended:'true',  converted:'true',  is_customized:'true',  n:'100' },
+      { synced:'true',  demo_attended:'false', free_attended:'false', converted:'false', is_customized:'false', n:'50'  },
+      { synced:'false', demo_attended:'false', free_attended:'false', converted:'false', is_customized:'false', n:'300' },
+    ];
+    const { links } = toSankey(bqRows, 'paid');
+    const syncYes = links.find(l => l.source === 'Trial' && l.target === 'Sync');
+    const syncNo  = links.find(l => l.source === 'Trial' && l.target === 'No sync');
+    expect(syncYes.value).toBe(150); // two "true" rows: 100 + 50
+    expect(syncNo.value).toBe(300);  // the "false" row
+    // and the deepest yes-path flow exists (Converted -> Paid project hours = 100)
+    const paid = links.find(l => l.source === 'Converted' && l.target === 'Paid project hours');
+    expect(paid.value).toBe(100);
+  });
 });

@@ -10,6 +10,10 @@ export const STAGES = [
 const TRIAL = 'Trial';
 const NEG = '#dde2e8';
 const num = (v) => Number(v) || 0;
+// BigQuery's REST API returns BOOL columns as the strings "true"/"false", so a
+// plain Number() coercion yields NaN→0 and every flag reads false. Treat the
+// string/number/boolean forms uniformly.
+const truthy = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
 export function goalNodeName(goal) { return goal === 'convert' ? 'Converted' : 'Paid project hours'; }
 
@@ -24,13 +28,13 @@ export function toSankey(rows = [], goal = 'paid') {
   const sum = (pred) => rows.reduce((a, r) => a + (pred(r) ? num(r.n) : 0), 0);
   const links = [];
   const first = active[0];
-  links.push({ source: TRIAL, target: first.yes, value: sum((r) => num(r[first.key]) === 1) });
-  links.push({ source: TRIAL, target: first.no,  value: sum((r) => num(r[first.key]) === 0) });
+  links.push({ source: TRIAL, target: first.yes, value: sum((r) => truthy(r[first.key])) });
+  links.push({ source: TRIAL, target: first.no,  value: sum((r) => !truthy(r[first.key])) });
   for (let i = 0; i < active.length - 1; i++) {
     const a = active[i], b = active[i + 1];
-    [[1, a.yes], [0, a.no]].forEach(([av, an]) => {
-      [[1, b.yes], [0, b.no]].forEach(([bv, bn]) => {
-        const v = sum((r) => num(r[a.key]) === av && num(r[b.key]) === bv);
+    [[true, a.yes], [false, a.no]].forEach(([av, an]) => {
+      [[true, b.yes], [false, b.no]].forEach(([bv, bn]) => {
+        const v = sum((r) => truthy(r[a.key]) === av && truthy(r[b.key]) === bv);
         if (v > 0) links.push({ source: an, target: bn, value: v });
       });
     });
