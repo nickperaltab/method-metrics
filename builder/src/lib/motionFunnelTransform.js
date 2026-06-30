@@ -1,46 +1,39 @@
 // builder/src/lib/motionFunnelTransform.js
-// Pure rate math for the Motion + Lifecycle funnel. No I/O.
-
-export const RETENTION_HORIZONS = [1, 3, 6, 12];
-
-const STAGE_DEFS = [
-  { key: 'trial',      label: 'Trial' },
-  { key: 'synced',     label: 'Sync' },
-  { key: 'converted',  label: 'Converted' },
-  { key: 'customized', label: 'Customized' },
+// Pure: joint distribution over the 5 journey flags -> ECharts Sankey nodes/links.
+export const STAGES = [
+  { key:'synced',        yes:'Sync',                no:'No sync',          color:'#3b82f6' },
+  { key:'demo_attended', yes:'Demo',                no:'No demo',          color:'#0ea5e9' },
+  { key:'free_attended', yes:'Free hour',           no:'No free hour',     color:'#0891b2' },
+  { key:'converted',     yes:'Converted',           no:'Not converted',    color:'#059669' },
+  { key:'is_customized', yes:'Paid project hours',  no:'No project hours', color:'#7c3aed' },
 ];
-
+const TRIAL = 'Trial';
+const NEG = '#dde2e8';
 const num = (v) => Number(v) || 0;
-const r4 = (x) => +x.toFixed(4);
 
-function stagesFor(row) {
-  const counts = [num(row.trials), num(row.synced), num(row.converted), num(row.customized)];
-  const trials = counts[0];
-  return STAGE_DEFS.map((def, i) => {
-    const count = counts[i];
-    const next = counts[i + 1];
-    const dropToNext = i === counts.length - 1 ? null : (count > 0 ? r4(Math.max(0, 1 - next / count)) : 0);
-    return { ...def, count, pctOfTrials: trials > 0 ? r4(count / trials) : 0, dropToNext };
+export function goalNodeName(goal) { return goal === 'convert' ? 'Converted' : 'Paid project hours'; }
+
+export function toSankey(rows = [], goal = 'paid') {
+  const active = goal === 'convert' ? STAGES.slice(0, 4) : STAGES; // stop after Converted
+  const total = rows.reduce((a, r) => a + num(r.n), 0);
+  const nodes = [{ name: TRIAL, itemStyle: { color: '#64748b', borderColor: '#64748b' } }];
+  active.forEach((s) => {
+    nodes.push({ name: s.yes, itemStyle: { color: s.color, borderColor: s.color } });
+    nodes.push({ name: s.no,  itemStyle: { color: NEG, borderColor: NEG } });
   });
-}
-
-function pathFor(row) {
-  const booked = num(row.demo_booked);
-  const showRate = booked > 0 ? r4(num(row.demo_attended) / booked) : null;
-  const retention = RETENTION_HORIZONS.map((k) => {
-    const elig = num(row[`eligible_${k}mo`]);
-    const ret = num(row[`retained_${k}mo`]);
-    return { k, mature: elig > 0, rate: elig > 0 ? r4(ret / elig) : null };
-  });
-  return { stages: stagesFor(row), showRate, retention };
-}
-
-// rows: [{motion, ...counts}]. Returns { talked, self_serve }, each a path object.
-export function toMotionFunnel(rows = []) {
-  const empty = { trials: 0, synced: 0, converted: 0, customized: 0, demo_booked: 0, demo_attended: 0 };
-  const byMotion = Object.fromEntries(rows.map((r) => [r.motion, r]));
-  return {
-    talked: pathFor(byMotion.talked || empty),
-    self_serve: pathFor(byMotion.self_serve || empty),
-  };
+  const sum = (pred) => rows.reduce((a, r) => a + (pred(r) ? num(r.n) : 0), 0);
+  const links = [];
+  const first = active[0];
+  links.push({ source: TRIAL, target: first.yes, value: sum((r) => num(r[first.key]) === 1) });
+  links.push({ source: TRIAL, target: first.no,  value: sum((r) => num(r[first.key]) === 0) });
+  for (let i = 0; i < active.length - 1; i++) {
+    const a = active[i], b = active[i + 1];
+    [[1, a.yes], [0, a.no]].forEach(([av, an]) => {
+      [[1, b.yes], [0, b.no]].forEach(([bv, bn]) => {
+        const v = sum((r) => num(r[a.key]) === av && num(r[b.key]) === bv);
+        if (v > 0) links.push({ source: an, target: bn, value: v });
+      });
+    });
+  }
+  return { total, nodes, links };
 }
