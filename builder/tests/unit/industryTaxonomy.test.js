@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   L1_DEFINITIONS,
   SPECIAL_BUCKETS,
+  OPERATING_MODELS,
   HOW_WE_LABEL,
   TAXONOMY_VERSION,
   getSegmentDefinition,
@@ -49,6 +50,21 @@ describe('L1_DEFINITIONS', () => {
   });
 });
 
+// Deployed operating_model values in account_labels (excl. null), 2026-06-23.
+const DEPLOYED_OM = [
+  'Service_Only', 'Service_With_Products', 'Project_Services', 'Pure_Retailer',
+  'B2B_Distributor', 'B2B_Producer', 'DTC_Producer', 'Hybrid_Producer', 'Hospitality',
+];
+
+describe('OPERATING_MODELS', () => {
+  it('covers exactly the nine deployed operating models', () => {
+    expect(OPERATING_MODELS.map((d) => d.name).sort()).toEqual([...DEPLOYED_OM].sort());
+  });
+  it('gives every operating model a one-liner', () => {
+    for (const d of OPERATING_MODELS) expect(d.oneLiner.length).toBeGreaterThan(0);
+  });
+});
+
 describe('SPECIAL_BUCKETS', () => {
   it('defines the two non-industry bars on the chart (Unclassified is retired)', () => {
     expect(SPECIAL_BUCKETS.map((d) => d.name).sort())
@@ -73,6 +89,12 @@ describe('getSegmentDefinition', () => {
     expect(getSegmentDefinition('UNCLASSIFIABLE')).toBeTruthy();
   });
 
+  it('resolves an operating model (drives the OM-bar callout + tooltip)', () => {
+    const d = getSegmentDefinition('Service_With_Products');
+    expect(d).toBeTruthy();
+    expect(d.oneLiner.length).toBeGreaterThan(0);
+  });
+
   it('returns null for retired Unclassified and unknown names', () => {
     expect(getSegmentDefinition('Unclassified')).toBeNull();
     expect(getSegmentDefinition('Nonsense Industry')).toBeNull();
@@ -91,6 +113,7 @@ describe('HOW_WE_LABEL + version', () => {
       ...HOW_WE_LABEL.principles.map((p) => p.text),
       ...L1_DEFINITIONS.flatMap((d) => [d.oneLiner, d.description, ...d.l2.map((s) => s.oneLiner)]),
       ...SPECIAL_BUCKETS.flatMap((d) => [d.oneLiner, d.description]),
+      ...OPERATING_MODELS.map((d) => d.oneLiner),
     ].join(' ');
     expect(prose).not.toMatch(/—/);
   });

@@ -42,6 +42,20 @@ const fontMono = "'JetBrains Mono', monospace";
 const sectionLabel = { fontSize: 13, color: '#6b7280', fontFamily: fontSans };
 const h2 = { fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '32px 0 4px', fontFamily: fontSans };
 
+// The clicked segment's definition, shown above its accounts table. Resolves
+// L1, L2, special buckets, and operating models. Renders nothing if undefined.
+function DefCallout({ seg }) {
+  const def = seg ? getSegmentDefinition(seg) : null;
+  if (!def) return null;
+  return (
+    <div style={{ border: '1px solid #e2e5e9', borderLeft: '3px solid #059669', borderRadius: 8, background: '#f9fafb', padding: '10px 14px', margin: '16px 0 8px', maxWidth: 880 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', fontFamily: fontSans }}>{def.name}</div>
+      <div style={{ fontSize: 12.5, color: '#059669', fontWeight: 600, fontFamily: fontSans, margin: '2px 0' }}>{def.oneLiner}</div>
+      {def.description && <div style={{ fontSize: 12.5, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.45 }}>{def.description}</div>}
+    </div>
+  );
+}
+
 export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const [month, setMonth] = useState(latestCompleteMonth());
 
@@ -60,6 +74,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const [industrySeg, setIndustrySeg] = useState(null); // raw clicked segment, for its definition
   const [industryAccounts, setIndustryAccounts] = useState(null);
   const [omSel, setOmSel] = useState(null);
+  const [omSeg, setOmSeg] = useState(null); // raw clicked operating model, for its definition
   const [omAccounts, setOmAccounts] = useState(null);
 
   // Industry section view: 'breakdown' (bars + drill) | 'trend' (12-mo lines).
@@ -75,7 +90,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
 
   const clearAccounts = () => {
     setIndustrySel(null); setIndustrySeg(null); setIndustryAccounts(null);
-    setOmSel(null); setOmAccounts(null);
+    setOmSel(null); setOmSeg(null); setOmAccounts(null);
   };
 
   // ── headline + L1 + operating model: refetch on month change ──────────────
@@ -160,6 +175,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   };
 
   const handleOmBarClick = (segment) => {
+    setOmSeg(segment);
     setOmSel(`${segment} (Operating model)`);
     setOmAccounts(null);
     setOmAccountsLoading(true);
@@ -294,17 +310,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       )}
       {industrySel && (
         <>
-          {(() => {
-            const def = industrySeg ? getSegmentDefinition(industrySeg) : null;
-            if (!def) return null;
-            return (
-              <div style={{ border: '1px solid #e2e5e9', borderLeft: '3px solid #059669', borderRadius: 8, background: '#f9fafb', padding: '10px 14px', margin: '16px 0 8px', maxWidth: 880 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', fontFamily: fontSans }}>{def.name}</div>
-                <div style={{ fontSize: 12.5, color: '#059669', fontWeight: 600, fontFamily: fontSans, margin: '2px 0' }}>{def.oneLiner}</div>
-                {def.description && <div style={{ fontSize: 12.5, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.45 }}>{def.description}</div>}
-              </div>
-            );
-          })()}
+          <DefCallout seg={industrySeg} />
           <h3 style={{ ...h2, fontSize: 15, margin: '8px 0 4px' }}>Accounts — {industrySel}</h3>
           {industryAccountsLoading
             ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
@@ -317,10 +323,11 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       <p style={{ ...sectionLabel, margin: '0 0 8px' }}>How they go to market. Click a bar to see its accounts.</p>
       {chartsLoading && !omRows
         ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading segments…</p>
-        : <ChartErrorBoundary><GrrSegmentBars rows={omRows} onSelect={handleOmBarClick} selected={omSel ? omSel.replace(' (Operating model)', '') : null} /></ChartErrorBoundary>}
+        : <ChartErrorBoundary><GrrSegmentBars rows={omRows} onSelect={handleOmBarClick} selected={omSel ? omSel.replace(' (Operating model)', '') : null} getHint={(s) => getSegmentDefinition(s)?.oneLiner} /></ChartErrorBoundary>}
       {omSel && (
         <>
-          <h3 style={{ ...h2, fontSize: 15, margin: '16px 0 4px' }}>Accounts — {omSel}</h3>
+          <DefCallout seg={omSeg} />
+          <h3 style={{ ...h2, fontSize: 15, margin: '8px 0 4px' }}>Accounts — {omSel}</h3>
           {omAccountsLoading
             ? <p style={{ ...sectionLabel, padding: '12px 0' }}>Loading accounts…</p>
             : <ChartErrorBoundary><GrrAccountTable key={omSel} rows={omAccounts} /></ChartErrorBoundary>}

@@ -6,7 +6,7 @@
 // sub-industries. L3 definitions are a later pass.
 import { useState } from 'react';
 import {
-  L1_DEFINITIONS, SPECIAL_BUCKETS, HOW_WE_LABEL, TAXONOMY_VERSION, TAXONOMY_SOURCE,
+  L1_DEFINITIONS, SPECIAL_BUCKETS, OPERATING_MODELS, HOW_WE_LABEL, TAXONOMY_VERSION, TAXONOMY_SOURCE,
 } from '../../config/industryTaxonomy';
 
 const fontSans = "'DM Sans', sans-serif";
@@ -79,6 +79,15 @@ export default function TaxonomyPanel() {
           <div style={sub}>Industries (L1, click for sub-industries)</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
             {L1_DEFINITIONS.map((d) => <L1Card key={d.name} d={d} />)}
+          </div>
+
+          <div style={sub}>Operating models (how they go to market)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
+            {OPERATING_MODELS.map((d) => (
+              <div key={d.name} style={{ fontSize: 12.5, color: '#4b5563', fontFamily: fontSans, lineHeight: 1.4 }}>
+                <span style={{ fontWeight: 700, color: '#1a1a1a' }}>{d.name}.</span> {d.oneLiner}
+              </div>
+            ))}
           </div>
 
           <div style={sub}>Other buckets on the chart</div>

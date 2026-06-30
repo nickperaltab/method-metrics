@@ -123,6 +123,21 @@ export const SPECIAL_BUCKETS = [
   },
 ];
 
+// The second axis: how a business goes to market. Orthogonal to industry. Names
+// MUST match the operating_model values in account_labels (underscored). Source:
+// V7 Classification Methodology Brief, Appendix A.
+export const OPERATING_MODELS = [
+  { name: 'Service_Only', oneLiner: 'No meaningful product revenue. Bookkeepers, cleaners, home watch.' },
+  { name: 'Service_With_Products', oneLiner: 'Service-led, with real parts or equipment sales. A plumber selling water heaters.' },
+  { name: 'Project_Services', oneLiner: 'Discrete project or contract work. General contractors.' },
+  { name: 'Pure_Retailer', oneLiner: 'Product-led, sells to consumers, no real service arm.' },
+  { name: 'B2B_Distributor', oneLiner: 'Distributes or wholesales others’ products to businesses.' },
+  { name: 'B2B_Producer', oneLiner: 'Manufactures and sells to businesses.' },
+  { name: 'DTC_Producer', oneLiner: 'Manufactures and sells direct to consumers.' },
+  { name: 'Hybrid_Producer', oneLiner: 'Makes products and sells through multiple channels (DTC and wholesale).' },
+  { name: 'Hospitality', oneLiner: 'Restaurants, hotels, tour and charter operators.' },
+];
+
 // How an account gets a label, in plain English for the dashboard.
 export const HOW_WE_LABEL = {
   summary:
@@ -160,6 +175,7 @@ export function getSegmentDefinition(name) {
   return (
     L1_DEFINITIONS.find((d) => d.name === name)
     || SPECIAL_BUCKETS.find((d) => d.name === name)
+    || OPERATING_MODELS.find((d) => d.name === name)
     || L1_DEFINITIONS.flatMap((d) => d.l2).find((s) => s.name === name)
     || null
   );
