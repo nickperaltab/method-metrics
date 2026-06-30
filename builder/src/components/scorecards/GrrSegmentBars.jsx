@@ -16,7 +16,8 @@ function formatUsd(v) {
 }
 const pctLabel = (v) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`);
 
-export default function GrrSegmentBars({ rows, onSelect, selected }) {
+// `getHint(segment)` → optional one-line definition shown as the label tooltip.
+export default function GrrSegmentBars({ rows, onSelect, selected, getHint }) {
   const [hovered, setHovered] = useState(null);
   if (!rows) return null;
   if (rows.length === 0) {
@@ -40,7 +41,7 @@ export default function GrrSegmentBars({ rows, onSelect, selected }) {
               width: 220, fontSize: 13, fontWeight: selected === r.segment ? 700 : 600,
               color: unclassified ? '#9ca3af' : '#374151', fontFamily: fontSans,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right',
-            }} title={r.segment}>
+            }} title={(getHint && getHint(r.segment)) || r.segment}>
               {r.segment}
             </div>
             <div style={{ flex: 1, background: '#f3f4f6', borderRadius: 4, height: 22 }}>

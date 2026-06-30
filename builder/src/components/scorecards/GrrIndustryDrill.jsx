@@ -9,6 +9,8 @@ import GrrSegmentBars from './GrrSegmentBars';
 import GrrAccountTable from './GrrAccountTable';
 import GrrTrendChart from './GrrTrendChart';
 import DrillBreadcrumb from './DrillBreadcrumb';
+import TaxonomyPanel from './TaxonomyPanel';
+import { getSegmentDefinition } from '../../config/industryTaxonomy';
 import {
   fetchGrrSegments, fetchGrrAccounts, fetchGrrTrend, fetchAnnualGrrHeadline, computeAllUpGrr,
 } from '../../lib/grrIndustryData';
@@ -241,6 +243,8 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
         </div>
       )}
 
+      <TaxonomyPanel />
+
       {/* ── Section 1: GRR by industry ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '32px 0 4px' }}>
         <h2 style={{ ...h2, margin: 0 }}>GRR by industry</h2>
@@ -272,7 +276,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
           {path.length > 0 && <DrillBreadcrumb trail={trail} onNavigate={handleNavigate} />}
           {chartsLoading && !industryRows
             ? <p style={{ ...sectionLabel, padding: '24px 0' }}>Loading segments…</p>
-            : <ChartErrorBoundary><GrrSegmentBars rows={industryRows} onSelect={handleIndustryBarClick} /></ChartErrorBoundary>}
+            : <ChartErrorBoundary><GrrSegmentBars rows={industryRows} onSelect={handleIndustryBarClick} getHint={(s) => getSegmentDefinition(s)?.oneLiner} /></ChartErrorBoundary>}
         </>
       ) : (
         <>
