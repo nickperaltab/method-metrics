@@ -58,6 +58,7 @@ function DefCallout({ seg }) {
 
 export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   const [month, setMonth] = useState(latestCompleteMonth());
+  const [customization, setCustomization] = useState('all'); // 'all' | 'customized' | 'not_customized'
 
   // Industry drill path: [] → L1 bars; [{dim:'l1',value:X}] → L2 bars within X; etc.
   const [path, setPath] = useState([]);
@@ -103,8 +104,8 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     clearAccounts();
     setTrendRows(null); // trend window ends at the cohort month — refetch on change
     Promise.all([
-      fetchGrrSegments({ month, dimension: 'l1', filters: {} }),
-      fetchGrrSegments({ month, dimension: 'operating_model', filters: {} }),
+      fetchGrrSegments({ month, dimension: 'l1', filters: {}, customization }),
+      fetchGrrSegments({ month, dimension: 'operating_model', filters: {}, customization }),
       fetchAnnualGrrHeadline({ month }),
     ])
       .then(([l1, om, headline]) => {
@@ -116,7 +117,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       .catch((e) => { if (!cancelled) setError(e); })
       .finally(() => { if (!cancelled) setChartsLoading(false); });
     return () => { cancelled = true; };
-  }, [month, bqConnected]);
+  }, [month, customization, bqConnected]);
 
   // ── industry bars for deeper drill levels ──────────────────────────────────
   useEffect(() => {
@@ -124,7 +125,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     if (path.length === 0) { setIndustryRows(l1Rows); return; }
     let cancelled = false;
     setChartsLoading(true);
-    fetchGrrSegments({ month, dimension: chartDim, filters: pathFilters })
+    fetchGrrSegments({ month, dimension: chartDim, filters: pathFilters, customization })
       .then((rows) => { if (!cancelled) setIndustryRows(rows); })
       .catch((e) => { if (!cancelled) setError(e); })
       .finally(() => { if (!cancelled) setChartsLoading(false); });
@@ -136,12 +137,12 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     if (!bqConnected || view !== 'trend' || trendRows) return;
     let cancelled = false;
     setTrendLoading(true);
-    fetchGrrTrend({ month })
+    fetchGrrTrend({ month, customization })
       .then((rows) => { if (!cancelled) setTrendRows(rows); })
       .catch((e) => { if (!cancelled) setError(e); })
       .finally(() => { if (!cancelled) setTrendLoading(false); });
     return () => { cancelled = true; };
-  }, [view, month, trendRows, bqConnected]);
+  }, [view, month, customization, trendRows, bqConnected]);
 
   // ── handlers ───────────────────────────────────────────────────────────────
   // monthArg defaults to the selected cohort month (Breakdown clicks); the Trend
@@ -150,7 +151,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     setIndustrySel(label);
     setIndustryAccounts(null);
     setIndustryAccountsLoading(true);
-    fetchGrrAccounts({ month: monthArg, filters })
+    fetchGrrAccounts({ month: monthArg, filters, customization })
       .then(setIndustryAccounts)
       .catch(setError)
       .finally(() => setIndustryAccountsLoading(false));
@@ -179,7 +180,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
     setOmSel(`${segment} (Operating model)`);
     setOmAccounts(null);
     setOmAccountsLoading(true);
-    fetchGrrAccounts({ month, filters: { operating_model: segment } })
+    fetchGrrAccounts({ month, filters: { operating_model: segment }, customization })
       .then(setOmAccounts)
       .catch(setError)
       .finally(() => setOmAccountsLoading(false));
@@ -198,9 +199,13 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
   ];
 
   // ── parity gate: recombined L1 GRR vs canonical metric ────────────────────
-  const allUp = l1Rows ? computeAllUpGrr(l1Rows) : null;
-  const parityBroken = allUp != null && headlineGrr != null
-    && Math.abs(allUp - headlineGrr) > PARITY_TOLERANCE;
+  const filtered = customization !== 'all';
+  const recombined = l1Rows ? computeAllUpGrr(l1Rows) : null;
+  // When filtered, show the recombined GRR of the filtered subset (there is no
+  // canonical subset metric). When unfiltered, show + parity-check the canonical rate.
+  const displayGrr = filtered ? recombined : headlineGrr;
+  const parityBroken = !filtered && recombined != null && headlineGrr != null
+    && Math.abs(recombined - headlineGrr) > PARITY_TOLERANCE;
 
   if (!bqConnected) {
     return (
@@ -241,13 +246,40 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
             {recentMonths(12).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
           </select>
         </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={sectionLabel}>Customization</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[['all', 'All'], ['customized', 'Bought customization'], ['not_customized', 'No customization']].map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => { setCustomization(value); clearAccounts(); }}
+                style={{
+                  padding: '4px 12px', fontSize: 12,
+                  fontWeight: customization === value ? 600 : 400,
+                  fontFamily: fontSans,
+                  background: customization === value ? '#2563eb' : '#f3f4f6',
+                  color: customization === value ? '#fff' : '#6b7280',
+                  border: 'none', borderRadius: 16, cursor: 'pointer',
+                  transition: 'background 150ms, color 150ms',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ ...sectionLabel, fontFamily: fontMono }}>
-          Annual GRR (all-up):{' '}
+          {filtered ? 'Annual GRR (filtered subset):' : 'Annual GRR (all-up):'}{' '}
           <strong style={{ color: '#1a1a1a', fontSize: 15 }}>
-            {headlineGrr == null ? '—' : `${(headlineGrr * 100).toFixed(1)}%`}
+            {displayGrr == null ? '—' : `${(displayGrr * 100).toFixed(1)}%`}
           </strong>
         </div>
       </div>
+      {filtered && (
+        <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 8px', fontFamily: fontSans, maxWidth: 760 }}>
+          Parity check paused while a customization filter is active — the canonical metric is all-up.
+        </p>
+      )}
       <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 16px', fontFamily: fontSans, maxWidth: 760 }}>
         Labels are current-state: a reclassified account counts under its current label even for past cohorts.
       </p>
@@ -259,7 +291,7 @@ export default function GrrIndustryDrill({ cfg, bqConnected, onConnect }) {
       )}
       {parityBroken && (
         <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', color: '#b45309', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, fontFamily: fontSans }}>
-          {`Parity check failed: segment math gives ${(allUp * 100).toFixed(2)}% but v_metric__annual_grr says ${(headlineGrr * 100).toFixed(2)}%. Don't trust the segment numbers until this is resolved.`}
+          {`Parity check failed: segment math gives ${(recombined * 100).toFixed(2)}% but v_metric__annual_grr says ${(headlineGrr * 100).toFixed(2)}%. Don't trust the segment numbers until this is resolved.`}
         </div>
       )}
 

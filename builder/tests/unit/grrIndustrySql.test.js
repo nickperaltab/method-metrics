@@ -5,6 +5,7 @@ import {
   buildGrrTrendSql,
   buildCustomerAccountsSql,
   buildLabelFilterClauses,
+  buildCustomizationSql,
   GRR_DIMENSIONS,
 } from '../../src/lib/grrIndustrySql.js';
 import { computeAllUpGrr } from '../../src/lib/grrIndustryData.js';
@@ -47,6 +48,31 @@ describe('buildLabelFilterClauses', () => {
 
   it('throws on a non-allowlisted dimension key (injection guard)', () => {
     expect(() => buildLabelFilterClauses({ 'l1; DROP TABLE x': 'v' })).toThrow(/dimension/i);
+  });
+});
+
+describe('buildCustomizationSql', () => {
+  const PROSERV_JOIN = 'LEFT JOIN `project-for-method-dw.revenue.int_customer_proserv` p ON p.EntityRecordID = c.EntityRecordID';
+
+  it("returns empty fragments for 'all' and undefined (default SQL unchanged)", () => {
+    expect(buildCustomizationSql('all')).toEqual({ join: '', clause: '' });
+    expect(buildCustomizationSql()).toEqual({ join: '', clause: '' });
+  });
+
+  it("'customized' joins int_customer_proserv and filters on the flag", () => {
+    const { join, clause } = buildCustomizationSql('customized');
+    expect(join).toContain(PROSERV_JOIN);
+    expect(clause).toContain('AND COALESCE(p.is_customized, FALSE)');
+    expect(clause).not.toContain('NOT COALESCE');
+  });
+
+  it("'not_customized' negates the flag", () => {
+    const { clause } = buildCustomizationSql('not_customized');
+    expect(clause).toContain('AND NOT COALESCE(p.is_customized, FALSE)');
+  });
+
+  it('throws on an unknown value (injection guard)', () => {
+    expect(() => buildCustomizationSql('x; DROP')).toThrow(/customization/i);
   });
 });
 
@@ -96,6 +122,17 @@ describe('buildGrrBySegmentSql', () => {
     const sql = buildGrrBySegmentSql({ month: "2026-05-01' OR '1'='1", dimension: 'l1' });
     expect(sql).toContain("'2026-05-01'' OR ''1''=''1'");
   });
+
+  it('applies the customization filter when requested', () => {
+    const sql = buildGrrBySegmentSql({ month: '2026-05-01', dimension: 'l1', customization: 'customized' });
+    expect(sql).toContain('LEFT JOIN `project-for-method-dw.revenue.int_customer_proserv` p ON p.EntityRecordID = c.EntityRecordID');
+    expect(sql).toContain('AND COALESCE(p.is_customized, FALSE)');
+  });
+
+  it('leaves the SQL unchanged (no proserv join) by default', () => {
+    const sql = buildGrrBySegmentSql({ month: '2026-05-01', dimension: 'l1' });
+    expect(sql).not.toContain('int_customer_proserv');
+  });
 });
 
 describe('buildGrrAccountsSql', () => {
@@ -122,6 +159,11 @@ describe('buildGrrAccountsSql', () => {
   it('only includes entities in the annual GRR base (StartMRR > 0)', () => {
     const sql = buildGrrAccountsSql({ month: '2026-05-01', filters: { operating_model: 'Service_Only' } });
     expect(sql).toContain('HAVING SUM(c.StartMRR) > 0');
+  });
+
+  it('applies the not_customized customization filter', () => {
+    const sql = buildGrrAccountsSql({ month: '2026-05-01', filters: { l1: 'Construction & Trades' }, customization: 'not_customized' });
+    expect(sql).toContain('AND NOT COALESCE(p.is_customized, FALSE)');
   });
 });
 
@@ -173,6 +215,12 @@ describe('buildGrrTrendSql', () => {
   it('escapes single quotes in endMonth (injection guard)', () => {
     const sql = buildGrrTrendSql({ endMonth: "2026-05-01' OR '1'='1" });
     expect(sql).toContain("'2026-05-01'' OR ''1''=''1'");
+  });
+
+  it('applies the customization filter when requested', () => {
+    const sql = buildGrrTrendSql({ endMonth: '2026-05-01', customization: 'customized' });
+    expect(sql).toContain('LEFT JOIN `project-for-method-dw.revenue.int_customer_proserv` p ON p.EntityRecordID = c.EntityRecordID');
+    expect(sql).toContain('AND COALESCE(p.is_customized, FALSE)');
   });
 });
 

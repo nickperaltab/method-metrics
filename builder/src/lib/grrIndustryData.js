@@ -10,8 +10,8 @@ import {
 const num = (v) => Number(v) || 0;
 
 // Returns [{ segment, start_mrr, churn_mrr, downgrade_mrr, grr, customers }]
-export async function fetchGrrSegments({ month, dimension, filters }) {
-  const { rows } = await queryBq(buildGrrBySegmentSql({ month, dimension, filters }));
+export async function fetchGrrSegments({ month, dimension, filters, customization }) {
+  const { rows } = await queryBq(buildGrrBySegmentSql({ month, dimension, filters, customization }));
   return rows.map((r) => ({
     segment: r.segment,
     start_mrr: num(r.start_mrr),
@@ -23,8 +23,8 @@ export async function fetchGrrSegments({ month, dimension, filters }) {
 }
 
 // Returns account rows with labels + reasoning (already sorted by lost $ in SQL).
-export async function fetchGrrAccounts({ month, filters }) {
-  const { rows } = await queryBq(buildGrrAccountsSql({ month, filters }));
+export async function fetchGrrAccounts({ month, filters, customization }) {
+  const { rows } = await queryBq(buildGrrAccountsSql({ month, filters, customization }));
   return rows.map((r) => ({
     ...r,
     start_mrr: num(r.start_mrr),
@@ -48,8 +48,8 @@ export async function fetchCustomerAccounts({ entityRecordId }) {
 }
 
 // Returns [{ month, segment, start_mrr, customers, grr }] — trailing-12m L1 trend rows.
-export async function fetchGrrTrend({ month, months = 12 }) {
-  const { rows } = await queryBq(buildGrrTrendSql({ endMonth: month, months }));
+export async function fetchGrrTrend({ month, months = 12, customization }) {
+  const { rows } = await queryBq(buildGrrTrendSql({ endMonth: month, months, customization }));
   return rows.map((r) => ({
     month: r.month,
     segment: r.segment,

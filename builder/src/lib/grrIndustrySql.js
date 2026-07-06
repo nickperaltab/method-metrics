@@ -26,6 +26,10 @@ const MRR_VIEW = '`project-for-method-dw.revenue.int_customer_annual_mrr`';
 const LABEL_VIEW = '`project-for-method-dw.v7_classification.v_entity_primary_label`';
 const MAP_TABLE = '`project-for-method-dw.v7_classification.account_entity_map`';
 const LABELS_TABLE = '`project-for-method-dw.v7_classification.account_labels`';
+const PROSERV_TABLE = '`project-for-method-dw.revenue.int_customer_proserv`';
+// Entity-grain: one row per EntityRecordID, only for customers who bought
+// customization. LEFT JOIN + COALESCE(FALSE) so non-buyers read as not customized.
+const PROSERV_JOIN = `LEFT JOIN ${PROSERV_TABLE} p ON p.EntityRecordID = c.EntityRecordID`;
 
 export const GRR_DIMENSIONS = ['l1', 'l2', 'l3', 'operating_model'];
 
@@ -39,6 +43,17 @@ function sqlStr(v) {
 
 function assertDim(dim) {
   if (!GRR_DIMENSIONS.includes(dim)) throw new Error(`Unknown GRR dimension: ${dim}`);
+}
+
+// Customization filter (paid-for-customization = int_customer_proserv.is_customized).
+// Returns { join, clause } newline-prefixed fragments; empty strings when unfiltered
+// so the default query is unchanged. Throws on an unknown value.
+export function buildCustomizationSql(customization) {
+  if (customization == null || customization === 'all') return { join: '', clause: '' };
+  const flag = 'COALESCE(p.is_customized, FALSE)';
+  if (customization === 'customized') return { join: `\n${PROSERV_JOIN}`, clause: `\n  AND ${flag}` };
+  if (customization === 'not_customized') return { join: `\n${PROSERV_JOIN}`, clause: `\n  AND NOT ${flag}` };
+  throw new Error(`Unknown customization filter: ${customization}`);
 }
 
 // The bucket expression for a dimension, on the view alias `v`.
@@ -69,8 +84,9 @@ export function buildLabelFilterClauses(filters = {}) {
 // Annual GRR + base per value of `dimension` for one cohort month, scoped to
 // the drill path in `filters`. Unlabeled entities bucket as 'Unclassified',
 // multi-client entities as 'Multi-client' (industry dims only).
-export function buildGrrBySegmentSql({ month, dimension, filters = {} }) {
+export function buildGrrBySegmentSql({ month, dimension, filters = {}, customization }) {
   assertDim(dimension);
+  const cust = buildCustomizationSql(customization);
   return `SELECT
   ${segExpr(dimension)} AS segment,
   SUM(c.StartMRR)      AS start_mrr,
@@ -79,9 +95,9 @@ export function buildGrrBySegmentSql({ month, dimension, filters = {} }) {
   SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr,
   COUNT(DISTINCT IF(c.StartMRR > 0, c.Company, NULL)) AS customers
 FROM ${MRR_VIEW} c
-${LABEL_JOIN}
+${LABEL_JOIN}${cust.join}
 WHERE c.Month = ${sqlStr(month)}
-${buildLabelFilterClauses(filters)}
+${buildLabelFilterClauses(filters)}${cust.clause}
 GROUP BY segment
 HAVING SUM(c.StartMRR) > 0
 ORDER BY start_mrr DESC`.trimEnd();
@@ -91,7 +107,8 @@ ORDER BY start_mrr DESC`.trimEnd();
 // multi-client flag, sorted by lost $ (churn + downgrade) descending.
 // EntityRecordID travels so a row can drill into its constituent accounts via
 // buildCustomerAccountsSql. StartMRR > 0 keeps it to the annual GRR base.
-export function buildGrrAccountsSql({ month, filters = {} }) {
+export function buildGrrAccountsSql({ month, filters = {}, customization }) {
+  const cust = buildCustomizationSql(customization);
   return `SELECT
   c.EntityRecordID,
   c.Company,
@@ -100,9 +117,9 @@ export function buildGrrAccountsSql({ month, filters = {} }) {
   SUM(c.Downgrades)    AS downgrade_mrr,
   v.l1, v.l2, v.l3, v.operating_model, v.confidence, v.is_multi_client
 FROM ${MRR_VIEW} c
-${LABEL_JOIN}
+${LABEL_JOIN}${cust.join}
 WHERE c.Month = ${sqlStr(month)}
-${buildLabelFilterClauses(filters)}
+${buildLabelFilterClauses(filters)}${cust.clause}
 GROUP BY c.EntityRecordID, c.Company, v.l1, v.l2, v.l3, v.operating_model, v.confidence, v.is_multi_client
 HAVING SUM(c.StartMRR) > 0
 ORDER BY (SUM(c.Cancellations) + SUM(c.Downgrades)) DESC, start_mrr DESC
@@ -139,8 +156,9 @@ ORDER BY l.confidence DESC`.trimEnd();
 // Annual GRR per L1 per month over the trailing `months` window ending at
 // `endMonth` (inclusive). Always L1 grain, independent of the drill state —
 // answers "is this industry's retention rising or falling".
-export function buildGrrTrendSql({ endMonth, months = 12 }) {
+export function buildGrrTrendSql({ endMonth, months = 12, customization }) {
   const back = Math.max(1, parseInt(months, 10) || 12) - 1;
+  const cust = buildCustomizationSql(customization);
   return `SELECT
   c.Month AS month,
   ${segExpr('l1')} AS segment,
@@ -148,8 +166,8 @@ export function buildGrrTrendSql({ endMonth, months = 12 }) {
   COUNT(DISTINCT IF(c.StartMRR > 0, c.Company, NULL)) AS customers,
   SAFE_DIVIDE(SUM(c.StartMRR) - SUM(c.Cancellations) - SUM(c.Downgrades), SUM(c.StartMRR)) AS grr
 FROM ${MRR_VIEW} c
-${LABEL_JOIN}
-WHERE c.Month BETWEEN DATE_SUB(DATE ${sqlStr(endMonth)}, INTERVAL ${back} MONTH) AND ${sqlStr(endMonth)}
+${LABEL_JOIN}${cust.join}
+WHERE c.Month BETWEEN DATE_SUB(DATE ${sqlStr(endMonth)}, INTERVAL ${back} MONTH) AND ${sqlStr(endMonth)}${cust.clause}
 GROUP BY month, segment
 HAVING SUM(c.StartMRR) > 0
 ORDER BY month, segment`.trimEnd();
