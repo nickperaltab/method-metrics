@@ -31,6 +31,9 @@ export async function fetchGrrAccounts({ month, filters }) {
     churn_mrr: num(r.churn_mrr),
     downgrade_mrr: num(r.downgrade_mrr),
     confidence: r.confidence == null ? null : Number(r.confidence),
+    // BQ's REST API returns BOOLs as the strings 'true'/'false' — and 'false'
+    // is truthy, which made the multi-client badge render on every row.
+    is_multi_client: r.is_multi_client === 'true' || r.is_multi_client === true,
   }));
 }
 
