@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: int_marketing_spend
+    description: >
+      Marketing spend actuals per channel per month, pivoted from
+      marketing.sheet_cac_raw (the scripted load of the marketing tracker's
+      CAC:ARR tabs, scripts/marketing_spend_sync.py). One row per (channel,
+      block, month), Actuals scenario only. Includes non-canonical blocks
+      (TOTAL, PPC sub-splits, Partners w/o events); int_channel_cac selects
+      the canonical set. sheet_* columns are the sheet's own computed numbers,
+      kept for reconciliation.
+    columns:
+      - name: channel
+        description: Channel key. Canonical values match int_customers.AttributionChannel (PPC, SEO, OPN, Partners, Email); TOTAL / PPC_TRIALGEN / PPC_BRANDING / Partners_NO_EVENTS are sheet-only rollups or splits.
+      - name: month
+        description: Calendar month (first of month).
+      - name: media_spend
+        description: Channel media dollars (the per-channel "Mktg X Spend" sheet line; for SEO this is the content spend line).
+      - name: team_spend
+        description: Sheet's "Mktg Team Overall Spend" allocation for the channel-month.
+      - name: mktg_sales_cost
+        description: Sheet's "Mktg + Sales Cost" allocation (people cost) for the channel-month.
+      - name: total_spend
+        description: Sheet's "Total Spend" line (media + team + mktg/sales cost). Fully-loaded numerator.
+      - name: sheet_customers
+        description: New customers as counted BY THE SHEET. Reconciliation only — differs from int_customers.IsNew by 10–25% on SEO/Partners. Do not use as a denominator.
+
+  - name: int_channel_cac
+    description: >
+      CAC per canonical acquisition channel per month. Numerator = sheet spend
+      (int_marketing_spend); denominator = canonical new-customer counts
+      (int_customers.IsNew by AttributionChannel), NOT the sheet's own count.
+      Directional / marketing-owned input — not a verified revenue_metrics
+      view. Complete months only.
+    columns:
+      - name: channel
+        description: One of PPC, SEO, OPN, Partners, Email (mutually exclusive; matches AttributionChannel).
+      - name: month
+        description: Calendar month (first of month), complete months only.
+      - name: bq_new_customers
+        description: COUNT(DISTINCT EntityRecordID) of int_customers.IsNew for the channel-month. The canonical denominator.
+      - name: cac_media
+        description: media_spend / bq_new_customers. Media-only CAC — the default number for cross-channel comparison.
+      - name: cac_fully_loaded
+        description: total_spend / bq_new_customers. Includes team + mktg/sales people cost as allocated by the sheet. Label it as fully loaded wherever shown.

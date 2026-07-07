@@ -49,6 +49,18 @@ sources:
       - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).
 
+  - name: marketing
+    database: project-for-method-dw
+    schema: marketing
+    description: |
+      Marketing-owned inputs. sheet_cac_raw is the unpivoted load of the
+      "2026 Trial + Sync + CAC:ARR Tracker" Google Sheet (CAC:ARR tabs),
+      refreshed by scripts/marketing_spend_sync.py (WRITE_TRUNCATE). Spend
+      dollars live only in BQ and the sheet, never in this repo.
+    tables:
+      - name: sheet_cac_raw
+        description: Long-format rows (source_tab, block, channel, measure, month, scenario, value) from the marketing tracker's CAC:ARR 2025/2026 tabs. Channel names match revenue.int_customers.AttributionChannel where 1:1; TOTAL and sub-split blocks (PPC_TRIALGEN, PPC_BRANDING, Partners_NO_EVENTS) are non-canonical.
+
   - name: v7_classification
     database: project-for-method-dw
     schema: v7_classification
