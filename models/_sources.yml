@@ -26,7 +26,121 @@ sources:
     tables:
       # ----- Raw source tables (Alocet-managed) -----
       - name: Account
-        description: One row per Method account (entity-grained snapshot). Primary key columns RecordID (account level) and EntityRecordID (customer level — can repeat across rows when a customer has multiple accounts).
+        description: One row per Method account (entity-grained snapshot). Primary key columns RecordID (account level) and EntityRecordID (customer level — can repeat across rows when a customer has multiple accounts). ~1.22 rows per EntityRecordID — dedup before any customer-grain join.
+        columns:
+          # ----- Keys -----
+          - name: RecordID
+            description: Account-level primary key (one row per account).
+          - name: CompanyAccount
+            description: The account's unique subdomain-style name. Account-level key used in joins to v7_classification.account_entity_map.company_account. One customer (EntityRecordID) can own many CompanyAccounts.
+          - name: EntityRecordID
+            description: Customer-level key — one customer = one EntityRecordID, owning 1+ account rows. CRITICAL — this table averages ~1.22 rows per EntityRecordID, so always dedup/aggregate before joining at customer grain (fan-out here has caused real bugs).
+          # ----- Lifecycle -----
+          - name: SignUpDate
+            description: Date the account signed up for a trial.
+          - name: FirstSaaSInvoiceTxnDate
+            description: Date of the account's first SaaS invoice — the trial-to-paid conversion anchor. Epoch-junk dates exist; clean to 2000+ before computing tenure.
+          - name: IsTrialConverted
+            description: TRUE when the account has converted to a paying subscriber. Metric work generally filters to IsTrialConverted = TRUE.
+          - name: IsActive
+            description: Whether the account is still active (has not cancelled its trial or paid subscription). NULL CancellationDate does not imply paying-in-good-standing — non-payers can sit on billing hold before a cancellation is recorded.
+          - name: CancellationDate
+            description: Date the account cancelled. NULL for active accounts, but see IsActive caveat on billing holds.
+          - name: CancellationReason
+            description: Cancellation reason selected at cancellation time.
+          - name: CancellationReasonCategory
+            description: Category rollup of CancellationReason.
+          - name: CancellationReasonOther
+            description: Free-text cancellation reason when the selected reason is "Other".
+          - name: IsChurnException
+            description: Flag excluding the account from churn counts (data-quality/exception handling).
+          - name: IsConversionException
+            description: Flag excluding the account from conversion counts (data-quality/exception handling). int_customers filters these out.
+          # ----- CustDat* (nightly data-miner snapshot fields) -----
+          - name: CustDatAnnualSales
+            description: "Company annual sales derived from the customer's synced QuickBooks data: the most recent month's invoices + sales receipts extrapolated to 12 months. Refreshed nightly on active accounts; freezes at last value when inactive. No currency normalization (value is in the QB file's home currency). NULL when there is no synced invoice history."
+          - name: CustDatCountOfCustomers
+            description: Count of active customers in the account's Method CRM. Refreshed nightly on active accounts.
+          - name: CustDatCountOfEmployees
+            description: Number of employees in the account's Method CRM, on synced accounts. Refreshed nightly on active accounts.
+          - name: CustDatFirstSyncCompleted
+            description: When the account's first sync completed. Checked nightly on active accounts. The validated sync-completion signal — prefer this over SyncTypeRegion for counting synced accounts.
+          - name: CustDatIndustry
+            description: Free-text industry pulled from the customer's synced QB/Xero company data. Verified nightly on active accounts, but only replaces the value when Vertical is null.
+          - name: CustDatLastRefreshed
+            description: Timestamp of the last nightly data-miner refresh. At least nightly for active accounts; freezes at the last active date for inactive accounts.
+          - name: Custdatlastsaasamount
+            description: "Current SaaS subscription amount on the account, refreshed nightly. Exceptions: (a) prepay discount not included, (b) legacy stepped pricing, (c) excludes extras like portals and overages. Snapshot field — do NOT use for recognized-revenue metrics (canonical is TransLineFlattened.SaaSAmount); accepted only as a labeled directional run-rate proxy."
+          - name: Custdatpreviouslastsaasamount
+            description: Previous day's Custdatlastsaasamount, set nightly. Enables day-over-day detection of subscription changes.
+          - name: CountOfCustomScreens
+            description: Number of custom screens on the account's M:C engine version. Refreshed nightly on active accounts.
+          - name: CountOfCustomScreensMN
+            description: Number of custom screens on the account's M:N engine version. Refreshed nightly on active accounts.
+          # ----- Attribution -----
+          - name: Channel
+            description: Legacy channel string; unused in the dbt models — prefer the Att_* flags / int_customers.AttributionChannel.
+          - name: Att_Backlinks
+            description: One-hot signup-attribution flag for the Backlinks channel. int_customers collapses the Att_* flags into AttributionChannel.
+          - name: Att_Banner_Ads
+            description: One-hot signup-attribution flag for the Banner Ads channel.
+          - name: Att_Content
+            description: One-hot signup-attribution flag for the Content channel.
+          - name: Att_Direct
+            description: One-hot signup-attribution flag for the Direct channel.
+          - name: Att_Email
+            description: One-hot signup-attribution flag for the Email channel.
+          - name: Att_Help_Center
+            description: One-hot signup-attribution flag for the Help Center channel.
+          - name: Att_None
+            description: One-hot signup-attribution flag meaning no attribution channel was recorded.
+          - name: Att_OPN_Other_Peoples_Networks
+            description: One-hot signup-attribution flag for the OPN (Other People's Networks) channel.
+          - name: Att_Online_Chat_Tool
+            description: One-hot signup-attribution flag for the Online Chat Tool channel.
+          - name: Att_Other
+            description: One-hot signup-attribution flag for the Other channel.
+          - name: Att_Partners
+            description: One-hot signup-attribution flag for the Partners channel.
+          - name: Att_Pay_Per_Click
+            description: One-hot signup-attribution flag for the PPC (pay-per-click) channel.
+          - name: Att_Referral_Link
+            description: One-hot signup-attribution flag for the Referral Link channel (mapped to 'Referral' in AttributionChannel).
+          - name: Att_Referral_Program
+            description: One-hot signup-attribution flag for the Referral Program channel.
+          - name: Att_Remarketing
+            description: One-hot signup-attribution flag for the Remarketing channel.
+          - name: Att_SEO
+            description: One-hot signup-attribution flag for the SEO channel.
+          - name: Att_Seminar_Conference
+            description: One-hot signup-attribution flag for the Seminar/Conference channel.
+          - name: Att_Social
+            description: One-hot signup-attribution flag for the Social channel.
+          # ----- Other -----
+          - name: CookieRecordID
+            description: Attribution cookie record ID used for signup-source tracking (e.g. whether the account arrived via SEO, a partner, etc.).
+          - name: HealthScore
+            description: Lead score for trial accounts. Not populated or up to date for all accounts (field predates current health-score system).
+          - name: LicenseCount
+            description: Number of paid user licenses on the account.
+          - name: Offering
+            description: QuickBooks offering SKU (QBO accounts only).
+          - name: Partner
+            description: Partner associated with the account (partner-referred / partner-managed context). Metric models exclude internal rows where Partner = 'Method Integration'.
+          - name: Platform
+            description: Whether the account is on the new version, the classic version, or has access to both.
+          - name: SaaSPayType
+            description: Whether the account pays on a monthly or pre-pay basis.
+          - name: Sector
+            description: "Sector (hierarchy: Vertical > Sector). If empty and CustDatIndustry matches a known sector in the source system, it is back-filled from CustDatIndustry during the nightly refresh."
+          - name: SignupCountry
+            description: Country associated with the IP address of the initial signup, captured on the signup form.
+          - name: SyncType
+            description: "Accounting-platform sync type. Values: None (never chose accounting software), QuickBooks (chose QB in onboarding but not yet QBDT vs QBO), Xero, QB-Desktop (once sync started), IA-QBO-V3 (QB Online once sync started)."
+          - name: SyncTypeRegion
+            description: Country/region of the QuickBooks product version; populated only after the account has performed a sync. Known to undercount completed syncs — prefer CustDatFirstSyncCompleted as the sync-completion signal.
+          - name: Vertical
+            description: "Vertical (hierarchy: Vertical > Sector). Derived nightly from the account's Sector via the source system's sector-to-vertical mapping."
       - name: Entity
         description: One row per customer entity. RecordID is the customer-level PK (joins to EntityRecordID elsewhere); EntityFullName is the display name. Used by int_customers.
       - name: Funnel

@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: int_customer_firmographics
+    description: >
+      Firmographic dimension table, entity grain: one row per EntityRecordID,
+      deduped from revenue.Account (~1.22 rows per entity — the dedup is the
+      point of this model). Centralizes size-band / country / tenure derivations
+      previously retyped ad-hoc.
+      annual_sales is QuickBooks-derived: the most recent month's QB invoices +
+      sales receipts x 12, refreshed nightly on active accounts and frozen at the
+      last value when an account goes inactive. Caveats: (1) seasonality — it is
+      one month x 12, so seasonal businesses are over/under-stated depending on
+      the snapshot month; (2) no currency normalization — ~30% of the base is
+      non-US, use is_us to control; (3) NULL means no synced invoice history,
+      which is itself a low-engagement signal, not missing-at-random.
+      Tenure gotchas: junk epoch dates (pre-2000 / future) are cleaned to NULL;
+      do NOT use int_customer_mrr for tenure — its history starts too late to
+      measure customer age.
+      Directional intermediate, not a verified metric.
+    columns:
+      - name: EntityRecordID
+        description: Customer-level primary key (one row per entity).
+        tests: [not_null, unique]
+      - name: annual_sales
+        description: >
+          Cleaned QB-derived annual sales: most recent month's invoices + sales
+          receipts x 12. Junk filter keeps values between 1 and 1e10; everything
+          else is NULL. Pre-FX — no currency normalization.
+      - name: size_band
+        description: >
+          Annual-sales band: <$500K, $500K-$1M, $1M-$5M, $5M-$10M, $10M+.
+          NULL when annual_sales is NULL (no synced invoice history).
+      - name: signup_country
+        description: >
+          SignupCountry of the earliest-signup account (ties broken by RecordID),
+          first non-null.
+      - name: is_us
+        description: >
+          TRUE when signup_country is United States / USA / US. FALSE otherwise,
+          including when signup_country is NULL.
+      - name: signup_date
+        description: >
+          Earliest valid SignUpDate across the entity's accounts (2000-01-01
+          through today; epoch junk and future dates cleaned to NULL).
+      - name: first_invoice_date
+        description: >
+          Earliest valid FirstSaaSInvoiceTxnDate across the entity's accounts
+          (2000-01-01 through today; junk cleaned to NULL). Basis for tenure.
+      - name: tenure_years
+        description: >
+          Years since first_invoice_date (month-precision, rounded to 2 decimals).
+          NULL when first_invoice_date is NULL.
+      - name: current_start_mrr
+        description: >
+          Entity's StartMRR summed over the latest complete month in
+          int_customer_annual_mrr (annual GRR base). NULL if not in that
+          month's paying base.
+      - name: mrr_rank_pct
+        description: >
+          PERCENT_RANK of current_start_mrr (descending) over the latest complete
+          month's paying base. 0 = largest customer. NULL if not in the base.
+      - name: is_top30_mrr
+        description: >
+          TRUE when mrr_rank_pct <= 0.30 (top 30% of the current paying base by
+          MRR). FALSE otherwise, including entities not in the current base.
