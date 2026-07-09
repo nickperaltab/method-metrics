@@ -240,6 +240,14 @@ The chart builder is a **building block system**, not a collection of pre-built 
 
 When in doubt: does the user have to explicitly ask for this, or does it happen behind their back? If behind their back, don't do it.
 
+## PS Hub
+
+New screens (`/ps-hub`, `/ps-hub/:id`) consolidating Method PS call preps,
+call audits, and project notes for dedicated accounts. Separate `ps_*`
+Supabase tables, written only by the `ps-hub-ingest` Edge Function
+(shared-secret auth, service-role key) — not part of the metrics/BQ data
+model above. Full reference: `docs/ps-hub.md`.
+
 ## Collaborators
 
 - Nic (nickperaltab) — funnel/marketing metrics, dashboard pages

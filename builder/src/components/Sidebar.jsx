@@ -193,6 +193,11 @@ export default function Sidebar({ collapsed, onToggle }) {
 
           {/* Metric Registry — visible to all, read-only for non-admins */}
           <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+          <NavLink to="/ps-hub" style={linkStyle}>
+            <span style={{ fontSize: 16 }}>{'\u25a4'}</span>
+            PS Hub
+          </NavLink>
+
           <NavLink to="/admin/registry" style={linkStyle}>
             <span style={{ fontSize: 16 }}>{'\u2261'}</span>
             Metric Registry

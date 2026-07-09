@@ -7,6 +7,8 @@ import Explorer from './components/Explorer';
 import DashboardView from './components/DashboardView';
 import ChatExplorer from './components/ChatExplorer';
 import Home from './pages/Home';
+import PsHub from './pages/PsHub';
+import PsHubAccount from './pages/PsHubAccount';
 import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
 import AdminInsights from './pages/AdminInsights';
@@ -111,6 +113,8 @@ export default function App() {
               <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
             } />
             <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
+            <Route path="/ps-hub" element={<PsHub />} />
+            <Route path="/ps-hub/:id" element={<PsHubAccount />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />
             <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
