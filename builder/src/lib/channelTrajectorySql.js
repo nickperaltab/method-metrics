@@ -39,11 +39,10 @@ export function buildChannelTrajectorySql({ start, end }) {
       GROUP BY d.metric, d.channel
     ),
     fcst AS (
-      SELECT 'trials' AS metric, f.AttributionChannel AS channel, f.forecast_value AS forecast
-      FROM \`${D}.v_trials_forecast_channel\` f, cal c WHERE f.forecast_date = c.m_start
-      UNION ALL
-      SELECT 'syncs', f.AttributionChannel, f.forecast_value
-      FROM \`${D}.v_syncs_forecast_channel\` f, cal c WHERE f.forecast_date = c.m_start
+      -- native materialized table (int_channel_forecast) — NOT the Sheets-federated
+      -- forecast views, so the browser query needs no Drive scope (avoids 403).
+      SELECT f.metric, f.channel, f.forecast_value AS forecast
+      FROM \`${D}.int_channel_forecast\` f, cal c WHERE f.forecast_date = c.m_start
     ),
     base AS (
       SELECT a.metric, a.channel, a.mtd, a.prior_full, a.ly_full,

@@ -7,7 +7,9 @@ describe('channelTrajectory', () => {
     expect(sql).toMatch(/int_channel_funnel_daily/);
     expect(sql).toMatch(/DATE '2026-07-01'/);
     expect(sql).toMatch(/DATE '2026-07-08'/);
-    expect(sql).toMatch(/v_trials_forecast_channel/);
+    expect(sql).toMatch(/int_channel_forecast/);
+    // must NOT touch the Sheets-federated forecast views (Drive-scope 403 guard)
+    expect(sql).not.toMatch(/forecast_channel/);
   });
 
   it('rejects malformed dates (guards against injection)', () => {
