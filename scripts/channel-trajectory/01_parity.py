@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase-0 parity: confirm fractional Funnel syncs + fractional Account trials
-by channel reproduce the Looker PDF (Jul 1-8, 2026), and that prior-month-shape
-trajectory reproduces Looker's PPC sync trajectory (~56.19)."""
+by channel reproduce the Looker PDF (Jul 1-8, 2026), and that calendar-day linear
+trajectory reproduces Looker's PPC sync trajectory (56.19)."""
 from google.cloud import bigquery
 c = bigquery.Client(project='project-for-method-dw')
 P = 'project-for-method-dw.revenue'
