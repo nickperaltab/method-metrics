@@ -88,11 +88,25 @@ agg AS (
   GROUP BY e.metric, e.channel
 ),
 
+-- Per-channel forecast for the CURRENT month (Looker parity). method_forecast
+-- itself is month-level only; these views carry the channel split.
+fcst AS (
+  SELECT 'trials' AS metric, f.AttributionChannel AS channel, f.forecast_value AS forecast
+  FROM {{ source('revenue', 'v_trials_forecast_channel') }} f, cal c
+  WHERE f.forecast_date = c.m_start
+  UNION ALL
+  SELECT 'syncs', f.AttributionChannel, f.forecast_value
+  FROM {{ source('revenue', 'v_syncs_forecast_channel') }} f, cal c
+  WHERE f.forecast_date = c.m_start
+),
+
 base AS (
   SELECT
-    metric, channel, mtd, prior_full, ly_full,
-    CASE WHEN days_elapsed > 0 THEN mtd / days_elapsed * days_in_month END AS trajectory
-  FROM agg
+    a.metric, a.channel, a.mtd, a.prior_full, a.ly_full,
+    CASE WHEN a.days_elapsed > 0 THEN a.mtd / a.days_elapsed * a.days_in_month END AS trajectory,
+    f.forecast
+  FROM agg a
+  LEFT JOIN fcst f USING (metric, channel)
 ),
 
 rate AS (
@@ -101,15 +115,16 @@ rate AS (
     SAFE_DIVIDE(s.mtd, t.mtd)               AS mtd,
     SAFE_DIVIDE(s.prior_full, t.prior_full) AS prior_full,
     SAFE_DIVIDE(s.ly_full, t.ly_full)       AS ly_full,
-    SAFE_DIVIDE(s.trajectory, t.trajectory) AS trajectory
+    SAFE_DIVIDE(s.trajectory, t.trajectory) AS trajectory,
+    SAFE_DIVIDE(s.forecast, t.forecast)     AS forecast
   FROM (SELECT * FROM base WHERE metric = 'trials') t
   LEFT JOIN (SELECT * FROM base WHERE metric = 'syncs') s USING (channel)
 ),
 
 unioned AS (
-  SELECT metric, channel, mtd, trajectory, prior_full, ly_full FROM base
+  SELECT metric, channel, mtd, trajectory, prior_full, ly_full, forecast FROM base
   UNION ALL
-  SELECT metric, channel, mtd, trajectory, prior_full, ly_full FROM rate
+  SELECT metric, channel, mtd, trajectory, prior_full, ly_full, forecast FROM rate
 )
 
 SELECT
@@ -119,6 +134,8 @@ SELECT
   trajectory,
   prior_full                                     AS prior_month_full,
   ly_full                                        AS last_year_full,
+  forecast,
   SAFE_DIVIDE(trajectory - ly_full, ly_full)     AS yoy_pct,
-  SAFE_DIVIDE(trajectory - prior_full, prior_full) AS mom_pct
+  SAFE_DIVIDE(trajectory - prior_full, prior_full) AS mom_pct,
+  SAFE_DIVIDE(trajectory - forecast, forecast)   AS fcst_pct
 FROM unioned

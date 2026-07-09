@@ -1,7 +1,7 @@
 export function buildChannelTrajectorySql() {
   return `
     SELECT metric, channel, mtd_actual, trajectory,
-           prior_month_full, last_year_full, yoy_pct, mom_pct
+           prior_month_full, last_year_full, forecast, yoy_pct, mom_pct, fcst_pct
     FROM \`project-for-method-dw.revenue.int_channel_funnel_trajectory\`
   `;
 }
@@ -13,15 +13,17 @@ const toRow = (r) => ({
   trajectory: n(r.trajectory),
   lastYearFull: n(r.last_year_full),
   priorMonthFull: n(r.prior_month_full),
+  forecast: n(r.forecast),
   mtdActual: n(r.mtd_actual),
   yoyPct: n(r.yoy_pct),
   momPct: n(r.mom_pct),
+  fcstPct: n(r.fcst_pct),
 });
 
 const sum = (xs) => xs.reduce((a, b) => a + (b || 0), 0);
 
 const isEmptyRow = (row) =>
-  !row.mtdActual && !row.trajectory && !row.priorMonthFull && !row.lastYearFull;
+  !row.mtdActual && !row.trajectory && !row.priorMonthFull && !row.lastYearFull && !row.forecast;
 
 function totalRow(metric, rows, trialsRows, syncsRows) {
   if (metric === 'sync_rate') {
@@ -34,17 +36,20 @@ function totalRow(metric, rows, trialsRows, syncsRows) {
     const lastYearFull = rate('lastYearFull');
     const priorMonthFull = rate('priorMonthFull');
     const mtdActual = rate('mtdActual');
+    const forecast = rate('forecast');
     return {
       channel: 'Total',
-      trajectory, lastYearFull, priorMonthFull, mtdActual,
+      trajectory, lastYearFull, priorMonthFull, mtdActual, forecast,
       yoyPct: lastYearFull ? (trajectory - lastYearFull) / lastYearFull : null,
       momPct: priorMonthFull ? (trajectory - priorMonthFull) / priorMonthFull : null,
+      fcstPct: forecast ? (trajectory - forecast) / forecast : null,
     };
   }
   const t = { channel: 'Total' };
-  for (const k of ['trajectory', 'lastYearFull', 'priorMonthFull', 'mtdActual']) t[k] = sum(rows.map((r) => r[k]));
+  for (const k of ['trajectory', 'lastYearFull', 'priorMonthFull', 'mtdActual', 'forecast']) t[k] = sum(rows.map((r) => r[k]));
   t.yoyPct = t.lastYearFull ? (t.trajectory - t.lastYearFull) / t.lastYearFull : null;
   t.momPct = t.priorMonthFull ? (t.trajectory - t.priorMonthFull) / t.priorMonthFull : null;
+  t.fcstPct = t.forecast ? (t.trajectory - t.forecast) / t.forecast : null;
   return t;
 }
 

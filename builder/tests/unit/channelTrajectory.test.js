@@ -9,15 +9,17 @@ describe('channelTrajectory', () => {
 
   it('groups by metric, sorts by trajectory desc, appends Total for counts', () => {
     const rows = [
-      { metric: 'syncs', channel: 'PPC', mtd_actual: 14.5, trajectory: 56, prior_month_full: 61, last_year_full: 69.8, yoy_pct: -0.198, mom_pct: -0.082 },
-      { metric: 'syncs', channel: 'SEO', mtd_actual: 20, trajectory: 80, prior_month_full: 70, last_year_full: 90, yoy_pct: -0.111, mom_pct: 0.143 },
-      { metric: 'trials', channel: 'PPC', mtd_actual: 37.5, trajectory: 150, prior_month_full: 160, last_year_full: 165, yoy_pct: -0.091, mom_pct: -0.062 },
-      { metric: 'sync_rate', channel: 'PPC', mtd_actual: 0.38, trajectory: 0.37, prior_month_full: 0.38, last_year_full: 0.42, yoy_pct: -0.119, mom_pct: -0.026 },
+      { metric: 'syncs', channel: 'PPC', mtd_actual: 14.5, trajectory: 56, prior_month_full: 61, last_year_full: 69.8, forecast: 75, yoy_pct: -0.198, mom_pct: -0.082, fcst_pct: -0.253 },
+      { metric: 'syncs', channel: 'SEO', mtd_actual: 20, trajectory: 80, prior_month_full: 70, last_year_full: 90, forecast: 120, yoy_pct: -0.111, mom_pct: 0.143, fcst_pct: -0.333 },
+      { metric: 'trials', channel: 'PPC', mtd_actual: 37.5, trajectory: 150, prior_month_full: 160, last_year_full: 165, forecast: 165.5, yoy_pct: -0.091, mom_pct: -0.062, fcst_pct: -0.094 },
+      { metric: 'sync_rate', channel: 'PPC', mtd_actual: 0.38, trajectory: 0.37, prior_month_full: 0.38, last_year_full: 0.42, forecast: 0.45, yoy_pct: -0.119, mom_pct: -0.026, fcst_pct: -0.178 },
     ];
     const out = shapeChannelTrajectory(rows);
     expect(out.syncs[0].channel).toBe('SEO');       // 80 > 56
     expect(out.syncs.at(-1).channel).toBe('Total');  // total appended
     expect(out.syncs.at(-1).trajectory).toBeCloseTo(136); // 80 + 56
+    expect(out.syncs.at(-1).forecast).toBeCloseTo(195); // 75 + 120
+    expect(typeof out.syncs.at(-1).fcstPct).toBe('number'); // (136-195)/195
     expect(out.trials[0].channel).toBe('PPC');
     // sync_rate total is trials-weighted (blended rate), not a plain sum, and
     // carries a computed YoY/MoM %Δ off that blended rate (matches Looker).

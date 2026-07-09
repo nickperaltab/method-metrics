@@ -151,6 +151,10 @@ sources:
         description: One row per CRM activity (demo, free-consulting session, call, etc.). EntityRecordID maps to a customer. ActivityType is the kind of touch; DueDateStart is the activity date (CreatedDate is NULL on most rows). Demo/free-consulting tracking effectively starts 2024.
       - name: method_forecast
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
+      - name: v_trials_forecast_channel
+        description: Per-channel monthly trials forecast (forecast_date = month start, AttributionChannel, forecast_value). Powers the Channel Trajectory scorecard's Forecast comparison; matches Looker's per-channel Trial Forecast.
+      - name: v_syncs_forecast_channel
+        description: Per-channel monthly syncs forecast (forecast_date, AttributionChannel, forecast_value). Powers the Channel Trajectory scorecard's Forecast comparison; matches Looker's per-channel Sync Forecast.
 
       # ----- BQ-managed intermediate views (Phase 1.5 migrates these to int_*) -----
       # NOTE: int_customers is now a dbt model (models/intermediate/int_customers.sql),

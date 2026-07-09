@@ -53,7 +53,9 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
   // trajectory to last year's full month; MoM compares it to last month's full.
   const cmp = compare === 'yoy'
     ? { label: 'LY Full', basis: 'lastYearFull', delta: 'yoyPct', deltaLabel: 'YoY %' }
-    : { label: 'Last Month', basis: 'priorMonthFull', delta: 'momPct', deltaLabel: 'MoM %' };
+    : compare === 'mom'
+    ? { label: 'Last Month', basis: 'priorMonthFull', delta: 'momPct', deltaLabel: 'MoM %' }
+    : { label: 'Forecast', basis: 'forecast', delta: 'fcstPct', deltaLabel: 'vs Fcst %' };
 
   const pill = (active) => ({
     padding: '6px 16px', fontSize: 13, fontWeight: active ? 600 : 400,
@@ -65,7 +67,7 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
     <div style={{ padding: 32, maxWidth: 900, fontFamily: "'DM Sans', sans-serif" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>{cfg.title}</h1>
       <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>
-        Full-month trajectory vs {compare === 'yoy' ? "last year's full month" : "last month's full month"}. MTD excludes today.
+        Full-month trajectory vs {compare === 'yoy' ? "last year's full month" : compare === 'mom' ? "last month's full month" : "this month's forecast"}. MTD excludes today.
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -76,6 +78,7 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
         <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: '.05em' }}>COMPARE TO</span>
         <button onClick={() => setCompare('yoy')} style={pill(compare === 'yoy')}>Last Year</button>
         <button onClick={() => setCompare('mom')} style={pill(compare === 'mom')}>Last Month</button>
+        <button onClick={() => setCompare('forecast')} style={pill(compare === 'forecast')}>Forecast</button>
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>

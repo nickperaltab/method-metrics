@@ -24,7 +24,11 @@ models:
         description: Prior calendar month, full.
       - name: last_year_full
         description: Same month last year, full.
+      - name: forecast
+        description: Current-month per-channel forecast (from v_trials/v_syncs_forecast_channel; sync_rate = sync_fcst/trial_fcst). Matches Looker's per-channel Forecast.
       - name: yoy_pct
         description: (trajectory - last_year_full) / last_year_full.
       - name: mom_pct
         description: (trajectory - prior_month_full) / prior_month_full.
+      - name: fcst_pct
+        description: (trajectory - forecast) / forecast — trajectory-vs-forecast attainment.
