@@ -25,6 +25,7 @@
 const ACCOUNT_TABLE = '`project-for-method-dw.revenue.Account`';
 const MOTION_FUNNEL_TABLE = '`project-for-method-dw.revenue.int_motion_funnel`';
 const CUSTOMERS_TABLE = '`project-for-method-dw.revenue.int_customers`';
+const CUSTOMER_MRR_TABLE = '`project-for-method-dw.revenue.int_customer_mrr`';
 const PROSERV_TABLE = '`project-for-method-dw.revenue.int_customer_proserv`';
 const ANNUAL_MRR_TABLE = '`project-for-method-dw.revenue.int_customer_annual_mrr`';
 const LABEL_VIEW = '`project-for-method-dw.v7_classification.v_entity_primary_label`';
@@ -148,4 +149,171 @@ FROM top30 t
 LEFT JOIN sized s ON s.EntityRecordID = t.EntityRecordID
 LEFT JOIN ${PROSERV_TABLE} p ON p.EntityRecordID = t.EntityRecordID
 LEFT JOIN ${LABEL_VIEW} v ON v.customer_record_id = t.EntityRecordID`.trimEnd();
+}
+
+// The size-band CASE on a per-entity cleaned sales column, shared by the
+// convert-rate and growth builders. `salesCol` is the aliased column reference
+// (e.g. 'a.sales') already cleaned to BETWEEN 1 AND 1e10 upstream.
+function bandCase(salesCol) {
+  return `CASE
+    WHEN ${salesCol} IS NULL THEN 'No data'
+    WHEN ${salesCol} < 1000000 THEN '<$1M'
+    WHEN ${salesCol} < 5000000 THEN '$1M–$5M'
+    ELSE '$5M+'
+  END`;
+}
+
+// The deduped-Account CTE keyed on EntityRecordID → cleaned `sales`, shared by
+// the quality / convert / growth / giants builders (each references a.sales).
+const ACCT_SALES_CTE = `acct AS (
+    SELECT EntityRecordID, MAX(IF(CustDatAnnualSales BETWEEN 1 AND 1e10, CustDatAnnualSales, NULL)) AS sales
+    FROM ${ACCOUNT_TABLE}
+    GROUP BY 1
+  )`;
+
+// "Are we attracting better customers?" — quarterly trial-quality trend.
+// Trials-side counts (trials, trials_1m_plus, trials_5m_plus) are always mature.
+// Convert-side counts (converts, converts_5m_plus, avg_mrr_at_convert) are only
+// meaningful once a signup quarter has had ~12 months to convert — the data
+// layer flags immature quarters via convertMaturity(). Percentages are computed
+// client-side so a zero-denominator quarter can't divide.
+export function buildIntakeQualitySql({ startDate = '2024-01-01' }) {
+  return `WITH ${ACCT_SALES_CTE}
+SELECT
+  DATE_TRUNC(f.signup_month, QUARTER) AS quarter,
+  COUNT(*) AS trials,
+  COUNTIF(a.sales >= 1000000) AS trials_1m_plus,
+  COUNTIF(a.sales >= 5000000) AS trials_5m_plus,
+  COUNTIF(f.converted) AS converts,
+  COUNTIF(f.converted AND a.sales >= 5000000) AS converts_5m_plus,
+  ROUND(AVG(IF(f.converted, f.mrr0, NULL)), 0) AS avg_mrr_at_convert
+FROM ${MOTION_FUNNEL_TABLE} f
+LEFT JOIN acct a USING (EntityRecordID)
+WHERE f.signup_month >= ${sqlStr(startDate)}
+GROUP BY 1
+ORDER BY 1`.trimEnd();
+}
+
+// "Do the good ones convert?" — trial→convert counts by size band per signup
+// quarter. Rates (converts/trials) are computed client-side. Reuses the banded
+// size CTE so a signup missing from Account lands in 'No data'.
+export function buildConvertRateByBandSql({ startDate = '2024-01-01' }) {
+  return `WITH ${BANDED_CTE}
+SELECT
+  DATE_TRUNC(f.signup_month, QUARTER) AS quarter,
+  COALESCE(b.band, 'No data') AS band,
+  COUNT(*) AS trials,
+  COUNTIF(f.converted) AS converts
+FROM ${MOTION_FUNNEL_TABLE} f
+LEFT JOIN banded b USING (EntityRecordID)
+WHERE f.signup_month >= ${sqlStr(startDate)}
+GROUP BY 1, 2
+ORDER BY 1, 2`.trimEnd();
+}
+
+// "Do they grow after converting?" — growth of converts by convert-cohort
+// quarter × size band. mrr_now = current MRR at nowMonth (latest complete
+// month, passed by the component and escaped). grew_10pct = now > mrr0*1.1;
+// gone = now = 0; median_mrr_multiple = median(now/mrr0). Only cohorts with
+// mrr0 > 0 are included.
+//
+// Validated reference values (2024 cohorts, for a test comment only):
+//   $5M+   grew 42.6%, gone 40.5%, median multiple 1.55
+//   <$1M   grew 10.2%, gone 70.6%, median multiple 1.0
+export function buildGrowthByCohortSql({ startDate = '2024-01-01', nowMonth }) {
+  return `WITH ${ACCT_SALES_CTE},
+  now_mrr AS (
+    SELECT EntityRecordID, SUM(StartMRR) AS mrr_now
+    FROM ${CUSTOMER_MRR_TABLE}
+    WHERE Month = ${sqlStr(nowMonth)}
+    GROUP BY 1
+  )
+SELECT
+  DATE_TRUNC(f.convert_month, QUARTER) AS cohort_quarter,
+  ${bandCase('a.sales')} AS band,
+  COUNT(*) AS converts,
+  COUNTIF(COALESCE(n.mrr_now, 0) > f.mrr0 * 1.1) AS grew_10pct,
+  COUNTIF(COALESCE(n.mrr_now, 0) = 0) AS gone,
+  ROUND(APPROX_QUANTILES(SAFE_DIVIDE(n.mrr_now, f.mrr0), 2)[OFFSET(1)], 2) AS median_mrr_multiple
+FROM ${MOTION_FUNNEL_TABLE} f
+LEFT JOIN acct a USING (EntityRecordID)
+LEFT JOIN now_mrr n USING (EntityRecordID)
+WHERE f.converted AND f.convert_month >= ${sqlStr(startDate)} AND f.mrr0 > 0
+GROUP BY 1, 2
+ORDER BY 1, 2`.trimEnd();
+}
+
+// Guard: minSales/maxMrr must be finite positive numbers (injection guard — they
+// are interpolated as bare numeric literals, not string-escaped).
+function assertFinitePositive(name, v) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+    throw new Error(`${name} must be a finite positive number`);
+  }
+}
+
+// "Sleeping giants" — active paying customers with $5M+ reported sales who are
+// paying under maxMrr/mo. These are big businesses on a tiny plan: undersold.
+// mrr = current MRR at nowMonth (SUM StartMRR > 0). Joins bring display columns:
+// customization, industry (l1), country → US flag, tenure years (from first SaaS
+// invoice), and account_count per entity (franchise-style multi-account entities
+// can inflate a single "giant"). US accounts sort first (non-US sales are
+// un-normalized foreign currency and would otherwise headline the list as
+// $5B mirages), then reported sales desc. LIMIT 250.
+export function buildSleepingGiantsSql({ nowMonth, minSales = 5000000, maxMrr = 219 }) {
+  assertFinitePositive('minSales', minSales);
+  assertFinitePositive('maxMrr', maxMrr);
+  return `WITH acct AS (
+    SELECT
+      EntityRecordID,
+      MAX(IF(CustDatAnnualSales BETWEEN 1 AND 1e10, CustDatAnnualSales, NULL)) AS sales,
+      ANY_VALUE(SignupCountry) AS country,
+      COUNT(*) AS account_count,
+      MIN(IF(FirstSaaSInvoiceTxnDate BETWEEN '2000-01-01' AND ${sqlStr(nowMonth)}, FirstSaaSInvoiceTxnDate, NULL)) AS first_invoice
+    FROM ${ACCOUNT_TABLE}
+    GROUP BY 1
+  ),
+  cust AS (
+    SELECT EntityRecordID, ANY_VALUE(Company) AS Company, SUM(StartMRR) AS mrr
+    FROM ${CUSTOMER_MRR_TABLE}
+    WHERE Month = ${sqlStr(nowMonth)}
+    GROUP BY 1
+    HAVING SUM(StartMRR) > 0
+  )
+SELECT
+  c.Company,
+  c.EntityRecordID,
+  c.mrr,
+  a.sales,
+  a.country IN ('United States', 'USA', 'US') AS is_us,
+  COALESCE(p.is_customized, FALSE) AS is_customized,
+  v.l1,
+  DATE_DIFF(${sqlStr(nowMonth)}, a.first_invoice, MONTH) / 12 AS tenure_years,
+  a.account_count
+FROM cust c
+JOIN acct a USING (EntityRecordID)
+LEFT JOIN ${PROSERV_TABLE} p ON p.EntityRecordID = c.EntityRecordID
+LEFT JOIN ${LABEL_VIEW} v ON v.customer_record_id = c.EntityRecordID
+WHERE a.sales >= ${minSales} AND c.mrr < ${maxMrr}
+ORDER BY is_us DESC, a.sales DESC
+LIMIT 250`.trimEnd();
+}
+
+// The peer benchmark for the Sleeping Giants panel: average MRR of active $5M+
+// customers who are NOT sleeping (mrr >= minMrr, i.e. paying a real plan). Shows
+// what the giants "should" be paying. Validated: $778 at nowMonth = '2026-06-01'.
+export function buildGiantsPeerBenchmarkSql({ nowMonth, minSales = 5000000, minMrr = 219 }) {
+  assertFinitePositive('minSales', minSales);
+  assertFinitePositive('minMrr', minMrr);
+  return `WITH ${ACCT_SALES_CTE},
+  cust AS (
+    SELECT EntityRecordID, SUM(StartMRR) AS mrr
+    FROM ${CUSTOMER_MRR_TABLE}
+    WHERE Month = ${sqlStr(nowMonth)}
+    GROUP BY 1
+    HAVING SUM(StartMRR) > 0
+  )
+SELECT ROUND(AVG(c.mrr)) AS avg_peer_mrr, COUNT(*) AS n
+FROM cust c
+JOIN acct a USING (EntityRecordID)
+WHERE a.sales >= ${minSales} AND c.mrr >= ${minMrr}`.trimEnd();
 }

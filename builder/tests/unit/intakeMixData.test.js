@@ -6,7 +6,9 @@ vi.mock('../../src/lib/bigquery', () => ({
 
 import {
   fetchIntakeMix, fetchAttachByCohort, fetchIntakeBenchmark,
-  toQuarterSeries, attachMaturity,
+  fetchIntakeQuality, fetchConvertRateByBand, fetchGrowthByCohort,
+  fetchSleepingGiants, fetchGiantsPeerBenchmark,
+  toQuarterSeries, attachMaturity, convertMaturity,
 } from '../../src/lib/intakeMixData.js';
 import { queryBq } from '../../src/lib/bigquery.js';
 
@@ -99,5 +101,130 @@ describe('attachMaturity', () => {
     const m = attachMaturity('2026-04-01', '2026-05-01');
     expect(m.mature90).toBe(false);
     expect(m.mature180).toBe(false);
+  });
+});
+
+describe('convertMaturity', () => {
+  // Q1 2024 = Jan–Mar; quarter end = 2024-03-31; +365d = 2025-03-31.
+  it('is mature exactly at quarter-end + 365 days (boundary)', () => {
+    expect(convertMaturity('2024-01-01', '2025-03-31')).toBe(true);
+    expect(convertMaturity('2024-01-01', '2025-03-30')).toBe(false);
+  });
+
+  it('a quarter under 12 months old is immature', () => {
+    expect(convertMaturity('2026-04-01', '2026-08-01')).toBe(false);
+  });
+});
+
+describe('fetchIntakeQuality', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('computes percentages client-side and coerces counts', async () => {
+    queryBq.mockResolvedValue({
+      rows: [{
+        quarter: '2024-01-01', trials: '100', trials_1m_plus: '40', trials_5m_plus: '10',
+        converts: '20', converts_5m_plus: '5', avg_mrr_at_convert: '350',
+      }],
+    });
+    const [r] = await fetchIntakeQuality({ startDate: '2024-01-01', todayIso: '2026-07-01' });
+    expect(r.trials).toBe(100);
+    expect(r.pct_trials_1m).toBe(40);
+    expect(r.pct_trials_5m).toBe(10);
+    expect(r.pct_converts_5m).toBe(25);
+    expect(r.avg_mrr_at_convert).toBe(350);
+    expect(r.convert_mature).toBe(true); // Q1 2024 fully mature by mid-2026
+  });
+
+  it('guards zero denominators to null (no divide by zero)', async () => {
+    queryBq.mockResolvedValue({
+      rows: [{ quarter: '2026-07-01', trials: '0', trials_1m_plus: '0', trials_5m_plus: '0', converts: '0', converts_5m_plus: '0', avg_mrr_at_convert: '0' }],
+    });
+    const [r] = await fetchIntakeQuality({ startDate: '2024-01-01', todayIso: '2026-08-01' });
+    expect(r.pct_trials_1m).toBeNull();
+    expect(r.pct_trials_5m).toBeNull();
+    expect(r.pct_converts_5m).toBeNull();
+    expect(r.convert_mature).toBe(false); // Q3 2026 still maturing
+  });
+});
+
+describe('fetchConvertRateByBand', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('pivots to per-quarter band maps with rate computed client-side', async () => {
+    queryBq.mockResolvedValue({
+      rows: [
+        { quarter: '2024-01-01', band: '$5M+', trials: '20', converts: '10' },
+        { quarter: '2024-01-01', band: '<$1M', trials: '0', converts: '0' },
+      ],
+    });
+    const out = await fetchConvertRateByBand({ startDate: '2024-01-01', todayIso: '2026-07-01' });
+    expect(out).toHaveLength(1);
+    expect(out[0].bands['$5M+']).toEqual({ trials: 20, converts: 10, rate: 50 });
+    expect(out[0].bands['<$1M'].rate).toBeNull(); // zero-denominator guard
+    expect(out[0].convert_mature).toBe(true);
+  });
+});
+
+describe('fetchGrowthByCohort', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('coerces counts and exposes pct_grew / pct_gone / median_multiple + maturity', async () => {
+    queryBq.mockResolvedValue({
+      rows: [{ cohort_quarter: '2024-01-01', band: '$5M+', converts: '100', grew_10pct: '43', gone: '40', median_mrr_multiple: '1.55' }],
+    });
+    const [r] = await fetchGrowthByCohort({ startDate: '2024-01-01', nowMonth: '2026-06-01', todayIso: '2026-07-01' });
+    expect(r.converts).toBe(100);
+    expect(r.pct_grew).toBe(43);
+    expect(r.pct_gone).toBe(40);
+    expect(r.median_multiple).toBe(1.55);
+    expect(r.mature).toBe(true);
+  });
+});
+
+describe('fetchSleepingGiants', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // BQ returns booleans as 'true'/'false' strings — 'false' is truthy, so a
+  // naive Boolean() coercion would mark every non-US giant as US.
+  it('coerces numbers and parses is_us/is_customized via string compare', async () => {
+    queryBq.mockResolvedValue({
+      rows: [{
+        Company: 'Acme Co', EntityRecordID: '9001', mrr: '99', sales: '7500000',
+        is_us: 'false', is_customized: 'true', l1: 'Manufacturing & Distribution',
+        tenure_years: '3', account_count: '2',
+      }],
+    });
+    const [r] = await fetchSleepingGiants({ nowMonth: '2026-06-01', minSales: 5000000, maxMrr: 219 });
+    expect(r.company).toBe('Acme Co');
+    expect(r.mrr).toBe(99);
+    expect(r.sales).toBe(7500000);
+    expect(r.is_us).toBe(false); // 'false' string must NOT become true
+    expect(r.is_customized).toBe(true);
+    expect(r.account_count).toBe(2);
+    expect(r.tenure_years).toBe(3);
+  });
+
+  it('parses a genuine boolean true from is_us', async () => {
+    queryBq.mockResolvedValue({
+      rows: [{ Company: 'X', EntityRecordID: '1', mrr: '10', sales: '6000000', is_us: true, is_customized: false, l1: null, tenure_years: '0', account_count: '1' }],
+    });
+    const [r] = await fetchSleepingGiants({ nowMonth: '2026-06-01' });
+    expect(r.is_us).toBe(true);
+    expect(r.is_customized).toBe(false);
+    expect(r.l1).toBeNull();
+  });
+});
+
+describe('fetchGiantsPeerBenchmark', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('coerces the single peer-benchmark row', async () => {
+    queryBq.mockResolvedValue({ rows: [{ avg_peer_mrr: '778', n: '520' }] });
+    expect(await fetchGiantsPeerBenchmark({ nowMonth: '2026-06-01' })).toEqual({ avg_peer_mrr: 778, n: 520 });
+  });
+
+  it('returns null when there are no rows', async () => {
+    queryBq.mockResolvedValue({ rows: [] });
+    expect(await fetchGiantsPeerBenchmark({ nowMonth: '2026-06-01' })).toBeNull();
   });
 });
