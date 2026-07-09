@@ -23,6 +23,8 @@ WITH cal AS (
 ),
 
 trial_rows AS (
+  -- NB: Account's native column is `SignUpDate` (capital U); we rely on
+  -- BigQuery's case-insensitive column resolution. Funnel's is `SignupDate`.
   SELECT SignupDate AS d, channel, weight FROM (
     SELECT SignupDate,
       Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Direct,

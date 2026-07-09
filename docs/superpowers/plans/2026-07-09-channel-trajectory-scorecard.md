@@ -305,7 +305,7 @@ models:
       - name: mtd_actual
         description: Month-to-date actual excluding today.
       - name: trajectory
-        description: Prior-month-shape projection of the full current month.
+        description: Calendar-day linear projection of the full current month (mtd / days_elapsed * days_in_month).
       - name: prior_month_full
         description: Prior calendar month, full.
       - name: last_year_full
