@@ -26,6 +26,7 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState('syncs');
+  const [compare, setCompare] = useState('yoy');
 
   useEffect(() => {
     if (!bqConnected) return;
@@ -48,28 +49,40 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
   const rows = data[tab];
   const isRate = tab === 'sync_rate';
 
+  // The comparison toggle swaps the basis column + delta: YoY compares the
+  // trajectory to last year's full month; MoM compares it to last month's full.
+  const cmp = compare === 'yoy'
+    ? { label: 'LY Full', basis: 'lastYearFull', delta: 'yoyPct', deltaLabel: 'YoY %' }
+    : { label: 'Last Month', basis: 'priorMonthFull', delta: 'momPct', deltaLabel: 'MoM %' };
+
+  const pill = (active) => ({
+    padding: '6px 16px', fontSize: 13, fontWeight: active ? 600 : 400,
+    background: active ? '#2563eb' : '#f3f4f6', color: active ? '#fff' : '#374151',
+    border: 'none', borderRadius: 20, cursor: 'pointer',
+  });
+
   return (
     <div style={{ padding: 32, maxWidth: 900, fontFamily: "'DM Sans', sans-serif" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>{cfg.title}</h1>
       <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>
-        Current-month trajectory vs last year's full month (YoY) and last month (MoM). MTD excludes today.
+        Full-month trajectory vs {compare === 'yoy' ? "last year's full month" : "last month's full month"}. MTD excludes today.
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '6px 16px', fontSize: 13, fontWeight: tab === t.key ? 600 : 400,
-            background: tab === t.key ? '#2563eb' : '#f3f4f6', color: tab === t.key ? '#fff' : '#374151',
-            border: 'none', borderRadius: 20, cursor: 'pointer',
-          }}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} style={pill(tab === t.key)}>{t.label}</button>
         ))}
+        <span style={{ width: 1, height: 20, background: '#e2e5e9', margin: '0 6px' }} />
+        <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: '.05em' }}>COMPARE TO</span>
+        <button onClick={() => setCompare('yoy')} style={pill(compare === 'yoy')}>Last Year</button>
+        <button onClick={() => setCompare('mom')} style={pill(compare === 'mom')}>Last Month</button>
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
         <thead>
           <tr style={{ textAlign: 'right', color: '#6b7280', fontSize: 12 }}>
             <th style={{ textAlign: 'left', padding: '8px 0' }}>Channel</th>
-            <th>Trajectory</th><th>LY Full</th><th>YoY %</th><th>MoM %</th>
+            <th>MTD Actual</th><th>Trajectory</th><th>{cmp.label}</th><th>{cmp.deltaLabel}</th>
           </tr>
         </thead>
         <tbody>
@@ -81,10 +94,10 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
                 fontWeight: isTotal ? 700 : 400, textAlign: 'right',
               }}>
                 <td style={{ textAlign: 'left', padding: '8px 0' }}>{r.channel}</td>
+                <td>{num(r.mtdActual, isRate)}</td>
                 <td>{num(r.trajectory, isRate)}</td>
-                <td>{num(r.lastYearFull, isRate)}</td>
-                <td><Delta v={r.yoyPct} /></td>
-                <td><Delta v={r.momPct} /></td>
+                <td>{num(r[cmp.basis], isRate)}</td>
+                <td><Delta v={r[cmp.delta]} /></td>
               </tr>
             );
           })}
