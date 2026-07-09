@@ -1013,3 +1013,47 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 **Known caveats:** same as `int_motion_funnel` — pre-2024 motion fork is unreliable; long-horizon retention cells are narrow for recent cohorts.
 
 **Used by:** Phase B frontend (in-progress) — the motion funnel page in the chart builder.
+
+---
+
+### `int_channel_funnel_trajectory` — channel trajectory + YoY/MoM (Marketing)
+
+**What it answers in one sentence:** For each acquisition channel, is this month's projected full-month Trials / Syncs / Sync Rate tracking up or down versus last year's full month (YoY) and versus last month (MoM)?
+
+**The math:**
+```sql
+-- Per channel × metric (trials | syncs | sync_rate):
+--   mtd_actual       = SUM(Att_*) over [month_start, CURRENT_DATE())   (MTD excl today)
+--   trajectory       = mtd_actual / days_elapsed * days_in_month        (calendar-day linear)
+--   prior_month_full = SUM(Att_*) over the full prior calendar month
+--   last_year_full   = SUM(Att_*) over the same month last year, full
+--   yoy_pct          = (trajectory - last_year_full) / last_year_full
+--   mom_pct          = (trajectory - prior_month_full) / prior_month_full
+-- Trials: revenue.Account by SignupDate. Syncs: revenue.Funnel EventType='Sync'.
+-- Attribution: fractional multi-touch — Att_* are already fractional weights, summed directly.
+-- sync_rate = syncs / trials at each level (trials-weighted total).
+```
+
+**Grain:** channel × metric, current month (recomputes live against `CURRENT_DATE()`).
+
+**Filters / exclusions:**
+- `IsConversionException = FALSE` — excludes test/exception accounts.
+- `Partner != 'Method Integration'` — excludes internal partner rows.
+- Trials also exclude `SignupDate = DATE('0001-01-01')` — the "no trial" sentinel.
+
+**Methodology source:** Looker Marketing Dashboard parity (Jul 2026). Fractional multi-touch attribution; calendar-day linear trajectory. Built to fix Looker's YoY column, which compared MTD-actual vs last-year-same-MTD-window instead of full-month trajectory vs last-year-full-month.
+
+**Parity-verified against:** Looker Marketing Dashboard PDF, Jul 1–8 2026 — syncs by channel exact (PPC 14.5, SEO 20, OPN 12, Direct 4, None 3); trials PPC 37.5 / SEO 36 / Email 1.5 exact; PPC sync trajectory `14.5/8*31 = 56.19` exact.
+
+**Status:** pending (ships in Labs; not flipped to `live`).
+
+**⚠️ Limitations / use-with-care:**
+- Trajectory is a linear run-rate projection — noisy early in the month when few days have elapsed.
+
+**Known caveats / things consumers should know:**
+- **Syncs use fractional multi-touch attribution** (an account touched by PPC+SEO contributes 0.5 to each), which is why channel values can be non-integers (e.g. 14.5).
+- **Email has no Funnel sync attribution** — `Att_Email` exists on `Account` (trials) but not `Funnel` (syncs), so Email syncs and Email sync rate are null.
+- **`CustDatFirstSyncCompleted` is deliberately not used** — syncs come only from Funnel sync events.
+- Trajectory method is **calendar-day linear** (`mtd/days_elapsed*days_in_month`), NOT the prior-month-shape method used for Net SaaS.
+
+**Used by:** Channel Trajectory scorecard (Labs) in the chart builder.
