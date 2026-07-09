@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: int_channel_funnel_trajectory
+    description: >
+      Per channel × metric (trials/syncs/sync_rate): current-month MTD (excl
+      today), calendar-day linear trajectory, prior-month full, last-year full,
+      and YoY/MoM %. Fractional multi-touch attribution. Trials from Account;
+      syncs from Funnel EventType='Sync'. Recomputes live against CURRENT_DATE().
+    columns:
+      - name: metric
+        description: "trials | syncs | sync_rate"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['trials', 'syncs', 'sync_rate']
+      - name: channel
+        description: Attribution channel (fractional multi-touch).
+      - name: mtd_actual
+        description: Month-to-date actual excluding today.
+      - name: trajectory
+        description: Prior-month-shape projection of the full current month.
+      - name: prior_month_full
+        description: Prior calendar month, full.
+      - name: last_year_full
+        description: Same month last year, full.
+      - name: yoy_pct
+        description: (trajectory - last_year_full) / last_year_full.
+      - name: mom_pct
+        description: (trajectory - prior_month_full) / prior_month_full.
