@@ -2,9 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { buildChannelTrajectorySql, shapeChannelTrajectory } from '../../src/lib/channelTrajectorySql.js';
 
 describe('channelTrajectory', () => {
-  it('builds SQL against the dbt view', () => {
-    const sql = buildChannelTrajectorySql();
-    expect(sql).toMatch(/int_channel_funnel_trajectory/);
+  it('builds a windowed SQL against the daily view with injected dates', () => {
+    const sql = buildChannelTrajectorySql({ start: '2026-07-01', end: '2026-07-08' });
+    expect(sql).toMatch(/int_channel_funnel_daily/);
+    expect(sql).toMatch(/DATE '2026-07-01'/);
+    expect(sql).toMatch(/DATE '2026-07-08'/);
+    expect(sql).toMatch(/v_trials_forecast_channel/);
+  });
+
+  it('rejects malformed dates (guards against injection)', () => {
+    expect(() => buildChannelTrajectorySql({ start: "2026-07-01'; DROP", end: '2026-07-08' })).toThrow();
   });
 
   it('groups by metric, sorts by trajectory desc, appends Total for counts', () => {

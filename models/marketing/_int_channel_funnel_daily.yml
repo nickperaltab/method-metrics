@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: int_channel_funnel_daily
+    description: >
+      Daily building block for the Channel Trajectory scorecard's date-range
+      filter. One row per (event_date, metric, channel) with the fractional
+      attribution weight summed. The frontend windows this by the picked range to
+      compute MTD / trajectory / prior-month / last-year. Trials from
+      Account.SignupDate; syncs from Funnel EventType='Sync'. Fractional
+      multi-touch attribution (Att_* summed directly).
+    columns:
+      - name: event_date
+        description: Signup date (trials) or sync date (syncs).
+      - name: metric
+        description: "trials | syncs"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['trials', 'syncs']
+      - name: channel
+        description: Attribution channel (fractional multi-touch).
+      - name: weight
+        description: Fractional attribution weight summed for that day + channel.
