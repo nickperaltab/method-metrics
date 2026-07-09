@@ -34,16 +34,22 @@ print("TRIALS Account Jul1-8  rows=", ev)
 for k, v in sorted(t.items(), key=lambda x: -x[1]): print(f"  {k:34} {v}")
 assert abs(t.get('Att_Pay_Per_Click', 0) - 37.5) < 0.01, "PPC trial != 37.5"
 
-# Trajectory (prior-month-shape) for PPC syncs, as of a fixed date matching Looker
-D = '2026-06-16'  # mid-June, when Michelle observed 57.86 / target ~56-58
+# Trajectory method = CALENDAR-DAY LINEAR run-rate: mtd / days_elapsed * days_in_month.
+# Confirmed against the dated PDF anchor (PPC Sync Trajectory 56.19, run Jul 9 2026,
+# MTD-excl-today = Jul 1-8 = 8 days elapsed): 14.5 / 8 * 31 = 56.19.
+# NOTE: this is NOT prior-month-shape (that method gives 68.04 here and is wrong for
+# marketing trials/syncs — it's only used for Net SaaS).
+D = '2026-07-09'  # PDF run date; MTD excl today = Jul 1-8 (8 days elapsed)
 q = f"""
 WITH s AS (SELECT CAST(Date AS DATE) d, Att_Pay_Per_Click w FROM `{P}.Funnel` WHERE EventType='Sync')
 SELECT
   SUM(CASE WHEN d>=DATE_TRUNC(DATE('{D}'),MONTH) AND d<DATE('{D}') THEN w END) mtd,
-  SUM(CASE WHEN d>=DATE_TRUNC(DATE_SUB(DATE('{D}'),INTERVAL 1 MONTH),MONTH) AND d<DATE_SUB(DATE('{D}'),INTERVAL 1 MONTH) THEN w END) prior_same,
-  SUM(CASE WHEN d>=DATE_TRUNC(DATE_SUB(DATE('{D}'),INTERVAL 1 MONTH),MONTH) AND d<DATE_TRUNC(DATE('{D}'),MONTH) THEN w END) prior_full
+  DATE_DIFF(DATE('{D}'), DATE_TRUNC(DATE('{D}'),MONTH), DAY) days_elapsed,
+  EXTRACT(DAY FROM LAST_DAY(DATE('{D}'))) days_in_month
 FROM s"""
 r = list(c.query(q).result())[0]
-traj = r.mtd / r.prior_same * r.prior_full if r.prior_same and r.prior_same != 0 else None
-print(f"\nPPC sync trajectory as of {D}: mtd={r.mtd} prior_same={r.prior_same} prior_full={r.prior_full} -> {traj}")
-print("Michelle observed ~57.86; confirm this method lands in that neighborhood.")
+traj = r.mtd / r.days_elapsed * r.days_in_month if r.days_elapsed else None
+print(f"\nPPC sync trajectory as of {D}: mtd={r.mtd} days_elapsed={r.days_elapsed} "
+      f"days_in_month={r.days_in_month} -> {traj:.2f}")
+assert traj and abs(traj - 56.19) < 0.05, f"trajectory {traj} != PDF anchor 56.19"
+print("Trajectory method CONFIRMED: calendar-day linear reproduces PDF anchor 56.19")
