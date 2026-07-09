@@ -6,14 +6,16 @@ export function buildChannelTrajectorySql() {
   `;
 }
 
+const n = (v) => (v == null ? null : Number(v));
+
 const toRow = (r) => ({
   channel: r.channel,
-  trajectory: r.trajectory,
-  lastYearFull: r.last_year_full,
-  priorMonthFull: r.prior_month_full,
-  mtdActual: r.mtd_actual,
-  yoyPct: r.yoy_pct,
-  momPct: r.mom_pct,
+  trajectory: n(r.trajectory),
+  lastYearFull: n(r.last_year_full),
+  priorMonthFull: n(r.prior_month_full),
+  mtdActual: n(r.mtd_actual),
+  yoyPct: n(r.yoy_pct),
+  momPct: n(r.mom_pct),
 });
 
 const sum = (xs) => xs.reduce((a, b) => a + (b || 0), 0);

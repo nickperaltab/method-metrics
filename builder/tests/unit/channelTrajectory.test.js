@@ -41,4 +41,23 @@ describe('channelTrajectory', () => {
     const out = shapeChannelTrajectory(rows);
     expect(out.syncs.find((r) => r.channel === 'Legacy')).toBeDefined();
   });
+
+  it('coerces BigQuery STRING values to numbers (regression: no string concatenation in totals)', () => {
+    // BigQuery's REST API returns every value as a string, regardless of the
+    // underlying column type. Feed string-valued rows through the real shape
+    // function to guard against string concatenation bugs like "80" + "56".
+    const rows = [
+      { metric: 'syncs', channel: 'SEO', trajectory: '80', last_year_full: '90', prior_month_full: '70', mtd_actual: '20', yoy_pct: '-0.111', mom_pct: '0.143' },
+      { metric: 'syncs', channel: 'PPC', trajectory: '56', last_year_full: '69.8', prior_month_full: '61', mtd_actual: '14.5', yoy_pct: '-0.198', mom_pct: '-0.082' },
+    ];
+    const out = shapeChannelTrajectory(rows);
+    const total = out.syncs.at(-1);
+    expect(total.channel).toBe('Total');
+    expect(typeof total.trajectory).toBe('number');
+    expect(total.trajectory).toBe(136); // 80 + 56, not "8056" or "80" + "56"
+
+    const seo = out.syncs.find((r) => r.channel === 'SEO');
+    expect(typeof seo.trajectory).toBe('number');
+    expect(seo.trajectory).toBe(80);
+  });
 });
