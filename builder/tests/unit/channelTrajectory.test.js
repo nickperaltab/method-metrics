@@ -19,8 +19,14 @@ describe('channelTrajectory', () => {
     expect(out.syncs.at(-1).channel).toBe('Total');  // total appended
     expect(out.syncs.at(-1).trajectory).toBeCloseTo(136); // 80 + 56
     expect(out.trials[0].channel).toBe('PPC');
-    // sync_rate total is trials-weighted, not a plain sum — see Step 3
-    expect(out.sync_rate.at(-1).channel).toBe('Total');
+    // sync_rate total is trials-weighted (blended rate), not a plain sum, and
+    // carries a computed YoY/MoM %Δ off that blended rate (matches Looker).
+    const rateTotal = out.sync_rate.at(-1);
+    expect(rateTotal.channel).toBe('Total');
+    // blended trajectory rate = sum(syncs.traj)/sum(trials.traj) = (56+80)/150
+    expect(rateTotal.trajectory).toBeCloseTo(136 / 150);
+    expect(typeof rateTotal.yoyPct).toBe('number');
+    expect(typeof rateTotal.momPct).toBe('number');
   });
 
   it('drops channel rows that are fully null across all value fields', () => {

@@ -25,15 +25,20 @@ const isEmptyRow = (row) =>
 
 function totalRow(metric, rows, trialsRows, syncsRows) {
   if (metric === 'sync_rate') {
-    // trials-weighted rate total: sum(syncs.X) / sum(trials.X) at each level
+    // trials-weighted (blended) rate total: sum(syncs.X) / sum(trials.X) at each
+    // level. Matches Looker's grand-total Sync %, incl. its YoY/MoM %Δ computed
+    // off the blended rate (not left blank).
     const s = (arr, k) => sum(arr.map((r) => r[k]));
+    const rate = (k) => (s(trialsRows, k) ? s(syncsRows, k) / s(trialsRows, k) : null);
+    const trajectory = rate('trajectory');
+    const lastYearFull = rate('lastYearFull');
+    const priorMonthFull = rate('priorMonthFull');
+    const mtdActual = rate('mtdActual');
     return {
       channel: 'Total',
-      trajectory: s(syncsRows, 'trajectory') / s(trialsRows, 'trajectory') || null,
-      lastYearFull: s(syncsRows, 'lastYearFull') / s(trialsRows, 'lastYearFull') || null,
-      priorMonthFull: s(syncsRows, 'priorMonthFull') / s(trialsRows, 'priorMonthFull') || null,
-      mtdActual: s(syncsRows, 'mtdActual') / s(trialsRows, 'mtdActual') || null,
-      yoyPct: null, momPct: null,
+      trajectory, lastYearFull, priorMonthFull, mtdActual,
+      yoyPct: lastYearFull ? (trajectory - lastYearFull) / lastYearFull : null,
+      momPct: priorMonthFull ? (trajectory - priorMonthFull) / priorMonthFull : null,
     };
   }
   const t = { channel: 'Total' };
