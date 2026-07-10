@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPsBoard } from '../lib/psHub';
+import { fetchPsBoard, isPsHubMockMode } from '../lib/psHub';
 import { useCalendarAuth } from '../hooks/useCalendarAuth';
 import { matchEventToAccount } from '../lib/calendar';
 import { useUser } from '../contexts/UserContext';
@@ -79,11 +79,12 @@ export default function PsHub() {
   const [ownerFilter, setOwnerFilter] = useState('mine');
   const [activeOnly, setActiveOnly] = useState(true);
   const [typeFilter, setTypeFilter] = useState('DEDICATED');
+  const [mockMode, setMockMode] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     fetchPsBoard({ activeOnly, accountType: typeFilter || undefined })
-      .then(setAccounts)
+      .then((rows) => { setAccounts(rows); setMockMode(isPsHubMockMode()); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [activeOnly, typeFilter]);
@@ -109,7 +110,14 @@ export default function PsHub() {
           <h1 style={s.title}>PS Hub</h1>
           <p style={s.subtitle}>Your day, your book, and every snapshot in one place.</p>
         </div>
+        <Link to="/ps-hub/bq-explorer" style={s.bqExplorerLink}>BigQuery Customer Explorer (prototype) →</Link>
       </div>
+
+      {mockMode && (
+        <div style={s.mockBanner}>
+          Showing local test data — the PS Hub tables aren't deployed to Supabase yet. Edits here only persist until you reload the page.
+        </div>
+      )}
 
       <TodayPanel accounts={accounts} />
 
@@ -196,6 +204,8 @@ const s = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 16 },
   title: { fontSize: 20, fontWeight: 700, color: '#1a1a1a', margin: 0 },
   subtitle: { color: '#6b7280', fontSize: 13, marginTop: 4 },
+  mockBanner: { background: '#fffbeb', border: '1px dashed #f59e0b', color: '#92400e', fontSize: 12, borderRadius: 6, padding: '8px 14px', marginBottom: 20 },
+  bqExplorerLink: { fontSize: 12, color: '#059669', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' },
   section: { marginBottom: 32 },
   sectionTitle: { fontSize: 14, fontWeight: 700, color: '#374151', margin: 0 },
   todayCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #e2e5e9', borderRadius: 8, padding: 20, marginBottom: 32 },

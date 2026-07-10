@@ -8,6 +8,7 @@ import {
   createProjectNote,
   updateProjectNote,
   deleteProjectNote,
+  isPsHubMockMode,
 } from '../lib/psHub';
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'BLOCKED', 'DONE'];
@@ -260,11 +261,12 @@ export default function PsHubAccount() {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [mockMode, setMockMode] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     fetchPsAccount(id)
-      .then(setAccount)
+      .then((a) => { setAccount(a); setMockMode(isPsHubMockMode()); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -314,6 +316,12 @@ export default function PsHubAccount() {
     <div style={s.layout}>
       <Link to="/ps-hub" style={s.backLink}>← Accounts</Link>
 
+      {mockMode && (
+        <div style={s.mockBanner}>
+          Showing local test data — edits here only persist until you reload the page.
+        </div>
+      )}
+
       <AccountHeader account={account} onChange={setAccount} />
 
       <section style={s.section}>
@@ -360,6 +368,7 @@ export default function PsHubAccount() {
 const s = {
   layout: { padding: 24, maxWidth: 1200, margin: '0 auto' },
   backLink: { fontSize: 13, color: '#6b7280', textDecoration: 'none' },
+  mockBanner: { background: '#fffbeb', border: '1px dashed #f59e0b', color: '#92400e', fontSize: 12, borderRadius: 6, padding: '8px 14px', margin: '12px 0' },
   header: { margin: '8px 0 24px' },
   title: { fontSize: 20, fontWeight: 700, color: '#1a1a1a', margin: 0 },
   subtitle: { color: '#6b7280', fontSize: 13, marginTop: 4 },

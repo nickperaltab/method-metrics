@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import posthog from './lib/posthog';
 import { setCurrentUserEmail } from './lib/supabase';
@@ -9,6 +9,7 @@ import ChatExplorer from './components/ChatExplorer';
 import Home from './pages/Home';
 import PsHub from './pages/PsHub';
 import PsHubAccount from './pages/PsHubAccount';
+import PsHubBqExplorer from './pages/PsHubBqExplorer';
 import Registry from './pages/Registry';
 import Dimensions from './pages/Dimensions';
 import AdminInsights from './pages/AdminInsights';
@@ -33,7 +34,7 @@ function PosthogPageview() {
   return null;
 }
 
-function SignInGate({ onConnect }) {
+function SignInGate({ onConnect, onDevSkip }) {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -65,61 +66,92 @@ function SignInGate({ onConnect }) {
         >
           Connect Google Account
         </button>
+        {onDevSkip && (
+          <div style={{ marginTop: 20 }}>
+            <button
+              onClick={onDevSkip}
+              style={{
+                padding: '6px 14px', background: 'transparent', color: '#9ca3af',
+                border: '1px dashed #d1d5db', borderRadius: 6, fontSize: 12,
+                cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Skip sign-in (local dev preview only)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// Local-only escape hatch so PS Hub look-and-feel can be reviewed without
+// the Google OAuth round trip. import.meta.env.DEV is statically false in
+// `vite build`, so this branch (and the button that triggers it) is dead
+// code in the deployed bundle — never reachable outside `npm run dev`.
+const DEV_PREVIEW_EMAIL = 'b.saltzman@method.me';
+
 export default function App() {
   const { connected, userEmail, userAvatar, connect } = useBqAuth();
+  const [devSkip, setDevSkip] = useState(false);
+
+  const previewing = import.meta.env.DEV && devSkip;
+  const effectiveEmail = previewing ? DEV_PREVIEW_EMAIL : userEmail;
+  const effectiveConnected = previewing || connected;
 
   // Set RLS identity header synchronously so useMetrics's fetch below
   // includes x-method-email from its first call onward.
-  setCurrentUserEmail(userEmail || null);
+  setCurrentUserEmail(effectiveEmail || null);
 
-  const { metrics, loading: metricsLoading } = useMetrics(userEmail);
+  const { metrics, loading: metricsLoading } = useMetrics(effectiveEmail);
 
   // Gate the app behind OAuth. No email → sign-in screen.
-  if (!connected || !userEmail) {
-    return <SignInGate onConnect={connect} />;
+  if (!effectiveConnected || !effectiveEmail) {
+    return (
+      <SignInGate
+        onConnect={connect}
+        onDevSkip={import.meta.env.DEV ? () => setDevSkip(true) : null}
+      />
+    );
   }
 
   return (
-    <UserProvider email={userEmail}>
+    <UserProvider email={effectiveEmail}>
       <HashRouter>
         <PosthogPageview />
-        <Layout bqConnected={connected} userEmail={userEmail} onConnect={connect}>
+        <Layout bqConnected={effectiveConnected} userEmail={effectiveEmail} onConnect={connect}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route
               path="/chat"
               element={
                 metricsLoading ? <Loading /> :
-                <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+                <ChatExplorer metrics={metrics} bqConnected={effectiveConnected} userEmail={effectiveEmail} userAvatar={userAvatar} />
               }
             />
             <Route
               path="/explorer"
               element={
                 metricsLoading ? <Loading /> :
-                <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+                <Explorer metrics={metrics} bqConnected={effectiveConnected} userEmail={effectiveEmail} userAvatar={userAvatar} />
               }
             />
             <Route path="/dashboards" element={<Navigate to="/" replace />} />
-            <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
+            <Route path="/dashboards/:id" element={<DashboardView userEmail={effectiveEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={effectiveConnected} />} />
             <Route path="/approved" element={<Navigate to="/" replace />} />
             <Route path="/scorecards/:id" element={
               metricsLoading ? <Loading /> :
-              <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
+              <Scorecard metrics={metrics} bqConnected={effectiveConnected} onConnect={connect} />
             } />
-            <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
+            <Route path="/mcp-token" element={<McpToken userEmail={effectiveEmail} bqConnected={effectiveConnected} onConnect={connect} />} />
             <Route path="/ps-hub" element={<PsHub />} />
             <Route path="/ps-hub/:id" element={<PsHubAccount />} />
+            <Route path="/ps-hub/bq-explorer" element={<PsHubBqExplorer bqConnected={effectiveConnected} onConnect={connect} />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />
             <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
             {/* Disconnected admin route — no nav link, direct URL only. */}
-            <Route path="/exports/saas-data" element={<SaasDataExport bqConnected={connected} />} />
+            <Route path="/exports/saas-data" element={<SaasDataExport bqConnected={effectiveConnected} />} />
           </Routes>
         </Layout>
       </HashRouter>
