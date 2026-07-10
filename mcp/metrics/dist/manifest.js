@@ -4,10 +4,19 @@ import { fileURLToPath } from "node:url";
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Repo root = two levels up from mcp/metrics/. */
 export const repoRoot = path.resolve(pkgDir, "..", "..");
+/**
+ * Base directory used to resolve model .sql files (getSql) and the default
+ * manifest location. Overridable via REPO_ROOT — the deployed HTTP function
+ * points this at its self-contained bundle/ copy, since ../../ doesn't exist
+ * at runtime there.
+ */
+export function getRepoRoot() {
+    return process.env.REPO_ROOT ? path.resolve(process.env.REPO_ROOT) : repoRoot;
+}
 export function manifestPath() {
     return process.env.DBT_MANIFEST_PATH
         ? path.resolve(process.env.DBT_MANIFEST_PATH)
-        : path.join(repoRoot, "target", "manifest.json");
+        : path.join(getRepoRoot(), "target", "manifest.json");
 }
 let cache = null;
 /**

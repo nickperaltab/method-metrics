@@ -8,10 +8,12 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare-deploy": "node scripts/prepare-deploy.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "mcp-handler": "^1.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

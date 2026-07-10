@@ -11,3 +11,8 @@ logs/
 # Account-level snapshots (contain Company names + per-customer MRR) — never commit (public repo)
 scripts/audit/*.json
 .superpowers/
+
+# MCP deploy bundle — pure generated copies (dbt manifest + model SQL), created
+# by `npm run prepare-deploy` in mcp/metrics/ at deploy time
+mcp/metrics/bundle/
+mcp/metrics/.vercel/
