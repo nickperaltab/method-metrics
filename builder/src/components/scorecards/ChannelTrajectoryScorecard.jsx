@@ -7,6 +7,13 @@ const TABS = [
   { key: 'sync_rate', label: 'Sync Rate', pctFmt: true },
 ];
 
+// Interpretive guidance shown under the title, swapped by the active compare lens.
+const CONTEXT = {
+  forecast: 'Trajectory vs forecast — are we on track this month? A low % of forecast flags a channel underperforming right now, worth a closer look.',
+  yoy: 'Comparison to last year — the long-run trend. E.g. OPN/SEO have softened a lot this year, dragging the overall trend down.',
+  mom: "Comparison to last month — short-term direction. E.g. are the SEO/AEO changes we've made actually moving the needle?",
+};
+
 const num = (v, pct) =>
   v == null ? '—'
   : pct ? `${(v * 100).toFixed(1)}%`
@@ -88,8 +95,11 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
   return (
     <div style={{ padding: 32, maxWidth: 900, fontFamily: "'DM Sans', sans-serif" }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>{cfg.title}</h1>
-      <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>
-        Full-month trajectory vs {compare === 'yoy' ? "last year's full month" : compare === 'mom' ? "last month's full month" : "this month's forecast"}. Trajectory projects from the selected date range.
+      <div style={{ fontSize: 13, color: '#4b5563', marginBottom: 4, maxWidth: 660, lineHeight: 1.5 }}>
+        {CONTEXT[compare]}
+      </div>
+      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 24 }}>
+        Trajectory projects the full month from the selected range; MTD excludes today.
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
