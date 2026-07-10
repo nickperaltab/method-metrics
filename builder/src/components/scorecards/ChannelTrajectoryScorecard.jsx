@@ -22,6 +22,13 @@ function Delta({ v }) {
   );
 }
 
+// Signed absolute difference (Trajectory − Forecast). Green ahead, red behind.
+function AbsDiff({ v }) {
+  if (v == null) return <span style={{ color: '#9ca3af' }}>—</span>;
+  const up = v >= 0;
+  return <span style={{ color: up ? '#059669' : '#dc2626' }}>{up ? '+' : ''}{v.toFixed(1)}</span>;
+}
+
 const fmt = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -115,7 +122,9 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
           <thead>
             <tr style={{ textAlign: 'right', color: '#6b7280', fontSize: 12 }}>
               <th style={{ textAlign: 'left', padding: '8px 0' }}>Channel</th>
-              <th>MTD Actual</th><th>Trajectory</th><th>{cmp.label}</th><th>{cmp.deltaLabel}</th>
+              <th>MTD Actual</th><th>Trajectory</th>
+              {!isRate && <><th>Forecast</th><th>vs Fcst</th></>}
+              <th>{cmp.label}</th><th>{cmp.deltaLabel}</th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +138,10 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
                   <td style={{ textAlign: 'left', padding: '8px 0' }}>{r.channel}</td>
                   <td>{num(r.mtdActual, isRate)}</td>
                   <td>{num(r.trajectory, isRate)}</td>
+                  {!isRate && <>
+                    <td>{num(r.forecast, false)}</td>
+                    <td><AbsDiff v={r.trajectory == null || r.forecast == null ? null : r.trajectory - r.forecast} /></td>
+                  </>}
                   <td>{num(r[cmp.basis], isRate)}</td>
                   <td><Delta v={r[cmp.delta]} /></td>
                 </tr>
