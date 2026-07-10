@@ -21,6 +21,31 @@ models:
       both StartMRR and Cancellations. Foundation for monthly GRR / NRR.
     config:
       materialized: view
+      meta:
+        answers: "What was Method's total MRR at the start of each month, summed across all customers?"
+        grain: "period-level (one $ value per month). Underlying aggregation is customer-month."
+        filters:
+          - rule: "CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%'"
+            why: "excludes internal Method accounts — matches Looker and SaaS Analytics Engine filters"
+          - rule: "Symmetric Prepay Expiry Income exclusion (CEO-confirmed 2026-04-28)"
+            why: "customers whose entire Period-1 SaaS revenue was Prepay Expiry Income are excluded from BOTH StartMRR and Cancellations. Their actual churn was captured in an earlier monthly cohort."
+          - rule: "TxnDate >= '2021-12-01'"
+            why: "data quality floor"
+          - rule: "Excludes current incomplete month"
+            why: "int_customer_mrr excludes the in-progress month"
+        methodology_source: "knowledge/verified-queries/int_customer_mrr.sql — Justin's verified pattern. CEO methodology confirmation logged 2026-04-28."
+        parity_verified:
+          against: "Pre-migration BQ values for 11 months (Jun 2025 – Apr 2026) (Round 3b)"
+          date: "2026-05-12"
+          values: "all penny-match"
+        caveats:
+          - "Pre-FX — all currencies at face value (USD, CAD, UK). If you want USD-equivalent, that's a different metric."
+          - "Diverges from board-deck monthly retention by ~4–6bp because this view uses symmetric methodology while the board deck uses asymmetric (PE-only customers left in StartMRR but excluded from Cancellations)."
+          - "Current month NOT shown (int_customer_mrr excludes in-progress month)."
+        used_by:
+          - "Method Monday (Revenue section, foundation for Monthly GRR/NRR)"
+          - "Monthly GRR (#382), Monthly NRR (#383) as denominator"
+          - "AC reverse-ETL (potential — declining-MRR cohort audiences)"
       labels:
         metric_id: '378'
         layer: metrics

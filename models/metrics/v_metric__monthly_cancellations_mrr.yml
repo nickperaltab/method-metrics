@@ -14,6 +14,29 @@ models:
       monthly GRR.
     config:
       materialized: view
+      meta:
+        answers: "How much MRR did Method lose from customer cancellations in each month?"
+        grain: "period-level. Underlying aggregation is customer-month."
+        filters:
+          - rule: "CompanyAccount NOT LIKE 'm11%' AND NOT LIKE 'm18%'"
+            why: "excludes internal Method accounts"
+          - rule: "Symmetric Prepay Expiry Income exclusion (CEO-confirmed 2026-04-28)"
+            why: "excludes one-time Prepay Expiry write-offs, consistent with StartMRR"
+          - rule: "TxnDate >= '2021-12-01'; excludes current incomplete month"
+            why: "data quality floor; in-progress month excluded"
+        methodology_source: "knowledge/verified-queries/int_customer_mrr.sql. Justin-verified pattern."
+        parity_verified:
+          against: "Pre-migration BQ values for 6 months (Round 4)"
+          date: "2026-05-14"
+          values: "all penny-match"
+        caveats:
+          - "Pre-FX. Each currency at face value."
+          - "Excludes one-time Prepay Expiry write-offs (per CEO methodology) — diverges from board-deck monthly retention by ~4-6bp."
+          - "Current month NOT shown."
+        used_by:
+          - "Method Monday (Revenue / Retention section)"
+          - "Monthly GRR (#382) as input"
+          - "Monthly NRR (#383) as input"
       labels:
         metric_id: '379'
         layer: metrics

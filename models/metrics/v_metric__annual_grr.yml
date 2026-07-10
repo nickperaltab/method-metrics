@@ -12,6 +12,22 @@ models:
       reconcile against board deck before external use.
     config:
       materialized: view
+      meta:
+        answers: "Annual version of Monthly GRR % (#382). Typical 76-78%."
+        grain: "Period-level fraction. Outputs as decimal (e.g., 0.965817 = 96.5817%)."
+        methodology_source: "CEO-protected family. Methodology was explicitly confirmed by Method's CEO on 2026-04-28 (symmetric Prepay Expiry exclusion). MUST NOT change without explicit CEO + Justin sign-off. Cross-model derived metric combining the MRR family inputs."
+        parity_verified:
+          against: "5 months x 4 metrics = 20 / 20 spot-check (Round 5)"
+          date: "2026-05-14"
+          values: "match to 6 decimal places"
+        caveats:
+          - "Pre-FX."
+          - "Symmetric Prepay Expiry methodology — diverges from board-deck retention by ~4-6bp."
+          - "For any number heading to the board or external reporting, reconcile against the board deck first. These numbers will not penny-match the deck."
+          - "Current month NOT shown."
+        used_by:
+          - "Method Monday (Retention section, headline metrics)"
+          - "Board reporting (with deck reconciliation)"
       labels:
         metric_id: '388'
         layer: metrics

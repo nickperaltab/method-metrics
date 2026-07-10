@@ -10,6 +10,16 @@ models:
       analysis, not as a clean "% of unique sync cohort that converted."
     config:
       materialized: view
+      meta:
+        answers: "What fraction of sync milestones progressed to conversion that month?"
+        grain: "Period-level ratio. Both numerator and denominator are account/event counts."
+        parity_verified:
+          against: "Sanity-checked against the live chart builder"
+          values: "values in 24-33% range"
+        caveats:
+          - "Uses event-grain Syncs (#55) in the denominator. Not a clean '% of sync cohort that converted' — see #55 caveats."
+        used_by:
+          - "Funnel-stage analysis"
       labels:
         metric_id: '301'
         layer: metrics

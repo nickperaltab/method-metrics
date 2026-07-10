@@ -11,6 +11,20 @@ models:
       see Monthly Cancellations ($) (#379) for MRR lost.
     config:
       materialized: view
+      meta:
+        answers: "How many distinct Method customers canceled in each month?"
+        grain: "customer-level (uses DISTINCT). A customer with multiple canceling accounts in the same month counts ONCE."
+        filters:
+          - rule: "Inherits from int_cancellations"
+            why: "carries the upstream cancellation filters"
+        parity_verified:
+          against: "6 months (Round 4)"
+          date: "2026-05-14"
+          values: "penny-match"
+        caveats:
+          - "Account-count churn, not dollar churn. For MRR-lost-to-cancellations, use Monthly Cancellations ($) (#379)."
+        used_by:
+          - "Method Monday (Retention section)"
       labels:
         metric_id: '59'
         layer: metrics

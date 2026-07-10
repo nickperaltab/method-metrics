@@ -1,0 +1,59 @@
+{
+  "nodes": {
+    "model.method_metrics.v_metric__trials": {
+      "name": "v_metric__trials",
+      "resource_type": "model",
+      "original_file_path": "models/metrics/v_metric__trials.sql",
+      "description": "Count of new trial signups per month. Excludes internal test accounts.",
+      "meta": {
+        "answers": "How many new trials did we get per month?",
+        "grain": "account-level"
+      },
+      "config": {
+        "meta": null,
+        "labels": {
+          "metric_id": "54",
+          "status": "live",
+          "verified_at": "2026-05-01"
+        }
+      }
+    },
+    "model.method_metrics.v_metric__syncs": {
+      "name": "v_metric__syncs",
+      "resource_type": "model",
+      "original_file_path": "models/metrics/v_metric__syncs.sql",
+      "description": "Count of QuickBooks sync events per month! Event grain, not account grain.",
+      "meta": {},
+      "config": {
+        "meta": {
+          "answers": "How many sync events happened per month?",
+          "grain": "event-level"
+        },
+        "labels": {
+          "metric_id": "55",
+          "status": "under_review"
+        }
+      }
+    },
+    "model.method_metrics.int_trials": {
+      "name": "int_trials",
+      "resource_type": "model",
+      "original_file_path": "models/intermediate/int_trials.sql",
+      "description": "Intermediate trial rows.",
+      "meta": {},
+      "config": { "meta": null, "labels": null }
+    }
+  },
+  "sources": {
+    "source.method_metrics.revenue.Account": {
+      "name": "Account",
+      "resource_type": "source"
+    }
+  },
+  "parent_map": {
+    "model.method_metrics.v_metric__trials": ["model.method_metrics.int_trials"],
+    "model.method_metrics.v_metric__syncs": ["model.method_metrics.int_trials"],
+    "model.method_metrics.int_trials": ["source.method_metrics.revenue.Account"],
+    "source.method_metrics.revenue.Account": []
+  }
+}

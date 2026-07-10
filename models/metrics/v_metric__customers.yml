@@ -18,6 +18,27 @@ models:
       partial values until month-end.
     config:
       materialized: view
+      meta:
+        answers: "How many unique paying Method customers had revenue activity in each month?"
+        grain: "customer-level (EntityRecordID). A customer with multiple Method accounts counts ONCE per month."
+        filters:
+          - rule: "IsActive = TRUE"
+            why: "applied to match Supabase's canonical filter. NOTE: this is redundant in practice — int_customers only contains customer-months with revenue activity, so all rows have IsActive = TRUE. Filter applied anyway for definitional consistency."
+          - rule: "Partner != 'Method Integration' (upstream in int_customers)"
+            why: "internal Method partner accounts already excluded upstream"
+        methodology_source: "Existing BQ view int_customers + Supabase metric #373 semantic definition."
+        parity_verified:
+          against: "Pre-migration BQ values for 12 months (Jun 2025 – May 2026) (Round 3b)"
+          date: "2026-05-12"
+          values: "all penny-match"
+        caveats:
+          - "Customer-grain. A customer with multiple Method accounts counts ONCE."
+          - "Includes any customer with revenue activity in the month — not separately broken out into 'new customer this month' vs 'existing.' For new customers specifically, use New Customers — Actual (#39)."
+          - "Current month is incomplete; partial values for the in-progress month."
+        used_by:
+          - "Method Monday (Revenue section)"
+          - "ARPC calculations"
+          - "Customer count for ratio metrics"
       labels:
         metric_id: '373'
         layer: metrics

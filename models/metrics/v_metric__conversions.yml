@@ -10,6 +10,22 @@ models:
       partner rows. Foundation for Conversion Rate metrics (#301, #302).
     config:
       materialized: view
+      meta:
+        answers: "How many Method accounts converted from trial to paying (received their first SaaS invoice) in each month?"
+        grain: "account-level. A customer with 2 converted accounts contributes 2 conversions."
+        filters:
+          - rule: "Inherits from int_conversions — excludes IsConversionException accounts and Method Integration partners"
+            why: "excludes test accounts and internal partner rows"
+        parity_verified:
+          against: "6 months (Round 4)"
+          date: "2026-05-14"
+          values: "penny-match"
+        caveats:
+          - "Account-grain by design. For unique-customer conversion counts, use Customers (#373) cohort analyses."
+        used_by:
+          - "Method Monday (Conversion section)"
+          - "Sync-to-Conversion Rate (#301)"
+          - "Trial-to-Conversion Rate (#302)"
       labels:
         metric_id: '56'
         layer: metrics

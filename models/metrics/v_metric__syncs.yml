@@ -14,6 +14,25 @@ models:
       Foundation for Sync Rate (#300).
     config:
       materialized: view
+      meta:
+        answers: "How many sync milestone events were recorded in the Funnel pipeline in each month? (At account-grain by intent — see caveat below.)"
+        grain: "account-grain by intent (Method tracks funnel metrics at account level). Each row in Funnel is a sync milestone event. See caveats for the data-vs-intent nuance."
+        filters:
+          - rule: "EventType = 'Sync'"
+            why: "filters Funnel to sync milestone events only (not all activity)"
+        methodology_source: "Existing BQ view int_syncs, pre-dbt convention. Definition unchanged in migration."
+        parity_verified:
+          against: "Pre-migration BQ values (Round 3a)"
+          date: "2026-05-08"
+          values: "penny-match for 10+ months"
+        caveats:
+          - "Account-grain by intent — but Funnel's data keys events to EntityRecordID, not RecordID. Funnel doesn't carry per-account identifiers. In practice this works out because most customers have one account, and Funnel events are tied to the lifecycle of an entity. A customer with 2 accounts will typically produce 1 sync event (one of their accounts hit the milestone), not 2."
+          - "~13% inflation from re-sync events: 91% of entities have exactly 1 sync event, 9% have 2+ (re-syncs after disconnect/reconnect). Method accepts this as part of the metric definition — re-syncs count."
+          - "For an exact 'count of unique entities that ever synced this month,' use COUNT(DISTINCT EntityRecordID) instead — that's a different metric not currently in the live set."
+        used_by:
+          - "Method Monday (Engagement section)"
+          - "Sync Rate (#300) as numerator"
+          - "AI chart builder"
       labels:
         metric_id: '55'
         layer: metrics

@@ -138,21 +138,36 @@ ORDER BY e.period DESC
 
 If any month diverges: **stop, investigate, don't proceed.** The dbt model has drift from the Supabase canonical.
 
-### Step 6 — Document in metric-definitions.md
+### Step 6 — Author the definition as the model's `meta:` block
 
-Add a complete entry to `docs/metric-definitions.md` §4 using the template at §1. Include:
+Approved definition content lives in the model YAML `meta:` block (source of truth as of 2026-07-10), NOT in `docs/metric-definitions.md` (that doc is now the authoring template + process + audit checklist; its per-metric entries are historical).
 
-- "What it answers in one sentence" (consumer-facing)
-- "The math" (the actual SQL)
-- "Grain" (event / account / customer / period — explicit, with example)
-- "Filters / exclusions" (every WHERE with WHY)
-- "Methodology source" (where the definition came from)
-- "Parity-verified against" (snapshot date + how many months matched)
-- "Status" (`live` only if audit checklist passes; else `under_review`)
-- "Known caveats" (FX, in-progress month, account-vs-customer grain, etc.)
-- "Used by" (Method Monday section, AC, etc.)
+Add a `meta:` block under `config:` in `models/metrics/v_metric__<slug>.yml`, alongside `labels:`, using the schema from the metrics-MCP spec (`docs/superpowers/specs/2026-07-10-metrics-mcp-design.md`). Fields the definition leaves blank stay absent (no empty keys, no invented content):
 
-Run the §3 audit checklist:
+```yaml
+    config:
+      materialized: view
+      meta:
+        answers: "<plain-English business question — one sentence>"
+        grain: "<customer-level (EntityRecordID) | account-level | event-level | period-only — explicit, with example>"
+        filters:
+          - rule: "<WHERE clause>"
+            why: "<why it exists>"
+        methodology_source: "<where the definition came from>"
+        parity_verified:
+          against: "<source>"
+          date: "YYYY-MM-DD"
+          values: "<what matched — snapshot date + how many months>"
+        limitations: ["<hard warnings — directional-only, small-sample, etc.>"]
+        caveats: ["<FX, in-progress month, account-vs-customer grain, etc.>"]
+        used_by: ["<Method Monday section, AC, scorecard, etc.>"]
+      labels:
+        ...
+```
+
+The `answers` sentence maps to "What it answers in one sentence." The `.sql` file IS the math — do NOT copy SQL into `meta:`. Set `labels.status: live` only if the audit checklist passes; else `under_review`.
+
+Run the §3 audit checklist from `docs/metric-definitions.md`:
 - Does the math match the name?
 - Grain match?
 - Event vs entity match?
@@ -239,6 +254,14 @@ For Phase 1.5 we found 11 downstream BQ views, 13 Supabase rows, 4 scorecard con
 
 **Default to soft-alias before hard-drop.** It's the only way to safely handle external systems (Looker, personal saved queries, scheduled jobs) that we have no visibility into.
 
+### "I committed a secret to a public repo"
+
+`method-metrics` is **public** (it deploys to GitHub Pages). A committed key, token, or credential is exposed the moment you push. A gitleaks gate now runs automatically on every `git commit` (native `.git/hooks/pre-commit` + a Claude PreToolUse hook), but treat it as a backstop, not a license to be careless:
+
+- Never stage `~/.dbt/profiles.yml`, service-account JSON, or any file holding a real key/token.
+- The Supabase **anon** key in `tracker.html` is fine (RLS-protected, see CLAUDE.md). A service-role key is NOT.
+- If the gate blocks a confirmed false positive: `git commit --no-verify`.
+
 ---
 
 ## Templates
@@ -289,6 +312,7 @@ The BQ description IS the consumer's window. Treat it as such — short, sharp, 
 - [ ] Entry in `docs/metric-definitions.md` §4 is complete
 - [ ] Audit checklist (§3) all passed
 - [ ] If renaming/replacing: Supabase rows updated, builder code updated, downstream views updated, soft-aliases in place
+- [ ] No secrets staged — gitleaks pre-commit gate passed (repo is PUBLIC)
 - [ ] Status flipped to `live` (in both the yml `labels.status` and the Supabase row)
 
 ---

@@ -10,6 +10,25 @@ models:
       Inherits the v_customer_mrr Prepay Expiry methodology.
     config:
       materialized: view
+      meta:
+        answers: "How much MRR did Method lose from existing customers paying less than the prior month (but not canceling) in each month?"
+        grain: "period-level."
+        filters:
+          - rule: "Same as Monthly Cancellations #379 (inherited from int_customer_mrr)"
+            why: "internal-account exclusion, symmetric Prepay Expiry exclusion, TxnDate floor, current-month exclusion"
+        methodology_source: "knowledge/verified-queries/int_customer_mrr.sql. Justin-verified."
+        parity_verified:
+          against: "6 months (Round 4)"
+          date: "2026-05-14"
+          values: "penny-match"
+        caveats:
+          - "Pre-FX."
+          - "Distinction from Cancellations: downgrade = customer pays less; cancellation = customer pays zero. Both reduce MRR; tracked separately."
+          - "Current month NOT shown."
+        used_by:
+          - "Method Monday (Revenue / Retention section)"
+          - "Monthly GRR (#382) as input"
+          - "Monthly NRR (#383) as input"
       labels:
         metric_id: '380'
         layer: metrics

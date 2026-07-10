@@ -24,6 +24,25 @@ models:
       that synced," a different metric would be needed.
     config:
       materialized: view
+      meta:
+        answers: "What fraction of trial accounts produced a sync milestone in each month?"
+        grain: "account-grain by intent. Period-level output (one value per month). Both numerator (Syncs) and denominator (Trials) are intended at account-grain — see Syncs (#55) caveats for the Funnel-data nuance."
+        filters:
+          - rule: "inherits filters from Trials (#54) and Syncs (#55)"
+            why: "Sync Rate is a cross-model ratio of the two"
+        methodology_source: "Cross-model ratio defined in Supabase (#300). Numerator = #55 Syncs; denominator = #54 Trials."
+        parity_verified:
+          against: "Reconstructed-from-source for 10 months — SAFE_DIVIDE(SUM(syncs), SUM(trials)) vs v_metric__sync_rate (Round 3a)"
+          date: "2026-05-08"
+          values: "matches to 6 decimal places"
+        caveats:
+          - "Account-grain by intent (denominator is account-grain Trials; numerator is Funnel-entity-grain Syncs — close enough for funnel reporting since most customers have one account)."
+          - "~13% inflation in numerator from re-sync events (see Syncs #55 caveats). This is part of the metric definition — re-syncs contribute to the rate."
+          - "'Sync Rate' here is 'syncs per trial' volume ratio at account/event grain. Not the same as '% of unique customers who ever synced' — that's a different metric."
+        used_by:
+          - "Method Monday (Conversion section)"
+          - "AI chart builder"
+          - "Forecast / budget comparison"
       labels:
         metric_id: '300'
         layer: metrics

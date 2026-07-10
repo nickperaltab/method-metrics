@@ -1,10 +1,12 @@
 # Method Metric Definitions
 
-**Purpose:** Every metric Method publishes has its definition documented here, using the template in §1. This is the single source of truth for *what each metric means* — not just the SQL.
+> **Source of truth moved (2026-07-10):** Approved definition content now lives in each model's YAML `meta:` block in `models/metrics/` — that is the single source of truth for what each metric means. This doc remains the **authoring template (§1)**, **process (§2)**, and **audit checklist (§3)**. The per-metric entries below (§4 onward) are **historical reference as of 2026-07-10** — they were the source the `meta:` blocks were ported from.
 
-**Why this exists:** SQL that compiles and parity-checks against historical values can still be answering a different question than the metric's name implies (we caught this on Syncs and Sync Rate in May 2026 — both ship as account-event counts but the name implies entity counts). This doc forces a name-vs-math reconciliation before a metric goes live.
+**Purpose:** This doc holds the template, process, and audit checklist used when defining or migrating a metric. The definition itself is authored as the model's `meta:` block (see §1 for the schema).
 
-**Rule (also in CLAUDE.md):** A metric does not get `status: live` in dbt + Supabase until it has a filled-in definition here.
+**Why this exists:** SQL that compiles and parity-checks against historical values can still be answering a different question than the metric's name implies (we caught this on Syncs and Sync Rate in May 2026 — both ship as account-event counts but the name implies entity counts). This process forces a name-vs-math reconciliation before a metric goes live.
+
+**Rule (also in CLAUDE.md):** A metric does not get `status: live` in dbt + Supabase until it has a filled-in definition (authored as the model's `meta:` block).
 
 ---
 

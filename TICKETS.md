@@ -74,6 +74,16 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 
 ## Improvements
 
+### dbt as Definition Source of Truth — Frontend Reads Manifest Directly
+**Status:** Open (proposed 2026-07-10)
+Make dbt the single source of truth for metric definitions; demote Supabase `metrics` from a definition store to a pointer-registry. Today Supabase holds two kinds of thing: **definitional** (`chart_sql`, `semantic_*`, `view_definition`, `depends_on` — duplicates/drifts from dbt) and **workflow** (`status`, `priority`, `assigned_to`, `verified_at`, `notes` — legit app state). Definitions move fully into dbt (model SQL + schema.yml descriptions + the prose from `docs/metric-definitions.md`); Supabase keeps only workflow fields plus a pointer to each metric's dbt model (name / `unique_id`).
+- **Chosen approach:** frontend reads the dbt `manifest.json` (or a slimmed projection) directly as a static asset — the no-build tracker/chart-builder resolve definitions from the manifest instead of Supabase columns. Extends the existing "pointer not copy" Inspector direction.
+- Depends on folding `docs/metric-definitions.md` prose into dbt model/column descriptions so the manifest carries the full definition (what-it-answers / grain / filters / caveats).
+- Visual definitions catalog (click any metric → definition, formula, dependency tree, SQL) is the read-only view over this — low priority, view-only.
+- Brainstorm/spec before building per repo workflow.
+
+---
+
 ### Labs — Live-Query Exploration Pages (Lab 01: Revenue Architecture Story)
 **Status:** Open (proposed 2026-06-11)
 A `/labs` route in the builder for narrative data explorations ("story" pages: chapters, verdicts, embedded charts) that render **every number live from BigQuery behind the existing OAuth**. Hard rule, because the repo is public: commit narrative structure + SQL only — no values, dollar figures, or customer identifiers in source; prose must be number-free, with all stats computed client-side at view time (same security model as the tracker).

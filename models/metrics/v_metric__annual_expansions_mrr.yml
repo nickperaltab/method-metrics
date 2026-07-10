@@ -10,6 +10,26 @@ models:
       revenue is tracked separately. Foundation for annual NRR (#389).
     config:
       materialized: view
+      meta:
+        answers: "Same as Monthly Expansions ($) (#381), but at annual cohort grain — reported monthly via trailing comparison."
+        grain: "Period-level (annual cohort comparison, reported monthly)."
+        filters:
+          - rule: "Symmetric Prepay Expiry exclusion (CEO-confirmed)"
+            why: "same as int_customer_mrr methodology"
+          - rule: "Internal Method accounts excluded"
+            why: "same as int_customer_mrr methodology"
+        methodology_source: "Same as int_customer_mrr — CEO-confirmed symmetric Prepay Expiry exclusion, internal Method accounts excluded."
+        parity_verified:
+          against: "5 months x 4 metrics = 20 / 20 (Round 4)"
+          date: "2026-05-14"
+          values: "penny-match"
+        caveats:
+          - "Pre-FX."
+          - "Annual = trailing 12-month cohort comparison."
+          - "Current month NOT shown."
+          - "Diverges from board-deck annual retention by ~4-6bp per the symmetric methodology."
+        used_by:
+          - "Method Monday (Revenue section, foundation for Annual GRR #388 / NRR #389)"
       labels:
         metric_id: '387'
         layer: metrics

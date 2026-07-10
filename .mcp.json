@@ -10,6 +10,10 @@
       "env": {
         "GEMINI_CLI_WORKSPACE_FORCE_FILE_STORAGE": "true"
       }
+    },
+    "metrics": {
+      "command": "node",
+      "args": ["/Users/nicolas/Desktop/method-metrics/mcp/metrics/dist/index.js"]
     }
   }
 }

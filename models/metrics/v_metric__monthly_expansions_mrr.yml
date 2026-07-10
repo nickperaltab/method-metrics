@@ -11,6 +11,25 @@ models:
       for monthly NRR.
     config:
       materialized: view
+      meta:
+        answers: "How much MRR did Method gain from existing customers paying more than the prior month in each month?"
+        grain: "period-level."
+        filters:
+          - rule: "Same as Monthly Cancellations #379 (inherited from int_customer_mrr)"
+            why: "internal-account exclusion, symmetric Prepay Expiry exclusion, TxnDate floor, current-month exclusion"
+        methodology_source: "knowledge/verified-queries/int_customer_mrr.sql. Justin-verified."
+        parity_verified:
+          against: "6 months (Round 4)"
+          date: "2026-05-14"
+          values: "penny-match"
+        caveats:
+          - "Pre-FX."
+          - "Existing customers ONLY — net-new customer revenue lives in a different metric (Start MRR contributes new customers separately)."
+          - "Current month NOT shown."
+        used_by:
+          - "Method Monday (Revenue / Retention section)"
+          - "Monthly NRR (#383) as input — the 'N' (net) part of NRR comes from expansions"
+          - "(Not used in GRR — gross retention excludes expansion)"
       labels:
         metric_id: '381'
         layer: metrics

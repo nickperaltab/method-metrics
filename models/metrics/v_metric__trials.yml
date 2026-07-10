@@ -20,6 +20,28 @@ models:
       use Customers (#373).
     config:
       materialized: view
+      meta:
+        answers: "How many Method accounts began a trial in each month?"
+        grain: "account-level (by design). One row per Method account that began a trial. A customer with 2 trial accounts contributes 2 trials. This is canonical for Method's funnel reporting, not a flaw."
+        filters:
+          - rule: "IsConversionException = FALSE"
+            why: "excludes accounts flagged as not real conversions (test accounts, exception cases)"
+          - rule: "Partner != 'Method Integration'"
+            why: "excludes internal Method Integration partner rows"
+          - rule: "SignupDate != DATE('0001-01-01')"
+            why: "excludes the 'no trial' sentinel value"
+        methodology_source: "Existing BQ view int_trials, pre-dbt convention. Definition unchanged in migration; dbt now owns the view."
+        parity_verified:
+          against: "Pre-migration BQ values for the 5 most recent months (Sep 2025 – May 2026)"
+          date: "2026-05-08"
+          values: "all penny-match (Round 3a)"
+        caveats:
+          - "Account-grain by design — customers with multiple accounts contribute multiple trials. This is intentional. Use Customers (#373) for unique-customer counts."
+          - "Current month is incomplete; partial values for the in-progress month."
+        used_by:
+          - "Method Monday (Acquisition section)"
+          - "AI chart builder"
+          - "Trial-to-Conversion Rate (#302) as denominator"
       labels:
         metric_id: '54'
         layer: metrics
