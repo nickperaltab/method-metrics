@@ -22,11 +22,11 @@ function Delta({ v }) {
   );
 }
 
-// Signed absolute difference (Trajectory − Forecast). Green ahead, red behind.
-function AbsDiff({ v }) {
+// Trajectory as a % of forecast (attainment): trajectory / forecast.
+// >= 100% = at/above plan (green), below = behind (red).
+function FcstAttain({ v }) {
   if (v == null) return <span style={{ color: '#9ca3af' }}>—</span>;
-  const up = v >= 0;
-  return <span style={{ color: up ? '#059669' : '#dc2626' }}>{up ? '+' : ''}{v.toFixed(1)}</span>;
+  return <span style={{ color: v >= 1 ? '#059669' : '#dc2626' }}>{(v * 100).toFixed(1)}%</span>;
 }
 
 const fmt = (d) =>
@@ -123,7 +123,7 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
             <tr style={{ textAlign: 'right', color: '#6b7280', fontSize: 12 }}>
               <th style={{ textAlign: 'left', padding: '8px 0' }}>Channel</th>
               <th>MTD Actual</th><th>Trajectory</th>
-              {!isRate && <><th>Forecast</th><th>vs Fcst</th></>}
+              {!isRate && <><th>Forecast</th><th>% of Fcst</th></>}
               <th>{cmp.label}</th><th>{cmp.deltaLabel}</th>
             </tr>
           </thead>
@@ -140,7 +140,7 @@ export default function ChannelTrajectoryScorecard({ cfg, bqConnected, onConnect
                   <td>{num(r.trajectory, isRate)}</td>
                   {!isRate && <>
                     <td>{num(r.forecast, false)}</td>
-                    <td><AbsDiff v={r.trajectory == null || r.forecast == null ? null : r.trajectory - r.forecast} /></td>
+                    <td><FcstAttain v={r.forecast && r.trajectory != null ? r.trajectory / r.forecast : null} /></td>
                   </>}
                   <td>{num(r[cmp.basis], isRate)}</td>
                   <td><Delta v={r[cmp.delta]} /></td>
