@@ -54,8 +54,8 @@ unit_tests:
           free_attended: false
           is_customized: true
           ps_gross: 500
-          has_dep: true
-          is_prepay: true
+          ever_had_dep: true
+          ever_prepay: true
           industry_l1: 'Construction'
           retained_1mo: true
           eligible_1mo: true
@@ -80,8 +80,8 @@ unit_tests:
           free_attended: false
           is_customized: false
           ps_gross: 0
-          has_dep: false
-          is_prepay: false
+          ever_had_dep: false
+          ever_prepay: false
           industry_l1: 'Unclassified'
           retained_1mo: false
           eligible_1mo: true
@@ -119,3 +119,14 @@ models:
           - accepted_values:
               arguments:
                 values: ['Solo', 'Small (2-4)', 'SMB (5-10)', 'Mid (11+)', 'Unknown']
+      - name: ever_had_dep
+        description: >
+          TRUE if the customer EVER had a DEP module on their subscription
+          (LOGICAL_OR(HasDEP) over int_customers). Ever-flag, not point-in-time.
+          Renamed from has_dep -> ever_had_dep 2026-07-10 (name-vs-math fix) to make
+          the "ever" semantics explicit; zero logic change.
+      - name: ever_prepay
+        description: >
+          TRUE if the customer EVER had a SaaS line with SaaSPayType = 'Prepay' and a
+          non-zero amount in TransLineFlattened. Ever-flag, not point-in-time. Renamed
+          from is_prepay -> ever_prepay 2026-07-10 (name-vs-math fix); zero logic change.

@@ -1,6 +1,9 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
 # Directional metric definition for "Channel ARR" (marketing Revenue-by-Channel).
 # See docs/metric-definitions.md "Channel ARR" for the full definition + the
 # documented Custdatlastsaasamount carve-out.
+# [REVIEW: on exposure, ensure the DIRECTIONAL / run-rate label rides prominently on
+#  the surface — it must not be quoted as accounting-grade ARR.]
 
 version: 2
 

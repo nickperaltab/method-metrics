@@ -1,3 +1,4 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
 version: 2
 
 models:
@@ -8,7 +9,11 @@ models:
       attribution weight summed. The frontend windows this by the picked range to
       compute MTD / trajectory / prior-month / last-year. Trials from
       Account.SignupDate; syncs from Funnel EventType='Sync'. Fractional
-      multi-touch attribution (Att_* summed directly).
+      multi-touch attribution (Att_* summed directly) — weights can be non-integer.
+      Supporting/building-block model; the month-level int_channel_funnel_trajectory
+      documents the full method.
+      [REVIEW: is the daily grain meant to be a consumer-facing surface, or purely
+      internal plumbing behind the month-level trajectory view?]
     columns:
       - name: event_date
         description: Signup date (trials) or sync date (syncs).

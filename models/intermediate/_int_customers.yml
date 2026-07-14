@@ -1,0 +1,92 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
+version: 2
+
+models:
+  - name: int_customers
+    description: |
+      Customer-month spine. One row per (Month, EntityRecordID) for every paying
+      customer that had SaaS activity that month (from 2024-01-01 onward). This is
+      the dimension backbone the rest of the stack joins to for segment / tier /
+      DEP / attribution / country slices.
+
+      Grain: customer-month at the EntityRecordID level. A "customer" is an
+      EntityRecordID, which can own multiple CompanyAccounts (see AccountCount) —
+      this is the dbt-stack customer definition (matches Customers #373), NOT the
+      CompanyAccount-as-customer convention used in some legacy Excel decks.
+
+      Migrated from an orphaned BQ view (2026-06-04). The dimension picks
+      (AttributionChannel / SignupCountry / Vertical / SyncType) were made
+      deterministic by adding a CompanyAccount ASC tiebreaker to the founding-account
+      selection — see the .sql header for the full determinism-fix rationale.
+
+      Excludes internal Method Integration partner rows and conversion-exception
+      accounts. HasDEP / Segment / UserTier here are per-customer-month
+      (point-in-time / honest), unlike the "ever"-style rollups in int_motion_funnel.
+    config:
+      materialized: table
+    columns:
+      - name: Month
+        description: First day of the customer-activity month (DATE_TRUNC to month).
+        tests: [not_null]
+      - name: EntityRecordID
+        description: >
+          Stable numeric customer ID (customer grain). One EntityRecordID can own
+          multiple CompanyAccounts. Use for temporal joins — Company strings drift
+          on rename.
+        tests: [not_null]
+      - name: EntityFullName
+        description: Customer display name, joined from revenue.Entity on RecordID.
+      - name: AccountCount
+        description: >
+          Distinct CompanyAccounts this customer billed under that month. >1 means
+          one customer spanning multiple Method accounts.
+      - name: TotalUsers
+        description: Sum of UserPaidCount across the customer's accounts that month (seat count).
+      - name: HasDEP
+        description: >
+          TRUE if any of the customer's accounts had a DEP line (Premium App /
+          Enhancement Plan with nonzero SaaS) that month. Per-customer-month /
+          point-in-time — this is the honest "on DEP this month" flag. (The
+          int_motion_funnel ever_had_dep rollup is "ever had DEP" and is a different
+          semantic — do not conflate.)
+      - name: UserTier
+        description: >
+          Seat band from TotalUsers: Solo (1), Small Team (2-3), Team (4+).
+      - name: Segment
+        description: >
+          Product/pricing segment: Team AI Plus (HasDEP), 4+ no DEP (4+ seats,
+          no DEP), 2-3 no DEP, Solo no DEP. Derived from HasDEP + TotalUsers.
+      - name: AttributionChannel
+        description: >
+          Single-touch acquisition channel of the founding account (earliest
+          FirstSaaSInvoiceTxnDate, CompanyAccount ASC tiebreak), from the Account
+          Att_* flags (SEO, PPC, OPN, Social, Email, Referral, Direct, Partners,
+          Content, Remarketing, Other, None; Unknown when no flag set). This is the
+          single-touch dimension — for real multi-touch credit use
+          int_attribution_fractional.
+      - name: SignupCountry
+        description: SignupCountry of the founding account (first non-null, deterministic pick).
+      - name: Vertical
+        description: Vertical of the founding account (first non-null, deterministic pick).
+      - name: SyncType
+        description: SyncType of the founding account (first non-null, deterministic pick).
+      - name: IsActive
+        description: >
+          ⚠️ Always TRUE by construction — every row here is already a paying
+          customer-month, so this is NOT a real state filter. Do not read it as
+          "active vs inactive"; there are no inactive rows to filter against.
+          [REVIEW: keep this column at all, or drop it since it carries no
+          information?]
+      - name: IsNew
+        description: >
+          TRUE for the customer's first observed month (no prior month row for this
+          EntityRecordID). New-customer flag.
+      - name: IsChurned
+        description: >
+          ⚠️ Means "no revenue row in the NEXT month" (last observed month, via
+          LEAD), NOT "cancelled." Method hard-holds non-payers before cancelling,
+          so a customer with no CancellationDate can still show IsChurned here, and
+          vice-versa (see CLAUDE.md "Hard-hold billing state"). Treat as a
+          revenue-presence proxy for churn, not a lifecycle cancellation event.
+          The current (max) month is forced to FALSE to avoid flagging the
+          in-progress month as churn.

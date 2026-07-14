@@ -971,8 +971,8 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 - The censor month defaults to the last complete calendar month (`DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH)`). It can be overridden via the `motion_censor_month` dbt variable for reproducible backtesting.
 
 **DEP and prepay are independent dimensions:**
-- `has_dep`: `LOGICAL_OR(HasDEP)` from `int_customers` — TRUE if the customer ever had a DEP module on their subscription.
-- `is_prepay`: TRUE if the customer ever had a SaaS line with `SaaSPayType = 'Prepay'` and a non-zero amount in `TransLineFlattened`. These are measured on the subscription line, not on any prepay-drawdown or ledger table.
+- `ever_had_dep` (renamed from `has_dep` 2026-07-10): `LOGICAL_OR(HasDEP)` from `int_customers` — TRUE if the customer EVER had a DEP module on their subscription. Ever-flag, not point-in-time.
+- `ever_prepay` (renamed from `is_prepay` 2026-07-10): TRUE if the customer EVER had a SaaS line with `SaaSPayType = 'Prepay'` and a non-zero amount in `TransLineFlattened`. These are measured on the subscription line, not on any prepay-drawdown or ledger table.
 - DEP and prepay are separate flags; a customer can have one, both, or neither. They are not derived from each other.
 
 **Industry dimension:** sourced from `v7_classification.v_entity_primary_label` (`l1`). This is current-state classification; reclassifications backfill into historical rows.

@@ -1,0 +1,35 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
+version: 2
+
+models:
+  - name: int_channel_forecast
+    description: |
+      Per-channel monthly forecast for trials and syncs, materialized as a native BQ
+      table. One row per (metric, forecast_date, channel). A pass-through UNION of the
+      two Sheets-federated forecast views (v_trials_forecast_channel +
+      v_syncs_forecast_channel).
+
+      Why materialized: the forecast views federate over Google Sheets (Drive), and
+      reading them from the browser frontend requires a Drive OAuth scope the app does
+      not request — which 403'd users. dbt reads the Sheet once at build time (its
+      service account has Drive access) and lands this plain table the frontend can
+      join scope-free. Refreshed on the normal dbt run cadence.
+
+      ⚠️ Pass-through: the numbers are only as good as the upstream forecast Sheet — if
+      the Sheet is wrong or stale, this table is wrong. Values reflect the last dbt
+      build, not live edits to the Sheet.
+    config:
+      materialized: table
+    columns:
+      - name: metric
+        description: "Which forecast: trials | syncs."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['trials', 'syncs']
+      - name: forecast_date
+        description: First day of the forecast month (from the source view's forecast_date).
+      - name: channel
+        description: Attribution channel (from the source view's AttributionChannel).
+      - name: forecast_value
+        description: Forecasted count for the (metric, month, channel), sourced from the forecast Sheet.

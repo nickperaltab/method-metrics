@@ -37,7 +37,7 @@ conv_mrr AS (
     ON mr.EntityRecordID = c.EntityRecordID AND mr.Month = c.convert_month
 ),
 dep AS (
-  SELECT EntityRecordID, LOGICAL_OR(HasDEP) AS has_dep
+  SELECT EntityRecordID, LOGICAL_OR(HasDEP) AS ever_had_dep
   FROM {{ ref('int_customers') }}
   GROUP BY 1
 ),
@@ -48,7 +48,7 @@ sizes AS (
 ),
 prepay AS (
   SELECT EntityRecordID,
-    LOGICAL_OR(InvoiceGrouping = 'SaaS' AND SaaSPayType = 'Prepay' AND SaaSAmount != 0) AS is_prepay
+    LOGICAL_OR(InvoiceGrouping = 'SaaS' AND SaaSPayType = 'Prepay' AND SaaSAmount != 0) AS ever_prepay
   FROM {{ source('revenue', 'TransLineFlattened') }}
   GROUP BY 1
 ),
@@ -78,8 +78,8 @@ SELECT
   COALESCE(pt.free_attended, FALSE)                AS free_attended,
   COALESCE(ps.is_customized, FALSE)                AS is_customized,
   COALESCE(ps.ps_gross, 0)                         AS ps_gross,
-  COALESCE(d.has_dep, FALSE)                        AS has_dep,
-  COALESCE(pp.is_prepay, FALSE)                     AS is_prepay,
+  COALESCE(d.ever_had_dep, FALSE)                   AS ever_had_dep,
+  COALESCE(pp.ever_prepay, FALSE)                   AS ever_prepay,
   COALESCE(ind.l1, 'Unclassified')                  AS industry_l1,
   -- customer size bucket derived from peak user count
   CASE

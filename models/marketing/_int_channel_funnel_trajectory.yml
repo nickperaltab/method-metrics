@@ -1,3 +1,4 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
 version: 2
 
 models:
@@ -5,8 +6,26 @@ models:
     description: >
       Per channel × metric (trials/syncs/sync_rate): current-month MTD (excl
       today), calendar-day linear trajectory, prior-month full, last-year full,
-      and YoY/MoM %. Fractional multi-touch attribution. Trials from Account;
-      syncs from Funnel EventType='Sync'. Recomputes live against CURRENT_DATE().
+      and YoY/MoM %. Fractional multi-touch attribution. Trials from Account
+      (SignupDate); syncs from Funnel EventType='Sync' (deliberately NOT
+      CustDatFirstSyncCompleted). Recomputes live against CURRENT_DATE(). Backs the
+      Channel Trajectory scorecard (Labs); status pending, not flipped to live.
+      Parity-verified against the Looker Marketing Dashboard PDF (Jul 1–8 2026).
+
+
+      ⚠️ Use with care:
+
+      - Trajectory is a linear run-rate projection (mtd/days_elapsed*days_in_month)
+        — noisy early in the month when few days have elapsed.
+
+      - Fractional multi-touch attribution means channel values can be non-integers
+        (an account touched by PPC+SEO contributes 0.5 to each; e.g. 14.5 syncs).
+
+      - Email has NO Funnel sync attribution (Att_Email exists on Account/trials but
+        not on Funnel/syncs), so Email syncs and Email sync_rate are null.
+
+      - Trajectory method is calendar-day linear, NOT the prior-month-shape method
+        used for Net SaaS.
     columns:
       - name: metric
         description: "trials | syncs | sync_rate"

@@ -1,3 +1,4 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
 version: 2
 
 models:
@@ -7,8 +8,14 @@ models:
       columns per (channel × first-invoice month) computed from v_channel_arr (on
       the int_attribution_fractional real-multi-touch primitive). "SaaS" is the
       run-rate (Custdatlastsaasamount) allocated by fractional attribution — NOT
-      invoiced revenue, does not tie to RevCogs. CAD ARR baked at a fixed 1.33.
-      Penny-matched to the Looker "Revenue by Channel" dashboard (May 2026).
+      invoiced revenue, does not tie to RevCogs. CAD ARR baked at a fixed 1.33 (stale
+      if the USD→CAD rate moves). Penny-matched to the Looker "Revenue by Channel"
+      dashboard (May 2026).
+
+      Presentation layer only — it duplicates v_channel_arr with formatting + a baked
+      FX rate. For definition questions prefer v_channel_arr itself.
+      [REVIEW: worth exposing at all as a definition surface, or keep internal since
+      it's display formatting over v_channel_arr?]
     config:
       materialized: view
       labels:

@@ -1,3 +1,6 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
+# [REVIEW: expose as a consumer surface, or keep as a supporting primitive that
+#  consumers reach only through v_channel_arr? Docs are already consumer-grade.]
 version: 2
 
 models:

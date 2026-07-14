@@ -34,7 +34,7 @@ SELECT
     WHEN Att_None = 1 THEN 'None'
     ELSE 'Unknown'
   END AS AttributionChannel
-FROM `project-for-method-dw.revenue.Account`
+FROM {{ source('revenue', 'Account') }}
 WHERE IsConversionException = FALSE
   AND Partner != 'Method Integration'
   AND SignupDate != DATE('0001-01-01')

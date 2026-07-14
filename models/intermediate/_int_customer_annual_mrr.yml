@@ -1,0 +1,87 @@
+# DRAFT 2026-07-10 — definitions drafted from SQL + knowledge docs; pending Nic review before exposure.
+version: 2
+
+models:
+  - name: int_customer_annual_mrr
+    description: |
+      Per-customer annual-cohort MRR with movement classification. Pairs month M
+      against M-12 (12-month offset), unlike int_customer_mrr which pairs M vs M-1.
+      This is the engine behind the live annual MRR-family metrics (#384–389).
+
+      Grain: one row per (Month, EntityRecordID), customer level. A customer is an
+      EntityRecordID (can own multiple CompanyAccounts). Movement is split into
+      PARALLEL columns (NewMRR / Expansions / Downgrades / Cancellations), not a
+      single movement_kind — a customer-month with all four = 0 is steady-state.
+      Do not SUM the movement columns together expecting a net; combine per the
+      metric definitions.
+
+      Migrated from an orphaned BQ view (2026-06-04) and materialized as a table for
+      performance. Parity-verified via scripts/parity_int_customer_mrr.py against the
+      pre-migration baseline. Methodology: CEO-confirmed symmetric Prepay-Expiry (PE)
+      exclusion (2026-04-28; see memory project_annual_retention) — a customer-month
+      whose SaaS lines are entirely Prepay-Expiry Income is excluded from the base.
+      Excludes test accounts (CompanyAccount m11%/m18%) and the current incomplete
+      month.
+    config:
+      materialized: table
+    columns:
+      - name: Month
+        description: First day of the month (the M side of the M vs M-12 pair).
+        tests: [not_null]
+      - name: EntityRecordID
+        description: >
+          Stable numeric customer ID (customer grain). Use for temporal joins — not
+          Company, which drifts on rename.
+        tests: [not_null]
+      - name: Company
+        description: >
+          Representative CompanyAccount for the customer-month (largest by SaaSAmount,
+          CompanyAccount ASC tiebreak). Coalesced from the current or prior-year side.
+      - name: p1_saas
+        description: >
+          Prior-year (M-12) SaaS total for the customer, entity-allocated. 0 when the
+          customer had no M-12 activity (a new-cohort customer).
+      - name: p2_saas
+        description: >
+          Current-month (M) SaaS total for the customer, entity-allocated. 0 when the
+          customer has churned out by M.
+      - name: StartMRR
+        description: >
+          Prior-year base MRR that counts toward the annual retention denominator
+          (= p1_saas, unless the entire prior-year book was Prepay-Expiry, in which
+          case 0 under the symmetric PE exclusion). Entity-allocated from the
+          company-level classification.
+      - name: Cancellations
+        description: >
+          MRR lost to full churn over the year (had prior-year SaaS, zero current SaaS,
+          not a PE-only base). Positive number representing the drop. Entity-allocated.
+      - name: Downgrades
+        description: >
+          MRR lost to partial contraction (current < prior, both > 0):
+          p1_saas - p2_saas. Positive number representing the decrease. Entity-allocated.
+      - name: Expansions
+        description: >
+          MRR gained from existing customers (current > prior, both > 0):
+          p2_saas - p1_saas. Entity-allocated.
+      - name: NewMRR
+        description: >
+          MRR from customers new in the annual window (zero prior-year SaaS, positive
+          current SaaS). Entity-allocated.
+      - name: Segment
+        description: >
+          Product/pricing segment (Team AI Plus / 4+ no DEP / 2-3 no DEP / Solo no DEP),
+          joined from int_customers. Taken from the M-12 month for existing customers
+          and the M month for new customers. [REVIEW: confirm this as-of-start vs
+          as-of-current dim join is the intended slice for annual movement breakdowns.]
+      - name: UserTier
+        description: Seat band (Solo / Small Team / Team) from int_customers, joined as above.
+      - name: HasDEP
+        description: Per-customer-month DEP flag from int_customers (point-in-time), joined as above.
+      - name: AttributionChannel
+        description: Single-touch acquisition channel from int_customers, joined as above.
+      - name: SignupCountry
+        description: Founding-account signup country from int_customers, joined as above.
+      - name: Vertical
+        description: Founding-account vertical from int_customers, joined as above.
+      - name: SyncType
+        description: Founding-account sync type from int_customers, joined as above.
