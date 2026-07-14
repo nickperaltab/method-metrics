@@ -36,10 +36,13 @@ export default function CallPrepBook() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     setBook(null);
+    setError('');
     fetchBook(consultant)
-      .then(setBook)
-      .catch((e) => setError(e?.message || String(e)));
+      .then((b) => { if (!cancelled) setBook(b); })
+      .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
+    return () => { cancelled = true; };
   }, [consultant]);
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -48,7 +51,7 @@ export default function CallPrepBook() {
     if (!book) return [];
     return book
       .map((snap) => ({ snap, flags: computeFlags(snap, todayIso) }))
-      .sort((a, b) => b.flags.length - a.flags.length || a.snap.accountName.localeCompare(b.snap.accountName));
+      .sort((a, b) => b.flags.length - a.flags.length || (a.snap.accountName ?? '').localeCompare(b.snap.accountName ?? ''));
   }, [book, todayIso]);
 
   const switchConsultant = () => {
@@ -83,7 +86,7 @@ export default function CallPrepBook() {
               <tr
                 key={snap.accountRecordId}
                 style={s.rowClickable}
-                onClick={() => navigate(`/call-prep/account/${snap.accountRecordId}`)}
+                onClick={() => navigate(`/call-prep/account/${encodeURIComponent(snap.accountRecordId)}`)}
               >
                 <td style={{ ...s.td, fontWeight: 600 }}>{snap.accountName}</td>
                 <td style={s.td}>{snap.syncStatus ?? '—'}</td>
