@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="AccountsReferred", model=get_where_subquery(ref('v_partner_scorecard'))) }}

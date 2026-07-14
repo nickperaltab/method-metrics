@@ -38,5 +38,5 @@ SELECT
     WHEN Att_None = 1 THEN 'None'
     ELSE 'Unknown'
   END AS AttributionChannel
-FROM `project-for-method-dw.revenue.Funnel`
+FROM `project-for-method-dw`.`revenue`.`Funnel`
 WHERE EventType = 'Sync'

@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="attended_any", model=get_where_subquery(ref('int_presale_touches'))) }}

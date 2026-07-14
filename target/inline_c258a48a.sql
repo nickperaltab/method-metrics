@@ -1,0 +1,1 @@
+SELECT COUNT(*) AS n, COUNTIF(has_dep) AS dep, COUNTIF(is_prepay) AS prepay FROM `project-for-method-dw.revenue.int_motion_funnel`

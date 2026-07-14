@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="metric", model=get_where_subquery(ref('int_channel_forecast')), values=["trials","syncs"]) }}

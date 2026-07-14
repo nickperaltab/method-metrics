@@ -1,0 +1,1 @@
+SELECT FORMAT_DATE('%Y-%m', SignupDate) AS period, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_trials` WHERE SignupDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH) GROUP BY 1 ORDER BY 1 DESC

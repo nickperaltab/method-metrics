@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="tenure_k", model=get_where_subquery(ref('int_customer_survival'))) }}

@@ -1,0 +1,1 @@
+{{ test_unique(column_name="Partner", model=get_where_subquery(ref('v_partner_scorecard'))) }}

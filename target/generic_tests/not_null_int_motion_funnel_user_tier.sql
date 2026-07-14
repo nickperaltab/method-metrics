@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="user_tier", model=get_where_subquery(ref('int_motion_funnel'))) }}

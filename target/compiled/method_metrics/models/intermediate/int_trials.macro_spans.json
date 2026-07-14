@@ -24,5 +24,31 @@
         "index": 0
       }
     }
+  },
+  {
+    "macro_span": {
+      "start": {
+        "line": 37,
+        "col": 6,
+        "index": 1619
+      },
+      "stop": {
+        "line": 37,
+        "col": 40,
+        "index": 1653
+      }
+    },
+    "expanded_span": {
+      "start": {
+        "line": 37,
+        "col": 6,
+        "index": 1586
+      },
+      "stop": {
+        "line": 37,
+        "col": 49,
+        "index": 1629
+      }
+    }
   }
 ]

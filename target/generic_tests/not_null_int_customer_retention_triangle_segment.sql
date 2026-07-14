@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="segment", model=get_where_subquery(ref('int_customer_retention_triangle'))) }}

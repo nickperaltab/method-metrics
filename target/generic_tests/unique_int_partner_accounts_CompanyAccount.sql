@@ -1,0 +1,1 @@
+{{ test_unique(column_name="CompanyAccount", model=get_where_subquery(ref('int_partner_accounts'))) }}

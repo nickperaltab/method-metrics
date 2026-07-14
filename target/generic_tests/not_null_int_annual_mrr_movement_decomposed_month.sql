@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="month", model=get_where_subquery(ref('int_annual_mrr_movement_decomposed'))) }}
