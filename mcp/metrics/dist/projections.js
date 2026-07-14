@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { APPROVED_INTERMEDIATES, INTERMEDIATE_TIER_LABEL } from "./tiers.js";
 export const METRIC_PREFIX = "v_metric__";
 // ---------- meta / labels extraction ----------
 /**
@@ -43,6 +44,45 @@ export function listMetrics(manifest, status) {
         };
     });
     return status ? entries.filter((e) => e.status === status) : entries;
+}
+/**
+ * Allowlisted intermediate model nodes present in the manifest, as
+ * [unique_id, node] pairs sorted by name. Only APPROVED_INTERMEDIATES
+ * (src/tiers.ts) are eligible — everything else is invisible in listings.
+ */
+export function intermediateNodes(manifest) {
+    const allow = new Set(APPROVED_INTERMEDIATES);
+    return Object.entries(manifest.nodes ?? {})
+        .filter(([, n]) => (n?.resource_type ?? "model") === "model" &&
+        typeof n?.name === "string" &&
+        allow.has(n.name))
+        .sort(([, a], [, b]) => a.name.localeCompare(b.name));
+}
+/** Column-level docs (name, description, meta) — for intermediates the columns ARE the definitions. */
+export function columnDocs(node) {
+    return Object.values(node.columns ?? {}).map((c) => ({
+        name: c.name,
+        description: c.description ?? "",
+        meta: c.meta ?? {},
+    }));
+}
+export function listIntermediates(manifest) {
+    const present = intermediateNodes(manifest);
+    const presentNames = new Set(present.map(([, n]) => n.name));
+    const intermediates = present.map(([, node]) => {
+        const grain = getMeta(node).grain;
+        const entry = {
+            name: node.name,
+            tier: INTERMEDIATE_TIER_LABEL,
+            description: firstSentence(node.description),
+            documented_column_count: columnDocs(node).filter((c) => c.description).length,
+        };
+        if (typeof grain === "string" && grain)
+            entry.grain = grain;
+        return entry;
+    });
+    const missing = APPROVED_INTERMEDIATES.filter((name) => !presentNames.has(name)).sort();
+    return { intermediates, missing };
 }
 // ---------- name resolution ----------
 function levenshtein(a, b) {
@@ -106,6 +146,40 @@ export function resolveMetric(manifest, query) {
     })
         .sort((a, b) => Number(b.isSubstr) - Number(a.isSubstr) || a.dist - b.dist);
     throw new MetricNotFoundError(query, ranked.slice(0, 3).map((r) => r.name));
+}
+/**
+ * Resolve an allowlisted intermediate by exact name, then fuzzy
+ * (unique substring match). Returns null when nothing matches —
+ * non-allowlisted models are never resolved here.
+ */
+export function resolveIntermediate(manifest, query) {
+    const intermediates = intermediateNodes(manifest);
+    const q = query.trim().toLowerCase();
+    for (const [id, node] of intermediates) {
+        if (node.name.toLowerCase() === q)
+            return { id, node };
+    }
+    const substr = intermediates.filter(([, n]) => n.name.toLowerCase().includes(q));
+    if (substr.length === 1)
+        return { id: substr[0][0], node: substr[0][1] };
+    return null;
+}
+/**
+ * Tiered resolution: verified metrics first (resolveMetric — exact, metric_id,
+ * fuzzy); only if that fails, try the intermediates allowlist. A metric always
+ * wins over an intermediate on ambiguity. If neither tier matches, rethrows
+ * the MetricNotFoundError (with metric-name suggestions).
+ */
+export function resolveTiered(manifest, query) {
+    try {
+        return { ...resolveMetric(manifest, query), tier: "metric" };
+    }
+    catch (err) {
+        const intermediate = resolveIntermediate(manifest, query);
+        if (intermediate)
+            return { ...intermediate, tier: "intermediate" };
+        throw err;
+    }
 }
 // ---------- lineage ----------
 function displayName(id, manifest) {

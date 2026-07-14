@@ -3,12 +3,19 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Minimal shape of the dbt manifest slices this server reads. */
+export interface DbtColumn {
+  name: string;
+  description?: string;
+  meta?: Record<string, unknown>;
+}
+
 export interface DbtNode {
   name: string;
   resource_type?: string;
   description?: string;
   original_file_path?: string;
   meta?: Record<string, unknown>;
+  columns?: Record<string, DbtColumn>;
   config?: {
     meta?: Record<string, unknown> | null;
     labels?: Record<string, string> | null;

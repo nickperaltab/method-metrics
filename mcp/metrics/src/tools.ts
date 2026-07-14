@@ -2,13 +2,16 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getRepoRoot, loadManifest } from "./manifest.js";
 import {
+  columnDocs,
   getLabels,
   getMeta,
   getSql,
   lineageTree,
+  listIntermediates,
   listMetrics,
-  resolveMetric,
+  resolveTiered,
 } from "./projections.js";
+import { INTERMEDIATE_WARNING } from "./tiers.js";
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -25,7 +28,7 @@ function fail(err: unknown): ToolResult {
 }
 
 /**
- * Register the 4 read-only metric tools on an McpServer.
+ * Register the 5 read-only metric tools on an McpServer.
  * Shared by the stdio entry point (src/index.ts) and the deployed
  * streamable-HTTP function (api/mcp.ts) so both serve identical tools.
  */
@@ -54,11 +57,31 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "list_intermediates",
+    {
+      title: "List intermediates",
+      description:
+        "List the approved analysis-model tier: allowlisted intermediate models (customer-attribute / analysis models, e.g. int_customer_firmographics). These are NOT verified metrics — grain and caveats apply, and the column docs carry the definitions. Allowlisted models absent from the manifest are reported in a 'missing' array. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const { intermediates, missing } = listIntermediates(loadManifest());
+        return ok(
+          JSON.stringify({ count: intermediates.length, intermediates, missing }, null, 2),
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "get_metric",
     {
       title: "Get metric definition",
       description:
-        "Get the full definition of one metric: description, meta block (grain, filters, methodology source, parity, caveats), labels, and model path. Accepts the model name (with or without the v_metric__ prefix), the metric_id, or a fuzzy name. Read-only.",
+        "Get the full definition of one metric: description, meta block (grain, filters, methodology source, parity, caveats), labels, and model path. Accepts the model name (with or without the v_metric__ prefix), the metric_id, or a fuzzy name. Also resolves allowlisted intermediates (second tier) when no verified metric matches — those responses carry tier: 'intermediate', a warning, and column-level docs. Read-only.",
       inputSchema: {
         metric: z
           .string()
@@ -67,20 +90,24 @@ export function registerTools(server: McpServer): void {
     },
     async ({ metric }) => {
       try {
-        const { node } = resolveMetric(loadManifest(), metric);
-        return ok(
-          JSON.stringify(
-            {
-              model: node.name,
-              path: node.original_file_path ?? "",
-              description: node.description ?? "",
-              meta: getMeta(node),
-              labels: getLabels(node),
-            },
-            null,
-            2,
-          ),
-        );
+        const { node, tier } = resolveTiered(loadManifest(), metric);
+        const base = {
+          model: node.name,
+          path: node.original_file_path ?? "",
+          description: node.description ?? "",
+          meta: getMeta(node),
+          labels: getLabels(node),
+        };
+        const payload =
+          tier === "intermediate"
+            ? {
+                ...base,
+                tier: "intermediate",
+                warning: INTERMEDIATE_WARNING,
+                columns: columnDocs(node),
+              }
+            : base;
+        return ok(JSON.stringify(payload, null, 2));
       } catch (err) {
         return fail(err);
       }
@@ -92,7 +119,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get metric lineage",
       description:
-        "Walk a metric's upstream dependency chain (via the dbt manifest parent_map) from the metric model through intermediates down to raw sources. Returns an indented text tree. Accepts model name, short name, or metric_id. Read-only.",
+        "Walk a metric's upstream dependency chain (via the dbt manifest parent_map) from the metric model through intermediates down to raw sources. Returns an indented text tree. Accepts model name, short name, or metric_id; also resolves allowlisted intermediates. Read-only.",
       inputSchema: {
         metric: z.string().describe("Metric name or metric_id"),
       },
@@ -100,7 +127,7 @@ export function registerTools(server: McpServer): void {
     async ({ metric }) => {
       try {
         const manifest = loadManifest();
-        const { id } = resolveMetric(manifest, metric);
+        const { id } = resolveTiered(manifest, metric);
         return ok(lineageTree(manifest, id));
       } catch (err) {
         return fail(err);

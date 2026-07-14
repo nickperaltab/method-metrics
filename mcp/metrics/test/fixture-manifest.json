@@ -42,6 +42,40 @@
       "description": "Intermediate trial rows.",
       "meta": {},
       "config": { "meta": null, "labels": null }
+    },
+    "model.method_metrics.int_customer_firmographics": {
+      "name": "int_customer_firmographics",
+      "resource_type": "model",
+      "original_file_path": "models/intermediate/int_customer_firmographics.sql",
+      "description": "Firmographic dimension table, entity grain: one row per EntityRecordID. Directional intermediate, not a verified metric.",
+      "meta": {
+        "grain": "customer-level (EntityRecordID)"
+      },
+      "columns": {
+        "EntityRecordID": {
+          "name": "EntityRecordID",
+          "description": "Customer-level primary key (one row per entity).",
+          "meta": {}
+        },
+        "ever_had_dep": {
+          "name": "ever_had_dep",
+          "description": "TRUE if the customer ever purchased a Dedicated Engagement Package.",
+          "meta": { "source": "TransLineFlattened" }
+        },
+        "undocumented_col": {
+          "name": "undocumented_col",
+          "meta": {}
+        }
+      },
+      "config": { "meta": null, "labels": null }
+    },
+    "model.method_metrics.int_secret_scratch": {
+      "name": "int_secret_scratch",
+      "resource_type": "model",
+      "original_file_path": "models/intermediate/int_secret_scratch.sql",
+      "description": "Unapproved ad-hoc scratch model — must not appear in any listing.",
+      "meta": {},
+      "config": { "meta": null, "labels": null }
     }
   },
   "sources": {
@@ -54,6 +88,10 @@
     "model.method_metrics.v_metric__trials": ["model.method_metrics.int_trials"],
     "model.method_metrics.v_metric__syncs": ["model.method_metrics.int_trials"],
     "model.method_metrics.int_trials": ["source.method_metrics.revenue.Account"],
+    "model.method_metrics.int_customer_firmographics": [
+      "source.method_metrics.revenue.Account"
+    ],
+    "model.method_metrics.int_secret_scratch": [],
     "source.method_metrics.revenue.Account": []
   }
 }

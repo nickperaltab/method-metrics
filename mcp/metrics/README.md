@@ -6,11 +6,19 @@ No warehouse connection, no writes, no secrets — it only projects content alre
 
 ## Tools
 
+The server exposes two tiers:
+
+1. **Verified metrics** — the `v_metric__*` models. Parity-verified, documented, quotable.
+2. **Intermediates** — an allowlisted set of customer-attribute / analysis models (e.g. `int_customer_firmographics`). These are NOT verified metrics: analysis-model grain and caveats apply, and their column docs carry the definitions (e.g. `ever_had_dep`). The allowlist lives in [`src/tiers.ts`](src/tiers.ts) (`APPROVED_INTERMEDIATES`, 12 models, audited/approved by Nic 2026-07-10). Models not on the allowlist and not `v_metric__*` never appear in listings (`get_sql` can still serve any model by exact name — unchanged).
+
+**Warning contract:** every `get_metric` response that resolves to an intermediate carries `tier: "intermediate"` and a `warning`: *"Not one of the 20 verified metrics — analysis-model grain and caveats apply; check column docs before quoting."* Consumers should surface that warning before quoting numbers derived from these models.
+
 | Tool | Input | Output |
 |---|---|---|
-| `list_metrics` | `status?` (e.g. `live`) | Every `v_metric__*` model: name, metric_id, status label, one-line description. Sorted by name. |
-| `get_metric` | `metric` — model name (with/without `v_metric__` prefix), metric_id, or fuzzy name | Full definition: description, `meta` block, labels, model path. Unknown names get an error with the 3 closest matches. |
-| `get_lineage` | `metric` — same resolution as `get_metric` | Indented dependency tree walked via the manifest `parent_map` down to `sources.*`. Cycle-safe. |
+| `list_metrics` | `status?` (e.g. `live`) | Every `v_metric__*` model: name, metric_id, status label, one-line description. Sorted by name. Canon tier only — intermediates never appear here. |
+| `list_intermediates` | — | Every allowlisted intermediate present in the manifest: name, tier label (`intermediate — not a verified metric`), grain (from `meta.grain` when present), one-line description, documented-column count. Sorted by name. Allowlisted models absent from the manifest are named in a `missing` array. |
+| `get_metric` | `metric` — model name (with/without `v_metric__` prefix), metric_id, or fuzzy name | Full definition: description, `meta` block, labels, model path. Metric resolution runs first; only if it fails, the intermediates allowlist is tried (exact/fuzzy) — a metric always wins on ambiguity. Intermediate responses add `tier`, `warning`, and column-level docs (name, description, meta). Unknown names get an error with the 3 closest matches. |
+| `get_lineage` | `metric` — same tiered resolution as `get_metric` (allowlisted intermediates resolve too) | Indented dependency tree walked via the manifest `parent_map` down to `sources.*`. Cycle-safe. |
 | `get_sql` | `model` — exact model name (any model, intermediates included) | Raw SQL read from the `.sql` file on disk (manifest `raw_code` can be a placeholder and is never served), plus compiled SQL from `target/compiled/` when present, labeled separately. |
 
 ## Build & run
@@ -38,7 +46,7 @@ Registered in the repo's `.mcp.json` as `metrics` (`node mcp/metrics/dist/index.
 
 ## Remote endpoint
 
-The same 4 tools are deployed as a remote streamable-HTTP MCP server on Vercel:
+The same 5 tools are deployed as a remote streamable-HTTP MCP server on Vercel:
 
 ```
 https://method-metrics-mcp.vercel.app/api/mcp
