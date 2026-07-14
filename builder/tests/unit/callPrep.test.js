@@ -84,6 +84,7 @@ describe('normalizeSnapshotRow', () => {
     expect(s.depSignals).toEqual(['signal-a', 'signal-b']);
     expect(s.bqConfidence).toBeCloseTo(0.85);
     expect(s.docLink).toBe('https://docs.google.com/document/d/abc');
+    expect(s.createdAt).toBe('1.78404058517258E9');
   });
 
   it('tolerates nulls and missing repeated fields', () => {
