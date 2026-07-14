@@ -6,6 +6,7 @@ import {
   buildAccountSnapshotsSql,
 } from '../../src/lib/callPrep.js';
 import { normalizeSnapshotRow, computeFlags } from '../../src/lib/callPrep.js';
+import { fetchConsultants, fetchBook, fetchAccountSnapshots } from '../../src/lib/callPrep.js';
 
 describe('buildConsultantsSql', () => {
   it('aggregates consultants from the snapshots table', () => {
@@ -119,5 +120,31 @@ describe('computeFlags', () => {
 
   it('flags missing snapshot', () => {
     expect(computeFlags(null, today)).toEqual(['no snapshot']);
+  });
+});
+
+describe('fetch functions', () => {
+  it('fetchConsultants normalizes count fields', async () => {
+    const query = async () => ({
+      rows: [{ consultant: 'Brandon Saltzman', account_count: '2', last_snapshot_date: '2026-07-13' }],
+    });
+    const out = await fetchConsultants({ query });
+    expect(out).toEqual([
+      { consultant: 'Brandon Saltzman', accountCount: 2, lastSnapshotDate: '2026-07-13' },
+    ]);
+  });
+
+  it('fetchBook passes built SQL to query and normalizes rows', async () => {
+    const seen = [];
+    const query = async (sql) => { seen.push(sql); return { rows: [bqRow] }; };
+    const out = await fetchBook('Brandon Saltzman', { query });
+    expect(seen[0]).toContain("consultant = 'Brandon Saltzman'");
+    expect(out[0].accountRecordId).toBe(141376);
+  });
+
+  it('fetchAccountSnapshots validates id before querying', async () => {
+    const query = async () => ({ rows: [] });
+    await expect(fetchAccountSnapshots('bad-id', { query })).rejects.toThrow();
+    expect(await fetchAccountSnapshots('141376', { query })).toEqual([]);
   });
 });

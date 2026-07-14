@@ -6,6 +6,7 @@
 // consultant's book" = distinct accounts they have snapshots for.
 
 import { validateInt } from './sanitize.js';
+import { queryBqWithRetry } from './bigquery.js';
 
 export const CALL_PREP_TABLE = '`project-for-method-dw.call_prep.snapshots`';
 
@@ -101,4 +102,23 @@ export function computeFlags(snapshot, todayIso) {
     : Infinity;
   if (staleDays >= STALE_SESSION_DAYS) flags.push('no recent sessions');
   return flags;
+}
+
+export async function fetchConsultants({ query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildConsultantsSql());
+  return rows.map((r) => ({
+    consultant: toStr(r.consultant),
+    accountCount: toInt(r.account_count, 0),
+    lastSnapshotDate: toStr(r.last_snapshot_date),
+  }));
+}
+
+export async function fetchBook(consultant, { query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildBookSql(consultant));
+  return rows.map(normalizeSnapshotRow);
+}
+
+export async function fetchAccountSnapshots(recordId, { query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildAccountSnapshotsSql(recordId));
+  return rows.map(normalizeSnapshotRow);
 }
