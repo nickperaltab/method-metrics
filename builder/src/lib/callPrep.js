@@ -53,6 +53,12 @@ const toInt = (v, fallback = null) => (v == null || v === '' ? fallback : parseI
 const toFloat = (v) => (v == null || v === '' ? null : parseFloat(v));
 const toBool = (v) => v === true || v === 'true';
 const toStr = (v) => (v == null || v === '' ? null : String(v));
+// Only allow http(s) URLs through — BQ-sourced doc_link values render in an
+// <a href>, and React does not block javascript:/data: URLs there.
+const toHttpUrl = (v) => {
+  const s = toStr(v);
+  return s && /^https?:\/\//i.test(s) ? s : null;
+};
 
 /** Convert a raw BQ REST row (all strings, [{v}] arrays) into typed camelCase. */
 export function normalizeSnapshotRow(row) {
@@ -79,7 +85,7 @@ export function normalizeSnapshotRow(row) {
     industryL3: toStr(row.industry_l3),
     operatingModel: toStr(row.operating_model),
     bqConfidence: toFloat(row.bq_confidence),
-    docLink: toStr(row.doc_link),
+    docLink: toHttpUrl(row.doc_link),
     createdAt: toStr(row.created_at),
   };
 }

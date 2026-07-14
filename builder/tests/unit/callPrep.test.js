@@ -96,6 +96,12 @@ describe('normalizeSnapshotRow', () => {
     expect(s.syncFailCount).toBe(0);
     expect(s.casesOpenCount).toBe(0);
   });
+
+  it('nulls docLink unless it is an http(s) URL', () => {
+    expect(normalizeSnapshotRow({ ...bqRow, doc_link: 'javascript:alert(1)' }).docLink).toBe(null);
+    expect(normalizeSnapshotRow({ ...bqRow, doc_link: 'https://docs.google.com/document/d/abc' }).docLink)
+      .toBe('https://docs.google.com/document/d/abc');
+  });
 });
 
 describe('computeFlags', () => {
