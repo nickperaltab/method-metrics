@@ -4,13 +4,13 @@ const s = (v) => `'${String(v).replace(/'/g, "''")}'`;
 export const SPLITS = [
   { key:null, label:'None' },
   { key:'user_tier', label:'Customer size' },
-  { key:'has_dep', label:'DEP' },
+  { key:'ever_had_dep', label:'DEP' },
   { key:'industry_l1', label:'Industry' },
-  { key:'is_prepay', label:'Prepay vs Monthly' },
+  { key:'ever_prepay', label:'Prepay vs Monthly' },
 ];
 const FLAGS = 'synced, demo_attended, free_attended, converted, is_customized';
 const win = (a, b) => `signup_month BETWEEN ${s(a)} AND ${s(b)}`;
-const BOOL_SPLITS = new Set(['has_dep', 'is_prepay']);
+const BOOL_SPLITS = new Set(['ever_had_dep', 'ever_prepay']);
 const splitFilter = (k, v) => (k && v != null && v !== '') ? ` AND ${k} = ${BOOL_SPLITS.has(k) ? (v === true || v === 'true') : s(v)}` : '';
 
 export function buildJointSql({ startMonth, endMonth, splitKey, splitValue }) {

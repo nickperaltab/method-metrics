@@ -12,22 +12,22 @@ const rows = [
 describe('buildJointSql — boolean split filter', () => {
   const base = { startMonth: '2024-01-01', endMonth: '2026-06-01' };
 
-  it('emits unquoted boolean true for has_dep split', () => {
-    const sql = buildJointSql({ ...base, splitKey: 'has_dep', splitValue: 'true' });
-    expect(sql).toContain('has_dep = true');
-    expect(sql).not.toContain("has_dep = 'true'");
+  it('emits unquoted boolean true for ever_had_dep split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'ever_had_dep', splitValue: 'true' });
+    expect(sql).toContain('ever_had_dep = true');
+    expect(sql).not.toContain("ever_had_dep = 'true'");
   });
 
-  it('emits unquoted boolean false for has_dep split', () => {
-    const sql = buildJointSql({ ...base, splitKey: 'has_dep', splitValue: 'false' });
-    expect(sql).toContain('has_dep = false');
-    expect(sql).not.toContain("has_dep = 'false'");
+  it('emits unquoted boolean false for ever_had_dep split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'ever_had_dep', splitValue: 'false' });
+    expect(sql).toContain('ever_had_dep = false');
+    expect(sql).not.toContain("ever_had_dep = 'false'");
   });
 
-  it('emits unquoted boolean true for is_prepay split', () => {
-    const sql = buildJointSql({ ...base, splitKey: 'is_prepay', splitValue: 'true' });
-    expect(sql).toContain('is_prepay = true');
-    expect(sql).not.toContain("is_prepay = 'true'");
+  it('emits unquoted boolean true for ever_prepay split', () => {
+    const sql = buildJointSql({ ...base, splitKey: 'ever_prepay', splitValue: 'true' });
+    expect(sql).toContain('ever_prepay = true');
+    expect(sql).not.toContain("ever_prepay = 'true'");
   });
 
   it('emits quoted string for user_tier split', () => {
