@@ -14,6 +14,7 @@ import Scorecard from './pages/Scorecard';
 import McpToken from './pages/McpToken';
 import SaasDataExport from './pages/SaasDataExport';
 import CallPrep from './pages/CallPrep';
+import CallPrepAccount from './pages/CallPrepAccount';
 import CallPrepBook from './pages/CallPrepBook';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
@@ -113,6 +114,7 @@ export default function App() {
               <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
             } />
             <Route path="/call-prep" element={<CallPrep />} />
+            <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
             <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
             <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
             <Route path="/admin/registry" element={<Registry />} />
