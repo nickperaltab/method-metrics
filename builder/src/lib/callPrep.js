@@ -9,6 +9,7 @@ import { validateInt } from './sanitize.js';
 import { queryBqWithRetry } from './bigquery.js';
 
 export const CALL_PREP_TABLE = '`project-for-method-dw.call_prep.snapshots`';
+export const TIME_TRACKING_TABLE = '`project-for-method-dw.revenue.TimeTracking`';
 
 export function buildConsultantsSql() {
   return `
@@ -47,6 +48,26 @@ export function buildAccountSnapshotsSql(recordId) {
     FROM ${CALL_PREP_TABLE}
     WHERE account_record_id = ${id}
     ORDER BY snapshot_date DESC`;
+}
+
+// Session history for the account's timeline. TimeTracking keys to the account
+// via MethodCompanyAccountRecordID (= snapshots.account_record_id). Notes are
+// full call write-ups; cap length so a chatty account doesn't bloat the payload.
+export function buildAccountSessionsSql(recordId) {
+  const id = validateInt(recordId, 'account_record_id');
+  return `
+    SELECT
+      TxnDate,
+      MethodSupportType,
+      BillableStatus,
+      IsDemo,
+      DurationHours,
+      AssignedToRecordID,
+      SUBSTR(Notes, 0, 4000) AS Notes
+    FROM ${TIME_TRACKING_TABLE}
+    WHERE MethodCompanyAccountRecordID = ${id}
+      AND IsDeleted = FALSE
+    ORDER BY TxnDate`;
 }
 
 const toInt = (v, fallback = null) => (v == null || v === '' ? fallback : parseInt(v, 10));
@@ -90,6 +111,19 @@ export function normalizeSnapshotRow(row) {
   };
 }
 
+/** Convert a raw TimeTracking row into a typed camelCase session. */
+export function normalizeSessionRow(row) {
+  return {
+    date: toStr(row.TxnDate),
+    supportType: toStr(row.MethodSupportType),
+    billable: toStr(row.BillableStatus),
+    isDemo: toBool(row.IsDemo),
+    durationHours: toFloat(row.DurationHours),
+    consultantId: toInt(row.AssignedToRecordID),
+    notes: toStr(row.Notes),
+  };
+}
+
 const STALE_SESSION_DAYS = 30;
 const MS_PER_DAY = 86400000;
 
@@ -127,4 +161,9 @@ export async function fetchBook(consultant, { query = queryBqWithRetry } = {}) {
 export async function fetchAccountSnapshots(recordId, { query = queryBqWithRetry } = {}) {
   const { rows } = await query(buildAccountSnapshotsSql(recordId));
   return rows.map(normalizeSnapshotRow);
+}
+
+export async function fetchAccountSessions(recordId, { query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildAccountSessionsSql(recordId));
+  return rows.map(normalizeSessionRow);
 }

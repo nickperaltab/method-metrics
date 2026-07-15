@@ -1,10 +1,11 @@
 // Call Prep — account snapshot. Route: #/call-prep/account/:recordId
-// The page Slack deep-links to. Rendered as a one-page pre-call brief: the
-// dep_signals prose is the body; sync/time/cases are a supporting vitals band.
-// All content comes from call_prep.snapshots in BigQuery — no doc read.
-import { useEffect, useMemo, useState } from 'react';
+// A one-page pre-call brief: dep_signals prose is the body; a jump-nav lets
+// the consultant snap between Situation / Timeline / Details without hiding
+// anything. The timeline is the account's real session history from
+// revenue.TimeTracking. All content is sourced from BigQuery — no doc read.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchAccountSnapshots, computeFlags } from '../lib/callPrep';
+import { fetchAccountSnapshots, fetchAccountSessions, computeFlags } from '../lib/callPrep';
 
 const PAPER = '#faf8f3';
 const INK = '#1c1a15';
@@ -49,7 +50,17 @@ const s = {
     fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '.02em',
     color: AMBER, background: '#fbf1e4', border: '1px solid #edd6b8', borderRadius: 3, padding: '4px 9px',
   },
-  rule: { border: 0, borderTop: `1px solid ${RULE}`, margin: '26px 0' },
+  nav: {
+    position: 'sticky', top: 0, zIndex: 5, display: 'flex', gap: 6, flexWrap: 'wrap',
+    margin: '24px 0 4px', padding: '10px 0', background: 'rgba(255,253,248,.92)',
+    backdropFilter: 'blur(4px)', borderBottom: `1px solid ${RULE}`,
+  },
+  navChip: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '.06em',
+    textTransform: 'uppercase', color: MUTE, background: PAPER, border: `1px solid ${RULE}`,
+    borderRadius: 999, padding: '5px 13px', cursor: 'pointer', textDecoration: 'none',
+  },
+  section: { scrollMarginTop: 56, paddingTop: 26 },
   bodyLabel: {
     fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600,
     letterSpacing: '.18em', textTransform: 'uppercase', color: FAINT, marginBottom: 16,
@@ -61,30 +72,52 @@ const s = {
   },
   briefMark: { position: 'absolute', left: 2, top: 10, width: 7, height: 7, borderRadius: '50%', background: ACCENT, opacity: .85 },
   empty: { fontSize: 14, color: MUTE, fontStyle: 'italic' },
-  vitals: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '18px 24px' },
-  vital: {},
-  vitalLabel: {
-    fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600,
-    letterSpacing: '.1em', textTransform: 'uppercase', color: FAINT, marginBottom: 5,
+
+  // Timeline
+  rail: { position: 'relative', margin: 0, padding: 0, listStyle: 'none' },
+  railLine: { position: 'absolute', left: 7, top: 6, bottom: 6, width: 2, background: RULE },
+  event: { position: 'relative', paddingLeft: 34, marginBottom: 20 },
+  dot: { position: 'absolute', left: 2, top: 3, width: 13, height: 13, borderRadius: '50%', border: `2px solid ${PAPER}`, boxSizing: 'border-box' },
+  eventHead: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', cursor: 'pointer' },
+  eventDate: { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: INK, fontWeight: 600 },
+  typeBadge: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '.05em',
+    textTransform: 'uppercase', borderRadius: 3, padding: '2px 7px',
   },
-  vitalValue: { fontSize: 16, fontWeight: 600, color: INK, lineHeight: 1.25 },
-  vitalSub: { fontSize: 11.5, color: MUTE, marginTop: 2 },
+  eventMeta: { fontSize: 12, color: MUTE },
+  eventNotes: {
+    marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: '#3a362d', whiteSpace: 'pre-wrap',
+    background: PAPER, border: `1px solid ${RULE}`, borderRadius: 4, padding: '10px 13px', maxWidth: 600,
+  },
+  expandHint: { fontSize: 11.5, color: ACCENT, marginTop: 3 },
+
+  // Details grid
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px 22px' },
+  dLabel: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600,
+    letterSpacing: '.1em', textTransform: 'uppercase', color: FAINT, marginBottom: 4,
+  },
+  dValue: { fontSize: 14.5, fontWeight: 500, color: INK, lineHeight: 1.35 },
+  dValueWarn: { color: AMBER },
+
   footer: {
-    marginTop: 30, paddingTop: 16, borderTop: `1px solid ${RULE}`,
+    marginTop: 32, paddingTop: 16, borderTop: `1px solid ${RULE}`,
     display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8,
   },
   footerMeta: { fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: FAINT, letterSpacing: '.03em' },
   sourceLink: { fontSize: 12, color: MUTE, textDecoration: 'none', borderBottom: `1px solid ${RULE}` },
   center: { maxWidth: 720, margin: '0 auto', padding: '60px 24px', textAlign: 'center', color: MUTE, fontSize: 14 },
   errorTxt: { color: '#b91c1c' },
+  timelineErr: { fontSize: 13, color: MUTE, fontStyle: 'italic' },
 };
 
 const CSS = `
 @keyframes cpRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .cp-rise { animation: cpRise .5s cubic-bezier(.2,.7,.2,1) both; }
 .cp-brief-item { animation: cpRise .5s cubic-bezier(.2,.7,.2,1) both; }
-.cp-crumb:hover { text-decoration: underline; }
-.cp-source:hover { color: ${ACCENT}; border-color: ${ACCENT}; }
+.cp-crumb:hover, .cp-source:hover { text-decoration: underline; }
+.cp-chip:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+.cp-event-head:hover .cp-date { color: ${ACCENT}; }
 `;
 
 function ageLabel(months) {
@@ -96,11 +129,29 @@ function ageLabel(months) {
   return rem ? `${y}yr ${rem}mo customer` : `${y}-year customer`;
 }
 
-const Vital = ({ label, value, sub, tone }) => (
-  <div style={s.vital}>
-    <div style={s.vitalLabel}>{label}</div>
-    <div style={{ ...s.vitalValue, ...(tone === 'warn' ? { color: AMBER } : null) }}>{value ?? '—'}</div>
-    {sub ? <div style={s.vitalSub}>{sub}</div> : null}
+// Session Notes start with a weekday-date header and a ==== rule — strip those
+// so the expanded note reads as the actual content.
+function cleanNotes(notes) {
+  if (!notes) return '';
+  return notes
+    .split('\n')
+    .filter((ln) => !/^=+$/.test(ln.trim()) && !/^[A-Za-z]+day,\s/.test(ln.trim()))
+    .join('\n')
+    .trim();
+}
+
+function sessionKind(sess) {
+  if (sess.isDemo) return { label: 'Demo', bg: '#eef2ff', fg: '#3730a3', dot: '#4f46e5' };
+  const t = (sess.supportType || '').toLowerCase();
+  if (t === 'free') return { label: 'Free hour', bg: '#ecfdf3', fg: ACCENT, dot: ACCENT };
+  if (t.includes('pay')) return { label: 'Pay-per-use', bg: '#fbf1e4', fg: AMBER, dot: AMBER };
+  return { label: sess.supportType || 'Session', bg: '#f1efe8', fg: MUTE, dot: FAINT };
+}
+
+const Detail = ({ label, value, warn }) => (
+  <div>
+    <div style={s.dLabel}>{label}</div>
+    <div style={{ ...s.dValue, ...(warn ? s.dValueWarn : null) }}>{value ?? '—'}</div>
   </div>
 );
 
@@ -110,15 +161,22 @@ export default function CallPrepAccount() {
   const [history, setHistory] = useState(null);
   const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
+  const [sessions, setSessions] = useState(null);
+  const [sessionsErr, setSessionsErr] = useState('');
+  const [openEvent, setOpenEvent] = useState(null);
+  const sheetRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    setHistory(null);
-    setSelectedDate(null);
-    setError('');
+    setHistory(null); setSelectedDate(null); setError('');
+    setSessions(null); setSessionsErr(''); setOpenEvent(null);
     fetchAccountSnapshots(recordId)
       .then((h) => { if (!cancelled) setHistory(h); })
       .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
+    // Timeline loads independently — a TimeTracking failure must not blank the brief.
+    fetchAccountSessions(recordId)
+      .then((rows) => { if (!cancelled) setSessions(rows); })
+      .catch((e) => { if (!cancelled) setSessionsErr(e?.message || String(e)); });
     return () => { cancelled = true; };
   }, [recordId]);
 
@@ -129,6 +187,11 @@ export default function CallPrepAccount() {
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const flags = useMemo(() => (snap ? computeFlags(snap, todayIso) : []), [snap, todayIso]);
+
+  const jump = (id) => {
+    const el = sheetRef.current?.querySelector(`#${id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   if (error) {
     return <div style={s.stage}><div style={s.center}><span style={s.errorTxt}>Couldn’t load snapshot: {error}</span></div></div>;
@@ -152,7 +215,7 @@ export default function CallPrepAccount() {
   return (
     <div style={s.stage}>
       <style>{CSS}</style>
-      <div style={s.sheet}>
+      <div style={s.sheet} ref={sheetRef}>
         <div style={s.topRow}>
           <a
             style={s.crumb}
@@ -172,9 +235,7 @@ export default function CallPrepAccount() {
           )}
         </div>
 
-        <div className="cp-rise" style={{ animationDelay: '0ms' }}>
-          <div style={s.kicker}>{[snap.callType, 'Pre-call brief'].filter(Boolean).join(' · ')}</div>
-        </div>
+        <div className="cp-rise"><div style={s.kicker}>{[snap.callType, 'Pre-call brief'].filter(Boolean).join(' · ')}</div></div>
         <h1 className="cp-rise" style={{ ...s.title, animationDelay: '40ms' }}>{snap.accountName ?? '—'}</h1>
 
         <div className="cp-rise" style={{ animationDelay: '90ms' }}>
@@ -196,46 +257,95 @@ export default function CallPrepAccount() {
           </div>
         )}
 
-        <hr style={s.rule} />
+        <nav style={s.nav}>
+          <a className="cp-chip" style={s.navChip} onClick={() => jump('situation')}>Situation</a>
+          <a className="cp-chip" style={s.navChip} onClick={() => jump('timeline')}>Timeline</a>
+          <a className="cp-chip" style={s.navChip} onClick={() => jump('details')}>Details</a>
+        </nav>
 
-        <div style={s.bodyLabel}>What’s going on</div>
-        {snap.depSignals.length > 0 ? (
-          <ul style={s.brief}>
-            {snap.depSignals.map((sig, i) => (
-              <li key={sig} className="cp-brief-item" style={{ ...s.briefItem, animationDelay: `${180 + i * 55}ms` }}>
-                <span style={s.briefMark} />
-                {sig}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p style={s.empty}>No prep notes recorded for this snapshot.</p>
-        )}
+        <section id="situation" style={s.section}>
+          <div style={s.bodyLabel}>What’s going on</div>
+          {snap.depSignals.length > 0 ? (
+            <ul style={s.brief}>
+              {snap.depSignals.map((sig, i) => (
+                <li key={sig} className="cp-brief-item" style={{ ...s.briefItem, animationDelay: `${i * 45}ms` }}>
+                  <span style={s.briefMark} />
+                  {sig}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={s.empty}>No prep notes recorded for this snapshot.</p>
+          )}
+        </section>
 
-        <hr style={s.rule} />
+        <section id="timeline" style={s.section}>
+          <div style={s.bodyLabel}>History</div>
+          {sessionsErr ? (
+            <p style={s.timelineErr}>Couldn’t load session history.</p>
+          ) : sessions == null ? (
+            <p style={s.timelineErr}>Loading history…</p>
+          ) : (
+            <ul style={s.rail}>
+              <div style={s.railLine} />
+              {snap.signupDate && (
+                <li style={s.event}>
+                  <span style={{ ...s.dot, background: INK }} />
+                  <div style={s.eventHead}>
+                    <span style={s.eventDate}>{snap.signupDate}</span>
+                    <span style={{ ...s.typeBadge, background: '#efece3', color: INK }}>Signed up</span>
+                  </div>
+                </li>
+              )}
+              {sessions.map((sess, i) => {
+                const kind = sessionKind(sess);
+                const key = `${sess.date}-${i}`;
+                const isThisCall = sess.date === snap.snapshotDate;
+                const body = cleanNotes(sess.notes);
+                const open = openEvent === key;
+                return (
+                  <li key={key} style={s.event}>
+                    <span style={{ ...s.dot, background: kind.dot }} />
+                    <div className="cp-event-head" style={s.eventHead} onClick={() => setOpenEvent(open ? null : key)}>
+                      <span className="cp-date" style={s.eventDate}>{sess.date}</span>
+                      <span style={{ ...s.typeBadge, background: kind.bg, color: kind.fg }}>{kind.label}</span>
+                      <span style={s.eventMeta}>
+                        {sess.durationHours != null ? `${sess.durationHours} hr` : ''}
+                        {isThisCall ? '  ·  this call’s day' : ''}
+                      </span>
+                    </div>
+                    {body ? (
+                      open
+                        ? <div style={s.eventNotes}>{body}</div>
+                        : <div style={s.expandHint}>click to read notes →</div>
+                    ) : null}
+                  </li>
+                );
+              })}
+              {sessions.length === 0 && <li style={s.empty}>No sessions recorded yet.</li>}
+            </ul>
+          )}
+        </section>
 
-        <div style={s.vitals}>
-          <Vital
-            label="Sync"
-            value={snap.syncStatus || '—'}
-            sub={snap.syncFailCount > 0 ? `${snap.syncFailCount} recent failure${snap.syncFailCount === 1 ? '' : 's'}` : null}
-            tone={syncWarn ? 'warn' : null}
-          />
-          <Vital
-            label="Time tracked"
-            value={snap.ttTotalHours != null ? `${snap.ttTotalHours} hrs` : '—'}
-            sub={[
-              snap.ttSessionCount != null ? `${snap.ttSessionCount} sessions` : null,
-              snap.ttLastSessionDate ? `last ${snap.ttLastSessionDate}` : null,
-            ].filter(Boolean).join(' · ') || null}
-          />
-          <Vital
-            label="Open cases"
-            value={snap.casesOpenCount}
-            sub={snap.casesClosed90dCount != null ? `${snap.casesClosed90dCount} closed in 90d` : null}
-            tone={snap.casesOpenCount > 0 ? 'warn' : null}
-          />
-        </div>
+        <section id="details" style={s.section}>
+          <div style={s.bodyLabel}>Details</div>
+          <div style={s.grid}>
+            <Detail label="Sync status" value={snap.syncStatus} warn={syncWarn} />
+            <Detail label="Sync failures" value={snap.syncFailCount} warn={snap.syncFailCount > 0} />
+            <Detail label="Time tracked" value={snap.ttTotalHours != null ? `${snap.ttTotalHours} hrs` : null} />
+            <Detail label="Sessions (snapshot)" value={snap.ttSessionCount} />
+            <Detail label="Last session" value={snap.ttLastSessionDate} />
+            <Detail label="Open cases" value={snap.casesOpenCount} warn={snap.casesOpenCount > 0} />
+            <Detail label="Closed cases (90d)" value={snap.casesClosed90dCount} />
+            <Detail label="Signup date" value={snap.signupDate} />
+            <Detail label="Account age" value={snap.accountAgeMonths != null ? `${snap.accountAgeMonths.toFixed(1)} mo` : null} />
+            <Detail label="DEP enrolled" value={snap.depEnrolled ? 'yes' : 'no'} />
+            {snap.multiEntityParentName ? <Detail label="Parent entity" value={snap.multiEntityParentName} /> : null}
+            <Detail label="Industry" value={industry || null} />
+            <Detail label="Operating model" value={snap.operatingModel} />
+            {snap.bqConfidence != null ? <Detail label="Classifier confidence" value={`${Math.round(snap.bqConfidence * 100)}%`} /> : null}
+          </div>
+        </section>
 
         <div style={s.footer}>
           <span style={s.footerMeta}>

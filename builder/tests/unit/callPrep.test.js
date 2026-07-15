@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   CALL_PREP_TABLE,
+  TIME_TRACKING_TABLE,
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
+  buildAccountSessionsSql,
 } from '../../src/lib/callPrep.js';
-import { normalizeSnapshotRow, computeFlags } from '../../src/lib/callPrep.js';
-import { fetchConsultants, fetchBook, fetchAccountSnapshots } from '../../src/lib/callPrep.js';
+import { normalizeSnapshotRow, normalizeSessionRow, computeFlags } from '../../src/lib/callPrep.js';
+import { fetchConsultants, fetchBook, fetchAccountSnapshots, fetchAccountSessions } from '../../src/lib/callPrep.js';
 
 describe('buildConsultantsSql', () => {
   it('aggregates consultants from the snapshots table', () => {
@@ -41,6 +43,34 @@ describe('buildAccountSnapshotsSql', () => {
   it('rejects non-integer record ids', () => {
     expect(() => buildAccountSnapshotsSql('141376; DROP TABLE x')).toThrow();
     expect(() => buildAccountSnapshotsSql('abc')).toThrow();
+  });
+});
+
+describe('buildAccountSessionsSql', () => {
+  it('queries TimeTracking by account, oldest first, excluding deleted', () => {
+    const sql = buildAccountSessionsSql('141376');
+    expect(sql).toContain(TIME_TRACKING_TABLE);
+    expect(sql).toContain('MethodCompanyAccountRecordID = 141376');
+    expect(sql).toMatch(/IsDeleted = FALSE/);
+    expect(sql).toMatch(/ORDER BY TxnDate/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountSessionsSql('1; DROP TABLE x')).toThrow();
+    expect(() => buildAccountSessionsSql('abc')).toThrow();
+  });
+});
+
+describe('normalizeSessionRow', () => {
+  it('casts a TimeTracking row to a typed session', () => {
+    const s = normalizeSessionRow({
+      TxnDate: '2025-07-18', MethodSupportType: 'Free', BillableStatus: 'HasBeenBilled',
+      IsDemo: 'false', DurationHours: '1', AssignedToRecordID: '380', Notes: 'Kickoff call',
+    });
+    expect(s).toEqual({
+      date: '2025-07-18', supportType: 'Free', billable: 'HasBeenBilled',
+      isDemo: false, durationHours: 1, consultantId: 380, notes: 'Kickoff call',
+    });
   });
 });
 
