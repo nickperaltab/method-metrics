@@ -32,6 +32,7 @@ export default function TopBar({ connected, userEmail, onConnect }) {
         <a href="/method-metrics/index.html" style={{ ...styles.logo, textDecoration: 'none' }}>Method</a>
         <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
+        <NavLink to="/call-prep" style={routerNavStyle}>Call Prep</NavLink>
         <a href="../tracker.html" style={styles.navLink}>Metrics</a>
       </div>
       <div style={styles.right}>
