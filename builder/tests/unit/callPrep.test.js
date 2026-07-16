@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   CALL_PREP_TABLE,
   TIME_TRACKING_TABLE,
+  CASES_TABLE,
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
   buildAccountSessionsSql,
+  buildAccountCasesSql,
 } from '../../src/lib/callPrep.js';
-import { normalizeSnapshotRow, normalizeSessionRow, computeFlags } from '../../src/lib/callPrep.js';
-import { fetchConsultants, fetchBook, fetchAccountSnapshots, fetchAccountSessions } from '../../src/lib/callPrep.js';
+import { normalizeSnapshotRow, normalizeSessionRow, normalizeCaseRow, computeFlags } from '../../src/lib/callPrep.js';
+import { fetchConsultants, fetchBook, fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases } from '../../src/lib/callPrep.js';
 
 describe('buildConsultantsSql', () => {
   it('aggregates consultants from the snapshots table', () => {
@@ -71,6 +73,43 @@ describe('normalizeSessionRow', () => {
       date: '2025-07-18', supportType: 'Free', billable: 'HasBeenBilled',
       isDemo: false, durationHours: 1, consultantId: 380, notes: 'Kickoff call',
     });
+  });
+});
+
+describe('buildAccountCasesSql', () => {
+  it('queries Cases by account, newest first, excluding deleted', () => {
+    const sql = buildAccountCasesSql('90430');
+    expect(sql).toContain(CASES_TABLE);
+    expect(sql).toContain('MethodCompanyAccountRecordID = 90430');
+    expect(sql).toMatch(/IsDeleted = FALSE/);
+    expect(sql).toMatch(/ORDER BY CreatedDate DESC/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountCasesSql('1 OR 1=1')).toThrow();
+    expect(() => buildAccountCasesSql('abc')).toThrow();
+  });
+});
+
+describe('normalizeCaseRow', () => {
+  it('casts a Cases row, derives isOpen, trims timestamps to dates', () => {
+    const c = normalizeCaseRow({
+      RecordID: '63114', CaseStatus: 'Closed', CasePriority: 'P2-Normal',
+      subject: 'Sync Engine Related - Credentials are not saving',
+      CreatedDate: '2025-08-14T14:48:04Z', ClosedDate: '2025-08-14T18:25:28Z', ContactName: 'Bill Paschick',
+    });
+    expect(c).toEqual({
+      recordId: 63114, status: 'Closed', isOpen: false, priority: 'P2-Normal',
+      subject: 'Sync Engine Related - Credentials are not saving',
+      createdDate: '2025-08-14', closedDate: '2025-08-14', contactName: 'Bill Paschick',
+    });
+  });
+
+  it('marks non-closed statuses open and tolerates nulls', () => {
+    const c = normalizeCaseRow({ RecordID: '40347', CaseStatus: 'Waiting on Jira', subject: null, CreatedDate: '2021-02-23T17:22:35Z' });
+    expect(c.isOpen).toBe(true);
+    expect(c.closedDate).toBe(null);
+    expect(c.subject).toBe(null);
   });
 });
 

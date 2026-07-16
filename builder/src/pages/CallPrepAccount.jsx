@@ -5,7 +5,7 @@
 // revenue.TimeTracking. All content is sourced from BigQuery — no doc read.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchAccountSnapshots, fetchAccountSessions, computeFlags } from '../lib/callPrep';
+import { fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases, computeFlags } from '../lib/callPrep';
 
 const PAPER = '#faf8f3';
 const INK = '#1c1a15';
@@ -91,6 +91,16 @@ const s = {
   },
   expandHint: { fontSize: 11.5, color: ACCENT, marginTop: 3 },
 
+  // Cases
+  caseRow: { padding: '12px 0', borderBottom: `1px solid ${RULE}` },
+  caseTop: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' },
+  caseSubject: { fontSize: 14.5, fontWeight: 600, color: INK },
+  caseBadge: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 600, letterSpacing: '.05em',
+    textTransform: 'uppercase', borderRadius: 3, padding: '2px 7px',
+  },
+  caseMeta: { fontSize: 12, color: MUTE, marginTop: 3 },
+
   // Details grid
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px 22px' },
   dLabel: {
@@ -164,19 +174,25 @@ export default function CallPrepAccount() {
   const [sessions, setSessions] = useState(null);
   const [sessionsErr, setSessionsErr] = useState('');
   const [openEvent, setOpenEvent] = useState(null);
+  const [cases, setCases] = useState(null);
+  const [casesErr, setCasesErr] = useState('');
   const sheetRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     setHistory(null); setSelectedDate(null); setError('');
     setSessions(null); setSessionsErr(''); setOpenEvent(null);
+    setCases(null); setCasesErr('');
     fetchAccountSnapshots(recordId)
       .then((h) => { if (!cancelled) setHistory(h); })
       .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
-    // Timeline loads independently — a TimeTracking failure must not blank the brief.
+    // Timeline and cases load independently — a CRM-table failure must not blank the brief.
     fetchAccountSessions(recordId)
       .then((rows) => { if (!cancelled) setSessions(rows); })
       .catch((e) => { if (!cancelled) setSessionsErr(e?.message || String(e)); });
+    fetchAccountCases(recordId)
+      .then((rows) => { if (!cancelled) setCases(rows); })
+      .catch((e) => { if (!cancelled) setCasesErr(e?.message || String(e)); });
     return () => { cancelled = true; };
   }, [recordId]);
 
@@ -260,6 +276,7 @@ export default function CallPrepAccount() {
         <nav style={s.nav}>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('situation')}>Situation</a>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('timeline')}>Timeline</a>
+          <a className="cp-chip" style={s.navChip} onClick={() => jump('cases')}>Cases</a>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('details')}>Details</a>
         </nav>
 
@@ -324,6 +341,36 @@ export default function CallPrepAccount() {
               })}
               {sessions.length === 0 && <li style={s.empty}>No sessions recorded yet.</li>}
             </ul>
+          )}
+        </section>
+
+        <section id="cases" style={s.section}>
+          <div style={s.bodyLabel}>Cases</div>
+          {casesErr ? (
+            <p style={s.timelineErr}>Couldn’t load cases.</p>
+          ) : cases == null ? (
+            <p style={s.timelineErr}>Loading cases…</p>
+          ) : cases.length === 0 ? (
+            <p style={s.empty}>No cases on record.</p>
+          ) : (
+            <div>
+              {cases.map((c) => (
+                <div key={c.recordId} style={s.caseRow}>
+                  <div style={s.caseTop}>
+                    <span style={s.caseSubject}>{c.subject ?? `Case #${c.recordId}`}</span>
+                    <span style={{ ...s.caseBadge, ...(c.isOpen ? { background: '#fbf1e4', color: AMBER } : { background: '#f1efe8', color: MUTE }) }}>
+                      {c.status || (c.isOpen ? 'Open' : 'Closed')}
+                    </span>
+                    {c.priority ? <span style={{ ...s.caseBadge, background: '#f1efe8', color: MUTE }}>{c.priority}</span> : null}
+                  </div>
+                  <div style={s.caseMeta}>
+                    #{c.recordId} · opened {c.createdDate}
+                    {c.closedDate ? ` · closed ${c.closedDate}` : ''}
+                    {c.contactName ? ` · ${c.contactName}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </section>
 
