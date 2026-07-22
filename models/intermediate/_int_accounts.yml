@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: int_accounts
+    description: |
+      One row per Method account (account grain, key = account_record_id).
+      Current-state account attributes for operational lookup: SaaS run-rate,
+      user licenses, health score, pay type, active flag. entity_record_id
+      bridges to the entity-grain revenue models (int_customers,
+      int_customer_mrr) which key on EntityRecordID. Source: revenue.Account
+      (Alocet nightly mirror). Distinct grain from int_customers, which is
+      entity/customer grain and a monthly time series — this model is current
+      account state, one row per account.
+    config:
+      meta:
+        layer: intermediate
+        grain: account
+        owner: nic
+
+    columns:
+      - name: account_record_id
+        description: >
+          Account-level primary key. Equals Alocet CustomerMethodAccount.RecordID
+          and call_prep.snapshots.account_record_id — the join key for the call-prep
+          brief.
+        tests:
+          - unique
+          - not_null
+
+      - name: entity_record_id
+        description: >
+          Customer/entity key. Bridge to int_customers / int_customer_mrr, which
+          key on EntityRecordID. This was the missing link that blocked joining
+          account-grain call-prep data to the entity-grain revenue models.
+
+      - name: company_account
+        description: Subdomain-style account name (e.g. "wavedistro1").
+
+      - name: mrr_run_rate
+        description: >
+          Monthly SaaS run-rate proxy from Account.Custdatlastsaasamount (nightly
+          snapshot). Excludes prepay discount, portals, and overages. Directional
+          only — NOT recognized revenue and NOT board-grade MRR (canonical
+          recognized SaaS is TransLineFlattened.SaaSAmount). Use for operational
+          context on the account brief, not for revenue reporting.
+
+      - name: user_licenses
+        description: >
+          Paid user license count (Account.LicenseCount). Source contains
+          negatives (min observed -2) from credits/adjustments — guard with
+          NULLIF(GREATEST(user_licenses,0),0) before using as a ratio denominator.
+
+      - name: health_score
+        description: >
+          Customer health score 0–100 (Account.HealthScore). ~61% null across all
+          accounts, populated mainly on active accounts. Nullable by design — no
+          not_null test.
+
+      - name: is_active
+        description: Whether the account is active (has not cancelled).
+
+      - name: saas_pay_type
+        description: Billing type, e.g. Prepay or Monthly (Account.SaaSPayType).
