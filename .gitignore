@@ -16,3 +16,6 @@ scripts/audit/*.json
 # by `npm run prepare-deploy` in mcp/metrics/ at deploy time
 mcp/metrics/bundle/
 mcp/metrics/.vercel/
+
+# MWD board-prep query outputs (may contain MRR/customer-level data) — never commit (public repo)
+scripts/mwd-board-prep/out/
