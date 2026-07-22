@@ -3,13 +3,15 @@ import {
   CALL_PREP_TABLE,
   TIME_TRACKING_TABLE,
   CASES_TABLE,
+  ACCOUNTS_TABLE,
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
   buildAccountSessionsSql,
   buildAccountCasesSql,
+  buildAccountOverviewSql,
 } from '../../src/lib/callPrep.js';
-import { normalizeSnapshotRow, normalizeSessionRow, normalizeCaseRow, computeFlags } from '../../src/lib/callPrep.js';
+import { normalizeSnapshotRow, normalizeSessionRow, normalizeCaseRow, normalizeAccountOverview, computeFlags } from '../../src/lib/callPrep.js';
 import { fetchConsultants, fetchBook, fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases } from '../../src/lib/callPrep.js';
 
 describe('buildConsultantsSql', () => {
@@ -88,6 +90,38 @@ describe('buildAccountCasesSql', () => {
   it('rejects non-integer record ids', () => {
     expect(() => buildAccountCasesSql('1 OR 1=1')).toThrow();
     expect(() => buildAccountCasesSql('abc')).toThrow();
+  });
+});
+
+describe('buildAccountOverviewSql', () => {
+  it('queries int_accounts by account, single row', () => {
+    const sql = buildAccountOverviewSql('90430');
+    expect(sql).toContain(ACCOUNTS_TABLE);
+    expect(sql).toContain('account_record_id = 90430');
+    expect(sql).toMatch(/LIMIT 1/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountOverviewSql('1; DROP TABLE x')).toThrow();
+  });
+});
+
+describe('normalizeAccountOverview', () => {
+  it('casts an int_accounts row', () => {
+    const a = normalizeAccountOverview({
+      account_record_id: '90430', mrr_run_rate: '209', user_licenses: '5',
+      health_score: '38', is_active: 'true', saas_pay_type: 'Prepay',
+    });
+    expect(a).toEqual({
+      accountRecordId: 90430, mrrRunRate: 209, userLicenses: 5,
+      healthScore: 38, isActive: true, saasPayType: 'Prepay',
+    });
+  });
+
+  it('nulls non-positive license counts (source has negatives) and tolerates a missing row', () => {
+    expect(normalizeAccountOverview({ account_record_id: '1', user_licenses: '-2' }).userLicenses).toBe(null);
+    expect(normalizeAccountOverview({ account_record_id: '1', user_licenses: '0' }).userLicenses).toBe(null);
+    expect(normalizeAccountOverview(undefined)).toBe(null);
   });
 });
 

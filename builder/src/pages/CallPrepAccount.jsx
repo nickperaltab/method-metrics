@@ -5,7 +5,7 @@
 // revenue.TimeTracking. All content is sourced from BigQuery — no doc read.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases, computeFlags } from '../lib/callPrep';
+import { fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases, fetchAccountOverview, computeFlags } from '../lib/callPrep';
 
 const PAPER = '#faf8f3';
 const INK = '#1c1a15';
@@ -176,23 +176,28 @@ export default function CallPrepAccount() {
   const [openEvent, setOpenEvent] = useState(null);
   const [cases, setCases] = useState(null);
   const [casesErr, setCasesErr] = useState('');
+  const [overview, setOverview] = useState(null);
   const sheetRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     setHistory(null); setSelectedDate(null); setError('');
     setSessions(null); setSessionsErr(''); setOpenEvent(null);
-    setCases(null); setCasesErr('');
+    setCases(null); setCasesErr(''); setOverview(null);
     fetchAccountSnapshots(recordId)
       .then((h) => { if (!cancelled) setHistory(h); })
       .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
-    // Timeline and cases load independently — a CRM-table failure must not blank the brief.
+    // Timeline, cases, and overview load independently — a CRM/warehouse-table
+    // failure must not blank the brief.
     fetchAccountSessions(recordId)
       .then((rows) => { if (!cancelled) setSessions(rows); })
       .catch((e) => { if (!cancelled) setSessionsErr(e?.message || String(e)); });
     fetchAccountCases(recordId)
       .then((rows) => { if (!cancelled) setCases(rows); })
       .catch((e) => { if (!cancelled) setCasesErr(e?.message || String(e)); });
+    fetchAccountOverview(recordId)
+      .then((o) => { if (!cancelled) setOverview(o); })
+      .catch(() => { if (!cancelled) setOverview(null); });
     return () => { cancelled = true; };
   }, [recordId]);
 
@@ -275,6 +280,7 @@ export default function CallPrepAccount() {
 
         <nav style={s.nav}>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('situation')}>Situation</a>
+          {overview ? <a className="cp-chip" style={s.navChip} onClick={() => jump('revenue')}>Revenue</a> : null}
           <a className="cp-chip" style={s.navChip} onClick={() => jump('timeline')}>Timeline</a>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('cases')}>Cases</a>
           <a className="cp-chip" style={s.navChip} onClick={() => jump('details')}>Details</a>
@@ -295,6 +301,21 @@ export default function CallPrepAccount() {
             <p style={s.empty}>No prep notes recorded for this snapshot.</p>
           )}
         </section>
+
+        {overview && (
+          <section id="revenue" style={s.section}>
+            <div style={s.bodyLabel}>Revenue &amp; licenses</div>
+            <div style={s.grid}>
+              <Detail label="MRR (run-rate)" value={overview.mrrRunRate != null ? `$${overview.mrrRunRate.toLocaleString()}/mo` : null} />
+              <Detail label="User licenses" value={overview.userLicenses} />
+              <Detail label="Health score" value={overview.healthScore != null ? Math.round(overview.healthScore) : null} warn={overview.healthScore != null && overview.healthScore < 50} />
+              <Detail label="Billing" value={overview.saasPayType} />
+            </div>
+            <p style={{ fontSize: 11.5, color: FAINT, marginTop: 12, fontStyle: 'italic' }}>
+              Utilization (active users ÷ licenses) pending an upstream field. MRR is a nightly run-rate proxy, not recognized revenue.
+            </p>
+          </section>
+        )}
 
         <section id="timeline" style={s.section}>
           <div style={s.bodyLabel}>History</div>
