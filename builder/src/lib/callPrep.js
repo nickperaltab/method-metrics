@@ -11,6 +11,7 @@ import { queryBqWithRetry } from './bigquery.js';
 export const CALL_PREP_TABLE = '`project-for-method-dw.call_prep.snapshots`';
 export const TIME_TRACKING_TABLE = '`project-for-method-dw.revenue.TimeTracking`';
 export const CASES_TABLE = '`project-for-method-dw.revenue.Cases`';
+export const ACCOUNTS_TABLE = '`project-for-method-dw.revenue.int_accounts`';
 
 export function buildConsultantsSql() {
   return `
@@ -69,6 +70,23 @@ export function buildAccountSessionsSql(recordId) {
     WHERE MethodCompanyAccountRecordID = ${id}
       AND IsDeleted = FALSE
     ORDER BY TxnDate`;
+}
+
+// Account overview (MRR run-rate, licenses, health) from the dbt model
+// revenue.int_accounts, keyed on account_record_id (= snapshots.account_record_id).
+export function buildAccountOverviewSql(recordId) {
+  const id = validateInt(recordId, 'account_record_id');
+  return `
+    SELECT
+      account_record_id,
+      mrr_run_rate,
+      user_licenses,
+      health_score,
+      is_active,
+      saas_pay_type
+    FROM ${ACCOUNTS_TABLE}
+    WHERE account_record_id = ${id}
+    LIMIT 1`;
 }
 
 // Case history from revenue.Cases, keyed on MethodCompanyAccountRecordID.
@@ -145,6 +163,20 @@ export function normalizeSessionRow(row) {
   };
 }
 
+/** Convert a raw int_accounts row into a typed account overview. */
+export function normalizeAccountOverview(row) {
+  if (!row) return null;
+  const licenses = toInt(row.user_licenses);
+  return {
+    accountRecordId: toInt(row.account_record_id),
+    mrrRunRate: toFloat(row.mrr_run_rate),
+    userLicenses: licenses != null && licenses > 0 ? licenses : null,
+    healthScore: toFloat(row.health_score),
+    isActive: toBool(row.is_active),
+    saasPayType: toStr(row.saas_pay_type),
+  };
+}
+
 /** Convert a raw Cases row into a typed camelCase case. */
 export function normalizeCaseRow(row) {
   const status = toStr(row.CaseStatus);
@@ -207,4 +239,9 @@ export async function fetchAccountSessions(recordId, { query = queryBqWithRetry 
 export async function fetchAccountCases(recordId, { query = queryBqWithRetry } = {}) {
   const { rows } = await query(buildAccountCasesSql(recordId));
   return rows.map(normalizeCaseRow);
+}
+
+export async function fetchAccountOverview(recordId, { query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildAccountOverviewSql(recordId));
+  return normalizeAccountOverview(rows[0]);
 }
