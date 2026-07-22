@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   CALL_PREP_TABLE,
+  TIME_TRACKING_TABLE,
+  CASES_TABLE,
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
+  buildAccountSessionsSql,
+  buildAccountCasesSql,
 } from '../../src/lib/callPrep.js';
-import { normalizeSnapshotRow, computeFlags } from '../../src/lib/callPrep.js';
-import { fetchConsultants, fetchBook, fetchAccountSnapshots } from '../../src/lib/callPrep.js';
+import { normalizeSnapshotRow, normalizeSessionRow, normalizeCaseRow, computeFlags } from '../../src/lib/callPrep.js';
+import { fetchConsultants, fetchBook, fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases } from '../../src/lib/callPrep.js';
 
 describe('buildConsultantsSql', () => {
   it('aggregates consultants from the snapshots table', () => {
@@ -41,6 +45,71 @@ describe('buildAccountSnapshotsSql', () => {
   it('rejects non-integer record ids', () => {
     expect(() => buildAccountSnapshotsSql('141376; DROP TABLE x')).toThrow();
     expect(() => buildAccountSnapshotsSql('abc')).toThrow();
+  });
+});
+
+describe('buildAccountSessionsSql', () => {
+  it('queries TimeTracking by account, oldest first, excluding deleted', () => {
+    const sql = buildAccountSessionsSql('141376');
+    expect(sql).toContain(TIME_TRACKING_TABLE);
+    expect(sql).toContain('MethodCompanyAccountRecordID = 141376');
+    expect(sql).toMatch(/IsDeleted = FALSE/);
+    expect(sql).toMatch(/ORDER BY TxnDate/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountSessionsSql('1; DROP TABLE x')).toThrow();
+    expect(() => buildAccountSessionsSql('abc')).toThrow();
+  });
+});
+
+describe('normalizeSessionRow', () => {
+  it('casts a TimeTracking row to a typed session', () => {
+    const s = normalizeSessionRow({
+      TxnDate: '2025-07-18', MethodSupportType: 'Free', BillableStatus: 'HasBeenBilled',
+      IsDemo: 'false', DurationHours: '1', AssignedToRecordID: '380', Notes: 'Kickoff call',
+    });
+    expect(s).toEqual({
+      date: '2025-07-18', supportType: 'Free', billable: 'HasBeenBilled',
+      isDemo: false, durationHours: 1, consultantId: 380, notes: 'Kickoff call',
+    });
+  });
+});
+
+describe('buildAccountCasesSql', () => {
+  it('queries Cases by account, newest first, excluding deleted', () => {
+    const sql = buildAccountCasesSql('90430');
+    expect(sql).toContain(CASES_TABLE);
+    expect(sql).toContain('MethodCompanyAccountRecordID = 90430');
+    expect(sql).toMatch(/IsDeleted = FALSE/);
+    expect(sql).toMatch(/ORDER BY CreatedDate DESC/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountCasesSql('1 OR 1=1')).toThrow();
+    expect(() => buildAccountCasesSql('abc')).toThrow();
+  });
+});
+
+describe('normalizeCaseRow', () => {
+  it('casts a Cases row, derives isOpen, trims timestamps to dates', () => {
+    const c = normalizeCaseRow({
+      RecordID: '63114', CaseStatus: 'Closed', CasePriority: 'P2-Normal',
+      subject: 'Sync Engine Related - Credentials are not saving',
+      CreatedDate: '2025-08-14T14:48:04Z', ClosedDate: '2025-08-14T18:25:28Z', ContactName: 'Bill Paschick',
+    });
+    expect(c).toEqual({
+      recordId: 63114, status: 'Closed', isOpen: false, priority: 'P2-Normal',
+      subject: 'Sync Engine Related - Credentials are not saving',
+      createdDate: '2025-08-14', closedDate: '2025-08-14', contactName: 'Bill Paschick',
+    });
+  });
+
+  it('marks non-closed statuses open and tolerates nulls', () => {
+    const c = normalizeCaseRow({ RecordID: '40347', CaseStatus: 'Waiting on Jira', subject: null, CreatedDate: '2021-02-23T17:22:35Z' });
+    expect(c.isOpen).toBe(true);
+    expect(c.closedDate).toBe(null);
+    expect(c.subject).toBe(null);
   });
 });
 
