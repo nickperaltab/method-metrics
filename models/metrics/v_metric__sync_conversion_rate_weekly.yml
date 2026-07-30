@@ -1,0 +1,35 @@
+# Canonical metric definition for "Sync Conversion Rate (weekly)".
+
+models:
+  - name: v_metric__sync_conversion_rate_weekly
+    description: |
+      Weekly sync conversion rate — conversions in an ISO week divided by
+      sync events in the same week, no lag. Weeks start Monday, matching
+      every other weekly series on the Sales Scorecard. Rolling 24 months.
+      Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What fraction of sync events converted, week by week?"
+        grain: "ISO week (Monday start). Period-level ratio; both sides are event/account counts."
+        filters:
+          - rule: "rolling 24 months on both sides"
+            why: "matches the metrics-layer convention and bounds query cost"
+        methodology_source: "Weekly form of Sync-to-Conversion Rate (#301). Same-month/no-lag convention chosen 2026-07-30."
+        parity_verified:
+          against: "PENDING — Task 10 records the live Looker side-by-side"
+          values: "PENDING"
+        caveats:
+          - "Weekly rates are noisy. The trials equivalent swings between 6% and 17% week to week; expect similar or worse here on a smaller denominator."
+          - "Denominator is event-grain syncs, inflated roughly 9-13% by re-syncs."
+          - "The current partial week is incomplete on both sides and can read anomalously."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section, Week Over Week chart)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: ratio
+        status: queued
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: '56-55'
