@@ -1,0 +1,56 @@
+version: 2
+
+unit_tests:
+  - name: forecasted_sync_rate_sums_before_dividing
+    model: v_metric__sync_conversion_rate_forecasted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-07-01', Forecasted_Conversion: 2, Forecasted_Syncs: 5 }
+          - { Date: '2026-07-02', Forecasted_Conversion: 3, Forecasted_Syncs: 15 }
+          - { Date: '2026-08-01', Forecasted_Conversion: 1, Forecasted_Syncs: 4 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: 0.25 }
+        - { period: '2026-08-01', value: 0.25 }
+
+  - name: forecasted_sync_rate_null_on_zero_denominator
+    model: v_metric__sync_conversion_rate_forecasted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-09-01', Forecasted_Conversion: 5, Forecasted_Syncs: 0 }
+    expect:
+      rows:
+        - { period: '2026-09-01', value: null }
+
+models:
+  - name: v_metric__sync_conversion_rate_forecasted
+    description: |
+      Forecasted sync conversion rate by month — forecasted conversions
+      divided by forecasted sync events, summing daily allocations before
+      dividing. DERIVED, not published: method_forecast carries a
+      pre-computed trials-based Forecasted_Conversion_Rate but no sync
+      equivalent. Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What sync conversion rate does the forecast imply for each month?"
+        grain: "Period-level ratio, one row per month present in the forecast sheet."
+        methodology_source: "Derived by Nic 2026-07-30 as Forecasted_Conversion / Forecasted_Syncs. NOT a Justin-published ratio — pending his confirmation."
+        parity_verified:
+          against: "PENDING — Justin sign-off plus Looker side-by-side in Task 10"
+          values: "PENDING"
+        caveats:
+          - "DERIVED ratio. Justin has not published a forecasted sync conversion rate."
+          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: method_forecast
+        source_measure_safe: ''
+        depends_on: ''

@@ -1,0 +1,62 @@
+version: 2
+
+unit_tests:
+  - name: budgeted_sync_rate_sums_before_dividing
+    model: v_metric__sync_conversion_rate_budgeted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          # Two days in the same month. Summing first gives 5/20 = 0.25.
+          # Averaging the daily ratios would give (2/5 + 3/15)/2 = 0.30 — wrong.
+          - { Date: '2026-07-01', Budgeted_Conversion: 2.0, Budgeted_Syncs: 5.0 }
+          - { Date: '2026-07-02', Budgeted_Conversion: 3.0, Budgeted_Syncs: 15.0 }
+          - { Date: '2026-08-01', Budgeted_Conversion: 1.0, Budgeted_Syncs: 4.0 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: 0.25 }
+        - { period: '2026-08-01', value: 0.25 }
+
+  - name: budgeted_sync_rate_null_on_zero_denominator
+    model: v_metric__sync_conversion_rate_budgeted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-09-01', Budgeted_Conversion: 5.0, Budgeted_Syncs: 0.0 }
+    expect:
+      rows:
+        - { period: '2026-09-01', value: null }
+
+models:
+  - name: v_metric__sync_conversion_rate_budgeted
+    description: |
+      Budgeted sync conversion rate by month — budgeted conversions divided
+      by budgeted sync events, summing daily allocations before dividing.
+      DERIVED, not published: method_forecast carries a pre-computed
+      trials-based Budgeted_Conversion_Rate but no sync equivalent. Emits a
+      decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What sync conversion rate does the budget imply for each month?"
+        grain: "Period-level ratio, one row per month present in the forecast sheet."
+        filters:
+          - rule: "none"
+            why: "the sheet contains only budget-year rows; no date filter needed"
+        methodology_source: "Derived by Nic 2026-07-30 as Budgeted_Conversion / Budgeted_Syncs. NOT a Justin-published ratio — pending his confirmation."
+        parity_verified:
+          against: "PENDING — Justin sign-off plus Looker side-by-side in Task 10"
+          values: "PENDING"
+        caveats:
+          - "DERIVED ratio. Justin has not published a budgeted sync conversion rate; this infers one from two budgeted counts."
+          - "Source is revenue.method_forecast, an EXTERNAL table federated over a Google Sheet. A column rename or shifted header row breaks this silently."
+          - "Federated-sheet reads need the Drive scope on any service-account path."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: method_forecast
+        source_measure_safe: ''
+        depends_on: ''
