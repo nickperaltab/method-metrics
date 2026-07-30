@@ -1,0 +1,39 @@
+# Canonical metric definition for "Syncs Trajectory" (#295).
+
+models:
+  - name: v_metric__syncs_trajectory
+    description: |
+      Month-end projection of sync events for the in-progress month.
+      Counts syncs through yesterday, divides by the current day of month,
+      and scales to the full month. Same divisor convention as Conversions
+      Trajectory (#296) so the two can be divided into a rate. Returns
+      exactly one row for the current month.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, how many sync events will it finish with?"
+        grain: "Single row, current month. Event-grain numerator (see Syncs #55)."
+        filters:
+          - rule: "SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)"
+            why: "restricts the numerator to the in-progress month"
+          - rule: "SyncDate < CURRENT_DATE()"
+            why: "excludes today, which is incomplete"
+        methodology_source: "Mirrors the divisor convention derived for Conversions Trajectory (#296) from the 2026-07-22 Looker read."
+        parity_verified:
+          against: "PENDING — Task 10 records the live Looker side-by-side"
+          values: "PENDING"
+        caveats:
+          - "Inherits the event-grain inflation of Syncs #55 — roughly 9-13% from re-sync events. See scripts/reconcile_sync_denominators.py output."
+          - "Noisy in the first few days of a month, same as #296."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+          - "Sync Conversion Rate Trajectory"
+      labels:
+        metric_id: '295'
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: int_syncs
+        source_measure_safe: count_star
+        depends_on: '55'
