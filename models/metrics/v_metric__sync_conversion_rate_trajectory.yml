@@ -1,0 +1,60 @@
+version: 2
+
+unit_tests:
+  - name: sync_conversion_rate_trajectory_divides
+    model: v_metric__sync_conversion_rate_trajectory
+    given:
+      - input: ref('v_metric__conversions_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 71.86 }
+      - input: ref('v_metric__syncs_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 250.0 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: 0.28744 }
+
+  - name: sync_conversion_rate_trajectory_null_safe_on_zero_syncs
+    model: v_metric__sync_conversion_rate_trajectory
+    given:
+      - input: ref('v_metric__conversions_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 10.0 }
+      - input: ref('v_metric__syncs_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 0.0 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: null }
+
+models:
+  - name: v_metric__sync_conversion_rate_trajectory
+    description: |
+      Month-end projection of the sync conversion rate for the in-progress
+      month — projected conversions divided by projected sync events. Both
+      sides use the same day_of_month projection, so the ratio is stable
+      through the month. Same-month, no lag, matching Sync-to-Conversion
+      Rate (#301). Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, what sync conversion rate will it finish at?"
+        grain: "Single row, current month. Period-level ratio."
+        methodology_source: "Ratio of the two trajectory projections, which follow the Looker divisor convention derived 2026-07-22."
+        parity_verified:
+          against: "PENDING — Task 10 records the live Looker side-by-side"
+          values: "PENDING"
+        caveats:
+          - "Denominator is event-grain syncs, inflated roughly 9-13% by re-syncs. Reads LOW versus a true 'share of synced accounts that converted'."
+          - "Not comparable in LEVEL to the trials Conversion Rate Trajectory — that one uses a lagged denominator. Compare trend and attainment, not level."
+          - "Single-row by design."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: ratio
+        status: queued
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: '296-295'
