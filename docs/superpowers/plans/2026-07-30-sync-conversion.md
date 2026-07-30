@@ -1571,8 +1571,14 @@ For each of the four pointer metrics, open its `models/metrics/*.yml` and replac
 
 - [ ] **Step 7: Rebuild so the labels land in BigQuery**
 
+Rebuild only the four models whose labels changed. Do **not** run `--select "models/metrics/*"` — that issues `CREATE OR REPLACE VIEW` against all 20+ production metric views, and the Global Constraint requires a snapshot before touching any existing view.
+
 ```bash
-/Users/nicolas/.local/bin/dbt run --select "models/metrics/*"
+/Users/nicolas/.local/bin/dbt run --select \
+  v_metric__sync_conversion_rate_trajectory \
+  v_metric__sync_conversion_rate_budgeted \
+  v_metric__sync_conversion_rate_forecasted \
+  v_metric__sync_conversion_rate_weekly
 ```
 
 - [ ] **Step 8: Commit**
@@ -1937,13 +1943,24 @@ Send him the Step 2 output with the two derived rows highlighted and ask whether
 
 Show Nic the Step 2 parity table, the Task 7 reconciliation output, and Justin's answer.
 
-On approval, change `status: queued` to `status: live` in all seven `models/metrics/*.yml`, add `verified_at` with the parity date, then:
+On approval, change `status: queued` to `status: live` in all seven `models/metrics/*.yml`, add `verified_at` with the parity date, then rebuild only this plan's models plus their tests:
 
 ```bash
-/Users/nicolas/.local/bin/dbt build --select "models/metrics/*"
+/Users/nicolas/.local/bin/dbt build --select \
+  v_metric__conversions_trajectory \
+  v_metric__syncs_trajectory \
+  v_metric__sync_conversion_rate_trajectory \
+  v_metric__sync_conversion_rate_budgeted \
+  v_metric__sync_conversion_rate_forecasted \
+  v_metric__sync_conversion_rate_weekly \
+  v_metric__trial_conversion_rate_lagged \
+  assert_trajectory_invariants \
+  assert_sync_conversion_rate_sane
 ```
 
-Expected: all models build, all tests pass.
+Expected: all seven models build, both tests pass.
+
+Do not widen this to `--select "models/metrics/*"`. That would `CREATE OR REPLACE` every production metric view without the snapshot the Global Constraints require.
 
 Also flip the Supabase rows:
 
@@ -1977,9 +1994,16 @@ In `TICKETS.md`, close the two resolved tickets. For ticket 1, record the correc
 cd builder && npm run build
 ```
 
+Stage explicitly. Do **not** use `git add -A` — the working tree carries unrelated in-progress net-saas work (`builder/src/lib/netSaasSql.js`, `net-saas-scorecard.js`, and others) that must not be swept into this commit.
+
 ```bash
-git add -A && git commit -m "feat(sales-scorecard): sync conversion section live, scorecard to beta" && git push
+git add models/metrics tests docs/metric-definitions.md TICKETS.md \
+        builder/src/config/scorecards/sales-scorecard.js builder/dist
+git commit -m "feat(sales-scorecard): sync conversion section live, scorecard to beta"
+git push
 ```
+
+Before pushing, run `git show --stat HEAD` and confirm no `netSaas*` file appears.
 
 GitHub Pages auto-deploys on push to `main`. Do not run `vercel --prod`.
 
