@@ -40,8 +40,8 @@ models:
         answers: "What sync conversion rate does the budget imply for each month?"
         grain: "Period-level ratio, one row per month present in the forecast sheet."
         filters:
-          - rule: "none"
-            why: "the sheet contains only budget-year rows; no date filter needed"
+          - rule: "Date IS NOT NULL"
+            why: "the federated sheet has ~633 fully-blank trailing rows past the populated range; without this, GROUP BY DATE_TRUNC(Date, MONTH) collapses them into a bogus period=NULL row"
         methodology_source: "Derived by Nic 2026-07-30 as Budgeted_Conversion / Budgeted_Syncs. NOT a Justin-published ratio — pending his confirmation."
         parity_verified:
           against: "PENDING — Justin sign-off plus Looker side-by-side in Task 10"
