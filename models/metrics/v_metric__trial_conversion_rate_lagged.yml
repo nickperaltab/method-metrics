@@ -1,3 +1,89 @@
+version: 2
+
+unit_tests:
+  - name: trial_conversion_rate_lagged_happy_path
+    model: v_metric__trial_conversion_rate_lagged
+    given:
+      - input: source('revenue', 'int_conversions')
+        rows:
+          # 3 conversions in 2026-05
+          - { FirstSaaSInvoiceTxnDate: '2026-05-03' }
+          - { FirstSaaSInvoiceTxnDate: '2026-05-10' }
+          - { FirstSaaSInvoiceTxnDate: '2026-05-20' }
+      - input: ref('int_trials')
+        rows:
+          # 8 trials in 2026-04 (M-1), should surface under 2026-05
+          - { SignupDate: '2026-04-01' }
+          - { SignupDate: '2026-04-05' }
+          - { SignupDate: '2026-04-09' }
+          - { SignupDate: '2026-04-12' }
+          - { SignupDate: '2026-04-15' }
+          - { SignupDate: '2026-04-19' }
+          - { SignupDate: '2026-04-24' }
+          - { SignupDate: '2026-04-28' }
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-05-01', Forecasted_Trials: 12 }
+    expect:
+      # denominator = (8 trials + 12 forecast) / 2 = 10; value = 3 / 10
+      rows:
+        - { period: '2026-05-01', value: 0.3 }
+
+  - name: trial_conversion_rate_lagged_null_without_forecast_row
+    model: v_metric__trial_conversion_rate_lagged
+    given:
+      - input: source('revenue', 'int_conversions')
+        rows:
+          # 2 conversions in 2026-02
+          - { FirstSaaSInvoiceTxnDate: '2026-02-04' }
+          - { FirstSaaSInvoiceTxnDate: '2026-02-18' }
+      - input: ref('int_trials')
+        rows:
+          # 4 trials in 2026-01 (M-1), should surface under 2026-02
+          - { SignupDate: '2026-01-02' }
+          - { SignupDate: '2026-01-08' }
+          - { SignupDate: '2026-01-15' }
+          - { SignupDate: '2026-01-22' }
+      - input: source('revenue', 'method_forecast')
+        rows: []
+    expect:
+      # No forecast row for 2026-02 (this is the shape of the real bug: a
+      # month before forecast coverage begins). The old SQL COALESCEd the
+      # missing side to 0 and returned 4/2 = 2 => value = 2/2 = 1.0 here.
+      # The fixed SQL must propagate NULL instead of inventing a rate.
+      rows:
+        - { period: '2026-02-01', value: null }
+
+  - name: trial_conversion_rate_lagged_lag_lands_one_month_forward
+    model: v_metric__trial_conversion_rate_lagged
+    given:
+      - input: source('revenue', 'int_conversions')
+        rows:
+          - { FirstSaaSInvoiceTxnDate: '2026-03-15' }
+          - { FirstSaaSInvoiceTxnDate: '2026-04-15' }
+      - input: ref('int_trials')
+        rows:
+          # trials all in 2026-03 — must surface under 2026-04, not 2026-03
+          - { SignupDate: '2026-03-02' }
+          - { SignupDate: '2026-03-08' }
+          - { SignupDate: '2026-03-14' }
+          - { SignupDate: '2026-03-20' }
+          - { SignupDate: '2026-03-27' }
+      - input: source('revenue', 'method_forecast')
+        rows:
+          # forecast only exists for 2026-04, not 2026-03
+          - { Date: '2026-04-01', Forecasted_Trials: 15 }
+    expect:
+      # 2026-03: no trials_lagged row (the March trials shifted to April)
+      # and no forecast row either -> NULL denominator -> NULL value.
+      # 2026-04: trials_lagged = 5 (from March, correctly lagged forward),
+      # forecast = 15 -> denominator = (5+15)/2 = 10 -> value = 1/10 = 0.1.
+      # An off-by-one lag (0 or 2 months instead of 1) would leave 2026-04
+      # without its trials_lagged match and fail this test.
+      rows:
+        - { period: '2026-03-01', value: null }
+        - { period: '2026-04-01', value: 0.1 }
+
 # Canonical metric definition for "Conversion Rate" (#357).
 
 models:
@@ -24,10 +110,11 @@ models:
           against: "PENDING — Task 10 records the live Looker side-by-side"
           values: "PENDING"
         caveats:
-          - "The current month reads LOW by construction: partial numerator over a full-month denominator. Roughly 9.6% on the 22nd versus roughly 13% at month end. Use #321 for the month-end projection."
+          - "The current month reads LOW by construction: partial numerator over a full-month denominator. Roughly 9.6% mid-month versus roughly 13% at month end. Use #321 for the month-end projection. Note this effect is only visible when there are still days left in the month to run off — a read taken on the last day of the month will look like a normal closed month, not a low one."
           - "NOT the same metric as Trial-to-Conversion Rate (#302), which is same-month and runs 15-20%. Two different questions, two different numbers."
           - "Denominator blends actual and forecast, so it moves when the forecast sheet is edited."
           - "Not comparable in LEVEL to the sync conversion rate, which has no lag."
+          - "Months before method_forecast's coverage begins have no matching forecast row and return NULL, not a fabricated rate. Earlier SQL COALESCEd the missing forecast (and would COALESCE missing prior-month trials the same way) to 0, which silently halved the /2.0 denominator and roughly doubled the rate for every uncovered month — some read as high as 18-38%, above even #302. Fixed by removing the COALESCE so a missing input propagates to NULL through SAFE_DIVIDE. The window is not hardcoded to a coverage date; it self-extends as the forecast sheet accumulates history."
         used_by:
           - "Sales Scorecard (Conversion Rate section)"
       labels:

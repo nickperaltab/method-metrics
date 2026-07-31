@@ -20,6 +20,21 @@
 -- the trajectory metric (#321) is the month-end projection.
 --
 -- Emits a decimal rate (0.096), not a percentage (9.6).
+--
+-- NULL handling: a period is only computable if BOTH prior-month trials
+-- AND that month's forecast row exist. `method_forecast` only has data
+-- from 2025-12 onward, so months before forecast coverage begins have no
+-- `forecast` row. Do NOT COALESCE the missing side to 0 — that silently
+-- halves the denominator (via the /2.0 average) and roughly doubles the
+-- rate for every pre-coverage month. Instead, let a missing input
+-- propagate to a NULL denominator, so SAFE_DIVIDE returns NULL for that
+-- period. The row still appears (one row per month with conversions) so
+-- a chart consumer sees an explicit gap for that period rather than the
+-- period silently vanishing — a missing row could otherwise be mistaken
+-- for the pipeline not having run, whereas a NULL value unambiguously
+-- says "not computable yet." The window therefore self-extends: as the
+-- forecast sheet accumulates history, older months resolve on their own
+-- with no code change needed here.
 
 WITH conversions AS (
   SELECT
@@ -49,7 +64,7 @@ SELECT
   c.period AS period,
   SAFE_DIVIDE(
     c.conversions,
-    (COALESCE(t.prior_month_trials, 0) + COALESCE(f.forecasted_trials, 0)) / 2.0
+    (t.prior_month_trials + f.forecasted_trials) / 2.0
   ) AS value
 FROM conversions c
 LEFT JOIN trials_lagged t USING (period)
