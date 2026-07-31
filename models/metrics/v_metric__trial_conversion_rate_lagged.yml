@@ -1,0 +1,40 @@
+# Canonical metric definition for "Conversion Rate" (#357).
+
+models:
+  - name: v_metric__trial_conversion_rate_lagged
+    description: |
+      Trials-based conversion rate as shown on the Sales Scorecard —
+      conversions in a month divided by the average of the prior month's
+      trials and that month's forecasted trials. The one-month lag reflects
+      that trials convert roughly a month after signup. Distinct from
+      Trial-to-Conversion Rate (#302), which is same-month and runs higher.
+      Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What share of the trial pool converted in each month, using the lagged denominator the Sales Scorecard reports on?"
+        grain: "Period-level ratio. Account-grain numerator and denominator."
+        filters:
+          - rule: "conversions rolling 24 months; trials rolling 25 months"
+            why: "the oldest output month needs its M-1 trials, which sit one month before the 24-month window"
+          - rule: "int_trials excludes IsConversionException, Method Integration partners, and the 0001-01-01 sentinel"
+            why: "inherited from the Trials metric (#54)"
+        methodology_source: "Matches WEEKLY_CONVERSION_RATE_SQL in builder/src/config/scorecards/sales-scorecard.js, lifted to monthly grain. That SQL replicated the Looker Sales Scorecard panel."
+        parity_verified:
+          against: "PENDING — Task 10 records the live Looker side-by-side"
+          values: "PENDING"
+        caveats:
+          - "The current month reads LOW by construction: partial numerator over a full-month denominator. Roughly 9.6% on the 22nd versus roughly 13% at month end. Use #321 for the month-end projection."
+          - "NOT the same metric as Trial-to-Conversion Rate (#302), which is same-month and runs 15-20%. Two different questions, two different numbers."
+          - "Denominator blends actual and forecast, so it moves when the forecast sheet is edited."
+          - "Not comparable in LEVEL to the sync conversion rate, which has no lag."
+        used_by:
+          - "Sales Scorecard (Conversion Rate section)"
+      labels:
+        metric_id: '357'
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: '56-54'
