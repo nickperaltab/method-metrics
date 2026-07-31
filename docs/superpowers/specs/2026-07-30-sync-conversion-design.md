@@ -172,6 +172,101 @@ Two documented biases pointing opposite ways, net effect unmeasured. Leadership 
 
 The reconciliation does not have to change the metric. It has to be on record, with the gap quantified, so the caveat is specific instead of hand-waved. About an hour.
 
+#### Findings — run 2026-07-31
+
+Script: [scripts/reconcile_sync_denominators.py](../../../scripts/reconcile_sync_denominators.py). Read-only, re-runnable.
+
+Twelve closed months, July 2025 through June 2026.
+
+| Candidate | 12-month total | Grain | Dated by |
+|---|---|---|---|
+| 1. Sync rows — what #55 counts | 4,510 | Account | Signup |
+| 2. Distinct entities that synced | 4,444 | Customer | Signup |
+| 3. `Account.CustDatFirstSyncCompleted` | 4,309 | Account | Sync completion |
+| 4. Either signal, upper bound | 4,573 | Account | Earliest evidence |
+| Conversions (numerator) | 1,230 | Account | First SaaS invoice |
+
+The two gap percentages.
+
+- Account-vs-entity fan-in, #1 over #2: **+1.5%**
+- Preferred-field gap, #3 over #1: **−4.5%**
+
+Both are small, and neither is distorted by a single month. Fan-in ranges +0.0% to +3.2%. The field gap ranges −9.0% to +0.2%, mean −4.5%.
+
+Candidate 1 reproduces live #301 exactly, month by month, to full float precision. So the shipped metric's basis is confirmed, not assumed.
+
+**The #55 yml caveat is wrong on two counts and should be corrected.**
+
+There are zero repeat sync events in `Funnel`. Row count equals distinct `CompanyAccount` equals distinct (entity, account), across all 67,167 rows. `Funnel` is one row per account, so the "re-syncs after disconnect/reconnect" mechanism the yml describes is not in the data. The 9% of entities with two or more rows are customers who own more than one account.
+
+The ~13% figure is also the wrong window. It is the all-time cumulative fan-in. At the monthly grain the metric actually carries, the fan-in is +1.5%.
+
+| Window | Fan-in |
+|---|---|
+| All time | +12.7% |
+| 12-month | +6.2% |
+| Monthly grain | +1.5% |
+
+**Only candidates 1, 3 and 4 are comparable to each other.**
+
+Candidate 2 is customer-grain. It counts a different unit from the numerator and from every other candidate. Moving the denominator to it would take the metric *away* from the leadership reading, not toward it.
+
+`revenue.Account` is unique on `RecordID` — 146,663 rows, 146,663 IDs. The ~1.22 rows-per-`EntityRecordID` hazard in CLAUDE.md is about `EntityRecordID`, not `RecordID`. The script asserts the uniqueness on every run so the dedup cannot rot into a silent no-op.
+
+**The `_sources.yml:141` undercount warning does apply here, and the net gap understates it.**
+
+`int_syncs` membership is exactly the set of accounts with `SyncTypeRegion` populated — 67,167 on both sides. So the denominator is built on the signal that file warns about.
+
+| All-time, filtered accounts | Count |
+|---|---|
+| In `int_syncs` (region signal) | 67,167 |
+| `CustDatFirstSyncCompleted` set | 69,236 |
+| In both | 63,438 |
+| Region only, no completion date | 3,729 |
+| Completion date only, missed by #55 | 5,798 |
+
+Net gap is +3.1%. Symmetric difference is 14.2%.
+
+The two signals disagree about *which* accounts about four times more than about *how many*.
+
+**Unanticipated: `int_syncs.SyncDate` is the signup date, not the sync date.**
+
+`Funnel.Date` equals `SignupDate` for 100% of Sync rows and 100% of Trial rows, with zero exceptions. For Conversion rows it does not — only 4.3%.
+
+So Syncs #55 measures *accounts that signed up in month M and have since completed a sync*. It is a signup-cohort measure, not an event-timing measure.
+
+Two consequences follow, and both are larger than either bias this gate was opened to measure.
+
+Recent months are structurally incomplete. 18.9% of accounts complete their sync more than 30 days after signup, 4.2% more than 60 days. A month published at close is missing roughly a fifth of its eventual syncs, and will grow retroactively.
+
+The numerator is event-dated while the denominator is signup-dated. Only 50.2% of month-M conversions signed up in month M. So the shipped ratio pairs two different populations that share a month label.
+
+This undercuts the stated reason for using no lag. The spec argues above that "the sync-to-invoice gap is short," which holds only if the denominator is sync-dated. It is signup-dated — the same basis as Trials #54, which this spec deliberately lags by one month for exactly this reason.
+
+Sync Rate #300 is unaffected. Syncs ÷ Trials puts signup-cohort counts on both sides.
+
+**Practical consequence for the shipped number.**
+
+Measured on the same accounts on both sides — of the accounts that signed up in month M and synced, the share that ever converted — the 12-month rate is 26.25%. The shipped rate is 27.27%.
+
+So the shipped metric reads **about 1 pp high** against the "share of synced accounts that converted" reading.
+
+The direction is opposite to what this gate assumed. An inflated denominator was expected to make the rate read low. The fan-in inflation turns out to be +1.5%, not 9–13%, and the dominant effect is the signup-cohort dating, which biases the rate up while signup volume is declining — it fell from 497 in April 2025 to 262 in June 2026.
+
+The 1 pp agreement is closer than the basis mismatch deserves. It holds because the flows are near steady-state, not because the arithmetic is right. It should not be relied on if signup volume moves sharply.
+
+**Does the gap change the recommendation?**
+
+No, for the denominator. Keep #55. It is already account-grain, which is what leadership means by "synced accounts," and the two biases the gate was opened to measure are +1.5% and −4.5% — too small to justify a new model.
+
+Yes, for the caveats and the lag question. Three things must land before the section is leadership-facing.
+
+Correct the #55 yml caveat. The mechanism is multi-account customers, not re-syncs, and the monthly-grain figure is +1.5%.
+
+State the signup-cohort dating on the dashboard, along with the retroactive growth on recent months.
+
+Reopen the no-lag decision with Justin. Its stated justification does not survive the dating finding.
+
 ### Justin sign-off
 
 The budgeted and forecasted sync conversion rates are derived — `Budgeted_Conversion ÷ Budgeted_Syncs`. Justin never published that ratio. He is the methodology authority on the revenue family, so he confirms the derivation before the section is leadership-facing.
@@ -181,7 +276,10 @@ The budgeted and forecasted sync conversion rates are derived — `Budgeted_Conv
 - [ ] Metric 296 divisor confirmed against a live Looker read, then fixed
 - [ ] Metric 357 returns values matching the Looker panel
 - [ ] Seven new dbt models built, `dbt run` clean, descriptions rendering in BQ
-- [ ] Denominator reconciliation run and recorded
+- [x] Denominator reconciliation run and recorded
+- [ ] `v_metric__syncs.yml` caveat corrected — mechanism and monthly-grain figure
+- [ ] Signup-cohort dating and retroactive growth stated on the dashboard
+- [ ] No-lag decision reopened with Justin in light of the dating finding
 - [ ] Every KPI in both sections compared side-by-side against Looker, values recorded
 - [ ] Justin has confirmed the derived budget ratio
 - [ ] Nic has approved flipping the seven models from `queued` to `live`
