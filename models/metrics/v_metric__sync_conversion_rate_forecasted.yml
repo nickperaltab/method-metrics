@@ -50,7 +50,7 @@ models:
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
       labels:
-        metric_id: ''
+        metric_id: '402'
         layer: metrics
         type: derived
         status: queued
