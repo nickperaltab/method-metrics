@@ -45,7 +45,8 @@ models:
           against: "PENDING — Task 10 records the live Looker side-by-side"
           values: "PENDING"
         caveats:
-          - "Denominator is event-grain syncs, inflated roughly 9-13% by re-syncs. Reads LOW versus a true 'share of synced accounts that converted'."
+          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in M and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Against a true 'share of synced accounts that converted' read, the shipped basis measured +1.02 pp HIGH on the current 12 months — not low, as an earlier draft of this caveat stated — and +0.02 pp on the prior 12. Window-dependent, not a standing directional bias — quote it with the prior window beside it."
           - "Not comparable in LEVEL to the trials Conversion Rate Trajectory — that one uses a lagged denominator. Compare trend and attainment, not level."
           - "Single-row by design."
         used_by:

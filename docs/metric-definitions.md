@@ -529,9 +529,17 @@ GROUP BY 1
 
 **Status:** **live**
 
-**Known caveats:** Uses event-grain Syncs (#55) in the denominator. Not a clean "% of sync cohort that converted" — see #55 caveats.
+**Known caveats:**
+- Denominator is event-grain Syncs (#55), dated by **signup** rather than by sync completion — `revenue.Funnel`'s Sync branch projects `SignupDate AS Date`. Measured fan-in at the monthly grain this metric carries is about **1.5%**. Do not quote the ~9–13% figure that `v_metric__syncs.yml` still states: that is an all-time cumulative number, and the "re-syncs after disconnect/reconnect" mechanism it describes does not exist in the data — there are zero repeat sync events, and the ~9% of entities with more than one sync row are multi-account customers. Source: `scripts/reconcile_sync_denominators.py`, 2026-07-31 run.
+- Not a clean "% of sync cohort that converted". Measured against that read, this metric is **+1.02 pp HIGH** on the current 12 months (27.27% shipped vs 26.25% cohort-consistent) and **+0.02 pp** on the prior 12 (24.00% vs 23.99%). Window-dependent, not a standing directional bias — quote it with the prior window beside it.
+- Only 50.2% of month-M conversions signed up in month M, so numerator and denominator share a month label rather than a cohort.
+- **Scale trap.** The Supabase row for #301 is a *formula* metric (`SAFE_DIVIDE({56},{55}) * 100`, `chart_sql` and `view_name` both NULL), so `buildScorecardQueryPlan` routes it to the derived path and it emits a **percentage** (32.89). The dbt view emits a **decimal** (0.3289). A scorecard KPI on #301 needs `format: 'percent'`; `'decimal_rate'` renders 3289.47%.
 
-**Used by:** Funnel-stage analysis.
+**Used by:**
+- Funnel-stage analysis
+- Sales Scorecard (Sync Conversion Rate section) — KPI tile, via the Supabase formula path
+- Funnel Scorecard (Sync-to-Conversion Rate section)
+- Sales Scorecard Month Over Month chart — reads **this dbt view** directly via `customSql`, not the Supabase formula, so it stays on the same decimal scale as #401/#402
 
 ---
 

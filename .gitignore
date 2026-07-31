@@ -19,3 +19,7 @@ mcp/metrics/.vercel/
 
 # MWD board-prep query outputs (may contain MRR/customer-level data) — never commit (public repo)
 scripts/mwd-board-prep/out/
+
+# Python bytecode caches
+__pycache__/
+*.py[cod]

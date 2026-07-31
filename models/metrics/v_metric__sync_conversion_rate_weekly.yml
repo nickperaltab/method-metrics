@@ -21,7 +21,9 @@ models:
           values: "PENDING"
         caveats:
           - "Weekly rates are noisy. The trials equivalent swings between 6% and 17% week to week; expect similar or worse here on a smaller denominator."
-          - "Denominator is event-grain syncs, inflated roughly 9-13% by re-syncs."
+          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in period P' means accounts that signed up in P and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Against a true 'share of synced accounts that converted' read, the shipped basis measured +1.02 pp HIGH on the current 12 months and +0.02 pp on the prior 12. Window-dependent, not a standing directional bias — quote it with the prior window beside it."
+          - "Not comparable in LEVEL to the trials Conversion Rate — that one uses a lagged denominator. Compare trend and attainment, not level."
           - "The current partial week is incomplete on both sides and can read anomalously."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section, Week Over Week chart)"

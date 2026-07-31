@@ -51,6 +51,27 @@ LEFT JOIN forecast f ON c.week = f.week
 ORDER BY 1
 `;
 
+// Monthly sync conversion rate — reads the dbt view directly rather than
+// going through Supabase #301.
+//
+// #301 is a FORMULA metric (`SAFE_DIVIDE({56},{55}) * 100`, chart_sql and
+// view_name both NULL), so buildScorecardQueryPlan routes it to the derived
+// path and it emits a PERCENTAGE (32.89), not a decimal. The two other series
+// on the Month Over Month chart (#401, #402) are dbt pointers emitting
+// decimals (0.2870), and the chart's valueFormat is 'decimal_rate'. Mixing
+// the two scales plotted #301 ~100x taller and flattened the other two bars
+// to the axis. The dbt view emits the decimal, so all three now agree.
+//
+// Period format is '%Y-%m' to match #401/#402. A '%Y-%m-%d' label here would
+// trip the axisIsWeekly branch in builder/src/lib/chartDataBuilder.js:183 and
+// zero out the two monthly series.
+const MONTHLY_SYNC_CONVERSION_RATE_SQL = `
+SELECT FORMAT_DATE('%Y-%m', period) AS period, value
+FROM \`project-for-method-dw.revenue_metrics.v_metric__sync_to_conversion_rate\`
+WHERE period >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 24 MONTH)
+ORDER BY 1
+`;
+
 // Weekly sync conversion rate — reads the dbt view. Same-month, no lag.
 // Multiplied by 100 because the chart's valueFormat is 'percent'.
 const WEEKLY_SYNC_CONVERSION_RATE_SQL = `
@@ -226,7 +247,12 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 402, label: 'Forecasted Sync Conversion Rate', format: 'decimal_rate',
           valueSelector: 'current_or_latest' },
-        { metricId: 301, label: 'Sync Conversion Rate', format: 'decimal_rate',
+        // 301 is a Supabase FORMULA metric — `SAFE_DIVIDE({56},{55}) * 100`
+        // with chart_sql and view_name NULL — so the app evaluates the formula
+        // and never reads the dbt view. It emits a percentage (32.89), not a
+        // decimal. 'decimal_rate' would multiply by 100 again and render
+        // 3289.47%. Same trap as 321 in the trials section above.
+        { metricId: 301, label: 'Sync Conversion Rate', format: 'percent',
           valueSelector: 'current_or_latest', showDelta: true },
         { metricId: 400, label: 'Sync Conversion Rate Trajectory', format: 'decimal_rate',
           valueSelector: 'current_or_latest' },
@@ -256,7 +282,9 @@ export default {
           metrics: [
             { id: 401, label: 'Budgeted Sync Conversion Rate', color: '#1e3a5f' },
             { id: 402, label: 'Forecasted Sync Conversion Rate', color: '#2563eb' },
-            { id: 301, label: 'Sync Conversion Rate', color: '#9dc3e6' },
+            // Reads the dbt view directly instead of Supabase #301 — see
+            // MONTHLY_SYNC_CONVERSION_RATE_SQL for why.
+            { id: '__monthly_sync_conv_rate', label: 'Sync Conversion Rate', color: '#9dc3e6', customSql: MONTHLY_SYNC_CONVERSION_RATE_SQL },
           ],
           lastNMonths: 4, showLabels: true,
         },

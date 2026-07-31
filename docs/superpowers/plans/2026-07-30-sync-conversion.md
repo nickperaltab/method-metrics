@@ -1434,9 +1434,18 @@ def req(method, url, body=None):
         return e.code, e.read().decode()
 
 
-def pointer_sql(view):
-    """chart_sql that reads a dbt metric view as (period, value) pairs."""
-    return (f"SELECT FORMAT_DATE('%Y-%m-%d', period) AS period, value "
+def pointer_sql(view, fmt="%Y-%m"):
+    """chart_sql that reads a dbt metric view as (period, value) pairs.
+
+    MONTHLY pointers must emit '%Y-%m'; only the WEEKLY pointer emits
+    '%Y-%m-%d'. An earlier draft of this template specified '%Y-%m-%d'
+    everywhere, which breaks four things: the derived-metric join in
+    builder/src/lib/sql/load.js (joins dependencies by exact period-label
+    string), the current_month KPI lookup, showDelta, and any chart mixing
+    monthly and weekly labels (axisIsWeekly at chartDataBuilder.js:183).
+    Every other monthly series in the app emits '%Y-%m'.
+    """
+    return (f"SELECT FORMAT_DATE('{fmt}', period) AS period, value "
             f"FROM `{DS}.{view}` ORDER BY 1")
 
 
@@ -1446,19 +1455,24 @@ if not isinstance(existing, list):
 by_name = {m["name"]: m for m in existing}
 
 # POINTER metrics: chart_sql reads a dbt view. No formula duplicated here.
+# 4th element is the period format — monthly everywhere except the weekly view.
 POINTERS = [
     ("Sync Conversion Rate Trajectory",
      "v_metric__sync_conversion_rate_trajectory",
-     "Month-end projection of the sync conversion rate: projected conversions / projected sync events. Same-month, no lag. Decimal rate. Single row, current month."),
+     "Month-end projection of the sync conversion rate: projected conversions / projected sync events. Same-month, no lag. Decimal rate. Single row, current month.",
+     "%Y-%m"),
     ("Budgeted Sync Conversion Rate",
      "v_metric__sync_conversion_rate_budgeted",
-     "Budgeted conversions / budgeted sync events by month. DERIVED, not published by Finance — pending Justin's confirmation. Decimal rate."),
+     "Budgeted conversions / budgeted sync events by month. DERIVED, not published by Finance — pending Justin's confirmation. Decimal rate.",
+     "%Y-%m"),
     ("Forecasted Sync Conversion Rate",
      "v_metric__sync_conversion_rate_forecasted",
-     "Forecasted conversions / forecasted sync events by month. DERIVED, not published by Finance — pending Justin's confirmation. Decimal rate."),
+     "Forecasted conversions / forecasted sync events by month. DERIVED, not published by Finance — pending Justin's confirmation. Decimal rate.",
+     "%Y-%m"),
     ("Sync Conversion Rate (weekly)",
      "v_metric__sync_conversion_rate_weekly",
-     "Conversions / sync events by ISO week (Monday start), no lag. Decimal rate. Noisy by nature."),
+     "Conversions / sync events by ISO week (Monday start), no lag. Decimal rate. Noisy by nature.",
+     "%Y-%m-%d"),
 ]
 
 maxid = max((m["id"] for m in existing if isinstance(m.get("id"), int)), default=0)
@@ -1466,14 +1480,14 @@ next_id = maxid + 1
 print(f"max existing id={maxid}; assigning explicit ids from {next_id}")
 
 ids = {}
-for name, view, desc in POINTERS:
+for name, view, desc, fmt in POINTERS:
     if name in by_name:
         ids[name] = by_name[name]["id"]
         print(f"  skip (exists #{ids[name]}): {name}")
         continue
     row = {
         "id": next_id, "name": name, "description": desc,
-        "chart_sql": pointer_sql(view), "view_name": view,
+        "chart_sql": pointer_sql(view, fmt), "view_name": view,
         "status": "queued", "stage": "revenue", "depends_on": [],
     }
     st, res = req("POST", SB, row)
