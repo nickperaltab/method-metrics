@@ -16,41 +16,63 @@ Output feeds the caveats block on the sync conversion rate metrics and the
 "Denominator reconciliation gate" section of
 docs/superpowers/specs/2026-07-30-sync-conversion-design.md.
 
-Read-only. No DDL, no writes.
+Read-only. No DDL, no writes. Exits 1 if any grain invariant fails.
 
 ==========================================================================
-THREE GRAIN / DATING FACTS THAT DECIDE HOW TO READ EVERY RATIO BELOW.
-Sections B, C and D re-prove each one on every run, so this script fails
-loudly rather than silently if any of them stops holding.
+READ revenue.Funnel's VIEW DDL BEFORE CHANGING ANYTHING HERE.
 
-1. revenue.Funnel is ONE ROW PER ACCOUNT, not one row per event.
-   For EventType='Sync', row count == distinct CompanyAccount == distinct
-   (EntityRecordID, CompanyAccount), and Account is unique on both
-   RecordID and CompanyAccount. So int_syncs COUNT(*) is account-grain and
-   COUNT(DISTINCT EntityRecordID) is customer-grain. They count DIFFERENT
-   UNITS. The multiplicity is multi-account customers, not repeat syncs.
-   There are zero repeat sync events in Funnel (section B).
+  SELECT view_definition
+  FROM `project-for-method-dw.revenue.INFORMATION_SCHEMA.VIEWS`
+  WHERE table_name = 'Funnel'
 
-2. int_syncs.SyncDate IS THE SIGNUP DATE, not the date the sync happened.
-   Funnel.Date == SignupDate for 100% of Sync rows and 100% of Trial rows
-   (section D). So "Syncs in month M" means "accounts that signed up in
-   month M and have since completed a sync." Syncs #55 is a signup-cohort
-   measure, not an event-timing measure. Two consequences:
-     - Recent months are structurally incomplete and grow retroactively.
-     - The numerator (int_conversions.FirstSaaSInvoiceTxnDate) IS event
-       dated, so the shipped same-month ratio pairs two different
-       populations. Section E measures the cohort-consistent rate instead.
+Funnel is not an event log. It is a VIEW over revenue.Account with three
+UNION ALL branches, all reading one CTE that applies
+`IsConversionException = FALSE AND Partner != 'Method Integration'`:
 
-3. revenue.Account is unique on RecordID (146,663 rows / 146,663 RecordIDs
-   at time of writing). The ~1.22 rows-per-EntityRecordID hazard in
-   CLAUDE.md is about EntityRecordID, NOT RecordID. The GROUP BY RecordID
-   below is kept as an explicit grain assertion; section B re-checks the
-   uniqueness so the dedup cannot rot into a no-op unnoticed.
+  Trial       SELECT SignupDate AS Date              ... WHERE SignupDate != sentinel
+  Sync        SELECT SignupDate AS Date              ... WHERE SyncTypeRegion != "" AND SignupDate != sentinel
+  Conversion  SELECT FirstSaaSInvoiceTxnDate AS Date ... WHERE FirstSaaSInvoiceTxnDate != sentinel
 
-   int_conversions is also account-grain — it selects from revenue.Account
-   with no aggregation, and its two LEFT JOINs are pre-aggregated per
-   entity so they cannot fan out. Numerator and candidates 1, 3, 4 are all
-   account-grain. Candidate 2 is the odd one out.
+Four things follow from that DDL as tautologies, not as empirical findings.
+The pre-flight block re-checks them anyway, as regression guards against
+the DDL changing underneath us. Exact counts are deliberately not quoted
+here — the runtime check is the authority, not this comment.
+
+1. One row per account, never per event. So int_syncs COUNT(*) is
+   account-grain and COUNT(DISTINCT EntityRecordID) is customer-grain.
+   They count DIFFERENT UNITS. Multi-row entities are multi-account
+   customers. There are no repeat sync events to inflate anything.
+
+2. int_syncs.SyncDate IS SignupDate — the same column, aliased. So Syncs
+   #55 is a SIGNUP-COHORT measure: "accounts that signed up in month M and
+   have since completed a sync", not "syncs that happened in M".
+
+3. int_syncs membership IS `SyncTypeRegion != ""`. So the
+   _sources.yml:141 undercount warning applies directly to this
+   denominator.
+
+4. Funnel's population IS the filtered Account population, so applying the
+   same two filters to Account keeps candidates 3 and 4 comparable.
+
+Also from the DDL: CustDatFirstSyncCompleted is a Funnel COLUMN, present on
+every branch. Re-dating the denominator by sync completion therefore needs
+no new source and no join — see candidate 5, which isolates the date-basis
+change from any population change. models/intermediate/int_syncs.sql simply
+does not project the column today.
+
+Candidate 5 is computed here for evidence only. Actually re-dating
+int_syncs has blast radius on live metrics #55 and #300 and is the metric
+owner's call, not this script's.
+
+revenue.Account is unique on RecordID, so the GROUP BY RecordID in
+candidate 3 is currently a no-op. It is kept as an explicit grain
+assertion. The ~1.22 rows-per-EntityRecordID hazard in CLAUDE.md is about
+EntityRecordID, NOT RecordID, and nothing here groups by EntityRecordID.
+
+int_conversions is account-grain too — it selects from revenue.Account with
+no aggregation, and its two LEFT JOINs are pre-aggregated per entity so
+they cannot fan out. Numerator and candidates 1, 3, 4, 5 are all
+account-grain. Candidate 2 is the odd one out.
 ==========================================================================
 """
 import sys
@@ -59,13 +81,19 @@ from google.cloud import bigquery
 
 PROJECT = "project-for-method-dw"
 
-# Shared population filters. Funnel is already restricted to this
-# population (section B verifies Funnel Trial rows == filtered Account
-# rows), so applying them to Account keeps candidate 3 comparable.
+# Funnel already applies these (see DDL above). Repeating them on Account
+# keeps candidates 3 and 4 population-comparable with candidates 1 and 2.
 ACCOUNT_FILTERS = """
     IsConversionException = FALSE
     AND Partner != 'Method Integration'
 """
+
+SENTINEL = "DATE '0001-01-01'"
+
+# Cohorts before 2019 behave completely differently from every cohort
+# since. Blending them yields a sync-lag statistic that is true of the
+# table and false of every publishable month. See section D.
+MODERN_ERA_START = "DATE '2019-01-01'"
 
 # --------------------------------------------------------------------------
 # A. The 12-month monthly table.
@@ -91,14 +119,14 @@ entities AS (
   FROM `{PROJECT}.revenue.int_syncs`
   GROUP BY 1
 ),
--- 3. Account-grain, SYNC-COMPLETION-dated: the field _sources.yml:141
---    prefers. GROUP BY RecordID asserts account grain.
+-- 3. Account-grain, completion-dated, from the Account side. Differs from
+--    #1 in BOTH population and date basis.
 account_first_sync AS (
   SELECT DATE_TRUNC(first_sync, MONTH) AS period,
          COUNT(*) AS accounts_first_synced
   FROM (
     SELECT RecordID,
-           MIN(NULLIF(CustDatFirstSyncCompleted, DATE '0001-01-01')) AS first_sync
+           MIN(NULLIF(CustDatFirstSyncCompleted, {SENTINEL})) AS first_sync
     FROM `{PROJECT}.revenue.Account`
     WHERE {ACCOUNT_FILTERS}
     GROUP BY RecordID
@@ -107,14 +135,13 @@ account_first_sync AS (
   GROUP BY 1
 ),
 -- 4. Account-grain union: earliest sync evidence from EITHER signal.
---    Upper bound on the population.
 either_signal AS (
   SELECT DATE_TRUNC(first_evidence, MONTH) AS period,
          COUNT(*) AS accounts_either
   FROM (
     SELECT a.RecordID,
            LEAST(
-             COALESCE(NULLIF(a.CustDatFirstSyncCompleted, DATE '0001-01-01'), DATE '9999-12-31'),
+             COALESCE(NULLIF(a.CustDatFirstSyncCompleted, {SENTINEL}), DATE '9999-12-31'),
              COALESCE(f.funnel_sync_date, DATE '9999-12-31')
            ) AS first_evidence
     FROM (
@@ -131,6 +158,19 @@ either_signal AS (
   WHERE first_evidence != DATE '9999-12-31'
   GROUP BY 1
 ),
+-- 5. THE CANDIDATE THE DATING FINDING ACTUALLY IMPLIES.
+--    Exactly #55's population, re-dated from signup to sync completion.
+--    Reads CustDatFirstSyncCompleted straight off Funnel, so this isolates
+--    the date-basis change from any population change. Drops only the rows
+--    with no completion date.
+sync_dated AS (
+  SELECT DATE_TRUNC(CustDatFirstSyncCompleted, MONTH) AS period,
+         COUNT(*) AS accounts_sync_dated
+  FROM `{PROJECT}.revenue.Funnel`
+  WHERE EventType = 'Sync'
+    AND CustDatFirstSyncCompleted != {SENTINEL}
+  GROUP BY 1
+),
 -- Numerator: account-grain, EVENT-dated (first SaaS invoice).
 conversions AS (
   SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS period,
@@ -144,61 +184,65 @@ SELECT
   COALESCE(en.sync_entities, 0)          AS sync_entities,
   COALESCE(af.accounts_first_synced, 0)  AS accounts_first_synced,
   COALESCE(ei.accounts_either, 0)        AS accounts_either,
+  COALESCE(sd.accounts_sync_dated, 0)    AS accounts_sync_dated,
   COALESCE(cv.conversions, 0)            AS conversions,
   SAFE_DIVIDE(cv.conversions, ev.sync_events)           AS rate_on_events,
   SAFE_DIVIDE(cv.conversions, en.sync_entities)         AS rate_on_entities,
-  SAFE_DIVIDE(cv.conversions, af.accounts_first_synced) AS rate_on_account_field
+  SAFE_DIVIDE(cv.conversions, af.accounts_first_synced) AS rate_on_account_field,
+  SAFE_DIVIDE(cv.conversions, sd.accounts_sync_dated)   AS rate_on_sync_dated
 FROM months m
 LEFT JOIN events ev              USING (period)
 LEFT JOIN entities en            USING (period)
 LEFT JOIN account_first_sync af  USING (period)
 LEFT JOIN either_signal ei       USING (period)
+LEFT JOIN sync_dated sd          USING (period)
 LEFT JOIN conversions cv         USING (period)
 ORDER BY m.period
 """
 
 # --------------------------------------------------------------------------
-# B. Grain assertions.
+# Pre-flight: the DDL tautologies, as regression guards.
 # --------------------------------------------------------------------------
 SQL_GRAIN = f"""
 WITH sync_rows AS (
   SELECT COUNT(*) AS n,
          COUNT(DISTINCT CompanyAccount) AS n_company_account,
-         COUNT(DISTINCT EntityRecordID) AS n_entity,
          COUNT(DISTINCT CONCAT(CAST(EntityRecordID AS STRING), '|', CompanyAccount))
-           AS n_entity_account
+           AS n_entity_account,
+         COUNT(DISTINCT EntityRecordID) AS n_entity,
+         COUNTIF(SyncDate = CAST(SignupDate AS DATE)) AS n_syncdate_eq_signup
   FROM `{PROJECT}.revenue.int_syncs`
 ),
 acct AS (
   SELECT COUNT(*) AS n,
          COUNT(DISTINCT RecordID) AS n_record_id,
-         COUNT(DISTINCT CompanyAccount) AS n_company_account,
-         COUNT(DISTINCT EntityRecordID) AS n_entity
+         COUNTIF({ACCOUNT_FILTERS.strip()}) AS n_filtered,
+         COUNTIF(NULLIF(SyncTypeRegion, '') IS NOT NULL AND {ACCOUNT_FILTERS.strip()})
+           AS n_region_filtered
   FROM `{PROJECT}.revenue.Account`
 ),
-trial_vs_acct AS (
-  SELECT
-    (SELECT COUNT(*) FROM `{PROJECT}.revenue.Funnel` WHERE EventType = 'Trial')
-      AS funnel_trial_rows,
-    (SELECT COUNT(*) FROM `{PROJECT}.revenue.Account` WHERE {ACCOUNT_FILTERS})
-      AS filtered_account_rows
+funnel AS (
+  SELECT COUNTIF(EventType = 'Trial') AS trial_rows,
+         COUNTIF(EventType = 'Sync')  AS sync_rows,
+         COUNTIF(EventType = 'Sync' AND CustDatFirstSyncCompleted != {SENTINEL})
+           AS sync_rows_with_completion
+  FROM `{PROJECT}.revenue.Funnel`
 )
-SELECT
-  sync_rows.n                  AS sync_rows,
-  sync_rows.n_company_account  AS sync_distinct_company_account,
-  sync_rows.n_entity_account   AS sync_distinct_entity_account,
-  sync_rows.n_entity           AS sync_distinct_entity,
-  acct.n                       AS account_rows,
-  acct.n_record_id             AS account_distinct_record_id,
-  acct.n_company_account       AS account_distinct_company_account,
-  acct.n_entity                AS account_distinct_entity,
-  trial_vs_acct.funnel_trial_rows,
-  trial_vs_acct.filtered_account_rows
-FROM sync_rows, acct, trial_vs_acct
+SELECT sync_rows.n                     AS sync_rows,
+       sync_rows.n_company_account     AS sync_distinct_company_account,
+       sync_rows.n_entity_account      AS sync_distinct_entity_account,
+       sync_rows.n_entity              AS sync_distinct_entity,
+       sync_rows.n_syncdate_eq_signup  AS sync_syncdate_eq_signup,
+       acct.n                          AS account_rows,
+       acct.n_record_id                AS account_distinct_record_id,
+       acct.n_filtered                 AS account_filtered_rows,
+       acct.n_region_filtered          AS account_region_filtered,
+       funnel.trial_rows,
+       funnel.sync_rows                AS funnel_sync_rows,
+       funnel.sync_rows_with_completion
+FROM sync_rows, acct, funnel
 """
 
-# Is every multi-row entity explained by owning multiple accounts? If rows
-# always equal distinct accounts, there are no repeat sync events at all.
 SQL_MULTIPLICITY = f"""
 WITH per_entity AS (
   SELECT EntityRecordID,
@@ -207,17 +251,13 @@ WITH per_entity AS (
   FROM `{PROJECT}.revenue.int_syncs`
   GROUP BY 1
 )
-SELECT
-  COUNT(*)                           AS entities,
-  COUNTIF(sync_rows = 1)             AS entities_with_one_row,
-  COUNTIF(sync_rows > sync_accounts) AS entities_with_repeat_events,
-  SUM(sync_rows)                     AS total_sync_rows,
-  MAX(sync_rows)                     AS max_rows_for_one_entity
+SELECT COUNT(*)                           AS entities,
+       COUNTIF(sync_rows = 1)             AS entities_with_one_row,
+       COUNTIF(sync_rows > sync_accounts) AS entities_with_repeat_events,
+       MAX(sync_rows)                     AS max_rows_for_one_entity
 FROM per_entity
 """
 
-# Fan-in depends entirely on the window you measure it over. The yml quotes
-# an all-time figure; the metric is monthly.
 SQL_FANIN = f"""
 WITH win AS (
   SELECT EntityRecordID, DATE_TRUNC(SyncDate, MONTH) AS period
@@ -237,109 +277,131 @@ SELECT
 """
 
 # --------------------------------------------------------------------------
-# C. Population overlap of the two account-grain sync signals, and whether
-#    the Funnel sync signal IS the region signal _sources.yml warns about.
+# C. Population overlap of the two account-grain signals, split by era.
+#    The net gap flips sign between windows; the era split says why.
 # --------------------------------------------------------------------------
 SQL_OVERLAP = f"""
 WITH acct AS (
-  SELECT CompanyAccount,
-         NULLIF(CustDatFirstSyncCompleted, DATE '0001-01-01') AS first_sync,
+  SELECT IF(SignupDate < {MODERN_ERA_START}, 'pre-2019', '2019+') AS era,
+         NULLIF(CustDatFirstSyncCompleted, {SENTINEL}) AS first_sync,
          NULLIF(SyncTypeRegion, '') AS region
   FROM `{PROJECT}.revenue.Account`
   WHERE {ACCOUNT_FILTERS}
-),
-fn AS (
-  SELECT CompanyAccount, MIN(SyncDate) AS funnel_sync_date
-  FROM `{PROJECT}.revenue.int_syncs`
-  GROUP BY 1
 )
-SELECT
-  COUNT(*)                                                               AS filtered_accounts,
-  COUNTIF(fn.CompanyAccount IS NOT NULL)                                 AS in_funnel_sync,
-  COUNTIF(acct.region IS NOT NULL)                                       AS has_sync_type_region,
-  COUNTIF(acct.first_sync IS NOT NULL)                                   AS has_first_sync_date,
-  COUNTIF(fn.CompanyAccount IS NOT NULL AND acct.first_sync IS NOT NULL)  AS in_both,
-  COUNTIF(fn.CompanyAccount IS NOT NULL AND acct.first_sync IS NULL)      AS funnel_only,
-  COUNTIF(fn.CompanyAccount IS NULL AND acct.first_sync IS NOT NULL)      AS field_only
-FROM acct LEFT JOIN fn USING (CompanyAccount)
+SELECT era,
+       COUNT(*)                                               AS filtered_accounts,
+       COUNTIF(region IS NOT NULL)                            AS in_region_signal,
+       COUNTIF(first_sync IS NOT NULL)                        AS has_completion_date,
+       COUNTIF(region IS NOT NULL AND first_sync IS NOT NULL)  AS in_both,
+       COUNTIF(region IS NOT NULL AND first_sync IS NULL)      AS region_only,
+       COUNTIF(region IS NULL AND first_sync IS NOT NULL)      AS field_only
+FROM acct GROUP BY era ORDER BY era
 """
 
 # --------------------------------------------------------------------------
-# D. Dating basis. This is the finding the brief did not anticipate.
+# D. Signup-to-sync lag, SPLIT BY ERA, plus a direct measurement of how much
+#    a published month actually grows after close.
+#
+#    The blended all-time lag is ~19% over 30 days. That figure is a
+#    pre-2019 artifact and is false of every publishable month.
 # --------------------------------------------------------------------------
-SQL_DATING = f"""
-SELECT
-  (SELECT COUNT(*) FROM `{PROJECT}.revenue.int_syncs`) AS sync_rows,
-  (SELECT COUNTIF(SyncDate = CAST(SignupDate AS DATE))
-     FROM `{PROJECT}.revenue.int_syncs`) AS syncdate_equals_signupdate,
-  (SELECT COUNT(*) FROM `{PROJECT}.revenue.Funnel` WHERE EventType = 'Trial')
-    AS trial_rows,
-  (SELECT COUNTIF(CAST(Date AS DATE) = CAST(SignupDate AS DATE))
-     FROM `{PROJECT}.revenue.Funnel` WHERE EventType = 'Trial')
-    AS trial_date_equals_signup,
-  (SELECT COUNT(*) FROM `{PROJECT}.revenue.Funnel` WHERE EventType = 'Conversion')
-    AS conversion_rows,
-  (SELECT COUNTIF(CAST(Date AS DATE) = CAST(SignupDate AS DATE))
-     FROM `{PROJECT}.revenue.Funnel` WHERE EventType = 'Conversion')
-    AS conversion_date_equals_signup
-"""
-
-# How long after signup does the sync actually complete? This is the
-# retroactive-growth exposure on recent months.
-SQL_SYNC_LAG = f"""
+SQL_SYNC_LAG_BY_ERA = f"""
 WITH j AS (
-  SELECT DATE_DIFF(NULLIF(a.CustDatFirstSyncCompleted, DATE '0001-01-01'),
-                   f.SyncDate, DAY) AS lag_days
-  FROM `{PROJECT}.revenue.int_syncs` f
-  JOIN `{PROJECT}.revenue.Account` a USING (CompanyAccount)
-  WHERE {ACCOUNT_FILTERS}
+  SELECT IF(SignupDate < {MODERN_ERA_START}, 'pre-2019', '2019+') AS era,
+         DATE_DIFF(CustDatFirstSyncCompleted, CAST(SignupDate AS DATE), DAY) AS lag_days
+  FROM `{PROJECT}.revenue.Funnel`
+  WHERE EventType = 'Sync' AND CustDatFirstSyncCompleted != {SENTINEL}
 )
-SELECT COUNT(*) AS rows_with_both,
-       COUNTIF(lag_days <= 0)  AS sync_on_or_before_signup_day,
-       COUNTIF(lag_days > 30)  AS sync_more_than_30d_after_signup,
-       COUNTIF(lag_days > 60)  AS sync_more_than_60d_after_signup,
-       COUNTIF(lag_days > 90)  AS sync_more_than_90d_after_signup
-FROM j WHERE lag_days IS NOT NULL
+SELECT era, COUNT(*) AS n, COUNTIF(lag_days <= 0) AS on_or_before_signup,
+       COUNTIF(lag_days > 30) AS over_30d, COUNTIF(lag_days > 60) AS over_60d
+FROM j GROUP BY era
+UNION ALL
+SELECT 'ALL (do not quote)', COUNT(*), COUNTIF(lag_days <= 0),
+       COUNTIF(lag_days > 30), COUNTIF(lag_days > 60)
+FROM j
+ORDER BY era
 """
 
-# --------------------------------------------------------------------------
-# E. The cohort-consistent rate: what leadership actually means.
-#    Of the accounts that signed up in month M and synced, what share
-#    ever converted? Numerator and denominator are the SAME accounts.
-# --------------------------------------------------------------------------
-SQL_COHORT = f"""
-WITH s AS (
-  SELECT CompanyAccount, DATE_TRUNC(SyncDate, MONTH) AS period
-  FROM `{PROJECT}.revenue.int_syncs`
-  WHERE SyncDate >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 12 MONTH)
-    AND SyncDate <  DATE_TRUNC(CURRENT_DATE(), MONTH)
-),
-c AS (
-  SELECT DISTINCT CompanyAccount FROM `{PROJECT}.revenue.int_conversions`
-)
-SELECT s.period,
-       COUNT(*) AS synced_accounts,
-       COUNTIF(c.CompanyAccount IS NOT NULL) AS converted,
-       SAFE_DIVIDE(COUNTIF(c.CompanyAccount IS NOT NULL), COUNT(*)) AS cohort_rate
-FROM s LEFT JOIN c USING (CompanyAccount)
+# The number that actually matters: for each recent signup cohort, what
+# share of its sync rows completed their sync AFTER that month closed?
+SQL_RETRO_FILL = f"""
+SELECT DATE_TRUNC(CAST(SignupDate AS DATE), MONTH) AS signup_month,
+       COUNT(*) AS sync_rows,
+       SAFE_DIVIDE(COUNTIF(CustDatFirstSyncCompleted != {SENTINEL}
+             AND CustDatFirstSyncCompleted > LAST_DAY(CAST(SignupDate AS DATE), MONTH)),
+             COUNT(*)) AS filled_after_month_end,
+       SAFE_DIVIDE(COUNTIF(CustDatFirstSyncCompleted != {SENTINEL}
+             AND CustDatFirstSyncCompleted
+                 > DATE_ADD(LAST_DAY(CAST(SignupDate AS DATE), MONTH), INTERVAL 30 DAY)),
+             COUNT(*)) AS filled_after_month_end_plus_30d
+FROM `{PROJECT}.revenue.Funnel`
+WHERE EventType = 'Sync'
+  AND SignupDate >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 15 MONTH)
+  AND SignupDate <  DATE_TRUNC(CURRENT_DATE(), MONTH)
 GROUP BY 1 ORDER BY 1
 """
 
-# How mismatched is the shipped same-month pairing?
+# Is CustDatFirstSyncCompleted trustworthy? The -4.5% gap and candidates 3
+# and 5 all depend on it.
+SQL_FIELD_SANITY = f"""
+SELECT COUNT(*) AS rows_with_date,
+       COUNTIF(CustDatFirstSyncCompleted = CAST(SignupDate AS DATE)) AS equals_signup_date,
+       COUNTIF(CustDatFirstSyncCompleted < CAST(SignupDate AS DATE)) AS before_signup_date,
+       MIN(DATE_DIFF(CustDatFirstSyncCompleted, CAST(SignupDate AS DATE), DAY)) AS min_lag_days
+FROM `{PROJECT}.revenue.Funnel`
+WHERE EventType = 'Sync' AND CustDatFirstSyncCompleted != {SENTINEL}
+"""
+
+# --------------------------------------------------------------------------
+# E. The cohort-consistent rate, on TWO windows, because the gap is
+#    window-dependent and must not be presented as a standing bias.
+# --------------------------------------------------------------------------
+SQL_COHORT_WINDOW = f"""
+WITH s AS (
+  SELECT CompanyAccount FROM `{PROJECT}.revenue.int_syncs`
+  WHERE SyncDate >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @back MONTH)
+    AND SyncDate <  DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @fwd MONTH)
+),
+conv AS (SELECT DISTINCT CompanyAccount FROM `{PROJECT}.revenue.int_conversions`),
+cohort AS (
+  SELECT COUNT(*) AS synced, COUNTIF(conv.CompanyAccount IS NOT NULL) AS converted
+  FROM s LEFT JOIN conv USING (CompanyAccount)
+),
+shipped AS (
+  SELECT
+    (SELECT COUNT(*) FROM `{PROJECT}.revenue.int_conversions`
+      WHERE FirstSaaSInvoiceTxnDate
+              >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @back MONTH)
+        AND FirstSaaSInvoiceTxnDate
+              <  DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @fwd MONTH)) AS convs,
+    (SELECT COUNT(*) FROM `{PROJECT}.revenue.int_syncs`
+      WHERE SyncDate >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @back MONTH)
+        AND SyncDate <  DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL @fwd MONTH)) AS syncs
+)
+SELECT cohort.synced, cohort.converted,
+       SAFE_DIVIDE(cohort.converted, cohort.synced) AS cohort_rate,
+       SAFE_DIVIDE(shipped.convs, shipped.syncs)    AS shipped_rate
+FROM cohort, shipped
+"""
+
 SQL_BASIS = f"""
-SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS period,
-       COUNT(*) AS conversions,
+SELECT COUNT(*) AS conversions,
        COUNTIF(DATE_TRUNC(CAST(SignupDate AS DATE), MONTH)
                = DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH)) AS signed_up_same_month
 FROM `{PROJECT}.revenue.int_conversions`
 WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 12 MONTH)
   AND FirstSaaSInvoiceTxnDate <  DATE_TRUNC(CURRENT_DATE(), MONTH)
-GROUP BY 1 ORDER BY 1
 """
 
+FAILURES = []
 
-def one_row(client, sql):
-    rows = list(client.query(sql).result())
+
+def one_row(client, sql, params=None):
+    cfg = None
+    if params:
+        cfg = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter(k, "INT64", v) for k, v in params.items()])
+    rows = list(client.query(sql, job_config=cfg).result())
     if not rows:
         sys.exit("no rows returned — check the query")
     return rows[0]
@@ -349,107 +411,131 @@ def pct(num, den):
     return f"{num / den * 100:.1f}%" if den else "n/a"
 
 
+def signed(val):
+    return f"{val:+.1f}" if val is not None else "n/a"
+
+
+def rng(vals):
+    return f"{min(vals):+.1f}..{max(vals):+.1f}" if vals else "n/a"
+
+
+def check(label, ok, detail=""):
+    print(f"  {label:<46}{'PASS' if ok else 'FAIL'}  {detail}")
+    if not ok:
+        FAILURES.append(label)
+
+
+def preflight(client):
+    """The DDL tautologies. Every ratio downstream assumes them."""
+    print("=" * 78)
+    print("PRE-FLIGHT — DDL invariants (Funnel DDL quoted in module docstring)")
+    print("=" * 78)
+    g = one_row(client, SQL_GRAIN)
+
+    check("Funnel Sync is one row per account",
+          g.sync_rows == g.sync_distinct_company_account == g.sync_distinct_entity_account,
+          f"{g.sync_rows:,} rows / {g.sync_distinct_company_account:,} accounts")
+    check("int_syncs.SyncDate IS SignupDate",
+          g.sync_syncdate_eq_signup == g.sync_rows,
+          f"{g.sync_syncdate_eq_signup:,}/{g.sync_rows:,}")
+    check("int_syncs membership IS SyncTypeRegion != ''",
+          g.funnel_sync_rows == g.account_region_filtered,
+          f"{g.funnel_sync_rows:,} vs {g.account_region_filtered:,}")
+    check("Funnel population IS filtered Account",
+          g.trial_rows == g.account_filtered_rows,
+          f"{g.trial_rows:,} vs {g.account_filtered_rows:,}")
+    check("Account unique on RecordID",
+          g.account_rows == g.account_distinct_record_id,
+          f"{g.account_rows:,} rows / {g.account_distinct_record_id:,} IDs")
+
+    m = one_row(client, SQL_MULTIPLICITY)
+    check("no repeat sync events exist",
+          m.entities_with_repeat_events == 0,
+          f"{m.entities_with_repeat_events} entities with rows > accounts")
+
+    if FAILURES:
+        print("\n" + "!" * 78)
+        print("ABORTING. A grain invariant no longer holds, so every ratio this")
+        print("script would print is computed on a false assumption.")
+        for f in FAILURES:
+            print(f"  FAILED: {f}")
+        print("Re-read the Funnel view DDL before trusting any prior output.")
+        print("!" * 78)
+        sys.exit(1)
+
+    print(f"\n  Funnel Sync rows with a completion date   "
+          f"{g.sync_rows_with_completion:,}/{g.funnel_sync_rows:,}"
+          f"  ({pct(g.sync_rows_with_completion, g.funnel_sync_rows)})")
+    print("  => candidate 5 (re-dating) needs no join and no new source.")
+    return m
+
+
 def main():
     client = bigquery.Client(project=PROJECT)
+    m = preflight(client)
 
     # ---------------- Section A ----------------
     rows = list(client.query(SQL_MONTHLY).result())
     if not rows:
         sys.exit("no rows returned — check the date window")
 
-    print("=" * 78)
+    print("\n" + "=" * 78)
     print("A. MONTHLY DENOMINATOR CANDIDATES — 12 closed months")
     print("=" * 78)
-    hdr = (f"{'period':<11}{'events':>8}{'entities':>10}{'acctfld':>9}"
-           f"{'either':>8}{'convs':>7}{'r_event':>9}{'r_entity':>10}{'r_acct':>9}")
+    hdr = (f"{'period':<11}{'c1_sgnp':>8}{'c2_enty':>8}{'c3_acct':>8}"
+           f"{'c4_eith':>8}{'c5_sync':>8}{'convs':>7}"
+           f"{'r_c1':>8}{'r_c3':>8}{'r_c5':>8}")
     print(hdr)
     print("-" * len(hdr))
     for r in rows:
-        print(f"{r.period.isoformat():<11}{r.sync_events:>8}{r.sync_entities:>10}"
-              f"{r.accounts_first_synced:>9}{r.accounts_either:>8}{r.conversions:>7}"
-              f"{(r.rate_on_events or 0):>9.4f}{(r.rate_on_entities or 0):>10.4f}"
-              f"{(r.rate_on_account_field or 0):>9.4f}")
+        print(f"{r.period.isoformat():<11}{r.sync_events:>8}{r.sync_entities:>8}"
+              f"{r.accounts_first_synced:>8}{r.accounts_either:>8}"
+              f"{r.accounts_sync_dated:>8}{r.conversions:>7}"
+              f"{(r.rate_on_events or 0):>8.4f}{(r.rate_on_account_field or 0):>8.4f}"
+              f"{(r.rate_on_sync_dated or 0):>8.4f}")
 
     tot_ev = sum(r.sync_events for r in rows)
     tot_en = sum(r.sync_entities for r in rows)
     tot_af = sum(r.accounts_first_synced for r in rows)
     tot_ei = sum(r.accounts_either for r in rows)
+    tot_sd = sum(r.accounts_sync_dated for r in rows)
     tot_cv = sum(r.conversions for r in rows)
 
     print("\n--- 12-month totals ---")
-    print(f"  1. sync rows, signup-dated (what #55 counts)  {tot_ev:>8,}   account-grain")
-    print(f"  2. distinct entities that synced              {tot_en:>8,}   customer-grain")
-    print(f"  3. accounts w/ CustDatFirstSyncCompleted      {tot_af:>8,}   account-grain")
-    print(f"  4. accounts w/ either signal (upper bound)    {tot_ei:>8,}   account-grain")
-    print(f"     conversions (numerator, event-dated)       {tot_cv:>8,}   account-grain")
+    print(f"  {'candidate':<42}{'total':>7}{'grain':>10}{'dated by':>12}{'rate':>8}")
+    for label, tot, grain, dated in (
+        ("1. sync rows, signup-dated (= #55 today)", tot_ev, "account", "signup"),
+        ("2. distinct entities that synced",         tot_en, "CUSTOMER", "signup"),
+        ("3. Account.CustDatFirstSyncCompleted",     tot_af, "account", "completion"),
+        ("4. either signal (upper bound)",           tot_ei, "account", "earliest"),
+        ("5. #55's population, re-dated",            tot_sd, "account", "completion"),
+    ):
+        rate = f"{tot_cv / tot * 100:.2f}%" if tot else "n/a"
+        print(f"  {label:<42}{tot:>7,}{grain:>10}{dated:>12}{rate:>8}")
+    print(f"  {'conversions (numerator)':<42}{tot_cv:>7,}{'account':>10}{'invoice':>12}")
 
-    print("\n--- implied 12-month conversion rates ---")
-    for label, den in (("1. on signup-dated sync rows ", tot_ev),
-                       ("2. on distinct entities      ", tot_en),
-                       ("3. on Account first-sync     ", tot_af),
-                       ("4. on either signal          ", tot_ei)):
-        print(f"  {label} {tot_cv / den * 100:6.2f}%" if den else f"  {label}    n/a")
-
-    print("\n--- the two gap percentages ---")
-    if tot_ev and tot_en:
-        print(f"  account-vs-entity fan-in (#1 over #2):     "
-              f"{(tot_ev / tot_en - 1) * 100:+.1f}%")
-    if tot_ev and tot_af:
-        print(f"  Account-field-vs-#55 gap  (#3 over #1):    "
-              f"{(tot_af / tot_ev - 1) * 100:+.1f}%")
+    print("\n--- the two gap percentages the gate asked for ---")
+    print(f"  account-vs-entity fan-in (#1 over #2):    {(tot_ev / tot_en - 1) * 100:+.1f}%")
+    print(f"  preferred-field gap      (#3 over #1):    {(tot_af / tot_ev - 1) * 100:+.1f}%")
+    print("\n--- the gap the dating finding implies ---")
+    print(f"  re-dating only           (#5 over #1):    {(tot_sd / tot_ev - 1) * 100:+.1f}%")
+    print(f"  rate moves {(tot_cv / tot_sd - tot_cv / tot_ev) * 100:+.2f} pp, "
+          f"from {tot_cv / tot_ev * 100:.2f}% to {tot_cv / tot_sd * 100:.2f}%")
+    print("  Note the direction: re-dating moves the rate UP, i.e. AWAY from")
+    print("  the 'inflated denominator makes the rate read low' framing.")
 
     print("\n--- per-month gap stability (is any single month distorting?) ---")
-    print(f"  {'period':<11}{'fanin_%':>9}{'fieldgap_%':>12}")
-    fan_vals, fld_vals = [], []
+    print(f"  {'period':<11}{'fanin_%':>12}{'fieldgap_%':>14}{'redate_%':>14}")
+    fan_v, fld_v, red_v = [], [], []
     for r in rows:
-        if r.sync_entities:
-            fan_vals.append((r.sync_events / r.sync_entities - 1) * 100)
-        if r.sync_events:
-            fld_vals.append((r.accounts_first_synced / r.sync_events - 1) * 100)
-        fan = f"{(r.sync_events / r.sync_entities - 1) * 100:+.1f}" if r.sync_entities else "n/a"
-        fld = f"{(r.accounts_first_synced / r.sync_events - 1) * 100:+.1f}" if r.sync_events else "n/a"
-        print(f"  {r.period.isoformat():<11}{fan:>9}{fld:>12}")
-    if fan_vals and fld_vals:
-        print(f"  {'range':<11}{f'{min(fan_vals):+.1f}..{max(fan_vals):+.1f}':>9}"
-              f"{f'{min(fld_vals):+.1f}..{max(fld_vals):+.1f}':>12}")
-
-    # ---------------- Section B ----------------
-    g = one_row(client, SQL_GRAIN)
-    print("\n" + "=" * 78)
-    print("B. GRAIN ASSERTIONS")
-    print("=" * 78)
-    print(f"  int_syncs rows                      {g.sync_rows:>9,}")
-    print(f"  ... distinct CompanyAccount         {g.sync_distinct_company_account:>9,}")
-    print(f"  ... distinct (entity, account)      {g.sync_distinct_entity_account:>9,}")
-    print(f"  ... distinct EntityRecordID         {g.sync_distinct_entity:>9,}")
-    print(f"  Account rows                        {g.account_rows:>9,}")
-    print(f"  ... distinct RecordID               {g.account_distinct_record_id:>9,}")
-    print(f"  ... distinct CompanyAccount         {g.account_distinct_company_account:>9,}")
-    print(f"  ... distinct EntityRecordID         {g.account_distinct_entity:>9,}")
-    print(f"  Funnel EventType='Trial' rows       {g.funnel_trial_rows:>9,}")
-    print(f"  filtered Account rows               {g.filtered_account_rows:>9,}")
-
-    print()
-    print(f"  Account unique on RecordID?                 "
-          f"{'YES' if g.account_rows == g.account_distinct_record_id else 'NO — dedup must change'}")
-    print(f"  int_syncs one row per account?              "
-          f"{'YES' if g.sync_rows == g.sync_distinct_company_account else 'NO — repeat events exist'}")
-    print(f"  Funnel population == filtered Account?      "
-          f"{'YES' if g.funnel_trial_rows == g.filtered_account_rows else 'NO'}")
-
-    m = one_row(client, SQL_MULTIPLICITY)
-    print(f"\n  entities with a sync row                    {m.entities:>9,}")
-    print(f"  ... exactly one sync row                    {m.entities_with_one_row:>9,}"
-          f"  ({pct(m.entities_with_one_row, m.entities)})")
-    print(f"  ... more rows than distinct accounts        {m.entities_with_repeat_events:>10,}"
-          f"  <- true repeat sync events")
-    print(f"  max sync rows for one entity                {m.max_rows_for_one_entity:>9,}")
-
-    if m.entities_with_repeat_events == 0:
-        print("\n  => Every multi-row entity is explained by owning multiple")
-        print("     accounts. There are ZERO repeat sync events in Funnel.")
-        print("     The yml's 're-syncs after disconnect/reconnect' mechanism")
-        print("     is not present in the data.")
+        fan = (r.sync_events / r.sync_entities - 1) * 100 if r.sync_entities else None
+        fld = (r.accounts_first_synced / r.sync_events - 1) * 100 if r.sync_events else None
+        red = (r.accounts_sync_dated / r.sync_events - 1) * 100 if r.sync_events else None
+        for bucket, v in ((fan_v, fan), (fld_v, fld), (red_v, red)):
+            if v is not None:
+                bucket.append(v)
+        print(f"  {r.period.isoformat():<11}{signed(fan):>12}{signed(fld):>14}{signed(red):>14}")
+    print(f"  {'range':<11}{rng(fan_v):>12}{rng(fld_v):>14}{rng(red_v):>14}")
 
     f = one_row(client, SQL_FANIN)
     print("\n--- fan-in depends on the window; the yml quotes the wrong one ---")
@@ -459,101 +545,107 @@ def main():
           f"  = {(f.window_rows / f.window_distinct_entities - 1) * 100:+.1f}%")
     print(f"  monthly grain: {f.window_rows:>7,} rows / {f.window_monthly_sum_entities:>7,} entities"
           f"  = {(f.window_rows / f.window_monthly_sum_entities - 1) * 100:+.1f}%   "
-          f"<- what the monthly metric actually carries")
+          f"<- what the monthly metric carries")
+    print(f"\n  entities with exactly one sync row: {m.entities_with_one_row:,}"
+          f"/{f.alltime_entities:,} ({pct(m.entities_with_one_row, f.alltime_entities)})")
+    print(f"  max sync rows for one entity:       {m.max_rows_for_one_entity:,}")
+    print("  The yml's 91/9 split is arithmetically right. Its stated cause —")
+    print("  're-syncs after disconnect/reconnect' — is not, per pre-flight.")
 
     # ---------------- Section C ----------------
-    o = one_row(client, SQL_OVERLAP)
     print("\n" + "=" * 78)
-    print("C. POPULATION OVERLAP OF THE TWO ACCOUNT-GRAIN SIGNALS (all time)")
+    print("C. THE TWO ACCOUNT-GRAIN SIGNALS, BY SIGNUP ERA")
     print("=" * 78)
-    print(f"  filtered accounts                   {o.filtered_accounts:>9,}")
-    print(f"  in int_syncs (Funnel sync)          {o.in_funnel_sync:>9,}")
-    print(f"  SyncTypeRegion populated            {o.has_sync_type_region:>9,}")
-    print(f"  CustDatFirstSyncCompleted set       {o.has_first_sync_date:>9,}")
-    print(f"  in both signals                     {o.in_both:>9,}")
-    print(f"  Funnel only (no completion date)    {o.funnel_only:>9,}")
-    print(f"  Account-field only (missed by #55)  {o.field_only:>9,}")
+    ov = list(client.query(SQL_OVERLAP).result())
+    print(f"  {'era':<10}{'accts':>9}{'region':>9}{'complet':>9}{'both':>8}"
+          f"{'rgn_only':>10}{'fld_only':>10}")
+    keys = ("filtered_accounts", "in_region_signal", "has_completion_date",
+            "in_both", "region_only", "field_only")
+    tot = dict.fromkeys(keys, 0)
+    for r in ov:
+        print(f"  {r.era:<10}{r.filtered_accounts:>9,}{r.in_region_signal:>9,}"
+              f"{r.has_completion_date:>9,}{r.in_both:>8,}"
+              f"{r.region_only:>10,}{r.field_only:>10,}")
+        for k in keys:
+            tot[k] += r[k]
+    print(f"  {'TOTAL':<10}{tot['filtered_accounts']:>9,}{tot['in_region_signal']:>9,}"
+          f"{tot['has_completion_date']:>9,}{tot['in_both']:>8,}"
+          f"{tot['region_only']:>10,}{tot['field_only']:>10,}")
 
-    if o.in_funnel_sync == o.has_sync_type_region:
-        print("\n  => int_syncs membership is exactly SyncTypeRegion-populated.")
-        print("     The _sources.yml:141 undercount warning applies directly")
-        print("     to the sync denominator.")
+    net = tot["has_completion_date"] - tot["in_region_signal"]
+    sym = tot["region_only"] + tot["field_only"]
+    print(f"\n  net count gap        {net:>+8,}  ({pct(net, tot['in_region_signal'])} of #55)")
+    print(f"  symmetric difference {sym:>8,}  ({pct(sym, tot['in_region_signal'])} of #55)")
+    print("  The signals disagree about WHICH accounts far more than HOW MANY.")
 
-    symmetric = o.funnel_only + o.field_only
-    print(f"\n  net count gap                       "
-          f"{o.has_first_sync_date - o.in_funnel_sync:>+9,}"
-          f"  ({pct(o.has_first_sync_date - o.in_funnel_sync, o.in_funnel_sync)} of #55)")
-    print(f"  symmetric difference                {symmetric:>9,}"
-          f"  ({pct(symmetric, o.in_funnel_sync)} of #55)")
-    print("  The two signals disagree about WHICH accounts far more than")
-    print("  about HOW MANY. The net gap hides most of the disagreement.")
+    pre = next((r for r in ov if r.era == "pre-2019"), None)
+    if pre and tot["field_only"]:
+        print(f"\n  {pct(pre.field_only, tot['field_only'])} of the field's population")
+        print("  advantage sits in pre-2019 cohorts. That is why the gap flips sign")
+        print("  by window: the field looks better all-time but worse over the last")
+        print("  12 months. Same field, different eras.")
 
     # ---------------- Section D ----------------
-    d = one_row(client, SQL_DATING)
     print("\n" + "=" * 78)
-    print("D. DATING BASIS  (not anticipated by the brief)")
+    print("D. SIGNUP-TO-SYNC LAG — SPLIT BY ERA, BECAUSE THE BLEND LIES")
     print("=" * 78)
-    print(f"  int_syncs rows                      {d.sync_rows:>9,}")
-    print(f"  ... SyncDate == SignupDate          {d.syncdate_equals_signupdate:>9,}"
-          f"  ({pct(d.syncdate_equals_signupdate, d.sync_rows)})")
-    print(f"  Funnel Trial rows                   {d.trial_rows:>9,}")
-    print(f"  ... Date == SignupDate              {d.trial_date_equals_signup:>9,}"
-          f"  ({pct(d.trial_date_equals_signup, d.trial_rows)})")
-    print(f"  Funnel Conversion rows              {d.conversion_rows:>9,}")
-    print(f"  ... Date == SignupDate              {d.conversion_date_equals_signup:>9,}"
-          f"  ({pct(d.conversion_date_equals_signup, d.conversion_rows)})")
+    print(f"  {'era':<20}{'n':>8}{'<=0d':>9}{'>30d':>9}{'>60d':>9}")
+    for r in client.query(SQL_SYNC_LAG_BY_ERA).result():
+        print(f"  {r.era:<20}{r.n:>8,}{pct(r.on_or_before_signup, r.n):>9}"
+              f"{pct(r.over_30d, r.n):>9}{pct(r.over_60d, r.n):>9}")
+    print("\n  The blended >30d figure is a PRE-2019 ARTIFACT. Every cohort since")
+    print("  2019 sits near 0.5%. Do not quote the blend — it is true of the")
+    print("  table and false of every publishable month.")
 
-    if d.syncdate_equals_signupdate == d.sync_rows:
-        print("\n  => int_syncs.SyncDate IS THE SIGNUP DATE, with zero exceptions.")
-        print("     Syncs #55 is a SIGNUP-COHORT measure: 'accounts that signed")
-        print("     up in month M and have since completed a sync'. It is not")
-        print("     'syncs that happened in month M'.")
+    print("\n--- direct measurement: how much does a closed month still grow? ---")
+    print(f"  {'signup month':<14}{'sync rows':>10}{'after close':>13}{'+30d':>8}")
+    retro = list(client.query(SQL_RETRO_FILL).result())
+    for r in retro:
+        print(f"  {r.signup_month.isoformat():<14}{r.sync_rows:>10,}"
+              f"{(r.filled_after_month_end or 0) * 100:>12.2f}%"
+              f"{(r.filled_after_month_end_plus_30d or 0) * 100:>7.2f}%")
+    vals = [(r.filled_after_month_end or 0) * 100 for r in retro]
+    if vals:
+        print(f"\n  retroactive growth after month close: "
+              f"{min(vals):.1f}% to {max(vals):.1f}% across {len(vals)} cohorts")
+        print("  THIS is the dashboard-footnote number — roughly 1-5%, not the")
+        print("  ~19% the blended lag implies.")
 
-    lag = one_row(client, SQL_SYNC_LAG)
-    print("\n--- when does the sync actually complete, vs signup? ---")
-    print(f"  rows with both dates                {lag.rows_with_both:>9,}")
-    print(f"  synced on/before signup day         {lag.sync_on_or_before_signup_day:>9,}"
-          f"  ({pct(lag.sync_on_or_before_signup_day, lag.rows_with_both)})")
-    print(f"  synced >30d after signup            {lag.sync_more_than_30d_after_signup:>9,}"
-          f"  ({pct(lag.sync_more_than_30d_after_signup, lag.rows_with_both)})")
-    print(f"  synced >60d after signup            {lag.sync_more_than_60d_after_signup:>9,}"
-          f"  ({pct(lag.sync_more_than_60d_after_signup, lag.rows_with_both)})")
-    print(f"  synced >90d after signup            {lag.sync_more_than_90d_after_signup:>9,}"
-          f"  ({pct(lag.sync_more_than_90d_after_signup, lag.rows_with_both)})")
-    print("  => the most recent months are structurally incomplete and will")
-    print("     grow retroactively. A month published at close is missing")
-    print("     roughly the >30d share of its eventual syncs.")
+    fs = one_row(client, SQL_FIELD_SANITY)
+    print("\n--- is CustDatFirstSyncCompleted trustworthy? ---")
+    print(f"  rows with a real date               {fs.rows_with_date:>9,}")
+    print(f"  ... exactly equal to SignupDate     {fs.equals_signup_date:>9,}"
+          f"  ({pct(fs.equals_signup_date, fs.rows_with_date)})")
+    print(f"  ... dated BEFORE signup             {fs.before_signup_date:>9,}"
+          f"  (min {fs.min_lag_days:,} days)")
+    print("  Same-day could be real onboarding sync or a backfill artifact.")
+    print("  Pre-signup dates cannot be real. Unresolved — and the field gap")
+    print("  plus candidates 3 and 5 all depend on this field's meaning.")
 
     # ---------------- Section E ----------------
     print("\n" + "=" * 78)
-    print("E. THE READ LEADERSHIP ACTUALLY WANTS")
+    print("E. THE READ LEADERSHIP ACTUALLY WANTS — MEASURED ON TWO WINDOWS")
     print("=" * 78)
-    basis = list(client.query(SQL_BASIS).result())
-    tot_b_cv = sum(r.conversions for r in basis)
-    tot_b_same = sum(r.signed_up_same_month for r in basis)
-    print("Shipped ratio pairs month-M invoicers with month-M signups.")
-    print(f"  month-M conversions                 {tot_b_cv:>9,}")
-    print(f"  ... that signed up in month M       {tot_b_same:>9,}"
-          f"  ({pct(tot_b_same, tot_b_cv)})")
-    print("  => roughly half the numerator comes from earlier signup")
-    print("     cohorts than the denominator it is divided by.")
+    b = one_row(client, SQL_BASIS)
+    print("The shipped ratio pairs month-M invoicers with month-M signups.")
+    print(f"  month-M conversions                 {b.conversions:>9,}")
+    print(f"  ... that signed up in month M       {b.signed_up_same_month:>9,}"
+          f"  ({pct(b.signed_up_same_month, b.conversions)})")
+    print("  => about half the numerator comes from earlier signup cohorts")
+    print("     than the denominator it is divided by.")
 
-    coh = list(client.query(SQL_COHORT).result())
-    print("\nCohort-consistent rate — same accounts on both sides:")
-    print(f"  {'signup month':<14}{'synced':>8}{'converted':>11}{'rate':>9}")
-    for r in coh:
-        print(f"  {r.period.isoformat():<14}{r.synced_accounts:>8}{r.converted:>11}"
-              f"{(r.cohort_rate or 0) * 100:>8.2f}%")
-    coh_syn = sum(r.synced_accounts for r in coh)
-    coh_cnv = sum(r.converted for r in coh)
-    coh_rate = coh_cnv / coh_syn if coh_syn else 0
-    shipped = tot_cv / tot_ev if tot_ev else 0
-    print(f"  {'12mo total':<14}{coh_syn:>8}{coh_cnv:>11}{coh_rate * 100:>8.2f}%")
-
-    print("\n--- bottom line ---")
-    print(f"  shipped rate  (#301 basis, conversions_M / syncs_M)   {shipped * 100:6.2f}%")
-    print(f"  'share of synced accounts that converted'             {coh_rate * 100:6.2f}%")
-    print(f"  shipped reads {(shipped - coh_rate) * 100:+.2f} pp versus the leadership read")
+    print(f"\n  {'window':<16}{'shipped':>10}{'cohort read':>13}{'gap':>11}")
+    gaps = {}
+    for label, back, fwd in (("current 12mo", 12, 0), ("prior 12mo", 24, 12)):
+        w = one_row(client, SQL_COHORT_WINDOW, {"back": back, "fwd": fwd})
+        gaps[label] = (w.shipped_rate - w.cohort_rate) * 100
+        print(f"  {label:<16}{w.shipped_rate * 100:>9.2f}%{w.cohort_rate * 100:>12.2f}%"
+              f"{gaps[label]:>+8.2f} pp")
+    print(f"\n  The gap is WINDOW-DEPENDENT, not a standing directional bias:")
+    print(f"  {gaps['current 12mo']:+.2f} pp on this window, "
+          f"{gaps['prior 12mo']:+.2f} pp on the one before.")
+    print("  Report it as a measurement of this window with the prior window")
+    print("  beside it. Do not attach a causal story to a sign that moves.")
 
     print("\n" + "=" * 78)
     print("Paste the gap percentages into the caveats block on")
