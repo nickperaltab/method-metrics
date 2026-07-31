@@ -5,6 +5,7 @@
 
 const VIEWS = {
   int_conversions: { dateCol: 'FirstSaaSInvoiceTxnDate' },
+  int_syncs: { dateCol: 'SyncDate' },
   v_new_net_saas: { dateCol: 'TxnDate' },
   v_new_dep_revenue: { dateCol: 'TxnDate' },
   int_cancellations: { dateCol: 'CancellationDate' },
@@ -48,6 +49,34 @@ FROM conversions c
 LEFT JOIN weekly_lagged t ON c.week = t.week
 LEFT JOIN forecast f ON c.week = f.week
 ORDER BY 1
+`;
+
+// Weekly sync conversion rate — reads the dbt view. Same-month, no lag.
+// Multiplied by 100 because the chart's valueFormat is 'percent'.
+const WEEKLY_SYNC_CONVERSION_RATE_SQL = `
+SELECT FORMAT_DATE('%Y-%m-%d', period) AS period,
+  ROUND(value * 100, 2) AS value
+FROM \`project-for-method-dw.revenue_metrics.v_metric__sync_conversion_rate_weekly\`
+WHERE period >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+ORDER BY 1
+`;
+
+// Weekly budgeted sync conversion rate. Sum the daily allocations within
+// the week, THEN divide — same reason as the monthly model.
+const WEEKLY_BUDGET_SYNC_CONV_RATE_SQL = `
+SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
+  ROUND(SAFE_DIVIDE(SUM(Budgeted_Conversion), SUM(Budgeted_Syncs)) * 100, 2) AS value
+FROM \`project-for-method-dw.revenue.method_forecast\`
+WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
+GROUP BY 1 ORDER BY 1
+`;
+
+const WEEKLY_FORECAST_SYNC_CONV_RATE_SQL = `
+SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
+  ROUND(SAFE_DIVIDE(SUM(Forecasted_Conversion), SUM(Forecasted_Syncs)) * 100, 2) AS value
+FROM \`project-for-method-dw.revenue.method_forecast\`
+WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
+GROUP BY 1 ORDER BY 1
 `;
 
 const WEEKLY_NEW_NET_SAAS_SQL = `
@@ -169,6 +198,65 @@ export default {
             { id: 324, label: 'Budgeted Conversion Rate', color: '#1e3a5f' },
             { id: 319, label: 'Forecasted Conversion Rate', color: '#2563eb' },
             { id: 357, label: 'Conversion Rate', color: '#9dc3e6' },
+          ],
+          lastNMonths: 4, showLabels: true,
+        },
+      ],
+    },
+
+    // ── 1b. Sync Conversion Rate ─────────────────────────────
+    // Leadership ask via Nelson (2026-07-30): report conversion on Sync
+    // alongside conversion on Trials. The trials section above is
+    // preserved unchanged.
+    //
+    // Same-month, no lag — unlike the trials rate, which divides by
+    // (prior-month trials + forecasted trials) / 2. Both sides of this
+    // ratio are partial for the current month, so it stays stable
+    // through the month where the trials panel drifts upward.
+    {
+      title: 'Sync Conversion Rate',
+      layout: 'scorecard-row',
+      // `description` is the field ScorecardSection.jsx renders (line 63).
+      // There is no `note` prop — using one renders nothing.
+      description: 'Conversions ÷ sync events, same month, no lag. Not comparable in level to the trials Conversion Rate above, which uses a lagged denominator — compare trend and attainment, not level.',
+      kpis: [
+        { metricId: 56, label: 'Conversion', format: 'number',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 296, label: 'Conversion Trajectory', format: 'number',
+          valueSelector: 'current_or_latest' },
+        { metricId: 402, label: 'Forecasted Sync Conversion Rate', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        { metricId: 301, label: 'Sync Conversion Rate', format: 'decimal_rate',
+          valueSelector: 'current_or_latest', showDelta: true },
+        { metricId: 400, label: 'Sync Conversion Rate Trajectory', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        // These two are real Supabase formula metrics registered in Task 8,
+        // not formulaOverride hacks. Both inputs are decimal rates, so the
+        // formula scales once by 100 — unlike the trials section's 322/323,
+        // which need overrides because 321 is a percentage and 319 a decimal.
+        { metricId: 404, label: 'Forecast vs. Trajectory', format: 'percent',
+          valueSelector: 'current_or_latest' },
+        { metricId: 405, label: 'Forecasted Attainment', format: 'percent',
+          valueSelector: 'current_or_latest' },
+      ],
+      charts: [
+        {
+          label: 'Sync Conversion Rate Week Over Week',
+          chartType: 'line', valueFormat: 'percent',
+          metrics: [
+            { id: '__wk_budget_syncconvrate', label: 'Budgeted Sync Conversion Rate', color: '#a3c771', customSql: WEEKLY_BUDGET_SYNC_CONV_RATE_SQL },
+            { id: '__wk_forecast_syncconvrate', label: 'Forecasted Sync Conversion Rate', color: '#e84393', customSql: WEEKLY_FORECAST_SYNC_CONV_RATE_SQL },
+            { id: '__weekly_sync_conv_rate', label: 'Sync Conversion Rate', color: '#2563eb', customSql: WEEKLY_SYNC_CONVERSION_RATE_SQL },
+          ],
+          lastNMonths: 2, showLabels: true,
+        },
+        {
+          label: 'Sync Conversion Rate Month Over Month',
+          chartType: 'bar', valueFormat: 'decimal_rate',
+          metrics: [
+            { id: 401, label: 'Budgeted Sync Conversion Rate', color: '#1e3a5f' },
+            { id: 402, label: 'Forecasted Sync Conversion Rate', color: '#2563eb' },
+            { id: 301, label: 'Sync Conversion Rate', color: '#9dc3e6' },
           ],
           lastNMonths: 4, showLabels: true,
         },

@@ -128,14 +128,15 @@ describe('computeDelta', () => {
 // ── Sales scorecard config validation ────────────────────────
 
 describe('Sales scorecard config', () => {
-  it('has 7 sections', () => {
-    expect(salesScorecard.sections).toHaveLength(7);
+  it('has 8 sections', () => {
+    expect(salesScorecard.sections).toHaveLength(8);
   });
 
   it('sections are in correct order', () => {
     const titles = salesScorecard.sections.map(s => s.title);
     expect(titles).toEqual([
       'Conversion Rate',
+      'Sync Conversion Rate',
       'New Net SaaS',
       'New DEP Revenue',
       'Churn Rate',
@@ -175,13 +176,13 @@ describe('Sales scorecard config', () => {
   });
 
   it('Churn Rate section uses metric 274 (Forecasted Churn) first', () => {
-    const churn = salesScorecard.sections[3];
+    const churn = salesScorecard.sections[4];
     expect(churn.kpis[0].metricId).toBe(274);
     expect(churn.kpis[0].label).toBe('Forecasted Churn');
   });
 
   it('NRR metrics use percent format (not decimal_rate)', () => {
-    const nrr = salesScorecard.sections[6];
+    const nrr = salesScorecard.sections[7];
     for (const kpi of nrr.kpis) {
       expect(kpi.format).toBe('percent');
     }
