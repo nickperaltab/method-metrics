@@ -1059,3 +1059,363 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 - Trajectory method is **calendar-day linear** (`mtd/days_elapsed*days_in_month`), NOT the prior-month-shape method used for Net SaaS.
 
 **Used by:** Channel Trajectory scorecard (Labs) in the chart builder.
+
+---
+
+## 4f. Sync Conversion Rate family — queued, pending Looker parity + approval
+
+Nelson relayed a leadership ask (2026-07-30): report conversion on **Sync** alongside conversion on **Trials** on the Sales Scorecard. Shipping that duplicated section required first fixing two known-wrong KPIs in the *existing* trials section (#296 and #357), since duplicating them would have cloned the errors. Spec: `docs/superpowers/specs/2026-07-30-sync-conversion-design.md`.
+
+All nine metrics below are **`status: queued`** in both dbt (`models/metrics/*.yml`) and Supabase. None is `live`. Per CLAUDE.md, a metric does not flip `live` until Nic has approved promotion off a completed parity pass; for the two derived budget/forecast ratios (#401, #402) that additionally requires Justin's sign-off, since he owns revenue methodology and never published a sync-side budget ratio. `parity_verified` is recorded as `PENDING` on every one of the seven dbt-managed models until that Looker side-by-side happens — see `scripts/parity_sync_conversion_vs_looker.py`.
+
+**Shared context — the sync-family denominator (applies to #295, #400, #401, #402, #403, #404, #405):**
+
+The Sync Conversion Rate uses **Syncs (#55)** as its denominator, same-month, no lag — unlike the trials Conversion Rate (#357), which lags the denominator by one month. Two things about that denominator must be stated on every sync-family entry, corrected from earlier drafts of this work that had them wrong:
+
+1. **The denominator is event-grain syncs dated by signup, not by sync completion.** `revenue.Funnel` is a view over `revenue.Account` whose Sync branch projects `SignupDate AS Date`. So "syncs in month M" means "accounts that signed up in month M and have sync data," not "syncs that happened in month M." Measured fan-in at the monthly grain the metric actually carries is about **1.5%**, not the ~13% that `v_metric__syncs.yml` currently states — that 13% figure is an all-time cumulative number, and the "re-syncs after disconnect/reconnect" mechanism it describes does not exist in the data: there are zero repeat sync events. The 9% of entities with more than one sync row are multi-account customers, not re-syncers. (`v_metric__syncs.yml` itself is out of scope for this pass — it is `status: live` and carries its own verification history — but its caveat text is now known-wrong and should be corrected in a follow-up.)
+2. **The sync rate and the trials rate are not comparable in level.** The trials rate (#357) uses a lagged denominator; the sync rate does not. Compare trend and attainment between the two sections, not level — the trials rate runs roughly 9–17%, the sync rate roughly 24–33%, and that gap is a construction difference, not a performance difference.
+
+Both points are sourced from `scripts/reconcile_sync_denominators.py`'s 2026-07-31 run, recorded in full in the design spec's "Denominator reconciliation gate" section.
+
+---
+
+### #295 Syncs Trajectory
+
+**What it answers in one sentence:** If the current month continues at its month-to-date pace, how many sync events will it finish with?
+
+**The math:**
+```sql
+WITH mtd AS (
+  SELECT COUNT(*) AS syncs
+  FROM int_syncs
+  WHERE SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+    AND SyncDate < CURRENT_DATE()
+)
+SELECT
+  DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,
+  SAFE_DIVIDE(mtd.syncs, EXTRACT(DAY FROM CURRENT_DATE()))
+    * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH)) AS value
+FROM mtd
+```
+
+**Grain:** Single row, current month only. Event-grain numerator (see Syncs #55). Trajectory has no meaning for a closed month, so no historical rows are emitted.
+
+**Filters / exclusions:**
+- `SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)` — restricts the numerator to the in-progress month.
+- `SyncDate < CURRENT_DATE()` — excludes today, which is itself incomplete and would drag the pace down.
+
+**Methodology source:** Mirrors the divisor convention derived for Conversions Trajectory (#296) from Nelson's 2026-07-22 Looker screenshot (`51 ÷ 22 × 31 = 71.86`, exact). Divisor is `day_of_month`, not `day_of_month + 1` or `day_of_month - 1`.
+
+**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side; run `scripts/parity_sync_conversion_vs_looker.py` and read against the live Looker Sales Scorecard.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above (event-grain/signup-dated denominator, ~1.5% monthly fan-in; not level-comparable to the trials trajectory).
+- Divisor is `day_of_month`, so the projection is noisy in the first few days of a month — expect wide swings before roughly the 5th.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section)
+- Sync Conversion Rate Trajectory (#400) as an input
+
+---
+
+### #296 Conversions Trajectory
+
+**What it answers in one sentence:** If the current month continues at its month-to-date pace, how many conversions will it finish with?
+
+**The math:**
+```sql
+WITH mtd AS (
+  SELECT COUNT(*) AS conversions
+  FROM int_conversions
+  WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+    AND FirstSaaSInvoiceTxnDate < CURRENT_DATE()
+)
+SELECT
+  DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,
+  SAFE_DIVIDE(mtd.conversions, EXTRACT(DAY FROM CURRENT_DATE()))
+    * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH)) AS value
+FROM mtd
+```
+
+**Grain:** Single row, current month only. Account-grain numerator (see Conversions #56). Trajectory has no meaning for a closed month.
+
+**Filters / exclusions:**
+- `FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)` — restricts the numerator to the in-progress month.
+- `FirstSaaSInvoiceTxnDate < CURRENT_DATE()` — excludes today, which is incomplete.
+
+**Methodology source:** Reverse-engineered from Nelson's 2026-07-22 live-Looker screenshot: 51 conversions ÷ 22 day-of-month × 31 days = 71.86, an exact match to Looker's displayed trajectory. The prior Supabase `chart_sql` divided by `day_of_month - 1` and over-projected; the ticket's own fix candidate guessed `day_of_month + 1`, which is also wrong. The correct divisor is plain `day_of_month`.
+
+**Parity-verified against:** PENDING — the screenshot derivation is a single data point and must be confirmed against one live Looker read before this metric goes `live` (Task 10 Step 2/3 gate). Run `scripts/parity_sync_conversion_vs_looker.py`.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Divisor is `day_of_month`, which means the projection is noisy in the first few days of a month. Expect wide swings before roughly the 5th.
+- Supersedes the old Supabase `chart_sql`, which divided by `day_of_month - 1` and over-projected by roughly 5%.
+- Single-row by design. Do not chart it as a time series.
+- Shared identically by both Sales Scorecard conversion sections (trials and sync) — same numerator, same KPI, shown twice by design so the two sections read as a matched pair.
+
+**Used by:**
+- Sales Scorecard (Conversion Rate section and Sync Conversion Rate section)
+- Sync Conversion Rate Trajectory (#400) as an input
+
+---
+
+### #357 Conversion Rate (Sales Scorecard, lagged)
+
+**What it answers in one sentence:** What share of the trial pool converted in each month, using the lagged denominator the Sales Scorecard reports on?
+
+**The math:**
+```sql
+WITH conversions AS (
+  SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) AS period, COUNT(*) AS conversions
+  FROM int_conversions
+  GROUP BY 1
+),
+trials_lagged AS (
+  SELECT DATE_ADD(DATE_TRUNC(SignupDate, MONTH), INTERVAL 1 MONTH) AS period,
+         COUNT(*) AS prior_month_trials
+  FROM int_trials
+  GROUP BY 1
+),
+forecast AS (
+  SELECT DATE_TRUNC(Date, MONTH) AS period, SUM(Forecasted_Trials) AS forecasted_trials
+  FROM method_forecast
+  GROUP BY 1
+)
+SELECT c.period,
+       SAFE_DIVIDE(c.conversions, (t.prior_month_trials + f.forecasted_trials) / 2.0) AS value
+FROM conversions c
+LEFT JOIN trials_lagged t USING (period)
+LEFT JOIN forecast f USING (period)
+```
+
+**Grain:** Period-level ratio. Account-grain numerator and denominator.
+
+**Filters / exclusions:**
+- Conversions rolling 24 months; trials rolling 25 months — the oldest output month needs its M-1 trials, which sit one month before the 24-month window.
+- `int_trials` excludes `IsConversionException`, Method Integration partner rows, and the `0001-01-01` sentinel — inherited from Trials (#54).
+- No `COALESCE` on the missing side of the join — a period is only computable if both prior-month trials and that month's forecast row exist. Coalescing a missing side to 0 (the previous bug) silently halved the `/2.0` denominator and roughly doubled the rate for uncovered months, reading as high as 18–38%, above even #302.
+
+**Methodology source:** Matches `WEEKLY_CONVERSION_RATE_SQL` in `builder/src/config/scorecards/sales-scorecard.js`, lifted to monthly grain. That SQL replicated the Looker Sales Scorecard panel.
+
+**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side.
+
+**Status:** **queued**
+
+**⚠️ Limitations / use-with-care:**
+- **Not the same metric as Trial-to-Conversion Rate (#302).** #302 is same-month and runs 15–20%. This one lags the denominator by a month and blends in forecast — two different questions, two different numbers. Do not use them interchangeably.
+- **This metric CAN read higher than #302 during periods of strong trials growth.** The lagged/blended denominator is `(trials[M-1] + forecast[M]) / 2`. When `trials[M-1] + forecast[M] < 2 × trials[M]` — which reduces to trials growing month over month — the denominator here is smaller than same-month trials, so the rate can exceed #302's same-month rate. Observed real instance: January 2026 read 16.45% here against #302's 14.95%, driven by trials jumping 25% month over month (December 581 → January 729). This is a mechanical property of the lag, not an error in either metric.
+
+**Known caveats:**
+- The current month reads LOW by construction: partial numerator over a full-month-equivalent denominator. Roughly 9.6% mid-month versus roughly 13% at month end. Use the trajectory metric for the month-end projection. This effect is only visible when there are still days left in the month to run off — a read taken on the last day of the month looks like a normal closed month, not a low one.
+- Denominator blends actual and forecast, so it moves when the forecast sheet is edited.
+- Not comparable in LEVEL to the sync conversion rate, which has no lag. Compare trend and attainment, not level.
+- Months before `method_forecast`'s coverage begins (pre-December 2025) have no matching forecast row and return NULL, not a fabricated rate — the window self-extends as the forecast sheet accumulates history.
+
+**Used by:**
+- Sales Scorecard (Conversion Rate section)
+
+---
+
+### #400 Sync Conversion Rate Trajectory
+
+**What it answers in one sentence:** If the current month continues at its month-to-date pace, what sync conversion rate will it finish at?
+
+**The math:**
+```sql
+SELECT
+  COALESCE(c.period, s.period) AS period,
+  SAFE_DIVIDE(c.value, s.value) AS value
+FROM v_metric__conversions_trajectory c
+FULL OUTER JOIN v_metric__syncs_trajectory s ON c.period = s.period
+```
+
+**Grain:** Single row, current month. Period-level ratio of two account/event-grain projections.
+
+**Filters / exclusions:** None beyond those inherited from Conversions Trajectory (#296) and Syncs Trajectory (#295).
+
+**Methodology source:** Ratio of the two trajectory projections, which both follow the Looker divisor convention derived 2026-07-22 (`day_of_month`). Same-month, no lag, matching Sync-to-Conversion Rate (#301).
+
+**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side. No Looker counterpart exists for this exact KPI (Nelson's sync section does not exist in Looker), so this is recorded as a first-observation value, not a match.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section)
+- Sync Forecast vs. Trajectory (#404) and Sync Forecasted Attainment (#405) as an input
+
+---
+
+### #401 Budgeted Sync Conversion Rate
+
+**What it answers in one sentence:** What sync conversion rate does the budget imply for each month?
+
+**The math:**
+```sql
+SELECT
+  DATE_TRUNC(Date, MONTH) AS period,
+  SAFE_DIVIDE(SUM(Budgeted_Conversion), SUM(Budgeted_Syncs)) AS value
+FROM method_forecast
+WHERE Date IS NOT NULL
+GROUP BY 1
+```
+
+**Grain:** Period-level ratio, one row per month present in the forecast sheet.
+
+**Filters / exclusions:**
+- `Date IS NOT NULL` — the federated sheet has roughly 633 fully-blank trailing rows past the populated range; without this filter, `GROUP BY DATE_TRUNC(Date, MONTH)` collapses them into a bogus `period = NULL` row.
+
+**Methodology source:** Derived by Nic 2026-07-30 as `Budgeted_Conversion ÷ Budgeted_Syncs`, summing daily allocations before dividing (averaging daily ratios would weight a low-volume day the same as a high-volume one). **This is NOT a Justin-published ratio.** `method_forecast` stores a pre-computed trials-based `Budgeted_Conversion_Rate` but carries no sync equivalent, so this infers one from the two budgeted counts. Justin owns revenue methodology and must confirm this derivation before the metric goes `live` (Task 10 Step 6 gate) — pending as of this writing.
+
+**Parity-verified against:** PENDING — Justin's sign-off on the derivation, plus a live Looker side-by-side. Neither has happened yet. No Looker counterpart exists for this KPI today, so once recorded it will be a first-observation value, not a match.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- **DERIVED ratio, not methodology-authority-published.** Justin has not confirmed this is the ratio he would sign off on. Do not present as budget-authoritative until he does.
+- Source is `revenue.method_forecast`, an `EXTERNAL` table federated over a Google Sheet. A column rename or shifted header row breaks this silently. Federated-sheet reads need the Drive scope on any service-account path.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section, KPI and Month-over-Month chart)
+
+---
+
+### #402 Forecasted Sync Conversion Rate
+
+**What it answers in one sentence:** What sync conversion rate does the forecast imply for each month?
+
+**The math:**
+```sql
+SELECT
+  DATE_TRUNC(Date, MONTH) AS period,
+  SAFE_DIVIDE(SUM(Forecasted_Conversion), SUM(Forecasted_Syncs)) AS value
+FROM method_forecast
+WHERE Date IS NOT NULL
+GROUP BY 1
+```
+
+**Grain:** Period-level ratio, one row per month present in the forecast sheet.
+
+**Filters / exclusions:**
+- `Date IS NOT NULL` — same blank-trailing-rows guard as #401.
+
+**Methodology source:** Derived by Nic 2026-07-30 as `Forecasted_Conversion ÷ Forecasted_Syncs`, same sum-then-divide reasoning as the budgeted twin (#401). **NOT a Justin-published ratio** — same Task 10 Step 6 sign-off gate as #401 applies here.
+
+**Parity-verified against:** PENDING — Justin's sign-off plus a live Looker side-by-side, both outstanding.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- DERIVED ratio, not methodology-authority-published — same caveat as #401.
+- Source is `revenue.method_forecast`, an `EXTERNAL` table over a Google Sheet. Fragile to sheet edits.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section, KPI and Month-over-Month chart)
+- Sync Forecast vs. Trajectory (#404) and Sync Forecasted Attainment (#405) as an input
+
+---
+
+### #403 Sync Conversion Rate (weekly)
+
+**What it answers in one sentence:** What fraction of sync events converted, week by week?
+
+**The math:**
+```sql
+WITH conversions AS (
+  SELECT DATE_TRUNC(FirstSaaSInvoiceTxnDate, WEEK(MONDAY)) AS week, COUNT(*) AS conversions
+  FROM int_conversions
+  WHERE FirstSaaSInvoiceTxnDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+  GROUP BY 1
+),
+syncs AS (
+  SELECT DATE_TRUNC(SyncDate, WEEK(MONDAY)) AS week, COUNT(*) AS syncs
+  FROM int_syncs
+  WHERE SyncDate >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH)
+  GROUP BY 1
+)
+SELECT COALESCE(c.week, s.week) AS period,
+       SAFE_DIVIDE(COALESCE(c.conversions, 0), s.syncs) AS value
+FROM conversions c
+FULL OUTER JOIN syncs s ON c.week = s.week
+```
+
+**Grain:** ISO week (Monday start). Period-level ratio; both sides are account/event counts. Rolling 24 months.
+
+**Filters / exclusions:**
+- Rolling 24 months on both sides — matches the metrics-layer convention and bounds query cost.
+
+**Methodology source:** Weekly form of Sync-to-Conversion Rate (#301). Same-month/no-lag convention chosen 2026-07-30, mirroring the actual monthly sync rate.
+
+**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side. No Looker counterpart exists (Nelson's sync section is new), so this is a first-observation value, not a match.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- Weekly rates are noisy. The trials-side weekly rate swings between roughly 6% and 17% week to week; expect similar or worse here on a smaller denominator.
+- The current partial week is incomplete on both sides and can read anomalously.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section, Week Over Week chart)
+
+---
+
+### #404 Sync Forecast vs. Trajectory
+
+**What it answers in one sentence:** How far ahead of or behind the sync-conversion-rate forecast is the current month projected to land, in percentage points?
+
+**The math:** Supabase formula metric — no dbt model. `({400} - {402}) * 100`, i.e. `(Sync Conversion Rate Trajectory − Forecasted Sync Conversion Rate) × 100`. Both #400 and #402 are decimal rates, so the formula scales once by 100 for display as percentage points — unlike the trials section's Forecast vs. Trajectory (#322), which needs a scale-correction override because its two inputs (#321, #319) are on mismatched scales.
+
+**Grain:** Single row, current month (inherits from #400 and #402).
+
+**Filters / exclusions:** None — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** Derived by Nic 2026-07-30, registered as a Supabase formula metric in `scripts/register_sync_conversion_metrics.py`. Mirrors the trials section's Forecast vs. Trajectory (#322) in intent (positive means pacing ahead of forecast) but has no dbt model of its own.
+
+**Parity-verified against:** PENDING — no Looker counterpart exists (Nelson's sync section is not in Looker). Recorded as a first-observation value, not a match, once Task 10's parity pass runs.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- Has no dbt model — it is pure Supabase-formula arithmetic over #400 and #402. If either input's definition changes, this changes silently with it; treat it as a view over those two metrics, not an independent measurement.
+- Inherits #401/#402's "not Justin-published" caveat indirectly through #402.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section)
+
+---
+
+### #405 Sync Forecasted Attainment
+
+**What it answers in one sentence:** What percentage of the forecasted sync conversion rate is the current month's trajectory pacing at? 100% means exactly on forecast.
+
+**The math:** Supabase formula metric — no dbt model. `SAFE_DIVIDE({400}, {402}) * 100`, i.e. `(Sync Conversion Rate Trajectory ÷ Forecasted Sync Conversion Rate) × 100`.
+
+**Grain:** Single row, current month (inherits from #400 and #402).
+
+**Filters / exclusions:** None — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** Derived by Nic 2026-07-30, registered as a Supabase formula metric in `scripts/register_sync_conversion_metrics.py`. Mirrors the trials section's Forecasted Attainment (#323) in intent.
+
+**Parity-verified against:** PENDING — no Looker counterpart exists. Recorded as a first-observation value, not a match, once Task 10's parity pass runs.
+
+**Status:** **queued**
+
+**Known caveats:**
+- Two sync-family caveats above.
+- Has no dbt model — pure Supabase-formula arithmetic over #400 and #402, same caveat as #404.
+- Inherits #401/#402's "not Justin-published" caveat indirectly through #402.
+
+**Used by:**
+- Sales Scorecard (Sync Conversion Rate section)

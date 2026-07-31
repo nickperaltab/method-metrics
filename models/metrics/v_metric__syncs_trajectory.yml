@@ -23,7 +23,8 @@ models:
           against: "PENDING — Task 10 records the live Looker side-by-side"
           values: "PENDING"
         caveats:
-          - "Inherits the event-grain inflation of Syncs #55 — roughly 9-13% from re-sync events. See scripts/reconcile_sync_denominators.py output."
+          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in month M and have sync data. Measured fan-in at the monthly grain this metric carries is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Not comparable in LEVEL to the trials Conversion Trajectory (#296) once divided into a rate — the sync rate has no lag where the trials rate does. Compare trend and attainment, not level."
           - "Noisy in the first few days of a month, same as #296."
           - "Single-row by design. Do not chart it as a time series."
         used_by:

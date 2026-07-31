@@ -1,0 +1,1 @@
+SELECT FORMAT_DATE('%Y-%m', period) AS period, value FROM `project-for-method-dw.revenue_metrics.v_metric__trial_conversion_rate_lagged` ORDER BY 1

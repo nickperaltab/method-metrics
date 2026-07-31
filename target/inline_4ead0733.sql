@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT FORMAT_DATE('%Y-%m', period) AS period, value FROM `project-for-method-dw.revenue_metrics.v_metric__syncs_trajectory` ORDER BY 1) sub WHERE period >= FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 13 MONTH), MONTH))
