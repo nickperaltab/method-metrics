@@ -33,7 +33,7 @@ syncs AS (
 )
 SELECT
   COALESCE(c.week, s.week) AS period,
-  SAFE_DIVIDE(c.conversions, s.syncs) AS value
+  SAFE_DIVIDE(COALESCE(c.conversions, 0), s.syncs) AS value
 FROM conversions c
 FULL OUTER JOIN syncs s
   ON c.week = s.week
