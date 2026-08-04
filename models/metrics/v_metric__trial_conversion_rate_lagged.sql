@@ -57,7 +57,7 @@ forecast AS (
   SELECT
     DATE_TRUNC(Date, MONTH) AS period,
     SUM(Forecasted_Trials) AS forecasted_trials
-  FROM {{ source('revenue', 'method_forecast_typed') }}
+  FROM {{ source('revenue', 'method_forecast') }}
   GROUP BY 1
 )
 SELECT

@@ -21,7 +21,7 @@ unit_tests:
           - { SignupDate: '2026-04-19' }
           - { SignupDate: '2026-04-24' }
           - { SignupDate: '2026-04-28' }
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           - { Date: '2026-05-01', Forecasted_Trials: 12 }
     expect:
@@ -44,7 +44,7 @@ unit_tests:
           - { SignupDate: '2026-01-08' }
           - { SignupDate: '2026-01-15' }
           - { SignupDate: '2026-01-22' }
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows: []
     expect:
       # No forecast row for 2026-02 (this is the shape of the real bug: a
@@ -69,7 +69,7 @@ unit_tests:
           - { SignupDate: '2026-03-14' }
           - { SignupDate: '2026-03-20' }
           - { SignupDate: '2026-03-27' }
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           # forecast only exists for 2026-04, not 2026-03
           - { Date: '2026-04-01', Forecasted_Trials: 15 }
@@ -115,8 +115,8 @@ models:
           - "This metric CAN exceed #302 during periods of strong trials growth. The condition is trials[M-1] + forecast[M] < 2 * trials[M], which reduces to trials growing month over month — when that holds, the lagged/blended denominator is smaller than same-month trials, so the rate here can read higher than #302's same-month rate. Observed real instance: January 2026 read 16.45% here against #302's 14.95%, driven by a 25% month-over-month trials jump (December 581 -> January 729)."
           - "Denominator blends actual and forecast, so it moves when the forecast sheet is edited."
           - "Not comparable in LEVEL to the sync conversion rate, which has no lag."
-          - "Months before method_forecast_typed's coverage begins have no matching forecast row and return NULL, not a fabricated rate. Earlier SQL COALESCEd the missing forecast (and would COALESCE missing prior-month trials the same way) to 0, which silently halved the /2.0 denominator and roughly doubled the rate for every uncovered month — some read as high as 18-38%, above even #302. Fixed by removing the COALESCE so a missing input propagates to NULL through SAFE_DIVIDE. The window is not hardcoded to a coverage date; it self-extends as the forecast sheet accumulates history."
-          - "Reads revenue.method_forecast_typed, not revenue.method_forecast: autodetect on method_forecast infers INTEGER for Forecasted_Trials and rounds every daily fractional value before it can be summed, so this reads the FLOAT64-typed twin instead. Interim fix — retire method_forecast_typed once method_forecast itself is retyped."
+          - "Months before method_forecast's coverage begins have no matching forecast row and return NULL, not a fabricated rate. Earlier SQL COALESCEd the missing forecast (and would COALESCE missing prior-month trials the same way) to 0, which silently halved the /2.0 denominator and roughly doubled the rate for every uncovered month — some read as high as 18-38%, above even #302. Fixed by removing the COALESCE so a missing input propagates to NULL through SAFE_DIVIDE. The window is not hardcoded to a coverage date; it self-extends as the forecast sheet accumulates history."
+          - "Until 2026-08-04, BigQuery's schema autodetect had typed Forecasted_Trials INTEGER on method_forecast, rounding every daily fractional forecast value before it could be summed. Fixed 2026-08-04 by retyping method_forecast itself to FLOAT64 for that column; a since-retired interim parallel table stood in during the gap."
         used_by:
           - "Sales Scorecard (Conversion Rate section)"
       labels:

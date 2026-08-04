@@ -39,7 +39,7 @@ conversions AS (
 ),
 forecast AS (
   SELECT DATE_TRUNC(Date, WEEK(MONDAY)) AS week, SUM(Forecasted_Trials) AS forecasted_trials
-  FROM \`project-for-method-dw.revenue.method_forecast_typed\`
+  FROM \`project-for-method-dw.revenue.method_forecast\`
   WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
   GROUP BY 1
 )
@@ -87,7 +87,7 @@ ORDER BY 1
 const WEEKLY_BUDGET_SYNC_CONV_RATE_SQL = `
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
   ROUND(SAFE_DIVIDE(SUM(Budgeted_Conversion), SUM(Budgeted_Syncs)) * 100, 2) AS value
-FROM \`project-for-method-dw.revenue.method_forecast_typed\`
+FROM \`project-for-method-dw.revenue.method_forecast\`
 WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1
 `;
@@ -95,7 +95,7 @@ GROUP BY 1 ORDER BY 1
 const WEEKLY_FORECAST_SYNC_CONV_RATE_SQL = `
 SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(Date, WEEK(MONDAY))) AS period,
   ROUND(SAFE_DIVIDE(SUM(Forecasted_Conversion), SUM(Forecasted_Syncs)) * 100, 2) AS value
-FROM \`project-for-method-dw.revenue.method_forecast_typed\`
+FROM \`project-for-method-dw.revenue.method_forecast\`
 WHERE Date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH) AND Date <= CURRENT_DATE()
 GROUP BY 1 ORDER BY 1
 `;

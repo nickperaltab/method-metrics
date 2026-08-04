@@ -20,7 +20,7 @@ SELECT
     SUM(Budgeted_Conversion),
     SUM(Budgeted_Syncs)
   ) AS value
-FROM {{ source('revenue', 'method_forecast_typed') }}
+FROM {{ source('revenue', 'method_forecast') }}
 WHERE Date IS NOT NULL
 GROUP BY 1
 ORDER BY 1

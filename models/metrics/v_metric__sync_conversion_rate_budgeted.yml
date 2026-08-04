@@ -4,7 +4,7 @@ unit_tests:
   - name: budgeted_sync_rate_sums_before_dividing
     model: v_metric__sync_conversion_rate_budgeted
     given:
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           # Two days in the same month. Summing first gives 5/20 = 0.25.
           # Averaging the daily ratios would give (2/5 + 3/15)/2 = 0.30 — wrong.
@@ -19,7 +19,7 @@ unit_tests:
   - name: budgeted_sync_rate_null_on_zero_denominator
     model: v_metric__sync_conversion_rate_budgeted
     given:
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           - { Date: '2026-09-01', Budgeted_Conversion: 5.0, Budgeted_Syncs: 0.0 }
     expect:
@@ -48,7 +48,8 @@ models:
           values: "PENDING"
         caveats:
           - "DERIVED ratio. Justin has not published a budgeted sync conversion rate; this infers one from two budgeted counts."
-          - "Source is revenue.method_forecast_typed, not revenue.method_forecast: autodetect on method_forecast infers INTEGER for the count columns and rounds every daily fractional value before it can be summed, so this reads the FLOAT64-typed twin instead. Interim fix — retire method_forecast_typed once method_forecast itself is retyped. Still an EXTERNAL table federated over a Google Sheet; a column rename or shifted header row breaks this silently."
+          - "Source is revenue.method_forecast, an EXTERNAL table federated over a Google Sheet. A column rename or shifted header row breaks this silently."
+          - "Until 2026-08-04, BigQuery's schema autodetect had typed the count columns INTEGER, rounding every daily fractional forecast value before it could be summed. Fixed 2026-08-04 by retyping method_forecast itself to FLOAT64 for those columns; a since-retired interim parallel table stood in during the gap."
           - "Federated-sheet reads need the Drive scope on any service-account path."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"

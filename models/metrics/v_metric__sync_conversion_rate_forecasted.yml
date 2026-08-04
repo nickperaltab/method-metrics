@@ -4,7 +4,7 @@ unit_tests:
   - name: forecasted_sync_rate_sums_before_dividing
     model: v_metric__sync_conversion_rate_forecasted
     given:
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           - { Date: '2026-07-01', Forecasted_Conversion: 2, Forecasted_Syncs: 5 }
           - { Date: '2026-07-02', Forecasted_Conversion: 3, Forecasted_Syncs: 15 }
@@ -17,7 +17,7 @@ unit_tests:
   - name: forecasted_sync_rate_null_on_zero_denominator
     model: v_metric__sync_conversion_rate_forecasted
     given:
-      - input: source('revenue', 'method_forecast_typed')
+      - input: source('revenue', 'method_forecast')
         rows:
           - { Date: '2026-09-01', Forecasted_Conversion: 5, Forecasted_Syncs: 0 }
     expect:
@@ -46,7 +46,8 @@ models:
           values: "PENDING"
         caveats:
           - "DERIVED ratio. Justin has not published a forecasted sync conversion rate."
-          - "Source is revenue.method_forecast_typed, not revenue.method_forecast: autodetect on method_forecast infers INTEGER for Forecasted_Trials/Forecasted_Syncs/Forecasted_Conversion and rounds every daily fractional value before it can be summed, so this reads the FLOAT64-typed twin instead. Interim fix — retire method_forecast_typed once method_forecast itself is retyped. Still an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
+          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
+          - "Until 2026-08-04, BigQuery's schema autodetect had typed Forecasted_Trials/Forecasted_Syncs/Forecasted_Conversion INTEGER, rounding every daily fractional forecast value before it could be summed. Fixed 2026-08-04 by retyping method_forecast itself to FLOAT64 for those columns; a since-retired interim parallel table stood in during the gap."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
       labels:
