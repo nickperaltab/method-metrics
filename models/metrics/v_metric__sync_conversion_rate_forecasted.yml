@@ -4,7 +4,7 @@ unit_tests:
   - name: forecasted_sync_rate_sums_before_dividing
     model: v_metric__sync_conversion_rate_forecasted
     given:
-      - input: source('revenue', 'method_forecast')
+      - input: source('revenue', 'method_forecast_typed')
         rows:
           - { Date: '2026-07-01', Forecasted_Conversion: 2, Forecasted_Syncs: 5 }
           - { Date: '2026-07-02', Forecasted_Conversion: 3, Forecasted_Syncs: 15 }
@@ -17,7 +17,7 @@ unit_tests:
   - name: forecasted_sync_rate_null_on_zero_denominator
     model: v_metric__sync_conversion_rate_forecasted
     given:
-      - input: source('revenue', 'method_forecast')
+      - input: source('revenue', 'method_forecast_typed')
         rows:
           - { Date: '2026-09-01', Forecasted_Conversion: 5, Forecasted_Syncs: 0 }
     expect:

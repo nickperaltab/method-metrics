@@ -21,7 +21,7 @@ unit_tests:
           - { SignupDate: '2026-04-19' }
           - { SignupDate: '2026-04-24' }
           - { SignupDate: '2026-04-28' }
-      - input: source('revenue', 'method_forecast')
+      - input: source('revenue', 'method_forecast_typed')
         rows:
           - { Date: '2026-05-01', Forecasted_Trials: 12 }
     expect:
@@ -44,7 +44,7 @@ unit_tests:
           - { SignupDate: '2026-01-08' }
           - { SignupDate: '2026-01-15' }
           - { SignupDate: '2026-01-22' }
-      - input: source('revenue', 'method_forecast')
+      - input: source('revenue', 'method_forecast_typed')
         rows: []
     expect:
       # No forecast row for 2026-02 (this is the shape of the real bug: a
@@ -69,7 +69,7 @@ unit_tests:
           - { SignupDate: '2026-03-14' }
           - { SignupDate: '2026-03-20' }
           - { SignupDate: '2026-03-27' }
-      - input: source('revenue', 'method_forecast')
+      - input: source('revenue', 'method_forecast_typed')
         rows:
           # forecast only exists for 2026-04, not 2026-03
           - { Date: '2026-04-01', Forecasted_Trials: 15 }
