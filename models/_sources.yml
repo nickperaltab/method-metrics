@@ -151,6 +151,17 @@ sources:
         description: One row per CRM activity (demo, free-consulting session, call, etc.). EntityRecordID maps to a customer. ActivityType is the kind of touch; DueDateStart is the activity date (CreatedDate is NULL on most rows). Demo/free-consulting tracking effectively starts 2024.
       - name: method_forecast
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
+      - name: method_forecast_typed
+        description: |
+          Same Google Sheet, same federation options, identical column list
+          as method_forecast — but Forecasted_Trials, Forecasted_Syncs, and
+          Forecasted_Conversion are explicitly typed FLOAT64. Exists because
+          BigQuery's schema autodetect on method_forecast inferred INTEGER
+          for those three columns, which rounds every daily fractional
+          forecast value before it can be summed (e.g. 20.6667/day becomes
+          21/day). Verified cell-by-cell against the sheet. Retire this
+          table once method_forecast itself is retyped to FLOAT64 for those
+          columns.
       - name: v_trials_forecast_channel
         description: Per-channel monthly trials forecast (forecast_date = month start, AttributionChannel, forecast_value). Powers the Channel Trajectory scorecard's Forecast comparison; matches Looker's per-channel Trial Forecast.
       - name: v_syncs_forecast_channel

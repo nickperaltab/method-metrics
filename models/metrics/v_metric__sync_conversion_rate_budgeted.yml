@@ -48,7 +48,7 @@ models:
           values: "PENDING"
         caveats:
           - "DERIVED ratio. Justin has not published a budgeted sync conversion rate; this infers one from two budgeted counts."
-          - "Source is revenue.method_forecast, an EXTERNAL table federated over a Google Sheet. A column rename or shifted header row breaks this silently."
+          - "Source is revenue.method_forecast_typed, not revenue.method_forecast: autodetect on method_forecast infers INTEGER for the count columns and rounds every daily fractional value before it can be summed, so this reads the FLOAT64-typed twin instead. Interim fix — retire method_forecast_typed once method_forecast itself is retyped. Still an EXTERNAL table federated over a Google Sheet; a column rename or shifted header row breaks this silently."
           - "Federated-sheet reads need the Drive scope on any service-account path."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"

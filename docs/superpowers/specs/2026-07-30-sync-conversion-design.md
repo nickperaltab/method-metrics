@@ -62,6 +62,20 @@ Note that #301's verification is weaker than its parents'. It is `status: live` 
 
 This is not new exposure — the existing trials panel already reads from it. It is recorded here so nobody claims the chain is fully verified.
 
+### Interim fix — two forecast tables now exist
+
+`revenue.method_forecast`'s autodetected schema types `Forecasted_Trials`, `Forecasted_Syncs`, and `Forecasted_Conversion` as `INTEGER`. BigQuery rounds every daily fractional value before it can be summed. June 2026 held 20.6667/day in the sheet; the table returned 21/day. Summed over the month, 630 became 620.
+
+`revenue.method_forecast_typed` is the same sheet, same federation options, same column list, with those three columns typed `FLOAT64`. Verified cell-by-cell against the sheet.
+
+Three dbt models now read `method_forecast_typed` instead of `method_forecast`: `v_metric__sync_conversion_rate_budgeted`, `v_metric__sync_conversion_rate_forecasted`, and `v_metric__trial_conversion_rate_lagged`. Three inline queries in `sales-scorecard.js` were repointed the same way: `WEEKLY_BUDGET_SYNC_CONV_RATE_SQL`, `WEEKLY_FORECAST_SYNC_CONV_RATE_SQL`, and `WEEKLY_CONVERSION_RATE_SQL`.
+
+`Budgeted_Conversion_Rate` and `Forecasted_Conversion_Rate` were already `FLOAT64` on `method_forecast` and are unaffected. The weekly WoW chart lines (`__wk_budget_convrate`, `__wk_forecast_convrate`) and the `FORECAST_WEEKLY`/`FORECAST_WEEKLY_CAST`/`FORECAST_WEEKLY_MAX` helpers still read those pre-computed rate columns off `method_forecast` directly. `models/marketing/int_channel_funnel_trajectory.sql` also still reads `method_forecast` and was left alone — it is out of scope here.
+
+Measured effect. Forecasted sync conversion rate, July 2026: 27.27% before, 24.65% after. Metric 357: June 2026 moved 11.65% → 11.75% and July 2026 moved 14.14% → 14.11%, both now matching Looker. April and May were already exact and stayed exact.
+
+This is an interim fix, not the resolution. The correct fix is to retype `method_forecast` itself, which would also correct the panels that still read it directly. That requires a BigQuery permission this work did not have. Once `method_forecast` is retyped, drop `method_forecast_typed` and point these six places back at `method_forecast`.
+
 ## Part 1 — Fix the existing section
 
 ### Metric 296, Conversions Trajectory

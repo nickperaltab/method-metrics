@@ -46,7 +46,7 @@ models:
           values: "PENDING"
         caveats:
           - "DERIVED ratio. Justin has not published a forecasted sync conversion rate."
-          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
+          - "Source is revenue.method_forecast_typed, not revenue.method_forecast: autodetect on method_forecast infers INTEGER for Forecasted_Trials/Forecasted_Syncs/Forecasted_Conversion and rounds every daily fractional value before it can be summed, so this reads the FLOAT64-typed twin instead. Interim fix — retire method_forecast_typed once method_forecast itself is retyped. Still an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
       labels:
