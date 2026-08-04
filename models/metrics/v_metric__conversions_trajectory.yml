@@ -1,0 +1,41 @@
+# Canonical metric definition for "Conversions Trajectory" (#296).
+
+models:
+  - name: v_metric__conversions_trajectory
+    description: |
+      Month-end projection of conversions for the in-progress month.
+      Counts conversions through yesterday, divides by the current day of
+      month, and scales to the full month. Looker-compatible: the divisor
+      is day_of_month, not day_of_month - 1. Returns exactly one row for
+      the current month — trajectory has no meaning for a closed month.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, how many conversions will it finish with?"
+        grain: "Single row, current month. Account-grain numerator (see Conversions #56)."
+        filters:
+          - rule: "FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)"
+            why: "restricts the numerator to the in-progress month"
+          - rule: "FirstSaaSInvoiceTxnDate < CURRENT_DATE()"
+            why: "excludes today, which is itself incomplete and would drag the pace down"
+        methodology_source: "Reverse-engineered from the live Looker Sales Scorecard, 2026-07-22 read: 51 conversions / 22 day-of-month * 31 days = 71.86, exact match to Looker's displayed trajectory."
+        parity_verified:
+          against: "Live Looker Studio Sales Scorecard, report 510f74bb page p_5wfqecngvd"
+          date: '2026-07-31'
+          values: "Ours 75.00 vs Looker 75 — exact. Closes the known ticket where this read ~86; the superseded Supabase formula divided by day_of_month - 1 rather than day_of_month."
+        caveats:
+          - "Divisor is day_of_month, which means the projection is noisy in the first few days of a month. Expect wide swings before roughly the 5th."
+          - "Supersedes the old Supabase metric 296 chart_sql, which divided by day_of_month - 1 and over-projected by roughly 5%."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Sales Scorecard (Conversion Rate section)"
+          - "Sync Conversion Rate Trajectory"
+      labels:
+        metric_id: '296'
+        layer: metrics
+        type: derived
+        status: live
+        verified_at: '2026-08-04'
+        source_table: int_conversions
+        source_measure_safe: count_star
+        depends_on: '56'

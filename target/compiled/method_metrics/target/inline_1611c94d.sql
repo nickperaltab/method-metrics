@@ -1,0 +1,1 @@
+SELECT period, value FROM `project-for-method-dw.revenue_metrics.v_metric__sync_to_conversion_rate` ORDER BY period DESC LIMIT 5

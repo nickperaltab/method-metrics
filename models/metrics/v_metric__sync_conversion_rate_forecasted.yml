@@ -1,0 +1,62 @@
+version: 2
+
+unit_tests:
+  - name: forecasted_sync_rate_sums_before_dividing
+    model: v_metric__sync_conversion_rate_forecasted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-07-01', Forecasted_Conversion: 2, Forecasted_Syncs: 5 }
+          - { Date: '2026-07-02', Forecasted_Conversion: 3, Forecasted_Syncs: 15 }
+          - { Date: '2026-08-01', Forecasted_Conversion: 1, Forecasted_Syncs: 4 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: 0.25 }
+        - { period: '2026-08-01', value: 0.25 }
+
+  - name: forecasted_sync_rate_null_on_zero_denominator
+    model: v_metric__sync_conversion_rate_forecasted
+    given:
+      - input: source('revenue', 'method_forecast')
+        rows:
+          - { Date: '2026-09-01', Forecasted_Conversion: 5, Forecasted_Syncs: 0 }
+    expect:
+      rows:
+        - { period: '2026-09-01', value: null }
+
+models:
+  - name: v_metric__sync_conversion_rate_forecasted
+    description: |
+      Forecasted sync conversion rate by month — forecasted conversions
+      divided by forecasted sync events, summing daily allocations before
+      dividing. DERIVED, not published: method_forecast carries a
+      pre-computed trials-based Forecasted_Conversion_Rate but no sync
+      equivalent. Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What sync conversion rate does the forecast imply for each month?"
+        grain: "Period-level ratio, one row per month present in the forecast sheet."
+        filters:
+          - rule: "Date IS NOT NULL"
+            why: "the federated sheet has ~633 fully-blank trailing rows past the populated range; without this, GROUP BY DATE_TRUNC(Date, MONTH) collapses them into a bogus period=NULL row"
+        methodology_source: "Derived by Nic 2026-07-30 as Forecasted_Conversion / Forecasted_Syncs. NOT a Justin-published ratio — pending his confirmation."
+        parity_verified:
+          against: "NOT CONFIRMED. Derived as Forecasted_Conversion / Forecasted_Syncs, summing daily sheet rows to the month. Finance has never published a forecasted sync conversion rate. Justin owns revenue methodology and his confirmation is OUTSTANDING."
+          date: '2026-08-04'
+          values: "First observation 24.65% for Jul 2026, after the method_forecast retype. Before the retype it read 27.27% and was quantized by INTEGER rounding. Unconfirmed."
+        caveats:
+          - "DERIVED ratio. Justin has not published a forecasted sync conversion rate."
+          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
+          - "Until 2026-08-04, BigQuery's schema autodetect had typed Forecasted_Trials/Forecasted_Syncs/Forecasted_Conversion INTEGER, rounding every daily fractional forecast value before it could be summed. Fixed 2026-08-04 by retyping method_forecast itself to FLOAT64 for those columns; a since-retired interim parallel table stood in during the gap."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+      labels:
+        metric_id: '402'
+        layer: metrics
+        type: derived
+        status: live
+        verified_at: '2026-08-04'
+        source_table: method_forecast
+        source_measure_safe: ''
+        depends_on: ''

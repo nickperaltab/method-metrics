@@ -1,0 +1,1 @@
+SELECT table_name, creation_time FROM `project-for-method-dw.revenue_metrics`.INFORMATION_SCHEMA.TABLES ORDER BY creation_time DESC

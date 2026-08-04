@@ -1,0 +1,1 @@
+SELECT 1 FROM `project-for-method-dw.revenue.method_forecast_typed` LIMIT 1

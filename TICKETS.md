@@ -6,6 +6,12 @@ Backlog of known bugs and deferred improvements. Add new items here rather than 
 
 ## Shipped
 
+- 2026-07-31 — Root-caused and fixed both known-wrong KPIs in the Sales Scorecard's existing Conversion Rate section (Sync Conversion Rate project, `docs/superpowers/specs/2026-07-30-sync-conversion-design.md`). Both are now correct in dbt (`v_metric__conversions_trajectory`, `v_metric__trial_conversion_rate_lagged`) but remain `status: queued` pending the live-Looker parity pass and Nic's promotion approval — this entry closes the *root-cause* tickets, not a `live` flip.
+  - **Metric 296 (Conversion Trajectory), corrected divisor:** the fix is plain `day_of_month`, **not** `day_of_month + 1` as the original ticket proposed. Confirmed against Nelson's 2026-07-22 live-Looker screenshot: `51 ÷ 22 × 31 = 71.86`, an exact match to Looker's displayed trajectory. The prior Supabase formula divided by `day_of_month - 1` and over-projected by roughly 5%. Still needs one more live Looker read before it flips `live` — the screenshot is a single data point.
+  - **Metric 357 (Scorecard Conversion Rate), root cause found:** its `chart_sql` referenced `revenue.int_trials_forecast_channel`, a table that **no longer exists**. It was hard-erroring at BigQuery plan time on every run, not silently returning an empty result as the "metric 357 empty" investigations had assumed. Replaced by the new `v_metric__trial_conversion_rate_lagged` model, which reproduces the Looker panel's `conversions ÷ ((trials[M-1] + forecast[M]) / 2)` formula.
+  - Downstream metrics 321 (Conversion Rate Trajectory), 322 (Forecast vs. Trajectory), and 323 (Forecasted Attainment) recompute automatically once 296 is correct — no separate fix needed for them.
+  - Definitions: `docs/metric-definitions.md` §4f (#296, #357, and the new sync-conversion-rate family).
+
 - 2026-04-21 — RLS SELECT loosened on metrics. Non-destructive reads are now open to all authenticated sessions regardless of status; only INSERT/UPDATE/DELETE remain admin-only. Fixes "No data" on scorecards that reference queued metrics (e.g. Customers). Migration: `docs/migrations/2026-04-21-metrics-rls-select-open.md`.
 - 2026-04-21 — useMetrics fetch race fixed. Previously fetched on mount before UserContext set `x-method-email`, so initial load was anonymous. Now gated on `userEmail` identity key + header set synchronously in App.jsx before useMetrics runs. Also renamed "Method Approved" sidebar header to "Scorecards" (missed in earlier approval cleanup). Metrics 373–377 (customer-segments) promoted live, verified_at left null pending audit.
 - 2026-04-21 — Polish pass: removed duplicate Description column from Registry table (lives in expand only, admin-editable), simplified Add Chart modal to "My Charts" only, Home's AI Dashboards filtered to mine, Charts page defaults to My Charts.
@@ -34,20 +40,19 @@ The Range filter's "All" button now correctly bypasses client-side display limit
 
 ---
 
+### Conversions Delta Compares Mismatched Windows (metric 296's delta display)
+**Status:** Open (split out 2026-07-31 from the now-closed "Conversion Trajectory Diverges from Looker" ticket — the trajectory-formula half of that ticket is fixed, see Shipped; this delta-window half was not touched by that fix and is unverified)
+Previously observed: the Conversions delta on the scorecard read -81.7% against Looker's -9.1%. Suspected cause: the delta appears to compare current-month MTD against the FULL prior month, instead of prior-month MTD through the same day-of-month. Not re-investigated as part of the Sync Conversion Rate project — that project fixed metric 296's trajectory divisor, not the delta/showDelta computation, which lives in the frontend hook below and is independent of which dbt view backs the KPI.
+**Fix candidate:** Verify whether the delta comparison should be same-day-of-month MTD vs MTD, not MTD vs full month. Confirm against a live Looker read before changing.
+**Files:** `builder/src/hooks/useScorecardData.js` (delta computation)
+
+---
+
 ### MetricInspector Shows Wrong SQL for Breakdown Charts
 **Status:** Open
 Clicking ⓘ on a grouped/breakdown chart (e.g. By Attribution Channel) opens MetricInspector for the metric and shows the plain time-series SQL — not the grouped SQL that actually ran. The grouped query adds `dimension AS dimension` and `GROUP BY 1, 2`, which is missing from what's shown.
 **Fix (Option A):** Pass `groupByDimension` through `onMetricClick` → MetricInspector → use `buildSemanticGroupedSql` when dimension is present. Shows the exact query that produced the chart.
 **Files:** `builder/src/components/scorecards/Chart.jsx` (ChartInspectMenu), `builder/src/pages/Scorecard.jsx` (handleMetricClick), `builder/src/components/scorecards/MetricInspector.jsx` (TechnicalDetails)
-
----
-
-### Conversion Trajectory Diverges from Looker (metric 296)
-**Status:** Open
-Metric 296 (Conversions Trajectory) returns ~86 while Looker shows 75. Root cause: our formula filters `< CURRENT_DATE()` (excludes today) and divides by `day_of_month - 1`, while Looker appears to count through today and divide by `day_of_month + 1`. All downstream metrics cascade from this: Conversion Rate Trajectory (321), Forecast vs. Trajectory (322), and Forecast Attainment (323) all show different values than Looker.
-Separately, the Conversions delta (-81.7% vs Looker's -9.1%) appears to compare April MTD against full prior month instead of March MTD through the same day.
-**Fix candidate:** Update metric 296 `chart_sql` to use `COUNT(...)` through today divided by `(day_of_month + 1)` × days in month. Confirm with Looker formula before changing.
-**Files:** Supabase metric 296 (`chart_sql`), and verify delta logic in `useScorecardData.js`
 
 ---
 
