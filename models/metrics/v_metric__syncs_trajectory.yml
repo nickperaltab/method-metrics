@@ -20,8 +20,9 @@ models:
             why: "excludes today, which is incomplete"
         methodology_source: "Mirrors the divisor convention derived for Conversions Trajectory (#296) from the 2026-07-22 Looker read."
         parity_verified:
-          against: "PENDING — Task 10 records the live Looker side-by-side"
-          values: "PENDING"
+          against: "No external counterpart. The sync conversion section does not exist in Looker — that is why it was requested."
+          date: '2026-07-31'
+          values: "First observation 226, taken 2026-07-31. Not a match against anything. Single-row metric returning only the current month, so a reading in the first days of a month is low by construction — it read 108.5 on 2026-08-04, three days in."
         caveats:
           - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in month M and have sync data. Measured fan-in at the monthly grain this metric carries is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
           - "Not comparable in LEVEL to the trials Conversion Trajectory (#296) once divided into a rate — the sync rate has no lag where the trials rate does. Compare trend and attainment, not level."
@@ -34,7 +35,8 @@ models:
         metric_id: '295'
         layer: metrics
         type: derived
-        status: queued
+        status: live
+        verified_at: '2026-08-04'
         source_table: int_syncs
         source_measure_safe: count_star
         depends_on: '55'

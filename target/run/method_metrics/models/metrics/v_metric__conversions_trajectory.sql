@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Month-end projection of conversions for the in-progress month.\nCounts conversions through yesterday, divides by the current day of\nmonth, and scales to the full month. Looker-compatible: the divisor\nis day_of_month, not day_of_month - 1. Returns exactly one row for\nthe current month \u2014 trajectory has no meaning for a closed month.\n""",
     
-      labels=[('metric_id', '296'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'int_conversions'), ('source_measure_safe', 'count_star'), ('depends_on', '56')]
+      labels=[('metric_id', '296'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', 'int_conversions'), ('source_measure_safe', 'count_star'), ('depends_on', '56')]
     )
   as 
 

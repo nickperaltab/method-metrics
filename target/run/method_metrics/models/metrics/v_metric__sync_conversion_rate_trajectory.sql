@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Month-end projection of the sync conversion rate for the in-progress\nmonth \u2014 projected conversions divided by projected sync events. Both\nsides use the same day_of_month projection, so the ratio is stable\nthrough the month. Same-month, no lag, matching Sync-to-Conversion\nRate (#301). Emits a decimal rate, not a percentage.\n""",
     
-      labels=[('metric_id', '400'), ('layer', 'metrics'), ('type', 'ratio'), ('status', 'queued'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '296-295')]
+      labels=[('metric_id', '400'), ('layer', 'metrics'), ('type', 'ratio'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '296-295')]
     )
   as 
 

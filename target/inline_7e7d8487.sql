@@ -1,0 +1,1 @@
+SELECT COUNT(*) n FROM `project-for-method-dw.revenue`.INFORMATION_SCHEMA.TABLES WHERE table_name='method_forecast_typed'

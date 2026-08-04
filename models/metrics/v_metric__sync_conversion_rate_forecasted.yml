@@ -42,8 +42,9 @@ models:
             why: "the federated sheet has ~633 fully-blank trailing rows past the populated range; without this, GROUP BY DATE_TRUNC(Date, MONTH) collapses them into a bogus period=NULL row"
         methodology_source: "Derived by Nic 2026-07-30 as Forecasted_Conversion / Forecasted_Syncs. NOT a Justin-published ratio — pending his confirmation."
         parity_verified:
-          against: "PENDING — Justin sign-off plus Looker side-by-side in Task 10"
-          values: "PENDING"
+          against: "NOT CONFIRMED. Derived as Forecasted_Conversion / Forecasted_Syncs, summing daily sheet rows to the month. Finance has never published a forecasted sync conversion rate. Justin owns revenue methodology and his confirmation is OUTSTANDING."
+          date: '2026-08-04'
+          values: "First observation 24.65% for Jul 2026, after the method_forecast retype. Before the retype it read 27.27% and was quantized by INTEGER rounding. Unconfirmed."
         caveats:
           - "DERIVED ratio. Justin has not published a forecasted sync conversion rate."
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. Fragile to sheet edits."
@@ -54,7 +55,8 @@ models:
         metric_id: '402'
         layer: metrics
         type: derived
-        status: queued
+        status: live
+        verified_at: '2026-08-04'
         source_table: method_forecast
         source_measure_safe: ''
         depends_on: ''

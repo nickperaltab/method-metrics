@@ -107,8 +107,9 @@ models:
             why: "inherited from the Trials metric (#54)"
         methodology_source: "Matches WEEKLY_CONVERSION_RATE_SQL in builder/src/config/scorecards/sales-scorecard.js, lifted to monthly grain. That SQL replicated the Looker Sales Scorecard panel."
         parity_verified:
-          against: "PENDING — Task 10 records the live Looker side-by-side"
-          values: "PENDING"
+          against: "Live Looker Studio Sales Scorecard, report 510f74bb page p_5wfqecngvd, Month-over-Month series"
+          date: '2026-07-31'
+          values: "Apr 2026 13.94%, May 2026 14.96%, Jun 2026 11.75% — all exact. Jun matched only after the method_forecast INTEGER->FLOAT64 retype on 2026-08-04; before it ours read 11.65%."
         caveats:
           - "The current month reads LOW by construction: partial numerator over a full-month denominator. Roughly 9.6% mid-month versus roughly 13% at month end. Use #321 for the month-end projection. Note this effect is only visible when there are still days left in the month to run off — a read taken on the last day of the month will look like a normal closed month, not a low one."
           - "NOT the same metric as Trial-to-Conversion Rate (#302), which is same-month and runs 15-20%. Two different questions, two different numbers."
@@ -123,7 +124,8 @@ models:
         metric_id: '357'
         layer: metrics
         type: derived
-        status: queued
+        status: live
+        verified_at: '2026-08-04'
         source_table: ''
         source_measure_safe: ''
         depends_on: '56-54'

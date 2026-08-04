@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Month-end projection of sync events for the in-progress month.\nCounts syncs through yesterday, divides by the current day of month,\nand scales to the full month. Same divisor convention as Conversions\nTrajectory (#296) so the two can be divided into a rate. Returns\nexactly one row for the current month.\n""",
     
-      labels=[('metric_id', '295'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'int_syncs'), ('source_measure_safe', 'count_star'), ('depends_on', '55')]
+      labels=[('metric_id', '295'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', 'int_syncs'), ('source_measure_safe', 'count_star'), ('depends_on', '55')]
     )
   as 
 

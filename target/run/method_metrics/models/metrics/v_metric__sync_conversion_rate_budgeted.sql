@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Budgeted sync conversion rate by month \u2014 budgeted conversions divided\nby budgeted sync events, summing daily allocations before dividing.\nDERIVED, not published: method_forecast carries a pre-computed\ntrials-based Budgeted_Conversion_Rate but no sync equivalent. Emits a\ndecimal rate, not a percentage.\n""",
     
-      labels=[('metric_id', '401'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
+      labels=[('metric_id', '401'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
     )
   as 
 

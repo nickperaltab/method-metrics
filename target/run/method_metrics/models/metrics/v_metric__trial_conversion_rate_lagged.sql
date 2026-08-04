@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Trials-based conversion rate as shown on the Sales Scorecard \u2014\nconversions in a month divided by the average of the prior month's\ntrials and that month's forecasted trials. The one-month lag reflects\nthat trials convert roughly a month after signup. Distinct from\nTrial-to-Conversion Rate (#302), which is same-month and runs higher.\nEmits a decimal rate, not a percentage.\n""",
     
-      labels=[('metric_id', '357'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '56-54')]
+      labels=[('metric_id', '357'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '56-54')]
     )
   as 
 

@@ -173,7 +173,7 @@ GROUP BY 1 ORDER BY 1
 export default {
   id: 'sales-scorecard',
   title: 'Sales Scorecard',
-  status: 'pending',
+  status: 'beta',
   views: VIEWS,
   sections: [
     // ── 1. Conversion Rate ───────────────────────────────────

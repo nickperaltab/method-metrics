@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Weekly sync conversion rate \u2014 conversions in an ISO week divided by\nsync events in the same week, no lag. Weeks start Monday, matching\nevery other weekly series on the Sales Scorecard. Rolling 24 months.\nEmits a decimal rate, not a percentage.\n""",
     
-      labels=[('metric_id', '403'), ('layer', 'metrics'), ('type', 'ratio'), ('status', 'queued'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '56-55')]
+      labels=[('metric_id', '403'), ('layer', 'metrics'), ('type', 'ratio'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', ''), ('source_measure_safe', ''), ('depends_on', '56-55')]
     )
   as 
 

@@ -4,7 +4,7 @@
   OPTIONS(
       description="""Forecasted sync conversion rate by month \u2014 forecasted conversions\ndivided by forecasted sync events, summing daily allocations before\ndividing. DERIVED, not published: method_forecast carries a\npre-computed trials-based Forecasted_Conversion_Rate but no sync\nequivalent. Emits a decimal rate, not a percentage.\n""",
     
-      labels=[('metric_id', '402'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
+      labels=[('metric_id', '402'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'live'), ('verified_at', '2026-08-04'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
     )
   as 
 

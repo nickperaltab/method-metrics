@@ -42,8 +42,9 @@ models:
         grain: "Single row, current month. Period-level ratio."
         methodology_source: "Ratio of the two trajectory projections, which follow the Looker divisor convention derived 2026-07-22."
         parity_verified:
-          against: "PENDING — Task 10 records the live Looker side-by-side"
-          values: "PENDING"
+          against: "No external counterpart. The sync conversion section does not exist in Looker."
+          date: '2026-07-31'
+          values: "First observation 33.19%, taken 2026-07-31 at month end. Not a match against anything. Reads 14.29% on 2026-08-04 with three days of August — that is the documented first-days noise, not a regression."
         caveats:
           - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in M and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
           - "Against a true 'share of synced accounts that converted' read, the shipped basis measured +1.02 pp HIGH on the current 12 months — not low, as an earlier draft of this caveat stated — and +0.02 pp on the prior 12. Window-dependent, not a standing directional bias — quote it with the prior window beside it."
@@ -55,7 +56,8 @@ models:
         metric_id: '400'
         layer: metrics
         type: ratio
-        status: queued
+        status: live
+        verified_at: '2026-08-04'
         source_table: ''
         source_measure_safe: ''
         depends_on: '296-295'

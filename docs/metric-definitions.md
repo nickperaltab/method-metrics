@@ -1070,11 +1070,21 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 
 ---
 
-## 4f. Sync Conversion Rate family — queued, pending Looker parity + approval
+## 4f. Sync Conversion Rate family — live as of 2026-08-04
 
 Nelson relayed a leadership ask (2026-07-30): report conversion on **Sync** alongside conversion on **Trials** on the Sales Scorecard. Shipping that duplicated section required first fixing two known-wrong KPIs in the *existing* trials section (#296 and #357), since duplicating them would have cloned the errors. Spec: `docs/superpowers/specs/2026-07-30-sync-conversion-design.md`.
 
-All nine metrics below are **`status: queued`** in both dbt (`models/metrics/*.yml`) and Supabase. None is `live`. Per CLAUDE.md, a metric does not flip `live` until Nic has approved promotion off a completed parity pass; for the two derived budget/forecast ratios (#401, #402) that additionally requires Justin's sign-off, since he owns revenue methodology and never published a sync-side budget ratio. `parity_verified` is recorded as `PENDING` on every one of the seven dbt-managed models until that Looker side-by-side happens — see `scripts/parity_sync_conversion_vs_looker.py`.
+All nine metrics below are **`status: live`** in both dbt (`models/metrics/*.yml`) and Supabase, promoted 2026-08-04 on Nic's approval.
+
+Parity splits three ways, and the distinction matters more than the fact of promotion.
+
+**#296 and #357 are confirmed against the live Looker Studio Sales Scorecard** (report `510f74bb`, read 2026-07-31). #296 reads 75 against Looker's 75, closing a ticket where it read ~86. #357 matches Looker exactly on Apr 2026 (13.94%), May (14.96%) and Jun (11.75%).
+
+**#295, #400, #403, #404 and #405 have no external counterpart.** The sync conversion section does not exist in Looker — that is why Nelson asked for it. Their recorded values are first observations, not matches.
+
+**#401 and #402 are derived ratios Justin has not confirmed.** They divide two forecast-sheet columns to infer a budgeted and forecasted sync conversion rate that finance has never published. Justin owns revenue methodology and his confirmation is OUTSTANDING as of 2026-08-04. They are live because Nic accepted that risk knowingly, not because the derivation is signed off. #404 and #405 are computed from #402 and inherit the same caveat.
+
+Re-run the comparison at any time with `scripts/parity_sync_conversion_vs_looker.py`.
 
 **Shared context — the sync-family denominator (applies to #295, #400, #401, #402, #403, #404, #405):**
 
@@ -1114,7 +1124,7 @@ FROM mtd
 
 **Methodology source:** Mirrors the divisor convention derived for Conversions Trajectory (#296) from Nelson's 2026-07-22 Looker screenshot (`51 ÷ 22 × 31 = 71.86`, exact). Divisor is `day_of_month`, not `day_of_month + 1` or `day_of_month - 1`.
 
-**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side; run `scripts/parity_sync_conversion_vs_looker.py` and read against the live Looker Sales Scorecard.
+**Parity-verified against:** No external counterpart — the sync conversion section does not exist in Looker, which is why it was requested. First observation 2026-07-31: 226. Single-row metric returning only the current month; it read 108.5 on 2026-08-04, three days into August.
 
 **Status:** **queued**
 
@@ -1156,7 +1166,7 @@ FROM mtd
 
 **Methodology source:** Reverse-engineered from Nelson's 2026-07-22 live-Looker screenshot: 51 conversions ÷ 22 day-of-month × 31 days = 71.86, an exact match to Looker's displayed trajectory. The prior Supabase `chart_sql` divided by `day_of_month - 1` and over-projected; the ticket's own fix candidate guessed `day_of_month + 1`, which is also wrong. The correct divisor is plain `day_of_month`.
 
-**Parity-verified against:** PENDING — the screenshot derivation is a single data point and must be confirmed against one live Looker read before this metric goes `live` (Task 10 Step 2/3 gate). Run `scripts/parity_sync_conversion_vs_looker.py`.
+**Parity-verified against:** Live Looker Studio Sales Scorecard (report `510f74bb`), read 2026-07-31 — ours 75.00 vs Looker 75, exact. This confirms the `day_of_month` divisor that had previously only been derived from a screenshot, and closes the open ticket where this metric read ~86 under the superseded Supabase formula.
 
 **Status:** **queued**
 
@@ -1210,7 +1220,7 @@ LEFT JOIN forecast f USING (period)
 
 **Methodology source:** Matches `WEEKLY_CONVERSION_RATE_SQL` in `builder/src/config/scorecards/sales-scorecard.js`, lifted to monthly grain. That SQL replicated the Looker Sales Scorecard panel.
 
-**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side.
+**Parity-verified against:** Live Looker Studio Sales Scorecard (report `510f74bb`), read 2026-07-31 — Month-over-Month Apr 2026 13.94%, May 14.96%, Jun 11.75%, all exact. Jun matched only after the `method_forecast` INTEGER→FLOAT64 retype on 2026-08-04; before it ours read 11.65%.
 
 **Status:** **queued**
 
@@ -1248,7 +1258,7 @@ FULL OUTER JOIN v_metric__syncs_trajectory s ON c.period = s.period
 
 **Methodology source:** Ratio of the two trajectory projections, which both follow the Looker divisor convention derived 2026-07-22 (`day_of_month`). Same-month, no lag, matching Sync-to-Conversion Rate (#301).
 
-**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side. No Looker counterpart exists for this exact KPI (Nelson's sync section does not exist in Looker), so this is recorded as a first-observation value, not a match.
+**Parity-verified against:** First observation 2026-07-31: 33.19% at month end. No Looker counterpart exists for this exact KPI (Nelson's sync section does not exist in Looker), so this is a first-observation value, not a match. Single-row metric returning only the current month — it read 14.29% on 2026-08-04 with three days of August, which is the documented first-days noise.
 
 **Status:** **queued**
 
@@ -1283,7 +1293,7 @@ GROUP BY 1
 
 **Methodology source:** Derived by Nic 2026-07-30 as `Budgeted_Conversion ÷ Budgeted_Syncs`, summing daily allocations before dividing (averaging daily ratios would weight a low-volume day the same as a high-volume one). **This is NOT a Justin-published ratio.** `method_forecast` stores a pre-computed trials-based `Budgeted_Conversion_Rate` but carries no sync equivalent, so this infers one from the two budgeted counts. Justin owns revenue methodology and must confirm this derivation before the metric goes `live` (Task 10 Step 6 gate) — pending as of this writing.
 
-**Parity-verified against:** PENDING — Justin's sign-off on the derivation, plus a live Looker side-by-side. Neither has happened yet. No Looker counterpart exists for this KPI today, so once recorded it will be a first-observation value, not a match.
+**Parity-verified against:** **NOT CONFIRMED.** First observation 2026-07-31: 30.26% for Jul 2026, 23.1–32.0% across 13 months. That band brackets the 24–33% recorded on #301, which is a plausibility signal rather than a verification. Justin's sign-off on the derivation is OUTSTANDING.
 
 **Status:** **queued**
 
@@ -1318,7 +1328,7 @@ GROUP BY 1
 
 **Methodology source:** Derived by Nic 2026-07-30 as `Forecasted_Conversion ÷ Forecasted_Syncs`, same sum-then-divide reasoning as the budgeted twin (#401). **NOT a Justin-published ratio** — same Task 10 Step 6 sign-off gate as #401 applies here.
 
-**Parity-verified against:** PENDING — Justin's sign-off plus a live Looker side-by-side, both outstanding.
+**Parity-verified against:** **NOT CONFIRMED.** First observation 2026-07-31: 24.65% for Jul 2026 — it read 27.27% and was quantized before the `method_forecast` INTEGER→FLOAT64 retype on 2026-08-04. Justin's sign-off on the derivation is OUTSTANDING, and no Looker counterpart exists.
 
 **Status:** **queued**
 
@@ -1364,7 +1374,7 @@ FULL OUTER JOIN syncs s ON c.week = s.week
 
 **Methodology source:** Weekly form of Sync-to-Conversion Rate (#301). Same-month/no-lag convention chosen 2026-07-30, mirroring the actual monthly sync rate.
 
-**Parity-verified against:** PENDING — Task 10 records the live Looker side-by-side. No Looker counterpart exists (Nelson's sync section is new), so this is a first-observation value, not a match.
+**Parity-verified against:** First observation 2026-07-31: 0.197–0.370 across the 12 most recent weeks. No Looker counterpart exists — no weekly sync conversion rate is published in Looker. A first-observation value, not a match.
 
 **Status:** **queued**
 
@@ -1390,7 +1400,7 @@ FULL OUTER JOIN syncs s ON c.week = s.week
 
 **Methodology source:** Derived by Nic 2026-07-30, registered as a Supabase formula metric in `scripts/register_sync_conversion_metrics.py`. Mirrors the trials section's Forecast vs. Trajectory (#322) in intent (positive means pacing ahead of forecast) but has no dbt model of its own.
 
-**Parity-verified against:** PENDING — no Looker counterpart exists (Nelson's sync section is not in Looker). Recorded as a first-observation value, not a match, once Task 10's parity pass runs.
+**Parity-verified against:** First observation 2026-07-31: +8.54pp. No Looker counterpart exists (Nelson's sync section is new), so this is a first-observation value, not a match. Derived from #400 and #402, so it inherits Justin's outstanding confirmation on #402.
 
 **Status:** **queued**
 
@@ -1416,7 +1426,7 @@ FULL OUTER JOIN syncs s ON c.week = s.week
 
 **Methodology source:** Derived by Nic 2026-07-30, registered as a Supabase formula metric in `scripts/register_sync_conversion_metrics.py`. Mirrors the trials section's Forecasted Attainment (#323) in intent.
 
-**Parity-verified against:** PENDING — no Looker counterpart exists. Recorded as a first-observation value, not a match, once Task 10's parity pass runs.
+**Parity-verified against:** First observation 2026-07-31: 134.6%. No Looker counterpart exists. A first-observation value, not a match. Derived from #400 and #402, so it inherits Justin's outstanding confirmation on #402.
 
 **Status:** **queued**
 
