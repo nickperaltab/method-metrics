@@ -1,0 +1,63 @@
+version: 2
+
+unit_tests:
+  - name: sync_conversion_rate_trajectory_divides
+    model: v_metric__sync_conversion_rate_trajectory
+    given:
+      - input: ref('v_metric__conversions_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 71.86 }
+      - input: ref('v_metric__syncs_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 250.0 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: 0.28744 }
+
+  - name: sync_conversion_rate_trajectory_null_safe_on_zero_syncs
+    model: v_metric__sync_conversion_rate_trajectory
+    given:
+      - input: ref('v_metric__conversions_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 10.0 }
+      - input: ref('v_metric__syncs_trajectory')
+        rows:
+          - { period: '2026-07-01', value: 0.0 }
+    expect:
+      rows:
+        - { period: '2026-07-01', value: null }
+
+models:
+  - name: v_metric__sync_conversion_rate_trajectory
+    description: |
+      Month-end projection of the sync conversion rate for the in-progress
+      month — projected conversions divided by projected sync events. Both
+      sides use the same day_of_month projection, so the ratio is stable
+      through the month. Same-month, no lag, matching Sync-to-Conversion
+      Rate (#301). Emits a decimal rate, not a percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, what sync conversion rate will it finish at?"
+        grain: "Single row, current month. Period-level ratio."
+        methodology_source: "Ratio of the two trajectory projections, which follow the Looker divisor convention derived 2026-07-22."
+        parity_verified:
+          against: "No external counterpart. The sync conversion section does not exist in Looker."
+          date: '2026-07-31'
+          values: "First observation 33.19%, taken 2026-07-31 at month end. Not a match against anything. Reads 14.29% on 2026-08-04 with three days of August — that is the documented first-days noise, not a regression."
+        caveats:
+          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in M and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Against a true 'share of synced accounts that converted' read, the shipped basis measured +1.02 pp HIGH on the current 12 months — not low, as an earlier draft of this caveat stated — and +0.02 pp on the prior 12. Window-dependent, not a standing directional bias — quote it with the prior window beside it."
+          - "Not comparable in LEVEL to the trials Conversion Rate Trajectory — that one uses a lagged denominator. Compare trend and attainment, not level."
+          - "Single-row by design."
+        used_by:
+          - "Sales Scorecard (Sync Conversion Rate section)"
+      labels:
+        metric_id: '400'
+        layer: metrics
+        type: ratio
+        status: live
+        verified_at: '2026-08-04'
+        source_table: ''
+        source_measure_safe: ''
+        depends_on: '296-295'

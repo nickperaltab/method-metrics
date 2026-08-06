@@ -1,0 +1,1 @@
+select * from `project-for-method-dw`.`revenue_metrics`.`v_metric__sync_conversion_rate_weekly` order by period desc

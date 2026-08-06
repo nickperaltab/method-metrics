@@ -7,7 +7,7 @@
 SELECT
   COALESCE(c.period, s.period) AS period,
   SAFE_DIVIDE(c.value, s.value) AS value
-FROM `project-for-method-dw`.`revenue`.`v_metric__conversions` c
-FULL OUTER JOIN `project-for-method-dw`.`revenue`.`v_metric__syncs` s
+FROM `project-for-method-dw`.`revenue_metrics`.`v_metric__conversions` c
+FULL OUTER JOIN `project-for-method-dw`.`revenue_metrics`.`v_metric__syncs` s
   ON c.period = s.period
 ORDER BY 1
