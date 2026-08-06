@@ -1,5 +1,7 @@
 import { validateIdentifier, validateInt, escapeBqString } from './sanitize.js';
 import { buildEndDateClause, buildSemanticSql } from './sql/semantic.js';
+import { MOCK_MODE } from '../dev/mockMode.js';
+import { mockQueryBq } from '../dev/mockBq.js';
 
 // Re-export pure SQL builders for backwards compat with existing imports.
 export {
@@ -19,6 +21,9 @@ const BQ_DATASET = 'revenue';
 let bqToken = localStorage.getItem('bq_access_token');
 
 export function getBqToken() {
+  // Offline UI mode has no OAuth token; hand back a sentinel so `if (!token)`
+  // guards elsewhere don't render a "connect BigQuery" state over the fixtures.
+  if (MOCK_MODE) return 'mock-token';
   return bqToken;
 }
 
@@ -113,6 +118,10 @@ export function clearQueryCache() {
 }
 
 export async function queryBq(sql) {
+  // Offline UI mode: serve fixtures instead of BigQuery. Deliberately outside
+  // the cache so every render pays the fake latency and loading states stay
+  // visible while designing. Dev-only — see src/dev/mockMode.js.
+  if (MOCK_MODE) return mockQueryBq(sql);
   if (!bqToken) throw new Error('Not connected to BigQuery');
   const key = cleanSql(sql);
   const cached = queryCache.get(key);

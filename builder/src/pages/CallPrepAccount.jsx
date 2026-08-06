@@ -245,15 +245,28 @@ export default function CallPrepAccount() {
           >
             ← {snap.consultant || 'Call Prep'}{snap.consultant ? '’s book' : ''}
           </a>
-          {history.length > 1 ? (
-            <select style={s.select} value={snap.snapshotDate} onChange={(e) => setSelectedDate(e.target.value)}>
-              {history.map((h) => (
-                <option key={h.snapshotDate} value={h.snapshotDate}>{h.snapshotDate}</option>
-              ))}
-            </select>
-          ) : (
-            <span style={s.dateStamp}>{snap.snapshotDate}</span>
-          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* This sheet is the pre-call view: one call, one date. The customer
+                page is the everything view — projects, full call history, audit
+                feedback. Cross-linked rather than merged, because they're read at
+                different moments. */}
+            <a
+              style={s.crumb}
+              className="cp-crumb"
+              onClick={() => navigate(`/accounts/${encodeURIComponent(recordId)}`)}
+            >
+              Customer view →
+            </a>
+            {history.length > 1 ? (
+              <select style={s.select} value={snap.snapshotDate} onChange={(e) => setSelectedDate(e.target.value)}>
+                {history.map((h) => (
+                  <option key={h.snapshotDate} value={h.snapshotDate}>{h.snapshotDate}</option>
+                ))}
+              </select>
+            ) : (
+              <span style={s.dateStamp}>{snap.snapshotDate}</span>
+            )}
+          </span>
         </div>
 
         <div className="cp-rise"><div style={s.kicker}>{[snap.callType, 'Pre-call brief'].filter(Boolean).join(' · ')}</div></div>

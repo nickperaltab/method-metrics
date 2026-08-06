@@ -13,9 +13,17 @@ import AdminInsights from './pages/AdminInsights';
 import Scorecard from './pages/Scorecard';
 import McpToken from './pages/McpToken';
 import SaasDataExport from './pages/SaasDataExport';
+import PsOverview from './pages/PsOverview';
 import CallPrep from './pages/CallPrep';
 import CallPrepAccount from './pages/CallPrepAccount';
 import CallPrepBook from './pages/CallPrepBook';
+import Handoffs from './pages/Handoffs';
+import HandoffAccount from './pages/HandoffAccount';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
+import ProjectNew from './pages/ProjectNew';
+import ProjectEdit from './pages/ProjectEdit';
+import CustomerPage from './pages/CustomerPage';
 import { UserProvider } from './contexts/UserContext';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
@@ -73,6 +81,7 @@ function SignInGate({ onConnect }) {
 
 export default function App() {
   const { connected, userEmail, userAvatar, connect } = useBqAuth();
+  const bypassAuth = import.meta.env.DEV && import.meta.env.VITE_BYPASS_AUTH === 'true';
 
   // Set RLS identity header synchronously so useMetrics's fetch below
   // includes x-method-email from its first call onward.
@@ -80,8 +89,9 @@ export default function App() {
 
   const { metrics, loading: metricsLoading } = useMetrics(userEmail);
 
-  // Gate the app behind OAuth. No email → sign-in screen.
-  if (!connected || !userEmail) {
+  // Gate the app behind OAuth in production. In local dev, allow an explicit
+  // VITE_BYPASS_AUTH=true override so UI work can proceed without Google login.
+  if (!bypassAuth && (!connected || !userEmail)) {
     return <SignInGate onConnect={connect} />;
   }
 
@@ -113,9 +123,23 @@ export default function App() {
               metricsLoading ? <Loading /> :
               <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
             } />
+            <Route path="/ps" element={<PsOverview />} />
             <Route path="/call-prep" element={<CallPrep />} />
             <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
             <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
+            <Route path="/handoffs" element={<Handoffs />} />
+            <Route path="/handoffs/account/:recordId" element={<HandoffAccount />} />
+            {/* Project tracker. Reachable by URL in production but deliberately
+                not in the nav yet — it has no backing store, so it only has data
+                under `npm run dev:mock`. See docs/local-ui-dev.md. */}
+            <Route path="/projects" element={<Projects />} />
+            {/* /new before /:projectId so "new" isn't parsed as a project id. */}
+            <Route path="/projects/new" element={<ProjectNew />} />
+            <Route path="/projects/:projectId" element={<ProjectDetail />} />
+            <Route path="/projects/:projectId/edit" element={<ProjectEdit />} />
+            {/* The customer page. Reads mostly real BigQuery tables, so unlike the
+                rest of the tracker it is useful outside mock mode. */}
+            <Route path="/accounts/:recordId" element={<CustomerPage />} />
             <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
             <Route path="/admin/registry" element={<Registry />} />
             <Route path="/admin/dimensions" element={<Dimensions />} />

@@ -10,6 +10,8 @@
     "@playwright/test": "^1.58.2"
   },
   "scripts": {
+    "dev": "npm --prefix builder run dev",
+    "dev:mock": "npm --prefix builder run dev:mock",
     "test": "npx playwright test",
     "test:tracker": "npx playwright test --project=tracker",
     "test:builder": "npx playwright test --project=builder",

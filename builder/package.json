@@ -7,6 +7,8 @@
     "prebuild": "node ../scripts/build_dbt_models_json.mjs",
     "predev": "node ../scripts/build_dbt_models_json.mjs",
     "dev": "vite",
+    "predev:mock": "node ../scripts/build_dbt_models_json.mjs",
+    "dev:mock": "vite --mode mock",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/eval.test.js",
