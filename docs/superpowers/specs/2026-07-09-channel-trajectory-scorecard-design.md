@@ -68,10 +68,13 @@ definition. Resolves once the window is pinned in Phase 1.
 
 ### Known asymmetries to surface
 
-- **Email has no Funnel sync attribution.** `Att_Email` exists on `Account`
-  (so trials have an Email channel) but not on `Funnel` (so syncs do not).
-  Email syncs and Email sync rate are therefore null/zero. Show this
-  honestly rather than faking a zero.
+- ~~**Email has no Funnel sync attribution.**~~ **RESOLVED 2026-08-10.** This was
+  read as a source asymmetry, but it was a defect in the `revenue.Funnel` view:
+  its `EventType='Sync'` branch is `Account WHERE SyncTypeRegion != ''` re-dated
+  to `SignupDate`, and its SELECT list hand-enumerates the `Att_*` columns and
+  omits `Att_Email`. Both models now read `Account` directly, which restores the
+  Email sync channel (5.6 of 230 rows in Jul 2026) and lifts the syncs Total from
+  224.4 to 230.0.
 - **Grand-total quirk.** Looker's total row is a raw event count (55) while
   its channel rows are fractional (sum 53.5); it computes the total
   independently. We show a fractional total (the channel sum) so the total
