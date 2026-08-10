@@ -35,13 +35,29 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
         let deltaPercent = null;
         let deltaInfo = null;
         if (kpi.showDelta && series) {
-          const delta = computeDelta(series);
+          // Opt-in only: without `deltaWindow` the comparison is exactly what
+          // it has always been. With `deltaWindow: 'same-period'` the KPI is
+          // compared against the same slice of the prior month, using the
+          // baseline the loader precomputed (see lib/sameWindow.js).
+          const sameWindow = kpi.deltaWindow === 'same-period'
+            ? dataMap.get(`${kpi.metricId}:samewindow`) || null
+            : null;
+          const delta = computeDelta(series, { window: kpi.deltaWindow, sameWindow });
           if (delta) {
             deltaPercent = delta.deltaPercent;
-            const cur = resolveKpiValue(series, 'current_month');
-            const prior = resolveKpiValue(series, 'prior_month');
-            if (cur != null && prior != null) {
-              deltaInfo = { current: cur, prior, format: kpi.format };
+            if (delta.basis === 'same-period') {
+              deltaInfo = {
+                current: sameWindow.current,
+                prior: sameWindow.prior,
+                format: kpi.format,
+                window: 'same-period',
+              };
+            } else {
+              const cur = resolveKpiValue(series, 'current_month');
+              const prior = resolveKpiValue(series, 'prior_month');
+              if (cur != null && prior != null) {
+                deltaInfo = { current: cur, prior, format: kpi.format };
+              }
             }
           }
         }

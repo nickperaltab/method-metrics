@@ -215,13 +215,13 @@ export default function MetricInspector({ metricId, dbtModel, currentValue, valu
                   return (
                     <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'flex-end' }}>
                       <div>
-                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>THIS MONTH</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>{deltaInfo.window === 'same-period' ? 'MONTH TO DATE' : 'THIS MONTH'}</div>
                         <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: '#1a1a1a' }}>
                           {formatValue(deltaInfo.current, deltaInfo.format)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>LAST MONTH</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>{deltaInfo.window === 'same-period' ? 'LAST MONTH, SAME DAYS' : 'LAST MONTH'}</div>
                         <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: '#6b7280' }}>
                           {formatValue(deltaInfo.prior, deltaInfo.format)}
                         </div>

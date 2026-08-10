@@ -1,6 +1,7 @@
 import { buildScorecardQueryPlan } from './plan.js';
 import { buildBatchSql, splitBatchResults } from './builders.js';
 import { evaluateFormula } from '../sanitize.js';
+import { computeSameWindowPair } from '../sameWindow.js';
 
 const BATCH_CHUNK_SIZE = 6;
 const BATCHABLE_KINDS = new Set(['primary_month', 'primary_view', 'custom', 'weekly', 'daily_90d', 'yoy']);
@@ -190,7 +191,68 @@ export async function loadScorecardData({ config, metrics, query, onProgress, si
     }
   }
 
+  computeSameWindowValues({
+    dataMap,
+    sameWindowIds: plan.sameWindowIds || [],
+    derived: plan.derived,
+    asOf: new Date(),
+  });
+
   return { dataMap, errors, plan };
+}
+
+/**
+ * Populate `<id>:samewindow` entries — `{ current, prior }` totals for the
+ * current month-to-date and the matching window of the prior month.
+ *
+ * Two design points, both deliberate:
+ *
+ *  - No new query. Semantic primitives already have a `<id>:day` series
+ *    (3 months, day grain) in the plan, which covers the prior month, so the
+ *    baseline is pure arithmetic over data the scorecard has already fetched.
+ *
+ *  - This lives in the loader, not in the KPI component, because it is the
+ *    only layer that knows a formula metric's dependencies. A ratio's
+ *    same-window value has to come from its dependencies' same-window values
+ *    (windowing the ratio's own output is meaningless), and the component
+ *    never sees `depends_on`.
+ *
+ * A metric with no entry simply has no baseline; KpiColumn then suppresses
+ * the delta rather than falling back to the wrong full-month comparison.
+ *
+ * @param {{dataMap: Map, sameWindowIds: number[], derived: Array, asOf: Date}} params
+ */
+export function computeSameWindowValues({ dataMap, sameWindowIds, derived, asOf }) {
+  for (const id of sameWindowIds || []) {
+    const pair = computeSameWindowPair(dataMap.get(`${id}:day`), asOf);
+    if (pair) dataMap.set(`${id}:samewindow`, pair);
+  }
+
+  // Topological order so a derived metric built on another derived metric
+  // sees its dependency's baseline already in place.
+  for (const d of topoSortDerived(derived || [])) {
+    const current = {};
+    const prior = {};
+    let complete = true;
+    let clamped = false;
+    for (const depId of d.depends_on || []) {
+      const pair = dataMap.get(`${depId}:samewindow`);
+      if (!pair) { complete = false; break; }
+      current[depId] = pair.current;
+      prior[depId] = pair.prior;
+      clamped = clamped || pair.clamped === true;
+    }
+    if (!complete) continue;
+    try {
+      dataMap.set(`${d.id}:samewindow`, {
+        current: evaluateFormula(d.formula, current),
+        prior: evaluateFormula(d.formula, prior),
+        clamped,
+      });
+    } catch {
+      // A formula we can't evaluate just means no baseline for this metric.
+    }
+  }
 }
 
 function keyOf(dataKey) {

@@ -2,6 +2,7 @@
  * Shared utilities for scorecard components.
  * Single source of truth for value formatting and KPI resolution.
  */
+import { isMonthComplete } from '../../lib/sameWindow';
 
 /**
  * Format a numeric value for display based on format type.
@@ -86,16 +87,50 @@ export function resolveKpiValue(timeSeries, selector) {
 
 /**
  * Compute delta percentage between current and prior month.
+ *
+ * Default behaviour (no options) is unchanged: full current month against
+ * full prior month, off the monthly series.
+ *
+ * A KPI can opt into `window: 'same-period'`, which compares month-to-date
+ * against day 1 through today's day-of-month in the prior month. That
+ * baseline is precomputed by the loader and passed in as `sameWindow` — see
+ * lib/sameWindow.js for the rule and lib/sql/load.js for where it comes from.
+ *
+ * When a KPI opts in but no baseline is available (no day-grain access to the
+ * metric, e.g. an opaque chart_sql), the delta is suppressed for a partial
+ * month rather than falling back to the wrong comparison. If the current
+ * month is complete, full-vs-full is already correct, so it is used.
+ *
  * @param {{ labels: string[], data: number[] } | null} timeSeries
- * @returns {{ delta: number, deltaPercent: number } | null}
+ * @param {{ window?: string,
+ *           sameWindow?: {current: number, prior: number}|null,
+ *           asOf?: Date }} [options]
+ * @returns {{ delta: number, deltaPercent: number, basis: 'same-period'|'month' } | null}
  */
-export function computeDelta(timeSeries) {
+export function computeDelta(timeSeries, options = {}) {
+  const { window: deltaWindow, sameWindow, asOf } = options;
+
+  if (deltaWindow === 'same-period') {
+    if (sameWindow && sameWindow.current != null && sameWindow.prior != null) {
+      if (sameWindow.prior === 0) return null;
+      const delta = sameWindow.current - sameWindow.prior;
+      return {
+        delta,
+        deltaPercent: (delta / Math.abs(sameWindow.prior)) * 100,
+        basis: 'same-period',
+      };
+    }
+    // No baseline. A partial month compared against a full one is the bug
+    // this option exists to prevent — show nothing instead.
+    if (!isMonthComplete(asOf || new Date())) return null;
+  }
+
   const current = resolveKpiValue(timeSeries, 'current_month');
   const prior = resolveKpiValue(timeSeries, 'prior_month');
   if (current == null || prior == null || prior === 0) return null;
   const delta = current - prior;
   const deltaPercent = (delta / Math.abs(prior)) * 100;
-  return { delta, deltaPercent };
+  return { delta, deltaPercent, basis: 'month' };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { buildSemanticSql, buildSemanticGroupedSql, buildViewAggSql } from './semantic.js';
 import { wrapChartSql } from './builders.js';
 import schemaCache from '../schemaCache.js';
+import { isAdditiveMeasure } from '../sameWindow.js';
 
 /**
  * Date-column resolver. Matches the existing hook's precedence:
@@ -260,6 +261,10 @@ export function buildScorecardQueryPlan(config, metrics) {
     });
   }
 
+  // Day-grain fetch (last 3 months) for every semantic primitive. This series
+  // already existed for other consumers; the same-window delta baseline reads
+  // it too, which is why no extra query is needed. See lib/sameWindow.js.
+  const sameWindowIds = [];
   for (const metric of primitives) {
     if (!metric.semantic_table || !metric.semantic_measure || !metric.semantic_date_col) continue;
     const key = `${metric.id}:day`;
@@ -270,6 +275,8 @@ export function buildScorecardQueryPlan(config, metrics) {
       kind: 'daily_90d',
       meta: { metric_id: metric.id },
     });
+    // Only additive measures can be re-summed over an arbitrary day window.
+    if (isAdditiveMeasure(metric.semantic_measure)) sameWindowIds.push(metric.id);
   }
 
   for (const metricId of c.yoyMetrics) {
@@ -313,5 +320,5 @@ export function buildScorecardQueryPlan(config, metrics) {
 
   for (const d of derived) expectedKeys.add(String(d.id));
 
-  return { queries, derived, expectedKeys: [...expectedKeys], derivedGroupedRequests };
+  return { queries, derived, expectedKeys: [...expectedKeys], derivedGroupedRequests, sameWindowIds };
 }
