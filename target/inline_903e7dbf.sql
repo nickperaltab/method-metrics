@@ -1,0 +1,1 @@
+SELECT value FROM (SELECT FORMAT_DATE('%Y-%m', TxnDate) AS period, ROUND(SUM(SaaSAmount), 2) AS value FROM `project-for-method-dw.revenue.v_total_dep_revenue` WHERE TxnDate >= '2025-01-01' GROUP BY 1 ORDER BY 1) WHERE CAST(period AS STRING) LIKE '2026-07%'

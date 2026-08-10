@@ -21,8 +21,8 @@ models:
         methodology_source: "Reverse-engineered from the live Looker Sales Scorecard, 2026-07-22 read: 51 conversions / 22 day-of-month * 31 days = 71.86, exact match to Looker's displayed trajectory."
         parity_verified:
           against: "Live Looker Studio Sales Scorecard, report 510f74bb page p_5wfqecngvd"
-          date: '2026-07-31'
-          values: "Ours 75.00 vs Looker 75 — exact. Closes the known ticket where this read ~86; the superseded Supabase formula divided by day_of_month - 1 rather than day_of_month."
+          date: '2026-08-10'
+          values: "Ours 65.1 vs Looker 65.1 — exact. Cascades correctly: #321 12.45% vs 12.45%, #322 -5.52 vs -5.52%, #323 69.28% vs 69.27%. NOTE the earlier 2026-07-31 reading of 75 vs 75 was a FALSE confirmation — the model then counted through YESTERDAY while Looker counts through TODAY, and on both days checked (07-22, 07-31) no conversion landed, so the off-by-one was invisible. Corrected 2026-08-10 when the two diverged (20 vs 21)."
         caveats:
           - "Divisor is day_of_month, which means the projection is noisy in the first few days of a month. Expect wide swings before roughly the 5th."
           - "Supersedes the old Supabase metric 296 chart_sql, which divided by day_of_month - 1 and over-projected by roughly 5%."

@@ -1,0 +1,1 @@
+SELECT value FROM (SELECT FORMAT_DATE('%Y-%m', DATE_TRUNC(CancellationDate, MONTH)) period, COUNT(DISTINCT CompanyAccount) value FROM `project-for-method-dw.revenue.int_cancellations` GROUP BY 1) WHERE CAST(period AS STRING) LIKE '2026-07%'

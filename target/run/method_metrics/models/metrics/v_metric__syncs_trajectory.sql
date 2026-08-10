@@ -22,7 +22,7 @@ WITH mtd AS (
   SELECT COUNT(*) AS syncs
   FROM `project-for-method-dw`.`revenue`.`int_syncs`
   WHERE SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
-    AND SyncDate < CURRENT_DATE()
+    AND SyncDate <= CURRENT_DATE()
 )
 SELECT
   DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,

@@ -4,7 +4,7 @@
 -- Type: derived (single-period projection)
 --
 -- Month-end projection of the in-progress month, Looker-compatible.
--- Formula: conversions through YESTERDAY
+-- Formula: conversions through TODAY
 --            / EXTRACT(DAY FROM CURRENT_DATE())
 --            * days in the current month
 --
@@ -20,7 +20,7 @@ WITH mtd AS (
   SELECT COUNT(*) AS conversions
   FROM {{ source('revenue', 'int_conversions') }}
   WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
-    AND FirstSaaSInvoiceTxnDate < CURRENT_DATE()
+    AND FirstSaaSInvoiceTxnDate <= CURRENT_DATE()
 )
 SELECT
   DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,

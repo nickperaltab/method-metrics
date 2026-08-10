@@ -1,0 +1,1 @@
+SELECT value FROM (SELECT FORMAT_DATE('%Y-%m', DATE_TRUNC(TxnDate, MONTH)) AS period, SUM(SaaSAmount) AS value FROM `project-for-method-dw.revenue.v_new_dep_revenue` WHERE is_new_dep = TRUE GROUP BY 1 ORDER BY 1) WHERE CAST(period AS STRING) LIKE '2026-07%'
