@@ -10,6 +10,13 @@ const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
 ];
 
+// Professional services screens. `/call-prep` bounces straight to the
+// remembered consultant's book, so the link lands on the day view for
+// returning users and on the picker for everyone else.
+const PS_ITEMS = [
+  { path: '/call-prep', label: 'Call Prep', icon: '☎' },
+];
+
 const ADMIN_ITEMS = [
   { path: '/admin/insights', label: 'AI Insights', icon: '\u25C8' },
 ];
@@ -137,6 +144,16 @@ export default function Sidebar({ collapsed, onToggle }) {
             <span style={{ fontSize: 16 }}>{'\u2728'}</span>
             Chart Builder
           </NavLink>
+
+          {/* PS */}
+          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+          <div style={sectionLabel}>PS</div>
+          {PS_ITEMS.map(item => (
+            <NavLink key={item.path} to={item.path} end={item.exact} style={linkStyle}>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              {item.label}
+            </NavLink>
+          ))}
 
           {/* My Dashboards (starred AI dashboards only) */}
           {stars.length > 0 && (() => {
