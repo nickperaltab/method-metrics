@@ -15,6 +15,12 @@ import {
   buildAccountSessionsSql,
   buildAccountCasesSql,
   buildAccountOverviewSql,
+  buildAccountOpportunityFitSql,
+  buildAccountActivitiesSql,
+  normalizeOpportunityFitRow,
+  normalizeActivityRow,
+  latestFitByMotion,
+  MOTION_ORDER,
   normalizeSnapshotRow,
   normalizeSessionRow,
   normalizeCaseRow,
@@ -159,6 +165,28 @@ describe('mock router — call-prep book and account detail', () => {
     const session = normalizeSessionRow(rows[0]);
     expect(typeof session.durationHours).toBe('number');
     expect(typeof session.notes).toBe('string');
+  });
+
+  it('returns every assessed motion for an account', () => {
+    const fit = rowsFor(buildAccountOpportunityFitSql(NORTHWIND)).map(normalizeOpportunityFitRow);
+    expect(fit.length).toBeGreaterThan(0);
+    expect(new Set(fit.map((f) => f.motion))).toEqual(new Set(MOTION_ORDER));
+    expect(fit.some((f) => f.signals.length > 0)).toBe(true);
+    expect(fit.some((f) => f.caveats)).toBe(true);
+    const ordered = latestFitByMotion(fit, TODAY);
+    expect(ordered.map((f) => f.motion)).toEqual(MOTION_ORDER);
+  });
+
+  it('returns activities newest first with the markup stripped', () => {
+    const acts = rowsFor(buildAccountActivitiesSql(NORTHWIND)).map(normalizeActivityRow);
+    expect(acts.length).toBeGreaterThan(0);
+    expect(acts.length).toBeLessThanOrEqual(10);
+    const dates = acts.map((a) => a.date);
+    expect([...dates].sort().reverse()).toEqual(dates);
+    for (const a of acts) {
+      expect(a).not.toHaveProperty('_account');
+      expect(a.notes).not.toMatch(/[<>]|&nbsp;/);
+    }
   });
 
   it('returns both open and closed cases', () => {
