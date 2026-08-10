@@ -28,15 +28,19 @@ export function buildChannelTrajectorySql({ start, end }) {
         EXTRACT(DAY FROM LAST_DAY(DATE '${we}')) AS days_in_month
     ),
     agg AS (
+      -- Backlinks rolls up INTO SEO. The daily view keeps them separate (it's the
+      -- building block); the rollup is a reporting choice made here and in
+      -- int_channel_funnel_trajectory. Deliberate deviation from Looker, which
+      -- reports Backlinks as its own line.
       SELECT
-        d.metric, d.channel,
+        d.metric, IF(d.channel = 'Backlinks', 'SEO', d.channel) AS channel,
         SUM(CASE WHEN d.event_date BETWEEN c.win_start AND c.win_end THEN d.weight END) AS mtd,
         SUM(CASE WHEN d.event_date >= c.pm_start AND d.event_date < c.m_start THEN d.weight END) AS prior_full,
         SUM(CASE WHEN d.event_date >= c.ly_start AND d.event_date < c.ly_next THEN d.weight END) AS ly_full,
         ANY_VALUE(c.days_elapsed)  AS days_elapsed,
         ANY_VALUE(c.days_in_month) AS days_in_month
       FROM \`${D}.int_channel_funnel_daily\` d CROSS JOIN cal c
-      GROUP BY d.metric, d.channel
+      GROUP BY 1, 2
     ),
     fcst AS (
       -- native materialized table (int_channel_forecast) — NOT the Sheets-federated

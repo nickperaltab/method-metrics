@@ -8,15 +8,31 @@ models:
       filter. One row per (event_date, metric, channel) with the fractional
       attribution weight summed. The frontend windows this by the picked range to
       compute MTD / trajectory / prior-month / last-year. Trials from
-      Account.SignupDate; syncs from Funnel EventType='Sync'. Fractional
-      multi-touch attribution (Att_* summed directly) — weights can be non-integer.
-      Supporting/building-block model; the month-level int_channel_funnel_trajectory
-      documents the full method.
+      Account.SignupDate; syncs from Account where SyncTypeRegion != '', also dated
+      by SignupDate. Fractional multi-touch attribution (Att_* summed directly) —
+      weights can be non-integer. Supporting/building-block model; the month-level
+      int_channel_funnel_trajectory documents the full method.
+
+
+      Backlinks is kept as its OWN channel here. This is the building block, so the
+      breakout stays recoverable; the Backlinks-into-SEO rollup the scorecard shows
+      is applied downstream (int_channel_funnel_trajectory and the frontend
+      windowed query in builder/src/lib/channelTrajectorySql.js).
+
+
+      Syncs read Account directly rather than the revenue.Funnel view: Funnel's
+      EventType='Sync' branch is the same filter re-dated to SignupDate, but its
+      SELECT list omits Att_Email and so dropped every email-attributed sync
+      (fixed 2026-08-10). Because a sync is dated by SignupDate but gated on
+      SyncTypeRegion — which flips when the account eventually syncs — historical
+      sync months keep growing retroactively.
       [REVIEW: is the daily grain meant to be a consumer-facing surface, or purely
       internal plumbing behind the month-level trajectory view?]
     columns:
       - name: event_date
-        description: Signup date (trials) or sync date (syncs).
+        description: >
+          Account.SignupDate for BOTH metrics. Not the date the sync happened — a
+          sync row is a signed-up account that has since synced, dated by signup.
       - name: metric
         description: "trials | syncs"
         tests:
