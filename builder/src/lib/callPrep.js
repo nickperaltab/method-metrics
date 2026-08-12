@@ -451,6 +451,45 @@ export const MOTION_LABELS = {
   free_hour: 'Free Hour',
 };
 
+// The pitch angle recorded against a motion. recommended_hook is a slug enum,
+// not prose, so it needs display labels. Only method_pay writes one today
+// (checked 2026-08-12: 61 hooks across 263 rows, all method_pay), and the
+// routine started writing the field on 2026-08-07, so expect new slugs —
+// humanizeHook() covers anything not listed here rather than leaking snake_case
+// onto the brief.
+export const HOOK_LABELS = {
+  overdue_invoice_reminders: 'overdue invoice reminders',
+  cc_fee_pass_through: 'card fee pass-through',
+  auto_invoicing: 'automatic invoicing',
+};
+
+// The routine writes the literal string 'none' to mean "no angle", which is not
+// the same as the column being null. Both must read as absent.
+const NO_HOOK = new Set(['none', 'n/a', 'unknown']);
+
+/** A recommended_hook slug as a phrase, or null when there is no angle. */
+export function humanizeHook(hook) {
+  const slug = toStr(hook)?.toLowerCase().trim();
+  if (!slug || NO_HOOK.has(slug)) return null;
+  return HOOK_LABELS[slug] ?? slug.replace(/_/g, ' ');
+}
+
+// Fits worth spending call time on, strongest first.
+const PITCHABLE = ['strong', 'moderate'];
+
+/**
+ * The motions actually worth pitching, strongest first. `fit: 'current'` is
+ * excluded on purpose — the account is already on that motion, so it is context
+ * rather than an opportunity.
+ */
+export function pitchableMotions(fitRows) {
+  return (fitRows ?? [])
+    .filter((row) => PITCHABLE.includes(row.fit))
+    .sort((a, b) =>
+      PITCHABLE.indexOf(a.fit) - PITCHABLE.indexOf(b.fit)
+      || MOTION_ORDER.indexOf(a.motion) - MOTION_ORDER.indexOf(b.motion));
+}
+
 /**
  * The newest assessment per motion that the consultant could have seen on
  * `asOfDate`. The table is append-only, so a later re-review must not rewrite

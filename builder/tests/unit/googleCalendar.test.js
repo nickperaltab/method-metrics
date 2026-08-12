@@ -17,7 +17,10 @@ import {
   fetchCalendarList,
   matchCalendarForConsultant,
 } from '../../src/lib/googleCalendar.js';
-import { buildPrepHistorySql, PREP_HISTORY_LIMIT, CALL_PREP_TABLE, fetchPrepHistory } from '../../src/lib/callPrep.js';
+import {
+  buildPrepHistorySql, PREP_HISTORY_LIMIT, CALL_PREP_TABLE, fetchPrepHistory,
+  humanizeHook, pitchableMotions,
+} from '../../src/lib/callPrep.js';
 
 const account = (id, name) => ({ accountRecordId: id, accountName: name });
 
@@ -318,6 +321,57 @@ describe('reading a teammate’s calendar', () => {
     });
     await expect(fetchCalendarEvents('2026-08-10', '2026-08-14', { fetchImpl }))
       .rejects.toBeInstanceOf(CalendarScopeError);
+  });
+});
+
+describe('humanizeHook', () => {
+  it('turns a known slug into a phrase that reads in a sentence', () => {
+    expect(humanizeHook('overdue_invoice_reminders')).toBe('overdue invoice reminders');
+    expect(humanizeHook('cc_fee_pass_through')).toBe('card fee pass-through');
+    expect(humanizeHook('auto_invoicing')).toBe('automatic invoicing');
+  });
+
+  it('treats the literal "none" as no angle, not as an angle called none', () => {
+    // The routine writes 'none' rather than leaving the column null.
+    expect(humanizeHook('none')).toBeNull();
+    expect(humanizeHook('None')).toBeNull();
+    expect(humanizeHook(null)).toBeNull();
+    expect(humanizeHook('')).toBeNull();
+  });
+
+  it('humanizes an unknown slug rather than leaking snake_case', () => {
+    // The field started being written 2026-08-07 and is still changing, so new
+    // slugs must not reach the brief raw.
+    expect(humanizeHook('annual_prepay_discount')).toBe('annual prepay discount');
+  });
+});
+
+describe('pitchableMotions', () => {
+  const row = (motion, fit) => ({ motion, fit });
+
+  it('keeps only what is worth call time, strongest first', () => {
+    const out = pitchableMotions([
+      row('dep', 'moderate'),
+      row('ppu', 'current'),
+      row('method_pay', 'strong'),
+      row('free_hour', 'none'),
+    ]);
+    expect(out.map((r) => r.motion)).toEqual(['method_pay', 'dep']);
+  });
+
+  it('excludes a motion the account is already on', () => {
+    // "current" is context, not an opportunity.
+    expect(pitchableMotions([row('ppu', 'current')])).toEqual([]);
+  });
+
+  it('breaks ties on the brief reading order', () => {
+    const out = pitchableMotions([row('free_hour', 'strong'), row('method_pay', 'strong')]);
+    expect(out.map((r) => r.motion)).toEqual(['method_pay', 'free_hour']);
+  });
+
+  it('handles null and empty input', () => {
+    expect(pitchableMotions(null)).toEqual([]);
+    expect(pitchableMotions([])).toEqual([]);
   });
 });
 
