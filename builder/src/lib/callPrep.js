@@ -451,6 +451,58 @@ export const MOTION_LABELS = {
   free_hour: 'Free Hour',
 };
 
+// Workflow talking points implied by an account's industry — the "what does a
+// business like this actually run" cues the call-prep routine applies when it
+// writes the Doc but never persists, so the brief has never shown them.
+//
+// Ported from the skill's Step 6 table (method-ps-skills/commands/call-prep.md)
+// and RE-KEYED. That table is still written against the pre-V7.1 L1 names
+// ("Professional Services", "Distribution & Wholesale", "Retail & E-Commerce",
+// "Manufacturing"), none of which are written to snapshots — four of its five
+// rows can never match a real account. The keys below are the deployed V7.1 L1
+// names, the same ones config/industryTaxonomy.js pins to
+// v7_classification.account_labels. Manufacturing & Distribution merges the
+// skill's separate distribution and manufacturing rows, because V7.1 merged the
+// industries.
+export const WORKFLOWS_BY_INDUSTRY = {
+  'Field Services & Trades': [
+    'Job costing', 'Work orders', 'Purchasing workflow', 'Field technician scheduling',
+  ],
+  'Professional & Business Services': [
+    'Project tracking', 'Time capture', 'Invoicing', 'Client billing workflow',
+  ],
+  'Manufacturing & Distribution': [
+    'Inventory management', 'Purchase orders', 'Order flow', 'Production workflow',
+    'Raw materials', 'Vendor management', 'Customer portal',
+  ],
+  'Retail & Consumer': [
+    'Sync health', 'Payment processing', 'Product catalog', 'Online orders',
+  ],
+};
+
+// Below this, the classifier's own confidence says don't lean on the label.
+// Matches the threshold the skill uses to decide whether to fall back to web
+// research (call-prep.md Step 6).
+export const INDUSTRY_CONFIDENCE_FLOOR = 0.5;
+
+/**
+ * Workflows typical of this account's industry. These are derived from the
+ * classification, NOT observed on the account, so the caller must say so.
+ * Returns [] when there is no usable classification: 26% of snapshots have no
+ * industry at all, and UNCLASSIFIABLE is an explicit "we could not tell".
+ */
+export function likelyWorkflows(snapshot) {
+  const l1 = toStr(snapshot?.industryL1);
+  if (!l1 || l1 === 'UNCLASSIFIABLE') return [];
+  return WORKFLOWS_BY_INDUSTRY[l1] ?? [];
+}
+
+/** True when the industry label is too weak to lean on. */
+export function industryIsWeak(snapshot) {
+  const c = snapshot?.bqConfidence;
+  return c != null && c < INDUSTRY_CONFIDENCE_FLOOR;
+}
+
 // The pitch angle recorded against a motion. recommended_hook is a slug enum,
 // not prose, so it needs display labels. Only method_pay writes one today
 // (checked 2026-08-12: 61 hooks across 263 rows, all method_pay), and the

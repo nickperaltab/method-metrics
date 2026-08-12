@@ -19,8 +19,9 @@ import {
 } from '../../src/lib/googleCalendar.js';
 import {
   buildPrepHistorySql, PREP_HISTORY_LIMIT, CALL_PREP_TABLE, fetchPrepHistory,
-  humanizeHook, pitchableMotions,
+  humanizeHook, pitchableMotions, likelyWorkflows, industryIsWeak, WORKFLOWS_BY_INDUSTRY,
 } from '../../src/lib/callPrep.js';
+import { L1_DEFINITIONS } from '../../src/config/industryTaxonomy.js';
 
 const account = (id, name) => ({ accountRecordId: id, accountName: name });
 
@@ -372,6 +373,57 @@ describe('pitchableMotions', () => {
   it('handles null and empty input', () => {
     expect(pitchableMotions(null)).toEqual([]);
     expect(pitchableMotions([])).toEqual([]);
+  });
+});
+
+describe('likelyWorkflows', () => {
+  // The bug this guards against is the one the call-prep skill still has: its
+  // Step 6 table is keyed on pre-V7.1 L1 names, so four of its five rows can
+  // never match an account. A lookup keyed on labels that do not exist is worse
+  // than no lookup, because it fails silently.
+  it('is keyed only on L1 names that are actually deployed', () => {
+    const deployed = new Set(L1_DEFINITIONS.map((l1) => l1.name));
+    for (const key of Object.keys(WORKFLOWS_BY_INDUSTRY)) {
+      expect(deployed.has(key), `"${key}" is not a deployed V7.1 L1 name`).toBe(true);
+    }
+  });
+
+  it('covers every deployed L1, so no classified account comes back empty', () => {
+    for (const { name } of L1_DEFINITIONS) {
+      expect(likelyWorkflows({ industryL1: name }).length, `no workflows for "${name}"`)
+        .toBeGreaterThan(0);
+    }
+  });
+
+  it('returns workflows for a classified account', () => {
+    expect(likelyWorkflows({ industryL1: 'Field Services & Trades' }))
+      .toContain('Job costing');
+  });
+
+  it('returns nothing when there is no usable classification', () => {
+    // 26% of snapshots have no industry at all, and UNCLASSIFIABLE is an
+    // explicit "we could not tell" rather than a category.
+    expect(likelyWorkflows({ industryL1: null })).toEqual([]);
+    expect(likelyWorkflows({ industryL1: 'UNCLASSIFIABLE' })).toEqual([]);
+    expect(likelyWorkflows(null)).toEqual([]);
+  });
+
+  it('returns nothing for a stale free-text industry rather than guessing', () => {
+    // Older rows carry values like "Manufacturing / Wholesale" that predate the
+    // taxonomy. Guessing a near-match would put invented advice on a brief.
+    expect(likelyWorkflows({ industryL1: 'Manufacturing / Wholesale' })).toEqual([]);
+  });
+});
+
+describe('industryIsWeak', () => {
+  it('flags a classification the classifier itself does not trust', () => {
+    expect(industryIsWeak({ bqConfidence: 0.42 })).toBe(true);
+    expect(industryIsWeak({ bqConfidence: 0.8 })).toBe(false);
+  });
+
+  it('does not flag a missing confidence as weak', () => {
+    expect(industryIsWeak({ bqConfidence: null })).toBe(false);
+    expect(industryIsWeak({})).toBe(false);
   });
 });
 

@@ -25,6 +25,7 @@ import {
   fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases, fetchAccountOverview,
   fetchAccountOpportunityFit, fetchAccountActivities, latestFitByMotion, computeFlags,
   MOTION_LABELS, ACTIVITY_LIMIT, pitchableMotions, humanizeHook,
+  likelyWorkflows, industryIsWeak,
 } from '../lib/callPrep';
 
 const PAPER = '#faf8f3';
@@ -230,6 +231,20 @@ const s = {
   upsellAction: { fontSize: 15, lineHeight: 1.5, color: '#2c2921', marginTop: 7 },
   upsellNoAction: { fontSize: 14, lineHeight: 1.5, color: MUTE, fontStyle: 'italic', marginTop: 7 },
   upsellMeta: { fontSize: 12, color: MUTE, marginTop: 8 },
+
+  workflowBlock: { marginTop: 18, paddingTop: 16, borderTop: `1px solid ${RULE}` },
+  workflowLabel: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+    letterSpacing: '.16em', textTransform: 'uppercase', color: MUTE, marginBottom: 10,
+  },
+  workflowChips: { display: 'flex', flexWrap: 'wrap', gap: 7 },
+  workflowChip: {
+    fontSize: 13.5, color: '#2c2921', background: PAPER,
+    border: `1px solid ${RULE}`, borderRadius: 999, padding: '4px 12px',
+  },
+  // These are inferred from the industry label, never observed on the account.
+  // Saying so is the difference between a prompt and a false claim.
+  workflowNote: { fontSize: 12, color: MUTE, marginTop: 10, lineHeight: 1.5 },
 
   // Opportunity fit
   fitTable: { width: '100%', borderCollapse: 'collapse' },
@@ -584,6 +599,7 @@ export default function CallPrepAccount() {
     [fitRows]
   );
   const upsellRows = useMemo(() => pitchableMotions(fitRows), [fitRows]);
+  const workflows = useMemo(() => likelyWorkflows(snap), [snap]);
 
   // Which section the reader is in. An eight-section sticky nav that never says
   // where you are is decoration.
@@ -854,7 +870,7 @@ export default function CallPrepAccount() {
                 ) : fitRows == null ? (
                   <p style={s.loadNote}>Loading opportunity fit…</p>
                 ) : upsellRows.length === 0 ? (
-                  <p style={s.empty}>Nothing flagged to pitch on this account.</p>
+                  <p style={s.empty}>No motion flagged to pitch on this account.</p>
                 ) : (
                   <div style={s.upsellList}>
                     {upsellRows.map((row) => {
@@ -890,6 +906,19 @@ export default function CallPrepAccount() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {workflows.length > 0 && (
+                  <div style={s.workflowBlock}>
+                    <div style={s.workflowLabel}>Likely workflow needs</div>
+                    <div style={s.workflowChips}>
+                      {workflows.map((w) => <span key={w} style={s.workflowChip}>{w}</span>)}
+                    </div>
+                    <p style={s.workflowNote}>
+                      Typical for {snap.industryL1}, not confirmed on this account.
+                      {industryIsWeak(snap) ? ' The industry match is low confidence.' : ''}
+                    </p>
                   </div>
                 )}
               </Section>
