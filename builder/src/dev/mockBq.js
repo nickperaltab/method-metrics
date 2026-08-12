@@ -44,6 +44,8 @@ const T = {
   freeHourAudit: 'call_audits.free_hour_audit',
   briefContent: 'call_prep.brief_content',
   account: 'revenue.Account',
+  opportunityFit: 'call_prep.opportunity_fit',
+  activity: 'revenue.Activity',
 };
 
 const hits = (sql, table) => sql.includes(table);
@@ -235,6 +237,8 @@ const ROUTES = [
     },
   },
   {
+    // Serves both the customer page's prep list and the call-prep account brief;
+    // the two queries differ only in their column list.
     name: 'call preps + brief content',
     when: (sql) => hits(sql, T.snapshots) && hits(sql, T.briefContent),
     rows: (sql) => {
@@ -254,6 +258,8 @@ const ROUTES = [
             business_context: brief?.business_context ?? null,
             contact_name: brief?.contact_name ?? null,
             contact_email: brief?.contact_email ?? null,
+            contact_phone: brief?.contact_phone ?? null,
+            website: brief?.website ?? null,
           };
         })
         .sort(desc('snapshot_date'));
@@ -567,6 +573,26 @@ const ROUTES = [
       return clean(fixtures().CASES.filter((c) => Number(c._account) === id))
         .map(({ CaseSubject, Subject, ...rest }) => ({ ...rest, subject: CaseSubject ?? Subject }))
         .sort(desc('CreatedDate'));
+    },
+  },
+  {
+    name: 'opportunity fit (per motion)',
+    when: (sql) => hits(sql, T.opportunityFit),
+    rows: (sql) => {
+      const id = intOf(sql, /account_record_id = (\d+)/);
+      return clean(fixtures().OPPORTUNITY_FIT.filter((r) => Number(r._account) === id))
+        .sort((a, b) => desc('assessed_date')(a, b) || a.motion.localeCompare(b.motion));
+    },
+  },
+  {
+    name: 'recent activities',
+    when: (sql) => hits(sql, T.activity),
+    rows: (sql) => {
+      const id = intOf(sql, /MethodCompanyAccountRecordID = (\d+)/);
+      const limit = intOf(sql, /LIMIT (\d+)/) ?? 10;
+      return clean(fixtures().ACTIVITIES.filter((a) => Number(a._account) === id))
+        .sort(desc('occurred_on'))
+        .slice(0, limit);
     },
   },
   {

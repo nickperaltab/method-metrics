@@ -18,6 +18,19 @@ const BQ_CLIENT_ID = '546732685010-nojjfak7esmun2taour8r5pakrsrg3aq.apps.googleu
 const BQ_PROJECT = 'project-for-method-dw';
 const BQ_DATASET = 'revenue';
 
+const BQ_SCOPES = [
+  'https://www.googleapis.com/auth/bigquery',
+  'https://www.googleapis.com/auth/userinfo.email',
+];
+// Read-only calendar, requested on top of the BQ scopes so the call-prep week
+// strip can show clock times.
+//
+// `calendar.readonly` rather than the narrower `calendar.events.readonly`
+// because the strip also lists which calendars you're subscribed to, so a rep's
+// book can show that rep's calendar. calendarList.list is not covered by the
+// events-only scope. Still read-only — nothing here writes to a calendar.
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+
 let bqToken = localStorage.getItem('bq_access_token');
 
 export function getBqToken() {
@@ -74,11 +87,11 @@ export async function initBqAuth(onSuccess, onFail) {
   }
 }
 
-export function connectBq(onSuccess) {
+function requestToken(scopes, onSuccess) {
   if (!window.google?.accounts?.oauth2) return;
   google.accounts.oauth2.initTokenClient({
     client_id: BQ_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/userinfo.email',
+    scope: scopes.join(' '),
     prompt: '',
     callback: (r) => {
       if (r.access_token) {
@@ -88,6 +101,22 @@ export function connectBq(onSuccess) {
       }
     },
   }).requestAccessToken();
+}
+
+export function connectBq(onSuccess) {
+  requestToken([...BQ_SCOPES, CALENDAR_SCOPE], onSuccess);
+}
+
+/**
+ * Re-request the same token with the calendar scope added.
+ *
+ * Tokens minted before the calendar scope existed still pass the BigQuery
+ * validation in initBqAuth, so those users stay signed in and only discover the
+ * gap when a calendar call 403s. This upgrades that token in place — same
+ * storage key, one combined token — rather than making everyone reconnect.
+ */
+export function connectCalendar(onSuccess) {
+  requestToken([...BQ_SCOPES, CALENDAR_SCOPE], onSuccess);
 }
 
 export function disconnectBq() {

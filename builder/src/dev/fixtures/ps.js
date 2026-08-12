@@ -49,6 +49,8 @@ function snapshot(o) {
     signup_date: iso(-Math.round(ageMonths * 30.4)),
     dep_enrolled: bool(o.dep),
     multi_entity_parent_name: str(o.parent ?? null),
+    multi_entity_parent_record_id: o.parent ? str(o.parentId ?? 900199) : null,
+    parent_is_dep: o.parent ? bool(o.parentIsDep) : null,
     sync_fail_count: str(o.syncFails ?? 0),
     sync_status: o.syncStatus ?? (o.syncFails ? 'FAILING' : 'OK'),
     tt_total_hours: str(o.hours ?? 12.5),
@@ -128,7 +130,7 @@ function accountSeed() {
       id: 900105, name: 'Bright Harbor Logistics', consultant: ME_FULL, callType: 'PPU',
       ageMonths: 15, syncFails: 0, casesOpen: 0, casesClosed: 3, hours: 19,
       sessions: 11, lastSession: iso(-9), dep: false,
-      parent: 'Bright Harbor Holdings',
+      parent: 'Bright Harbor Holdings', parentId: 900190, parentIsDep: true,
       industry: ['Transportation', 'Freight Brokerage', '3PL'],
       operatingModel: 'Dispatch', confidence: 0.68,
       mrr: 1120, licenses: 16, health: 84, active: true, payType: 'Monthly',
@@ -204,6 +206,49 @@ const CASE_SUBJECTS = [
   'Portal login link expired',
 ];
 const CONTACTS = ['Dana Whitcombe', 'Marcus Reyes', 'Priya Nandakumar', 'Ellis Vaughn', 'Tomas Berg'];
+
+// revenue.Activity — Comments arrive as CRM rich text, so these carry real tags
+// and entities to exercise stripHtml() rather than reading as clean prose.
+const ACTIVITY_TYPES = [
+  'Demo', 'AI Summary - Demo', 'Chat Incoming', 'Phone Call Outgoing',
+  'Email Incoming & Outgoing', 'Phone Call Incoming', 'Chat Incoming',
+];
+const ACTIVITY_COMMENTS = [
+  '<p>Walked the estimate flow end to end. Customer wants package pricing with terms text instead of itemised lines.</p>',
+  '<p><strong>Meeting Summary</strong></p><p>Reviewed onboarding progress; QuickBooks sync confirmed clean &amp; no open blockers.</p>',
+  'Question<br>The customer asked how to create jobs from an approved estimate.',
+  '<p>Called to check in on setup &nbsp;&mdash; left voicemail.</p>',
+  '<div>Sent the getting-started guide and booked the follow-up session.</div>',
+  '<p>Customer could not log in; reset the password and confirmed access.</p>',
+];
+
+// call_prep.opportunity_fit — one row per motion, matching the four the routine
+// always assesses. Northwind is the interesting case: two flagged motions with
+// signals and a caveat.
+const FIT_SEEDS = {
+  900101: [
+    { motion: 'method_pay', fit: 'strong', hook: 'overdue_invoice_reminders',
+      signals: ['AR chased manually in TT notes', 'No gateway connected'],
+      rationale: 'Two sessions mention chasing overdue invoices by hand, and no payment gateway is connected.',
+      caveats: 'Method Pay hook naming is not confirmed with Product — do not present as a named feature.' },
+    { motion: 'dep', fit: 'moderate',
+      signals: ['22 sessions over 26 months', 'Recurring sync topic across consultants'],
+      rationale: '41 billed hours across 22 sessions, with the same QuickBooks sync topic re-explained to three consultants.' },
+    { motion: 'ppu', fit: 'current', signals: ['current_ppu_booking'],
+      rationale: 'Today’s booking is a PPU session.' },
+    { motion: 'free_hour', fit: 'none', signals: [],
+      rationale: 'Free Hour was used in the first month; the account is on paid consulting now.' },
+  ],
+  900103: [
+    { motion: 'method_pay', fit: 'none', signals: [], rationale: 'No payment friction anywhere in account history.' },
+    { motion: 'dep', fit: 'none', signals: [],
+      rationale: 'Account is ~3 months old with 2 sessions — no volume, complexity or continuity signal.' },
+    { motion: 'ppu', fit: 'moderate', signals: ['Second free session requested'],
+      rationale: 'A second scoping request arrived after the free hour was used.' },
+    { motion: 'free_hour', fit: 'current', signals: ['current_free_hour_booking'],
+      rationale: 'Today’s booking is the account’s complimentary Free Hour.' },
+  ],
+};
 
 function build() {
   const seeds = accountSeed();
@@ -283,6 +328,39 @@ function build() {
     ];
   });
 
+  // revenue.Activity — the brief's "Recent activities". Every account gets a
+  // run so the section is never empty, newest first.
+  const ACTIVITIES = seeds.flatMap((seed) =>
+    Array.from({ length: 7 }, (_, i) => ({
+      _account: str(seed.id),
+      RecordID: str(seed.id * 100 + i),
+      occurred_on: iso(-(i * 4 + 1)),
+      ActivityType: ACTIVITY_TYPES[(seed.id + i) % ACTIVITY_TYPES.length],
+      ActivityStatus: 'Completed',
+      AssignedToRecordID: str(455 + ((seed.id + i) % 3)),
+      Comments: ACTIVITY_COMMENTS[(seed.id + i) % ACTIVITY_COMMENTS.length],
+    }))
+  );
+
+  // call_prep.opportunity_fit — only two accounts are seeded, so the page's
+  // "no assessment yet" branch stays reachable.
+  const OPPORTUNITY_FIT = Object.entries(FIT_SEEDS).flatMap(([id, rows]) =>
+    rows.map((r) => ({
+      _account: str(id),
+      account_record_id: str(id),
+      account_name: seeds.find((s) => String(s.id) === id)?.name ?? null,
+      motion: r.motion,
+      fit: r.fit,
+      rationale: r.rationale,
+      signals: repeated(r.signals),
+      recommended_hook: r.hook ?? null,
+      caveats: r.caveats ?? null,
+      assessed_date: iso(0),
+      review_status: 'new',
+      first_flagged_date: iso(0),
+    }))
+  );
+
   // call_prep.handoffs — empty in real BQ today (see docs/ps-hub.md), so these
   // fixtures are the only way to see the Handoffs screens with content. One row
   // per status change, newest first per account.
@@ -324,7 +402,7 @@ function build() {
     }),
   ];
 
-  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS };
+  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT };
 }
 
 let cache = null;

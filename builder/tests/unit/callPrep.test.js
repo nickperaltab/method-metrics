@@ -1,9 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   CALL_PREP_TABLE,
+  BRIEF_CONTENT_TABLE,
   TIME_TRACKING_TABLE,
   CASES_TABLE,
   ACCOUNTS_TABLE,
+  OPPORTUNITY_FIT_TABLE,
+  ACTIVITY_TABLE,
+  buildAccountOpportunityFitSql,
+  buildAccountActivitiesSql,
+  normalizeActivityRow,
+  stripHtml,
+  toWebsiteUrl,
+  latestFitByMotion,
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
@@ -41,12 +50,51 @@ describe('buildAccountSnapshotsSql', () => {
   it('filters by record id, newest first', () => {
     const sql = buildAccountSnapshotsSql('141376');
     expect(sql).toContain('account_record_id = 141376');
-    expect(sql).toMatch(/ORDER BY snapshot_date DESC/);
+    expect(sql).toMatch(/ORDER BY s\.snapshot_date DESC/);
+  });
+
+  it('left joins the written brief so preps without one still return', () => {
+    const sql = buildAccountSnapshotsSql('141376');
+    expect(sql).toContain(BRIEF_CONTENT_TABLE);
+    expect(sql).toMatch(/LEFT JOIN/);
+    expect(sql).toMatch(/b\.top_3/);
+    expect(sql).toMatch(/b\.why_today/);
+  });
+
+  // Both tables are append-only with no key: a routine that runs twice in a day
+  // leaves two rows for one (account, date). Without both QUALIFYs that shows
+  // the same date twice in the picker and fans the join out.
+  it('keeps one row per snapshot date on both sides of the join', () => {
+    const sql = buildAccountSnapshotsSql('141376');
+    expect(sql).toMatch(/PARTITION BY account_record_id, snapshot_date ORDER BY created_at DESC/);
+    expect(sql).toMatch(/PARTITION BY s\.snapshot_date ORDER BY s\.created_at DESC/);
   });
 
   it('rejects non-integer record ids', () => {
     expect(() => buildAccountSnapshotsSql('141376; DROP TABLE x')).toThrow();
     expect(() => buildAccountSnapshotsSql('abc')).toThrow();
+  });
+});
+
+describe('toWebsiteUrl', () => {
+  // Every historical brief_content row stores a bare host, not a URL.
+  it('gives a bare domain a scheme', () => {
+    expect(toWebsiteUrl('primodoors.com')).toBe('https://primodoors.com');
+    expect(toWebsiteUrl('arrowconservation.com/about')).toBe('https://arrowconservation.com/about');
+  });
+
+  it('leaves an absolute URL alone', () => {
+    expect(toWebsiteUrl('http://example.com')).toBe('http://example.com');
+    expect(toWebsiteUrl('https://example.com/x')).toBe('https://example.com/x');
+  });
+
+  it('refuses anything that is not a plain host', () => {
+    expect(toWebsiteUrl('javascript:alert(1)')).toBeNull();
+    expect(toWebsiteUrl('data:text/html,<script>')).toBeNull();
+    expect(toWebsiteUrl('not a domain')).toBeNull();
+    expect(toWebsiteUrl('localhost')).toBeNull();
+    expect(toWebsiteUrl('')).toBeNull();
+    expect(toWebsiteUrl(null)).toBeNull();
   });
 });
 
@@ -62,6 +110,104 @@ describe('buildAccountSessionsSql', () => {
   it('rejects non-integer record ids', () => {
     expect(() => buildAccountSessionsSql('1; DROP TABLE x')).toThrow();
     expect(() => buildAccountSessionsSql('abc')).toThrow();
+  });
+});
+
+describe('buildAccountOpportunityFitSql', () => {
+  it('reads every assessment for the account, newest first', () => {
+    const sql = buildAccountOpportunityFitSql('141376');
+    expect(sql).toContain(OPPORTUNITY_FIT_TABLE);
+    expect(sql).toContain('account_record_id = 141376');
+    expect(sql).toMatch(/ORDER BY assessed_date DESC/);
+  });
+
+  it('rejects non-integer record ids', () => {
+    expect(() => buildAccountOpportunityFitSql('1; DROP TABLE x')).toThrow();
+  });
+});
+
+describe('buildAccountActivitiesSql', () => {
+  it('queries Activity by account, newest first, excluding deleted', () => {
+    const sql = buildAccountActivitiesSql('141376');
+    expect(sql).toContain(ACTIVITY_TABLE);
+    expect(sql).toContain('MethodCompanyAccountRecordID = 141376');
+    expect(sql).toMatch(/IsDeleted = FALSE/);
+    expect(sql).toMatch(/LIMIT 10/);
+  });
+
+  // mockBq's batched cross-account route matches on `AS activity_date`; if this
+  // query ever uses that alias again, mock mode silently serves the wrong rows.
+  it('does not alias its date column activity_date', () => {
+    expect(buildAccountActivitiesSql('141376')).not.toMatch(/AS activity_date/);
+  });
+
+  it('rejects non-integer record ids and limits', () => {
+    expect(() => buildAccountActivitiesSql('abc')).toThrow();
+    expect(() => buildAccountActivitiesSql('141376', '10; DROP TABLE x')).toThrow();
+  });
+});
+
+describe('stripHtml', () => {
+  it('reduces CRM rich text to plain prose', () => {
+    expect(stripHtml('<p>Called Tom &amp; left a vm&nbsp;today</p>')).toBe('Called Tom & left a vm today');
+  });
+
+  it('turns block ends into line breaks', () => {
+    expect(stripHtml('<p>One</p><p>Two</p>')).toBe('One\nTwo');
+  });
+
+  it('drops script bodies rather than inlining them', () => {
+    expect(stripHtml('<script>alert(1)</script>hello')).toBe('hello');
+  });
+
+  it('returns null for empty or markup-only input', () => {
+    expect(stripHtml('')).toBeNull();
+    expect(stripHtml('<p></p>')).toBeNull();
+    expect(stripHtml(null)).toBeNull();
+  });
+});
+
+describe('normalizeActivityRow', () => {
+  it('casts an Activity row to a typed activity', () => {
+    expect(normalizeActivityRow({
+      RecordID: '1749823', occurred_on: '2026-08-04', ActivityType: 'Demo',
+      ActivityStatus: 'Completed', AssignedToRecordID: '455', Comments: '<p>Walked the estimate flow.</p>',
+    })).toEqual({
+      recordId: 1749823, date: '2026-08-04', type: 'Demo', status: 'Completed',
+      agentId: 455, notes: 'Walked the estimate flow.',
+    });
+  });
+});
+
+describe('latestFitByMotion', () => {
+  const row = (motion, assessedDate, fit) => ({ motion, assessedDate, fit, signals: [] });
+
+  it('keeps the newest assessment per motion in reading order', () => {
+    const out = latestFitByMotion([
+      row('ppu', '2026-08-01', 'current'),
+      row('method_pay', '2026-08-10', 'strong'),
+      row('method_pay', '2026-07-01', 'none'),
+    ], '2026-08-10');
+    expect(out.map((r) => r.motion)).toEqual(['method_pay', 'ppu']);
+    expect(out[0].fit).toBe('strong');
+  });
+
+  it('ignores assessments made after the prep being read', () => {
+    const out = latestFitByMotion([
+      row('dep', '2026-08-10', 'strong'),
+      row('dep', '2026-07-01', 'none'),
+    ], '2026-07-15');
+    expect(out).toHaveLength(1);
+    expect(out[0].fit).toBe('none');
+  });
+
+  it('still returns motions outside the known set', () => {
+    const out = latestFitByMotion([row('partner_referral', '2026-08-10', 'strong')], '2026-08-10');
+    expect(out.map((r) => r.motion)).toEqual(['partner_referral']);
+  });
+
+  it('tolerates no rows', () => {
+    expect(latestFitByMotion(null, '2026-08-10')).toEqual([]);
   });
 });
 

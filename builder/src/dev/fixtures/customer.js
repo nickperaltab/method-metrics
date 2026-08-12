@@ -189,6 +189,8 @@ function brief(o) {
     business_context: str(o.businessContext),
     contact_name: str(o.contactName),
     contact_email: str(o.contactEmail),
+    contact_phone: str(o.contactPhone ?? null),
+    website: str(o.website ?? null),
   };
 }
 
@@ -365,6 +367,9 @@ function build() {
       businessContext: 'Wholesale distributor, 24 users, second location planned for the fall.',
       contactName: 'Dana Whitcombe',
       contactEmail: 'dana@northwind.example',
+      contactPhone: '(555) 0142-887',
+      // Scheme-less, like every real brief_content row — exercises toWebsiteUrl.
+      website: 'northwind.example',
     }),
     brief({
       accountId: 900104, date: iso(0), time: '11:30:00',
@@ -377,6 +382,8 @@ function build() {
       businessContext: 'Building-materials supplier, 47 users, three branches.',
       contactName: 'Marcus Reyes',
       contactEmail: 'marcus@pikepowell.example',
+      contactPhone: '(555) 0198-204',
+      website: 'https://pikepowell.example',
     }),
   ];
 

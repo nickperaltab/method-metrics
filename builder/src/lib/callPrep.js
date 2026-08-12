@@ -9,9 +9,12 @@ import { validateInt } from './sanitize.js';
 import { queryBqWithRetry } from './bigquery.js';
 
 export const CALL_PREP_TABLE = '`project-for-method-dw.call_prep.snapshots`';
+export const BRIEF_CONTENT_TABLE = '`project-for-method-dw.call_prep.brief_content`';
 export const TIME_TRACKING_TABLE = '`project-for-method-dw.revenue.TimeTracking`';
 export const CASES_TABLE = '`project-for-method-dw.revenue.Cases`';
 export const ACCOUNTS_TABLE = '`project-for-method-dw.revenue.int_accounts`';
+export const OPPORTUNITY_FIT_TABLE = '`project-for-method-dw.call_prep.opportunity_fit`';
+export const ACTIVITY_TABLE = '`project-for-method-dw.revenue.Activity`';
 
 export function buildConsultantsSql() {
   return `
@@ -43,13 +46,59 @@ export function buildBookSql(consultant) {
     ORDER BY snapshot_date DESC`;
 }
 
-export function buildAccountSnapshotsSql(recordId) {
-  const id = validateInt(recordId, 'account_record_id');
+// Every prep this consultant has, newest first — one row per account per day,
+// not deduped to the latest like buildBookSql. Feeds both the Today and Past
+// preps tabs, which are the same rows split on snapshot_date.
+export const PREP_HISTORY_LIMIT = 500;
+
+export function buildPrepHistorySql(consultant, limit = PREP_HISTORY_LIMIT) {
+  const name = escapeSqlLiteral(consultant);
+  const rows = validateInt(limit, 'limit');
   return `
     SELECT *
     FROM ${CALL_PREP_TABLE}
-    WHERE account_record_id = ${id}
-    ORDER BY snapshot_date DESC`;
+    WHERE consultant = '${name}'
+    ORDER BY snapshot_date DESC, account_name
+    LIMIT ${rows}`;
+}
+
+// The account brief. snapshots carries the account facts; brief_content carries
+// the written parts of the /call-prep doc — the top 3 points, why today, the
+// business summary and the contact. brief_content stopped being written on
+// 2026-07-16 and only ever covered 24 preps, so LEFT JOIN: an older prep still
+// renders, just without the prose.
+//
+// Both tables are append-only and neither has a key, so a routine that runs
+// twice in a day leaves two rows for the same (account, date) — measured
+// 2026-08-10: 7 such pairs in snapshots, 1 in brief_content. Without the two
+// QUALIFYs below that duplicate would fan the join out and show the same date
+// twice in the date picker. Newest row per date wins.
+export function buildAccountSnapshotsSql(recordId) {
+  const id = validateInt(recordId, 'account_record_id');
+  return `
+    SELECT
+      s.*,
+      b.scheduled_time,
+      b.top_3,
+      b.why_today,
+      b.business_context,
+      b.contact_name,
+      b.contact_email,
+      b.contact_phone,
+      b.website
+    FROM ${CALL_PREP_TABLE} s
+    LEFT JOIN (
+      SELECT *
+      FROM ${BRIEF_CONTENT_TABLE}
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY account_record_id, snapshot_date ORDER BY created_at DESC
+      ) = 1
+    ) b
+      ON b.account_record_id = s.account_record_id
+     AND b.snapshot_date = s.snapshot_date
+    WHERE s.account_record_id = ${id}
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY s.snapshot_date ORDER BY s.created_at DESC) = 1
+    ORDER BY s.snapshot_date DESC`;
 }
 
 // Session history for the account's timeline. TimeTracking keys to the account
@@ -109,6 +158,61 @@ export function buildAccountCasesSql(recordId) {
     LIMIT 25`;
 }
 
+// Opportunity fit — the brief's per-motion Method Pay / DEP / PPU / Free Hour
+// assessment, written by the team call-prep routine. Append-only, one row per
+// account + motion + assessed_date, so take the newest assessment per motion
+// that is not newer than the prep being read.
+export function buildAccountOpportunityFitSql(recordId) {
+  const id = validateInt(recordId, 'account_record_id');
+  return `
+    SELECT
+      motion,
+      fit,
+      rationale,
+      signals,
+      recommended_hook,
+      caveats,
+      assessed_date,
+      review_status,
+      first_flagged_date
+    FROM ${OPPORTUNITY_FIT_TABLE}
+    WHERE account_record_id = ${id}
+    ORDER BY assessed_date DESC, motion`;
+}
+
+// Recent activities — the brief's "Recent Activities (last 10)". Unlike Alocet's
+// Activity table, the BigQuery copy carries MethodCompanyAccountRecordID, so it
+// joins to an account directly.
+//
+// The date is aliased occurred_on, not activity_date: mockBq's batched
+// cross-account indicator route matches on `AS activity_date` and would
+// otherwise swallow this query.
+//
+// COST: revenue.Activity is ~143 MB and neither partitioned nor clustered, and
+// Comments is nearly all of it. One account's activities therefore scan the
+// whole column (~136 MB measured 2026-08-10) no matter how narrow the WHERE or
+// how small the LIMIT. That is why this fetches once per page load and truncates
+// Comments server-side rather than paging.
+export const ACTIVITY_LIMIT = 10;
+
+export function buildAccountActivitiesSql(recordId, limit = ACTIVITY_LIMIT) {
+  const id = validateInt(recordId, 'account_record_id');
+  const rows = validateInt(limit, 'limit');
+  return `
+    SELECT
+      RecordID,
+      COALESCE(DueDateStart, DATE(CreatedDate)) AS occurred_on,
+      ActivityType,
+      ActivityStatus,
+      AssignedToRecordID,
+      SUBSTR(Comments, 0, 2000) AS Comments
+    FROM ${ACTIVITY_TABLE}
+    WHERE MethodCompanyAccountRecordID = ${id}
+      AND IsDeleted = FALSE
+    ORDER BY occurred_on DESC, RecordID DESC
+    LIMIT ${rows}`;
+}
+
 const toInt = (v, fallback = null) => (v == null || v === '' ? fallback : parseInt(v, 10));
 const toFloat = (v) => (v == null || v === '' ? null : parseFloat(v));
 const toBool = (v) => v === true || v === 'true';
@@ -118,6 +222,19 @@ const toStr = (v) => (v == null || v === '' ? null : String(v));
 const toHttpUrl = (v) => {
   const s = toStr(v);
   return s && /^https?:\/\//i.test(s) ? s : null;
+};
+
+/**
+ * brief_content.website is written scheme-less on every historical row
+ * ("primodoors.com"), which toHttpUrl drops. Accept a bare host and give it
+ * https://, still refusing anything that isn't a plain domain — the value ends
+ * up in an <a href>, where React does not block javascript:/data:.
+ */
+export const toWebsiteUrl = (v) => {
+  const s = toStr(v)?.trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/[^\s]*)?$/i.test(s) ? `https://${s}` : null;
 };
 
 /** Convert a raw BQ REST row (all strings, [{v}] arrays) into typed camelCase. */
@@ -132,6 +249,8 @@ export function normalizeSnapshotRow(row) {
     signupDate: toStr(row.signup_date),
     depEnrolled: toBool(row.dep_enrolled),
     multiEntityParentName: toStr(row.multi_entity_parent_name),
+    multiEntityParentRecordId: toInt(row.multi_entity_parent_record_id),
+    parentIsDep: toBool(row.parent_is_dep),
     syncFailCount: toInt(row.sync_fail_count, 0),
     syncStatus: toStr(row.sync_status)?.toLowerCase() ?? null,
     ttTotalHours: toFloat(row.tt_total_hours),
@@ -147,6 +266,15 @@ export function normalizeSnapshotRow(row) {
     bqConfidence: toFloat(row.bq_confidence),
     docLink: toHttpUrl(row.doc_link),
     createdAt: toStr(row.created_at),
+    // brief_content — null on every prep the doc-writer didn't cover.
+    scheduledTime: toStr(row.scheduled_time),
+    top3: (row.top_3 || []).map((x) => x?.v).filter(Boolean),
+    whyToday: toStr(row.why_today),
+    businessContext: toStr(row.business_context),
+    contactName: toStr(row.contact_name),
+    contactEmail: toStr(row.contact_email),
+    contactPhone: toStr(row.contact_phone),
+    website: toWebsiteUrl(row.website),
   };
 }
 
@@ -174,6 +302,58 @@ export function normalizeAccountOverview(row) {
     healthScore: toFloat(row.health_score),
     isActive: toBool(row.is_active),
     saasPayType: toStr(row.saas_pay_type),
+  };
+}
+
+/** Convert a raw opportunity_fit row into a typed camelCase assessment. */
+export function normalizeOpportunityFitRow(row) {
+  return {
+    motion: toStr(row.motion),
+    fit: toStr(row.fit)?.toLowerCase() ?? null,
+    rationale: toStr(row.rationale),
+    signals: (row.signals || []).map((x) => x?.v).filter(Boolean),
+    recommendedHook: toStr(row.recommended_hook),
+    caveats: toStr(row.caveats),
+    assessedDate: toStr(row.assessed_date),
+    reviewStatus: toStr(row.review_status),
+    firstFlaggedDate: toStr(row.first_flagged_date),
+  };
+}
+
+/**
+ * Activity Comments are stored as CRM rich text — tags, entities and inline
+ * styles. Strip to plain text so the brief reads as prose. This is cosmetic
+ * only: React escapes the string either way, so it is not a sanitizer.
+ */
+export function stripHtml(value) {
+  const raw = toStr(value);
+  if (!raw) return null;
+  const text = raw
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text || null;
+}
+
+/** Convert a raw Activity row into a typed camelCase activity. */
+export function normalizeActivityRow(row) {
+  return {
+    recordId: toInt(row.RecordID),
+    date: toStr(row.occurred_on),
+    type: toStr(row.ActivityType),
+    status: toStr(row.ActivityStatus),
+    agentId: toInt(row.AssignedToRecordID),
+    notes: stripHtml(row.Comments),
   };
 }
 
@@ -226,6 +406,11 @@ export async function fetchBook(consultant, { query = queryBqWithRetry } = {}) {
   return rows.map(normalizeSnapshotRow);
 }
 
+export async function fetchPrepHistory(consultant, { query = queryBqWithRetry, limit } = {}) {
+  const { rows } = await query(buildPrepHistorySql(consultant, limit));
+  return rows.map(normalizeSnapshotRow);
+}
+
 export async function fetchAccountSnapshots(recordId, { query = queryBqWithRetry } = {}) {
   const { rows } = await query(buildAccountSnapshotsSql(recordId));
   return rows.map(normalizeSnapshotRow);
@@ -244,4 +429,43 @@ export async function fetchAccountCases(recordId, { query = queryBqWithRetry } =
 export async function fetchAccountOverview(recordId, { query = queryBqWithRetry } = {}) {
   const { rows } = await query(buildAccountOverviewSql(recordId));
   return normalizeAccountOverview(rows[0]);
+}
+
+export async function fetchAccountOpportunityFit(recordId, { query = queryBqWithRetry } = {}) {
+  const { rows } = await query(buildAccountOpportunityFitSql(recordId));
+  return rows.map(normalizeOpportunityFitRow);
+}
+
+export async function fetchAccountActivities(recordId, { query = queryBqWithRetry, limit } = {}) {
+  const { rows } = await query(buildAccountActivitiesSql(recordId, limit));
+  return rows.map(normalizeActivityRow);
+}
+
+// Reading order for the fit table, matching the brief's Opportunity Fit section.
+export const MOTION_ORDER = ['method_pay', 'dep', 'ppu', 'free_hour'];
+
+export const MOTION_LABELS = {
+  method_pay: 'Method Pay',
+  dep: 'DEP',
+  ppu: 'PPU',
+  free_hour: 'Free Hour',
+};
+
+/**
+ * The newest assessment per motion that the consultant could have seen on
+ * `asOfDate`. The table is append-only, so a later re-review must not rewrite
+ * the history of an older prep.
+ */
+export function latestFitByMotion(rows, asOfDate) {
+  const best = new Map();
+  for (const row of rows ?? []) {
+    if (!row.motion) continue;
+    if (asOfDate && row.assessedDate && row.assessedDate > asOfDate) continue;
+    const current = best.get(row.motion);
+    if (!current || (row.assessedDate ?? '') > (current.assessedDate ?? '')) best.set(row.motion, row);
+  }
+  return MOTION_ORDER
+    .map((motion) => best.get(motion))
+    .filter(Boolean)
+    .concat([...best.values()].filter((r) => !MOTION_ORDER.includes(r.motion)));
 }
