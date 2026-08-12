@@ -24,7 +24,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   fetchAccountSnapshots, fetchAccountSessions, fetchAccountCases, fetchAccountOverview,
   fetchAccountOpportunityFit, fetchAccountActivities, latestFitByMotion, computeFlags,
-  MOTION_LABELS, ACTIVITY_LIMIT,
+  MOTION_LABELS, ACTIVITY_LIMIT, pitchableMotions, humanizeHook,
+  likelyWorkflows, industryIsWeak,
 } from '../lib/callPrep';
 
 const PAPER = '#faf8f3';
@@ -215,6 +216,36 @@ const s = {
     padding: '6px 12px', cursor: 'pointer', marginTop: 4,
   },
 
+  // Upsell — the pitchable motions, lifted out of the fit table because "what
+  // do I sell on this call" is a different question from "how does this account
+  // score on all four motions".
+  upsellList: { display: 'grid', gap: 10 },
+  upsellCard: {
+    background: PAPER, border: `1px solid ${RULE}`, borderRadius: 4,
+    padding: '14px 16px 15px', borderLeft: `3px solid ${RULE}`,
+  },
+  upsellStrong: { borderLeftColor: ACCENT },
+  upsellModerate: { borderLeftColor: AMBER },
+  upsellTop: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' },
+  upsellMotion: { fontSize: 16, fontWeight: 600, color: INK },
+  upsellAction: { fontSize: 15, lineHeight: 1.5, color: '#2c2921', marginTop: 7 },
+  upsellNoAction: { fontSize: 14, lineHeight: 1.5, color: MUTE, fontStyle: 'italic', marginTop: 7 },
+  upsellMeta: { fontSize: 12, color: MUTE, marginTop: 8 },
+
+  workflowBlock: { marginTop: 18, paddingTop: 16, borderTop: `1px solid ${RULE}` },
+  workflowLabel: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+    letterSpacing: '.16em', textTransform: 'uppercase', color: MUTE, marginBottom: 10,
+  },
+  workflowChips: { display: 'flex', flexWrap: 'wrap', gap: 7 },
+  workflowChip: {
+    fontSize: 13.5, color: '#2c2921', background: PAPER,
+    border: `1px solid ${RULE}`, borderRadius: 999, padding: '4px 12px',
+  },
+  // These are inferred from the industry label, never observed on the account.
+  // Saying so is the difference between a prompt and a false claim.
+  workflowNote: { fontSize: 12, color: MUTE, marginTop: 10, lineHeight: 1.5 },
+
   // Opportunity fit
   fitTable: { width: '100%', borderCollapse: 'collapse' },
   fitTh: {
@@ -316,6 +347,7 @@ button:focus-visible, select:focus-visible, a:focus-visible {
 const SECTIONS = [
   { id: 'top3', label: 'Top 3' },
   { id: 'why', label: 'Why today' },
+  { id: 'upsell', label: 'Upsell' },
   { id: 'fit', label: 'Opportunity fit' },
   { id: 'signals', label: 'Signals' },
   { id: 'sessions', label: 'Time tracking' },
@@ -566,6 +598,8 @@ export default function CallPrepAccount() {
     () => [...new Set((fitRows ?? []).map((r) => r.caveats).filter(Boolean))],
     [fitRows]
   );
+  const upsellRows = useMemo(() => pitchableMotions(fitRows), [fitRows]);
+  const workflows = useMemo(() => likelyWorkflows(snap), [snap]);
 
   // Which section the reader is in. An eight-section sticky nav that never says
   // where you are is decoration.
@@ -820,6 +854,72 @@ export default function CallPrepAccount() {
                     <strong>Most recent open case:</strong>{' '}
                     {openCases[0].subject ?? `Case #${openCases[0].recordId}`} — opened {fmtDate(openCases[0].createdDate)}
                   </p>
+                )}
+              </Section>
+
+              <Section
+                id="upsell"
+                title="Upsell & recommended actions"
+                count={upsellRows.length || null}
+                open={!collapsed.has('upsell')}
+                onToggle={() => toggleSection('upsell')}
+                style={sectionStyle}
+              >
+                {fitErr ? (
+                  <p style={s.loadNote}>Couldn’t load opportunity fit.</p>
+                ) : fitRows == null ? (
+                  <p style={s.loadNote}>Loading opportunity fit…</p>
+                ) : upsellRows.length === 0 ? (
+                  <p style={s.empty}>No motion flagged to pitch on this account.</p>
+                ) : (
+                  <div style={s.upsellList}>
+                    {upsellRows.map((row) => {
+                      const hook = humanizeHook(row.recommendedHook);
+                      const flagged = fmtDate(row.firstFlaggedDate);
+                      return (
+                        <div
+                          key={row.motion}
+                          style={{
+                            ...s.upsellCard,
+                            ...(row.fit === 'strong' ? s.upsellStrong : s.upsellModerate),
+                          }}
+                        >
+                          <div style={s.upsellTop}>
+                            <span style={s.upsellMotion}>{MOTION_LABELS[row.motion] ?? row.motion}</span>
+                            <span style={{ ...s.fitBadge, ...(FIT_STYLE[row.fit] ?? FIT_STYLE.none) }}>
+                              {FIT_LABELS[row.fit] ?? 'Unknown'}
+                            </span>
+                          </div>
+                          {hook
+                            ? <div style={s.upsellAction}>Lead with {hook}.</div>
+                            : <div style={s.upsellNoAction}>No pitch angle recorded.</div>}
+                          {(row.signals.length > 0 || flagged) && (
+                            <div style={s.upsellMeta}>
+                              {[
+                                row.signals.length
+                                  ? `${row.signals.length} signal${row.signals.length === 1 ? '' : 's'}`
+                                  : null,
+                                flagged ? `flagged ${flagged}` : null,
+                              ].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {workflows.length > 0 && (
+                  <div style={s.workflowBlock}>
+                    <div style={s.workflowLabel}>Likely workflow needs</div>
+                    <div style={s.workflowChips}>
+                      {workflows.map((w) => <span key={w} style={s.workflowChip}>{w}</span>)}
+                    </div>
+                    <p style={s.workflowNote}>
+                      Typical for {snap.industryL1}, not confirmed on this account.
+                      {industryIsWeak(snap) ? ' The industry match is low confidence.' : ''}
+                    </p>
+                  </div>
                 )}
               </Section>
 
