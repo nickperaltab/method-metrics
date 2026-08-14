@@ -1,6 +1,13 @@
 import { evaluateFormula } from './sanitize.js';
+import { color, chartPalette, font, chart } from '../styles/tokens.js';
 
-export const COLORS = ['#059669', '#2563eb', '#f59e0b', '#dc2626', '#a78bfa', '#0284c7', '#ea580c', '#c026d3', '#16a34a', '#db2777'];
+/**
+ * Categorical series palette. Re-exported from the token file so the chart
+ * layer and the ECharts theme cannot drift apart. The previous palette had two
+ * measured defects: #db2777 against #16a34a sat at ΔE 6.1 under deutan
+ * simulation, and #f59e0b measured 2.09:1 against the surface.
+ */
+export const COLORS = chartPalette;
 
 export const ATT_COL_MAP = {
   SEO: 'Att_SEO', PPC: 'Att_Pay_Per_Click', OPN: 'Att_OPN_Other_Peoples_Networks',
@@ -255,12 +262,13 @@ export function applyStyleRulesToDatasets(datasets, styleRules) {
       const compareData = compareIdx != null ? datasets[compareIdx]?.data : null;
       const threshold = rule.threshold != null ? Number(rule.threshold) : null;
       const operator = rule.operator || '<';
-      const color = rule.color || '#f87171';
+      // Local name avoids shadowing the imported `color` token object.
+      const ruleColor = rule.color || color.negative;
       for (let i = 0; i < ds.data.length; i++) {
         const comparison = compareData ? compareData[i] : threshold;
         if (comparison == null) continue;
         if (evaluateRule(ds.data[i], comparison, operator)) {
-          ds.pointStyles[i] = { color };
+          ds.pointStyles[i] = { color: ruleColor };
         }
       }
     }
@@ -291,11 +299,24 @@ function deriveAxisLabels(labels, datasets, dataConfig, valueFormat) {
 }
 
 const axisNameStyle = {
-  color: '#9ca3af',
-  fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 10,
+  color: color.inkMuted,
+  fontFamily: font.sans,
+  fontSize: 12,
   fontWeight: 400,
 };
+
+/** 12px sans in inkMuted. Axis labels are read, so never inkFaint. */
+const axisLabelStyle = {
+  color: color.inkMuted,
+  fontFamily: font.sans,
+  fontSize: 12,
+};
+
+/**
+ * Horizontal gridlines only, solid. A vertical gridline on a time axis encodes
+ * nothing, and a dashed grid competes with the data for attention.
+ */
+const gridLine = { lineStyle: { color: color.borderSubtle, type: 'solid' } };
 
 /** Build a full ECharts option from chart type + aggregated data */
 export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { showLabels = false, colors: customColors = null, valueFormat = null } = {}) {
@@ -308,9 +329,9 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
 
   const baseTooltip = {
     trigger: 'axis',
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e5e9',
-    textStyle: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
+    backgroundColor: color.surface,
+    borderColor: color.border,
+    textStyle: { color: color.ink, fontFamily: font.sans, fontSize: 12 },
   };
 
   const baseGrid = {
@@ -324,7 +345,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
   const baseLegend = showLegend ? {
     show: true,
     type: 'scroll',
-    textStyle: { color: '#374151' },
+    textStyle: { color: color.inkSecondary },
     top: 0,
   } : { show: false };
 
@@ -335,12 +356,12 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     nameLocation: 'middle',
     nameGap: 34,
     nameTextStyle: axisNameStyle,
-    axisLine: { lineStyle: { color: '#e2e5e9' } },
-    axisTick: { lineStyle: { color: '#e2e5e9' } },
+    // The x baseline stays; ticks go — they duplicate the label positions.
+    axisLine: { lineStyle: { color: color.border } },
+    axisTick: { show: false },
+    splitLine: { show: false },
     axisLabel: {
-      color: '#6b7280',
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 11,
+      ...axisLabelStyle,
       rotate: displayLabels.length > 12 ? 45 : 0,
     },
   };
@@ -351,12 +372,11 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     nameLocation: 'middle',
     nameGap: 50,
     nameTextStyle: axisNameStyle,
-    axisLine: { lineStyle: { color: '#e2e5e9' } },
-    axisTick: { lineStyle: { color: '#e2e5e9' } },
+    // No y-axis line: the horizontal gridlines already carry the scale.
+    axisLine: { show: false },
+    axisTick: { show: false },
     axisLabel: {
-      color: '#6b7280',
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 11,
+      ...axisLabelStyle,
       formatter: (v) => {
         if (typeof v !== 'number') return v;
         if (valueFormat === 'percent') return `${v}%`;
@@ -364,10 +384,20 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         return v;
       },
     },
-    splitLine: { lineStyle: { color: '#e2e5e9', type: 'dashed' } },
+    splitLine: gridLine,
   };
 
-  const labelStyle = { color: '#374151', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" };
+  const labelStyle = { color: color.inkSecondary, fontSize: 12, fontFamily: font.sans };
+
+  // 2px line, round cap and join. Markers are 4px radius (ECharts symbolSize is
+  // a diameter) and 5px on the final point, each with a 2px surface-coloured
+  // ring so a marker sitting on a gridline still reads as a marker.
+  const lineStyleBase = { width: chart.lineWidth, cap: 'round', join: 'round' };
+  const markerRing = { borderColor: color.surface, borderWidth: chart.symbolRingWidth };
+  const lastPointMarker = {
+    symbolSize: chart.symbolSizeLast,
+    itemStyle: { ...markerRing },
+  };
   const wrapValue = (ds, idx, value, extra = null) => {
     const style = ds.pointStyles?.[idx];
     if (!style && !extra) return value;
@@ -394,23 +424,23 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
           type: 'line',
           data: ds.data.map((v, idx) => {
             const extra = showLabels && idx === ds.data.length - 1
-              ? { label: { show: true, ...labelStyle, position: 'top' } }
+              ? { label: { show: true, ...labelStyle, position: 'top' }, ...lastPointMarker }
               : null;
             return wrapValue(ds, idx, v, extra);
           }),
           smooth: true,
           symbol: showLabels ? 'circle' : 'none',
-          showSymbol: showLabels ? false : false,
-          symbolSize: showLabels ? 4 : 0,
-          lineStyle: { width: 2 },
-          itemStyle: { color: palette[i % palette.length] },
+          showSymbol: showLabels,
+          symbolSize: showLabels ? chart.symbolSize : 0,
+          lineStyle: lineStyleBase,
+          itemStyle: { color: palette[i % palette.length], ...(showLabels ? markerRing : {}) },
           label: { show: false },
         };
         if (dataConfig?.targetLine && i === 0) {
           seriesItem.markLine = {
             silent: true,
             data: [{ yAxis: dataConfig.targetLine.value }],
-            lineStyle: { color: dataConfig.targetLine.color || '#ef4444', type: 'dashed', width: 2 },
+            lineStyle: { color: dataConfig.targetLine.color || color.inkMuted, type: 'dashed', width: 2 },
             label: { formatter: dataConfig.targetLine.label || '' },
           };
         }
@@ -432,17 +462,17 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         type: 'line',
         data: ds.data.map((v, idx) => {
           const extra = showLabels && idx === ds.data.length - 1
-            ? { label: { show: true, ...labelStyle, position: 'top' } }
+            ? { label: { show: true, ...labelStyle, position: 'top' }, ...lastPointMarker }
             : null;
           return wrapValue(ds, idx, v, extra);
         }),
         smooth: true,
         symbol: showLabels ? 'circle' : 'none',
-        showSymbol: showLabels ? false : false,
-        symbolSize: showLabels ? 4 : 0,
-        lineStyle: { width: 2 },
+        showSymbol: showLabels,
+        symbolSize: showLabels ? chart.symbolSize : 0,
+        lineStyle: lineStyleBase,
         areaStyle: { opacity: 0.15 },
-        itemStyle: { color: palette[i % palette.length] },
+        itemStyle: { color: palette[i % palette.length], ...(showLabels ? markerRing : {}) },
         label: { show: false },
       })),
     };
@@ -462,16 +492,17 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
           name: ds.label,
           type: 'bar',
           data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
+          barGap: chart.barGap,
           itemStyle: hasPointStyles
-            ? { borderRadius: [3, 3, 0, 0] }
-            : { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
+            ? { borderRadius: chart.barRadius }
+            : { color: palette[i % palette.length], borderRadius: chart.barRadius },
           ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
         };
         if (dataConfig?.targetLine && i === 0) {
           seriesItem.markLine = {
             silent: true,
             data: [{ yAxis: dataConfig.targetLine.value }],
-            lineStyle: { color: dataConfig.targetLine.color || '#ef4444', type: 'dashed', width: 2 },
+            lineStyle: { color: dataConfig.targetLine.color || color.inkMuted, type: 'dashed', width: 2 },
             label: { formatter: dataConfig.targetLine.label || '' },
           };
         }
@@ -511,7 +542,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       ? [{
           type: 'bar',
           data: dsList
-            .map((ds, i) => ({ value: ds.data.reduce((s, v) => s + (v || 0), 0), itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] } }))
+            .map((ds, i) => ({ value: ds.data.reduce((s, v) => s + (v || 0), 0), itemStyle: { color: palette[i % palette.length], borderRadius: chart.barRadiusH } }))
             .sort((a, b) => a.value - b.value),
           ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
         }]
@@ -519,7 +550,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
           name: ds.label,
           type: 'bar',
           data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
-          itemStyle: { color: palette[i % palette.length], borderRadius: [0, 3, 3, 0] },
+          itemStyle: { color: palette[i % palette.length], borderRadius: chart.barRadiusH },
           ...(showLabels ? { label: { show: true, position: 'right', ...labelStyle } } : {}),
         }));
     // Sort y-labels to match sorted bars when grouped
@@ -560,7 +591,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         radius: ['35%', '65%'],
         center: ['50%', '45%'],
         data: pieData,
-        label: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
+        label: { color: color.inkSecondary, fontFamily: font.sans, fontSize: 12 },
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } },
       }],
     };
@@ -583,7 +614,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         width: '80%',
         sort: 'descending',
         gap: 2,
-        label: { show: true, position: 'inside', color: '#fff', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
+        label: { show: true, position: 'inside', color: color.surface, fontFamily: font.sans, fontSize: 12 },
         data: funnelData,
       }],
     };
@@ -601,13 +632,13 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         data: actualDs.data.map((v, idx) => {
           // Apply style_rules first if they exist, otherwise default red/green logic
           const style = actualDs.pointStyles?.[idx];
-          if (style) return { value: v, itemStyle: { ...style, borderRadius: [3, 3, 0, 0] } };
+          if (style) return { value: v, itemStyle: { ...style, borderRadius: chart.barRadius } };
           const below = targetData[idx] != null && v < targetData[idx];
           return {
             value: v,
             itemStyle: {
-              color: below ? '#f87171' : '#34d399',
-              borderRadius: [3, 3, 0, 0],
+              color: below ? color.negative : color.accent,
+              borderRadius: chart.barRadius,
             },
           };
         }),
@@ -620,7 +651,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         type: 'line',
         data: targetData,
         lineStyle: { type: 'dashed', width: 2 },
-        itemStyle: { color: '#60a5fa' },
+        itemStyle: { color: palette[1], ...markerRing },
         symbol: 'circle',
         symbolSize: 6,
       });
@@ -660,7 +691,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
           smooth: isLast,
           symbol: isLast ? 'none' : undefined,
           lineStyle: isLast ? { width: 2 } : undefined,
-          itemStyle: { color: palette[i % palette.length], ...(isLast ? {} : { borderRadius: [3, 3, 0, 0] }) },
+          itemStyle: { color: palette[i % palette.length], ...(isLast ? {} : { borderRadius: chart.barRadius }) },
           ...(showLabels && !isLast ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
         };
       }),
@@ -672,17 +703,14 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
     const yoyMonthAxis = {
       type: 'category',
       data: labels,
-      axisLine: { lineStyle: { color: '#e2e5e9' } },
-      axisTick: { lineStyle: { color: '#e2e5e9' } },
-      axisLabel: {
-        color: '#6b7280',
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11,
-      },
+      axisLine: { lineStyle: { color: color.border } },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: axisLabelStyle,
     };
     return {
       tooltip: baseTooltip,
-      legend: { show: true, textStyle: { color: '#374151' }, top: 0 },
+      legend: { show: true, textStyle: { color: color.inkSecondary }, top: 0 },
       grid: baseGrid,
       xAxis: yoyMonthAxis,
       yAxis: valueAxis,
@@ -690,7 +718,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
         name: ds.label,
         type: 'bar',
         data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
-        itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: palette[i % palette.length], borderRadius: chart.barRadius },
         ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
       })),
     };
@@ -711,8 +739,8 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       tooltip: { ...baseTooltip, trigger: 'item', formatter: (p) => `${displayLabels[p.data[0]]} / ${yLabels[p.data[1]]}: ${p.data[2]}` },
       grid: { ...baseGrid, left: 120 },
       xAxis: categoryAxis,
-      yAxis: { type: 'category', data: yLabels, axisLine: { lineStyle: { color: '#e2e5e9' } }, axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 } },
-      visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#f8f9fa', '#059669'] }, textStyle: { color: '#6b7280' } },
+      yAxis: { type: 'category', data: yLabels, axisLine: { lineStyle: { color: color.border } }, axisTick: { show: false }, axisLabel: axisLabelStyle },
+      visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: [color.surfaceAlt, color.accent] }, textStyle: { color: color.inkMuted } },
       series: [{ type: 'heatmap', data: heatData, label: { show: false }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }],
     };
   }
@@ -728,7 +756,7 @@ export function buildEChartsOption(echartsType, labels, datasets, dataConfig, { 
       name: ds.label,
       type: 'bar',
       data: ds.data.map((v, idx) => wrapValue(ds, idx, v)),
-      itemStyle: { color: palette[i % palette.length], borderRadius: [3, 3, 0, 0] },
+      itemStyle: { color: palette[i % palette.length], borderRadius: chart.barRadius },
       ...(showLabels ? { label: { show: true, position: 'top', ...labelStyle } } : {}),
     })),
   };

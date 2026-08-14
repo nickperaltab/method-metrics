@@ -16,6 +16,7 @@ import MethodMondayPaceView from '../components/method-monday/MethodMondayPaceVi
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
+import { color, font, type, weight, radius } from '../styles/tokens';
 
 const DATE_PRESETS = [
   { label: '3M', value: 3 },
@@ -39,12 +40,12 @@ function PillGroup({ options, value, onChange }) {
           key={opt.label}
           onClick={() => onChange(opt.value)}
           style={{
-            padding: '4px 12px', fontSize: 12,
-            fontWeight: value === opt.value ? 600 : 400,
-            fontFamily: "'DM Sans', sans-serif",
-            background: value === opt.value ? '#2563eb' : '#f3f4f6',
-            color: value === opt.value ? '#fff' : '#6b7280',
-            border: 'none', borderRadius: 16, cursor: 'pointer',
+            padding: '4px 12px', fontSize: type.label,
+            fontWeight: value === opt.value ? weight.medium : weight.regular,
+            fontFamily: font.sans,
+            background: value === opt.value ? color.accentBg : color.surfaceAlt,
+            color: value === opt.value ? color.accentText : color.inkMuted,
+            border: 'none', borderRadius: radius.control, cursor: 'pointer',
             transition: 'background 150ms, color 150ms',
           }}
         >
@@ -59,7 +60,7 @@ function ScoreCardFilters({ lastNMonths, onLastNMonths }) {
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: "'DM Sans', sans-serif" }}>RANGE</span>
+        <span style={{ fontSize: type.label, color: color.inkMuted, fontFamily: font.sans }}>RANGE</span>
         <PillGroup options={DATE_PRESETS} value={lastNMonths} onChange={onLastNMonths} />
       </div>
     </div>
@@ -72,8 +73,8 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, gr
   return (
     <div style={{ marginBottom: 48 }}>
       <h2 style={{
-        fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 16,
-        fontFamily: "'DM Sans', sans-serif",
+        fontSize: type.sectionTitle, fontWeight: weight.medium, color: color.ink, marginBottom: 16,
+        fontFamily: font.sans,
       }}>
         Breakdowns
       </h2>
@@ -84,12 +85,12 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, gr
             key={section.title}
             onClick={() => setActive(i)}
             style={{
-              padding: '6px 16px', fontSize: 13,
-              fontWeight: active === i ? 600 : 400,
-              fontFamily: "'DM Sans', sans-serif",
-              background: active === i ? '#2563eb' : '#f3f4f6',
-              color: active === i ? '#fff' : '#374151',
-              border: 'none', borderRadius: 20, cursor: 'pointer',
+              padding: '6px 16px', fontSize: type.body,
+              fontWeight: active === i ? weight.medium : weight.regular,
+              fontFamily: font.sans,
+              background: active === i ? color.accentBg : color.surfaceAlt,
+              color: active === i ? color.accentText : color.inkSecondary,
+              border: 'none', borderRadius: radius.control, cursor: 'pointer',
               transition: 'background 150ms, color 150ms',
             }}
           >
@@ -135,7 +136,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
 
   if (!config) {
     return (
-      <div style={{ padding: 48, textAlign: 'center', color: '#6b7280' }}>
+      <div style={{ padding: 48, textAlign: 'center', color: color.inkMuted }}>
         <h2>Scorecard not found</h2>
         <p>No scorecard with ID "{id}"</p>
       </div>
@@ -166,13 +167,13 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   if (needsBq && dataMap.size === 0) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, color: '#1a1a1a', marginBottom: 8 }}>{config.title}</h2>
-        <p style={{ color: '#6b7280', marginBottom: 16 }}>Connect to BigQuery to load scorecard data.</p>
+        <h2 style={{ fontSize: type.valueMd, color: color.ink, marginBottom: 8 }}>{config.title}</h2>
+        <p style={{ color: color.inkMuted, marginBottom: 16 }}>Connect to BigQuery to load scorecard data.</p>
         <button
           onClick={onConnect}
           style={{
-            background: '#059669', color: '#fff', border: 'none', borderRadius: 8,
-            padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            background: color.accentText, color: color.surface, border: 'none', borderRadius: radius.control,
+            padding: '10px 24px', fontSize: 14, fontWeight: weight.medium, cursor: 'pointer',
           }}
         >
           Connect BigQuery
@@ -183,14 +184,14 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 48, textAlign: 'center', color: '#6b7280' }}>
-        <h2 style={{ fontSize: 20, color: '#1a1a1a', marginBottom: 8 }}>{config.title}</h2>
+      <div style={{ padding: 48, textAlign: 'center', color: color.inkMuted }}>
+        <h2 style={{ fontSize: type.valueMd, color: color.ink, marginBottom: 8 }}>{config.title}</h2>
         <p>Loading data...</p>
         <div style={{
-          width: 200, height: 4, background: '#e2e5e9', borderRadius: 2,
+          width: 200, height: 4, background: color.border, borderRadius: 2,
           margin: '12px auto', overflow: 'hidden',
         }}>
-          <div style={{ width: '30%', height: '100%', background: '#059669', borderRadius: 2 }} />
+          <div style={{ width: '30%', height: '100%', background: color.accent, borderRadius: 2 }} />
         </div>
       </div>
     );
@@ -217,13 +218,13 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
       }}>
         <div>
           <h1 style={{
-            fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0,
-            fontFamily: "'DM Sans', sans-serif",
+            fontSize: type.pageTitle, fontWeight: weight.medium, color: color.ink, margin: 0,
+            fontFamily: font.sans,
           }}>
             {config.title}
           </h1>
           {config.description && (
-            <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 4, maxWidth: 700, fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ fontSize: type.body, color: color.inkMuted, marginTop: 4, maxWidth: 700, fontFamily: font.sans }}>
               {config.description}
             </div>
           )}
@@ -241,15 +242,15 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
         section.component ? (
           <div key={section.title} style={{ marginTop: 32 }}>
             <h2 style={{
-              fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px',
-              fontFamily: "'DM Sans', sans-serif",
+              fontSize: type.sectionTitle, fontWeight: weight.medium, color: color.ink, margin: '0 0 12px',
+              fontFamily: font.sans,
             }}>
               {section.title}
               {section.dbtModel && (
                 <span
                   onClick={() => setInspected({ dbtModel: section.dbtModel })}
                   title="How this is derived (dbt)"
-                  style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', marginLeft: 8 }}
+                  style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', marginLeft: 8 }}
                 >ⓘ</span>
               )}
             </h2>

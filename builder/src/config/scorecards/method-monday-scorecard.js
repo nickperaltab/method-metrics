@@ -56,8 +56,11 @@
  * second copy of them.
  */
 
-const EXCLUDES_TODAY =
-  'All figures exclude today. Trajectories project from complete days only, so they do not move during the day.';
+// Why: trajectories divide by complete elapsed days (day_of_month - 1), so
+// today's partial data is excluded and the number doesn't drift during the day.
+// That rationale is a code comment, not UI text — see the em-dash-justification
+// tell in builder/.claude/skills/ui-review/SKILL.md.
+const EXCLUDES_TODAY = 'Figures exclude today.';
 
 export default {
   id: 'method-monday',

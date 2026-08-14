@@ -47,6 +47,27 @@ describe('formatValue', () => {
     // JS toLocaleString puts sign after $ for negative numbers
     expect(formatValue(-9075.24, 'currency')).toBe('$-9,075.24');
   });
+
+  // The 2026 styling pass touched every other file in components/scorecards/
+  // but deliberately left this function's numeric logic alone. The two percent
+  // formats are NOT interchangeable: 'percent' takes a number already scaled to
+  // 100, 'decimal_rate' takes a raw fraction and scales it. Collapsing them is
+  // what once shipped a tile reading 3289%. Same input, two answers, on purpose.
+  it('keeps percent and decimal_rate distinct for the same input', () => {
+    expect(formatValue(32.89, 'percent')).toBe('32.9%');
+    expect(formatValue(32.89, 'decimal_rate')).toBe('3289.00%');
+    expect(formatValue(0.3289, 'percent')).toBe('0.3%');
+    expect(formatValue(0.3289, 'decimal_rate')).toBe('32.89%');
+  });
+
+  it('keeps its remaining branches: percent2, delta, currency_delta, default', () => {
+    expect(formatValue(95.55, 'percent2')).toBe('95.55%');
+    expect(formatValue(4.2, 'delta')).toBe('+4.20%');
+    expect(formatValue(-4.2, 'delta')).toBe('-4.20%');
+    expect(formatValue(1200.5, 'currency_delta')).toBe('+$1,200.5');
+    expect(formatValue(-1200.5, 'currency_delta')).toBe('$-1,200.5');
+    expect(formatValue(7, 'unrecognised')).toBe('7');
+  });
 });
 
 // ── resolveKpiValue ──────────────────────────────────────────

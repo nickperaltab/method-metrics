@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { buildPaceRows } from '../../lib/methodMondayPace';
 import ScorecardSection from '../scorecards/ScorecardSection';
+import { color, font, type, weight, radius, numeric } from '../../styles/tokens';
 
 /**
  * Method Monday — shared-axis pace view. Page-scoped: this component is not
@@ -35,15 +36,23 @@ const ON_PACE_X = (100 / AXIS_MAX) * 100; // % position of the 100% rule on the 
 // footer caption below can stay aligned with the rule at any container width.
 const ROW_GRID = '20px 160px 1fr 90px';
 
+// Bar fill. `unknown` is a decorative empty-track marker, which is the only
+// legitimate use of inkFaint — it fails AA and must never colour text.
 const BAND_COLORS = {
-  green: '#059669',
-  amber: '#b45309',
-  red: '#dc2626',
-  unknown: '#d1d5db',
+  green: color.accent,
+  amber: color.warning,
+  red: color.negative,
+  unknown: color.inkFaint,
 };
 
-const fontSans = "'DM Sans', sans-serif";
-const fontMono = "'JetBrains Mono', monospace";
+// Text colour for the attainment figure. Identical to BAND_COLORS except on
+// `unknown`, where the figure reads "No data" and has to be legible.
+const BAND_TEXT_COLORS = {
+  ...BAND_COLORS,
+  unknown: color.inkMuted,
+};
+
+const fontSans = font.sans;
 
 function formatAttainment(value) {
   if (value == null || Number.isNaN(value)) return 'No data';
@@ -76,11 +85,12 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
   const barWidthPct = row.attainment == null
     ? 0
     : Math.max(0, Math.min(row.attainment, AXIS_MAX)) / AXIS_MAX * 100;
-  const color = BAND_COLORS[row.band];
+  const bandColor = BAND_COLORS[row.band];
+  const bandTextColor = BAND_TEXT_COLORS[row.band];
   const detailId = `method-monday-pace-detail-${row.key}`;
 
   return (
-    <div style={{ borderBottom: '1px solid #f1f3f5' }}>
+    <div style={{ borderBottom: `1px solid ${color.borderSubtle}` }}>
       {/*
         A real <button>, per the task's a11y requirement — native Enter/Space
         activation and focus handling for free, no reimplemented keydown
@@ -106,8 +116,8 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
           padding: '10px 8px',
           margin: 0,
           border: 'none',
-          borderRadius: 6,
-          background: hovered ? '#f0f4ff' : 'transparent',
+          borderRadius: radius.control,
+          background: hovered ? color.surfaceAlt : 'transparent',
           cursor: 'pointer',
           font: 'inherit',
           textAlign: 'left',
@@ -118,9 +128,9 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
           aria-hidden="true"
           style={{
             display: 'inline-block',
-            color: '#9ca3af',
+            color: color.inkMuted,
             fontSize: 16,
-            fontFamily: 'monospace',
+            fontFamily: font.mono,
             transform: isOpen ? 'rotate(90deg)' : 'none',
             transition: 'transform 150ms ease-out',
           }}
@@ -128,11 +138,11 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
           ›
         </span>
 
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', fontFamily: fontSans }}>
+        <span style={{ fontSize: type.body, fontWeight: weight.medium, color: color.ink, fontFamily: fontSans }}>
           {row.label}
         </span>
 
-        <span style={{ position: 'relative', height: 20, background: '#f3f4f6', borderRadius: 4 }}>
+        <span style={{ position: 'relative', height: 20, background: color.surfaceAlt, borderRadius: 4 }}>
           {/* Danger-zone tint: for an inverted metric (churn), the region
               past the 100% rule is the harmful direction, shaded whether or
               not the bar currently reaches it. Explanation of WHY lives in
@@ -146,7 +156,8 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
                 right: 0,
                 top: 0,
                 bottom: 0,
-                background: 'rgba(220, 38, 38, 0.08)',
+                // 8% tint of color.negative; rgba() has no token form.
+                background: 'rgba(180, 35, 24, 0.08)',
                 borderRadius: '0 4px 4px 0',
               }}
             />
@@ -158,7 +169,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
               top: -2,
               bottom: -2,
               width: 1,
-              background: '#9ca3af',
+              background: color.inkMuted,
             }}
           />
           <span
@@ -168,14 +179,21 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
               top: 0,
               bottom: 0,
               width: `${barWidthPct}%`,
-              background: color,
+              background: bandColor,
               borderRadius: 4,
               transition: 'width 200ms ease-out',
             }}
           />
         </span>
 
-        <span style={{ fontSize: 14, fontWeight: 700, fontFamily: fontMono, color, textAlign: 'right' }}>
+        <span style={{
+          fontSize: 14,
+          fontWeight: weight.medium,
+          fontFamily: fontSans,
+          color: bandTextColor,
+          textAlign: 'right',
+          ...numeric,
+        }}>
           {formatAttainment(row.attainment)}
         </span>
       </button>
@@ -183,7 +201,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
       {isOpen && detailSection && (
         <div id={detailId} style={{ padding: '4px 8px 20px 36px' }}>
           {row.inverted && (
-            <div style={{ fontSize: 12, color: '#b45309', fontFamily: fontSans, marginBottom: 8 }}>
+            <div style={{ fontSize: type.label, color: color.warning, fontFamily: fontSans, marginBottom: 8 }}>
               Inverted metric: for {row.label.toLowerCase()}, more than forecast is bad, not good.
             </div>
           )}
@@ -214,13 +232,13 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
   return (
     <div
       style={{
-        background: '#fff',
-        border: '1px solid #e2e5e9',
-        borderRadius: 8,
+        background: color.surface,
+        border: `1px solid ${color.border}`,
+        borderRadius: radius.card,
         padding: '20px 24px 12px',
       }}
     >
-      <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: fontSans, marginBottom: 16 }}>
+      <div style={{ fontSize: type.label, color: color.inkMuted, fontFamily: fontSans, marginBottom: 16 }}>
         Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn inverts —
         a longer bar is worse for churn, unlike every other row. Click a row for detail.
       </div>
@@ -249,8 +267,8 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
               position: 'absolute',
               left: `${ON_PACE_X}%`,
               transform: 'translateX(-50%)',
-              fontSize: 11,
-              color: '#9ca3af',
+              fontSize: type.label,
+              color: color.inkMuted,
               fontFamily: fontSans,
               whiteSpace: 'nowrap',
             }}

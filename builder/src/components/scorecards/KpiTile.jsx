@@ -1,38 +1,46 @@
 import React, { useState } from 'react';
 import { formatValue } from './utils';
+import { color, font, type, weight, radius, numeric, numericLg } from '../../styles/tokens';
 
 const styles = {
   tile: {
     padding: '8px 12px',
     cursor: 'pointer',
-    borderRadius: 6,
+    borderRadius: radius.control,
     position: 'relative',
     transition: 'background 150ms ease-out',
   },
   tileHover: {
-    background: '#f0f4ff',
+    background: color.surfaceAlt,
   },
   label: {
-    fontSize: 11,
-    fontFamily: "'JetBrains Mono', monospace",
-    color: '#6b7280',
+    fontSize: type.label,
+    fontFamily: font.sans,
+    fontWeight: weight.regular,
+    color: color.inkMuted,
     marginBottom: 2,
   },
   value: {
-    fontSize: 28,
-    fontWeight: 700,
-    fontFamily: "'DM Sans', sans-serif",
-    color: '#1a1a1a',
+    fontSize: type.valueLg,
+    fontWeight: weight.medium,
+    fontFamily: font.sans,
+    color: color.ink,
     lineHeight: 1.2,
+    ...numericLg,
   },
   delta: {
-    fontSize: 12,
-    fontFamily: "'DM Sans', sans-serif",
+    fontSize: type.label,
+    fontFamily: font.sans,
+    ...numeric,
   },
+  // An em dash, not italic "No data": italics in a data grid read as an error
+  // state. inkMuted, not inkFaint — the reader has to perceive it.
   noData: {
-    fontSize: 14,
-    color: '#9ca3af',
-    fontStyle: 'italic',
+    fontSize: type.valueLg,
+    fontWeight: weight.regular,
+    fontFamily: font.sans,
+    color: color.inkMuted,
+    lineHeight: 1.2,
   },
 };
 
@@ -43,7 +51,7 @@ export default function KpiTile({ label, value, format, deltaPercent, noData, on
     return (
       <div style={styles.tile}>
         <div style={styles.label}>{label}</div>
-        <div style={styles.noData}>No data</div>
+        <div style={styles.noData}>—</div>
       </div>
     );
   }
@@ -52,11 +60,11 @@ export default function KpiTile({ label, value, format, deltaPercent, noData, on
 
   let deltaEl = null;
   if (deltaPercent != null) {
-    const color = deltaPercent > 0 ? '#059669' : deltaPercent < 0 ? '#dc2626' : '#6b7280';
-    const arrow = deltaPercent > 0 ? '\u2191' : deltaPercent < 0 ? '\u2193' : '';
+    const deltaColor = deltaPercent > 0 ? color.positive : deltaPercent < 0 ? color.negative : color.neutral;
+    const arrow = deltaPercent > 0 ? '↑' : deltaPercent < 0 ? '↓' : '';
     const sign = deltaPercent > 0 ? '+' : '';
     deltaEl = (
-      <div style={{ ...styles.delta, color }}>
+      <div style={{ ...styles.delta, color: deltaColor }}>
         {arrow} {sign}{deltaPercent.toFixed(1)}%
       </div>
     );
@@ -72,7 +80,7 @@ export default function KpiTile({ label, value, format, deltaPercent, noData, on
       <div style={styles.label}>{label}</div>
       <div style={styles.value}>{formatted}</div>
       {deltaEl}
-      {hovered && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 14, color: '#2563eb' }}>ⓘ</span>}
+      {hovered && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 14, color: color.accentText }}>ⓘ</span>}
     </div>
   );
 }

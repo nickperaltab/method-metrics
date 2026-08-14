@@ -4,6 +4,7 @@ import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { color, chartPalette, font } from '../styles/tokens';
 
 echarts.use([LineChart, BarChart, PieChart, FunnelChart, ScatterChart, SankeyChart, GridComponent, TooltipComponent, LegendComponent, DatasetComponent, TitleComponent, MarkLineComponent, CanvasRenderer]);
 
@@ -15,7 +16,7 @@ export class ChartErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#6b7280', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: color.inkMuted, fontSize: 13, fontFamily: font.sans }}>
           Chart failed to render. Try editing the chart or refreshing.
         </div>
       );
@@ -24,28 +25,33 @@ export class ChartErrorBoundary extends Component {
   }
 }
 
+const axisLabel = { color: color.inkMuted, fontFamily: font.sans, fontSize: 12 };
+
 const METHOD_THEME = {
-  color: ['#059669', '#2563eb', '#f59e0b', '#dc2626', '#7c3aed', '#0284c7', '#ea580c', '#c026d3', '#16a34a', '#db2777'],
+  color: chartPalette,
   backgroundColor: 'transparent',
-  textStyle: { color: '#374151', fontFamily: "'DM Sans', sans-serif" },
-  title: { textStyle: { color: '#1a1a1a' }, subtextStyle: { color: '#6b7280' } },
-  legend: { textStyle: { color: '#374151' } },
+  textStyle: { color: color.inkSecondary, fontFamily: font.sans },
+  title: { textStyle: { color: color.ink }, subtextStyle: { color: color.inkMuted } },
+  legend: { textStyle: { color: color.inkSecondary } },
   tooltip: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e5e9',
-    textStyle: { color: '#374151', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 },
+    backgroundColor: color.surface,
+    borderColor: color.border,
+    textStyle: { color: color.ink, fontFamily: font.sans, fontSize: 12 },
   },
+  // Category axis keeps its baseline and loses its ticks and gridlines: a
+  // vertical gridline on a time axis encodes nothing.
   categoryAxis: {
-    axisLine: { lineStyle: { color: '#e2e5e9' } },
-    axisTick: { lineStyle: { color: '#e2e5e9' } },
-    axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
-    splitLine: { lineStyle: { color: '#f1f3f5', type: 'dashed' } },
+    axisLine: { lineStyle: { color: color.border } },
+    axisTick: { show: false },
+    axisLabel,
+    splitLine: { show: false },
   },
+  // Value axis is the opposite: no line, no ticks, solid horizontal gridlines.
   valueAxis: {
-    axisLine: { lineStyle: { color: '#e2e5e9' } },
-    axisTick: { lineStyle: { color: '#e2e5e9' } },
-    axisLabel: { color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
-    splitLine: { lineStyle: { color: '#f1f3f5', type: 'dashed' } },
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel,
+    splitLine: { lineStyle: { color: color.borderSubtle, type: 'solid' } },
   },
 };
 

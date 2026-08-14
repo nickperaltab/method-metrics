@@ -4,6 +4,15 @@ import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
 import ChannelTable from './ChannelTable';
+import { color, font, type, weight, radius } from '../../styles/tokens';
+
+const sectionTitleStyle = {
+  fontSize: type.sectionTitle,
+  fontWeight: weight.medium,
+  color: color.ink,
+  margin: 0,
+  fontFamily: font.sans,
+};
 
 const GRAIN_OPTIONS = [
   { label: 'Daily', value: 'day' },
@@ -18,18 +27,15 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
     return (
       <div style={{ marginBottom: 48 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <h2 style={{
-            fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
+          <h2 style={sectionTitleStyle}>
             {section.title}
           </h2>
           {section.metricId && onMetricClick && (
             <span
               onClick={() => onMetricClick(section.metricId, null, null)}
-              style={{ fontSize: 14, color: '#9ca3af', cursor: 'pointer', transition: 'color 100ms' }}
-              onMouseEnter={e => { e.target.style.color = '#2563eb'; }}
-              onMouseLeave={e => { e.target.style.color = '#9ca3af'; }}
+              style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', transition: 'color 100ms' }}
+              onMouseEnter={e => { e.target.style.color = color.accentText; }}
+              onMouseLeave={e => { e.target.style.color = color.inkMuted; }}
             >ⓘ</span>
           )}
         </div>
@@ -42,7 +48,7 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
   if (section.type === 'channelTable') {
     return (
       <div style={{ marginBottom: 48 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: '0 0 16px', fontFamily: "'DM Sans', sans-serif" }}>
+        <h2 style={{ ...sectionTitleStyle, margin: '0 0 16px' }}>
           {section.title}
         </h2>
         <ChannelTable config={section} dataMap={dataMap} onMetricClick={onMetricClick} />
@@ -54,14 +60,11 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
     <div style={{ marginBottom: 48 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h2 style={{
-            fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
+          <h2 style={sectionTitleStyle}>
             {section.title}
           </h2>
           {section.description && (
-            <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 4, fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ fontSize: type.body, color: color.inkMuted, marginTop: 4, fontFamily: font.sans }}>
               {section.description}
             </div>
           )}
@@ -73,12 +76,12 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
                 key={opt.label}
                 onClick={() => onGrain(opt.value)}
                 style={{
-                  padding: '4px 12px', fontSize: 12,
-                  fontWeight: grain === opt.value ? 600 : 400,
-                  fontFamily: "'DM Sans', sans-serif",
-                  background: grain === opt.value ? '#2563eb' : '#f3f4f6',
-                  color: grain === opt.value ? '#fff' : '#6b7280',
-                  border: 'none', borderRadius: 16, cursor: 'pointer',
+                  padding: '4px 12px', fontSize: type.label,
+                  fontWeight: grain === opt.value ? weight.medium : weight.regular,
+                  fontFamily: font.sans,
+                  background: grain === opt.value ? color.accentBg : color.surfaceAlt,
+                  color: grain === opt.value ? color.accentText : color.inkMuted,
+                  border: 'none', borderRadius: radius.control, cursor: 'pointer',
                   transition: 'background 150ms, color 150ms',
                 }}
               >

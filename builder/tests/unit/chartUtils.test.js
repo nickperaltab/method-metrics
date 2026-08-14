@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { color } from '../../src/styles/tokens.js';
 import { parseDate, toBucketKey, formatDateLabel, formatDateLabels, aggregateRows, computeDerived, applyChannelFilter, applyLastNMonths, buildEChartsOption, applyStyleRulesToDatasets } from '../../src/lib/chartUtils.js';
 
 describe('toBucketKey', () => {
@@ -641,11 +642,11 @@ describe('buildEChartsOption — variance chart type', () => {
     const option = buildEChartsOption('variance', labels, [actualDs, targetDs], dataConfig);
     const barData = option.series[0].data;
     // 100 >= 90 → green
-    expect(barData[0].itemStyle.color).toBe('#34d399');
+    expect(barData[0].itemStyle.color).toBe(color.accent);
     // 80 < 100 → red
-    expect(barData[1].itemStyle.color).toBe('#f87171');
+    expect(barData[1].itemStyle.color).toBe(color.negative);
     // 120 >= 110 → green
-    expect(barData[2].itemStyle.color).toBe('#34d399');
+    expect(barData[2].itemStyle.color).toBe(color.accent);
   });
 
   it('preserves actual data values in bar series', () => {
@@ -665,7 +666,7 @@ describe('buildEChartsOption — variance chart type', () => {
     expect(option.series[0].type).toBe('bar');
     // With no target, all bars should be green (not < undefined)
     option.series[0].data.forEach(d => {
-      expect(d.itemStyle.color).toBe('#34d399');
+      expect(d.itemStyle.color).toBe(color.accent);
     });
   });
 
@@ -674,7 +675,7 @@ describe('buildEChartsOption — variance chart type', () => {
     const lowTarget = { label: 'Target', data: [100, 100, 100] };
     const option = buildEChartsOption('variance', labels, [highActual, lowTarget], dataConfig);
     option.series[0].data.forEach(d => {
-      expect(d.itemStyle.color).toBe('#34d399');
+      expect(d.itemStyle.color).toBe(color.accent);
     });
   });
 
@@ -683,7 +684,7 @@ describe('buildEChartsOption — variance chart type', () => {
     const highTarget = { label: 'Target', data: [100, 100, 100] };
     const option = buildEChartsOption('variance', labels, [lowActual, highTarget], dataConfig);
     option.series[0].data.forEach(d => {
-      expect(d.itemStyle.color).toBe('#f87171');
+      expect(d.itemStyle.color).toBe(color.negative);
     });
   });
 });
