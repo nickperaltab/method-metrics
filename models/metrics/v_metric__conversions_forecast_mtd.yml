@@ -1,0 +1,34 @@
+# Canonical metric definition for "Conversions Forecast MTD".
+
+models:
+  - name: v_metric__conversions_forecast_mtd
+    description: |
+      The full-month conversions forecast prorated to the elapsed window
+      (conversions_forecast * elapsed_days / days_in_month), so the MTD
+      actual has a like-for-like comparison instead of the full-month total.
+    config:
+      materialized: view
+      meta:
+        answers: "How many conversions should we have by today, if the full-month forecast lands evenly?"
+        grain: "Single row, current month. Period-level, derived from a full-month forecast total."
+        filters:
+          - rule: "inherits int_method_monday.conversions_forecast_mtd, proration is elapsed_days / days_in_month"
+            why: "matches the elapsed window used by the MTD actual it is compared against"
+        methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
+        parity_verified:
+          against: "PENDING — Task 8 records the browser comparison"
+          values: "PENDING"
+        caveats:
+          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename in the sheet breaks this silently."
+          - "Straight-line proration, not shaped to the forecast's own daily curve. Assumes even distribution across the month."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Method Monday (Acquisition/Retention section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: int_method_monday
+        source_measure_safe: ''
+        depends_on: ''
