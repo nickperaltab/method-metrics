@@ -158,6 +158,22 @@ Then add both to `semantic_dimensions` on metric 59 and add breakdown tabs to `c
 
 ---
 
+### Churn Rate: Migrate 344/345 to the Method Monday Convention
+**Status:** Open
+Metrics 344 (Churn Rate) and 345 (Churn Rate % Trajectory) are raw `chart_sql`, computing on the through-today convention. They were deliberately left off the Method Monday page (see `docs/metric-definitions.md` §4g) because putting them there as-is would reintroduce the actual-vs-trajectory window mismatch the page exists to remove.
+
+Doing it properly means a churn-rate pair built on the new complete-days convention:
+- **Actual:** `churn_mtd ÷ (BOM + conversions_mtd)` — using Churn MTD (#409) and Conversions MTD (#408).
+- **Trajectory:** `churn_trajectory ÷ (BOM + conversions_trajectory)` — using Churn Trajectory (#411) and Conversions Trajectory (#296, revised convention).
+
+**The wrinkle that makes this non-trivial:** BOM (Beginning-of-Month customer count) does not scale with elapsed days — it's a point-in-time count, fixed at month start. Unlike the sync conversion rate (where both trajectory inputs scale together and the ratio is scale-invariant to the convention change, see #400), these two churn-rate variants are genuinely different numbers from each other, not one tile shown two ways. The actual and the trajectory need to be built and reasoned about separately.
+
+Metric 344 was verified against Looker on 2026-08-04 (Apr 2.41%, Jun 2.70%, exact), so the basis is sound — only the window convention needs changing, not the underlying methodology.
+
+**Files:** Supabase metrics 344, 345; new BOM primitive per the existing "Churn Rate: Create v_customer_bom View as Semantic Primitive" ticket below (a dependency of this one); `docs/metric-definitions.md` §4g.
+
+---
+
 ### Churn Rate: Create v_customer_bom View as Semantic Primitive
 **Status:** Open
 Churn Rate = `Churn / (CustomersBOM + Conversions)`. The BOM component doesn't exist as a metric yet. Create a `v_customer_bom` BQ view that exposes one clean row per month with the correct Beginning-of-Month customer count — including the current-month adjustment (prior BOM + prior additions − prior churn, since current month TransLineFlattened data is incomplete mid-month).
@@ -190,6 +206,28 @@ The Sales Scorecard (`builder/src/config/scorecards/sales-scorecard.js`) has ~10
 **Benefits:** Retire ~9 of 10 custom SQL strings, fix the silently-broken metric 337, make these metrics reusable by the chat builder and other scorecards, consolidate metric definitions to one place (Supabase).
 
 **Files:** `builder/src/config/scorecards/sales-scorecard.js` (delete constants + switch to `timeBucket: 'week'`), Supabase `metrics` table (populate semantic fields on ~14 metrics).
+
+---
+
+### Bogus `used_by: Method Monday` Entries on the GRR/NRR/MRR-Movement Family
+**Status:** Open
+Twelve dbt `.yml` files (not nineteen, per the brief that raised this — the real count is 12) list "Method Monday" under `used_by` for GRR, NRR, and the monthly/annual MRR movements. The shipped Method Monday page (`docs/metric-definitions.md` §4g) has no Revenue/GRR/NRR section — nobody asked for one, and it doesn't exist. These entries are aspirational leftovers and should be corrected to reflect actual consumers (board reporting, the MRR-family dependency chain, etc. — see each file's other `used_by` lines for what's actually true).
+
+**Files (12):**
+- `models/metrics/v_metric__monthly_start_mrr.yml`
+- `models/metrics/v_metric__monthly_cancellations_mrr.yml`
+- `models/metrics/v_metric__monthly_downgrades_mrr.yml`
+- `models/metrics/v_metric__monthly_expansions_mrr.yml`
+- `models/metrics/v_metric__monthly_grr.yml`
+- `models/metrics/v_metric__monthly_nrr.yml`
+- `models/metrics/v_metric__annual_start_mrr.yml`
+- `models/metrics/v_metric__annual_cancellations_mrr.yml`
+- `models/metrics/v_metric__annual_downgrades_mrr.yml`
+- `models/metrics/v_metric__annual_expansions_mrr.yml`
+- `models/metrics/v_metric__annual_grr.yml`
+- `models/metrics/v_metric__annual_nrr.yml`
+
+Note: `v_metric__trials.yml`, `v_metric__syncs.yml`, `v_metric__conversions.yml`, `v_metric__churn.yml`, `v_metric__customers.yml`, `v_metric__sync_rate.yml`, and `v_metric__trial_to_conversion_rate.yml` also mention Method Monday under `used_by` — those are correct as-is (Acquisition/Engagement/Conversion/Retention/Revenue sections do exist on the page) and are out of scope for this fix.
 
 ---
 

@@ -1099,86 +1099,103 @@ Both points are sourced from `scripts/reconcile_sync_denominators.py`'s 2026-07-
 
 ### #295 Syncs Trajectory
 
-**What it answers in one sentence:** If the current month continues at its month-to-date pace, how many sync events will it finish with?
+> **Revised 2026-08-14 — Method Monday complete-days convention.** The divisor and numerator convention changed under the Method Monday scorecard work (Task 3). This entry replaces the prior `day_of_month`/through-today version below; do not re-add a duplicate entry when Task 8's parity read lands.
+
+**What it answers in one sentence:** If the current month continues at its pace through complete days only, how many sync events will it finish with?
 
 **The math:**
 ```sql
-WITH mtd AS (
-  SELECT COUNT(*) AS syncs
+-- via int_method_monday (one wide intermediate shared by all Method Monday tiles)
+WITH bounds AS (
+  SELECT
+    EXTRACT(DAY FROM CURRENT_DATE()) - 1                  AS elapsed_days,
+    EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH))     AS days_in_month
+),
+mtd AS (
+  SELECT COUNT(*) AS syncs_mtd
   FROM int_syncs
-  WHERE SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+  WHERE DATE_TRUNC(SyncDate, MONTH) = DATE_TRUNC(CURRENT_DATE(), MONTH)
     AND SyncDate < CURRENT_DATE()
 )
-SELECT
-  DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,
-  SAFE_DIVIDE(mtd.syncs, EXTRACT(DAY FROM CURRENT_DATE()))
-    * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH)) AS value
-FROM mtd
+SELECT SAFE_DIVIDE(mtd.syncs_mtd, bounds.elapsed_days) * bounds.days_in_month AS value
+FROM mtd, bounds
 ```
 
 **Grain:** Single row, current month only. Event-grain numerator (see Syncs #55). Trajectory has no meaning for a closed month, so no historical rows are emitted.
 
 **Filters / exclusions:**
-- `SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)` — restricts the numerator to the in-progress month.
-- `SyncDate < CURRENT_DATE()` — excludes today, which is itself incomplete and would drag the pace down.
+- `SyncDate < CURRENT_DATE()` — excludes today, which is itself incomplete and would drag the pace down. The MTD numerator (Syncs MTD #407) is the same count.
+- Divisor is `elapsed_days = EXTRACT(DAY FROM CURRENT_DATE()) - 1` (complete days only), not `day_of_month`.
 
-**Methodology source:** Mirrors the divisor convention derived for Conversions Trajectory (#296) from Nelson's 2026-07-22 Looker screenshot (`51 ÷ 22 × 31 = 71.86`, exact). Divisor is `day_of_month`, not `day_of_month + 1` or `day_of_month - 1`.
+**Methodology source:** Method Monday convention (`docs/superpowers/specs/2026-08-10-method-monday-design.md`), adopted 2026-08-10. Verified against the live Looker Studio "Method Monday (PROD)" page, report `510f74bb`, page `p_rh9bepy1rd`, read 2026-08-14. Supersedes the prior `day_of_month`/through-today divisor, which mirrored Looker's **Sales** page and was itself derived from Nelson's 2026-07-22 screenshot.
 
-**Parity-verified against:** No external counterpart — the sync conversion section does not exist in Looker, which is why it was requested. First observation 2026-07-31: 226. Single-row metric returning only the current month; it read 108.5 on 2026-08-04, three days into August.
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
 
 **Status:** **queued**
 
 **Known caveats:**
-- Two sync-family caveats above (event-grain/signup-dated denominator, ~1.5% monthly fan-in; not level-comparable to the trials trajectory).
-- Divisor is `day_of_month`, so the projection is noisy in the first few days of a month — expect wide swings before roughly the 5th.
+- **Excludes today by design.** The numerator (Syncs MTD, #407) counts through yesterday only. Not the same number as the corresponding full-month primitive, Syncs (#55).
+- **The trajectory divides by complete elapsed days** (`day_of_month - 1`). This is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this metric now follows the Method Monday one. Convention changed 2026-08-10, moving this metric from 219.21 to 231.31 (measured 2026-08-14) and cascading to any Sales Scorecard consumer that reads it.
+- History: before 2026-08-10 this metric used a through-today numerator divided by plain `day_of_month`, matching Looker's Sales page (verified there 2026-08-04, reading 201.5 on 2026-08-10 under that convention). That parity record no longer applies.
+- Two sync-family caveats still apply (event-grain/signup-dated denominator, ~1.5% monthly fan-in — not the 9–13% previously stated; not level-comparable to the trials Conversions Trajectory once divided into a rate).
+- Noisy in the first few days of a month. NULL on the 1st, when `elapsed_days` is 0 (`SAFE_DIVIDE` returns NULL by design).
 - Single-row by design. Do not chart it as a time series.
 
 **Used by:**
 - Sales Scorecard (Sync Conversion Rate section)
 - Sync Conversion Rate Trajectory (#400) as an input
+- Method Monday scorecard (Engagement section) — see §4g
 
 ---
 
 ### #296 Conversions Trajectory
 
-**What it answers in one sentence:** If the current month continues at its month-to-date pace, how many conversions will it finish with?
+> **Revised 2026-08-14 — Method Monday complete-days convention.** The divisor and numerator convention changed under the Method Monday scorecard work (Task 3). This entry replaces the prior `day_of_month`/through-today version below; do not re-add a duplicate entry when Task 8's parity read lands.
+
+**What it answers in one sentence:** If the current month continues at its pace through complete days only, how many conversions will it finish with?
 
 **The math:**
 ```sql
-WITH mtd AS (
-  SELECT COUNT(*) AS conversions
+-- via int_method_monday (one wide intermediate shared by all Method Monday tiles)
+WITH bounds AS (
+  SELECT
+    EXTRACT(DAY FROM CURRENT_DATE()) - 1                  AS elapsed_days,
+    EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH))     AS days_in_month
+),
+mtd AS (
+  SELECT COUNT(*) AS conversions_mtd
   FROM int_conversions
-  WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+  WHERE DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) = DATE_TRUNC(CURRENT_DATE(), MONTH)
     AND FirstSaaSInvoiceTxnDate < CURRENT_DATE()
 )
-SELECT
-  DATE_TRUNC(CURRENT_DATE(), MONTH) AS period,
-  SAFE_DIVIDE(mtd.conversions, EXTRACT(DAY FROM CURRENT_DATE()))
-    * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE(), MONTH)) AS value
-FROM mtd
+SELECT SAFE_DIVIDE(mtd.conversions_mtd, bounds.elapsed_days) * bounds.days_in_month AS value
+FROM mtd, bounds
 ```
 
 **Grain:** Single row, current month only. Account-grain numerator (see Conversions #56). Trajectory has no meaning for a closed month.
 
 **Filters / exclusions:**
-- `FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH)` — restricts the numerator to the in-progress month.
-- `FirstSaaSInvoiceTxnDate < CURRENT_DATE()` — excludes today, which is incomplete.
+- `FirstSaaSInvoiceTxnDate < CURRENT_DATE()` — excludes today, which is incomplete. The MTD numerator (Conversions MTD #408) is the same count.
+- Divisor is `elapsed_days = EXTRACT(DAY FROM CURRENT_DATE()) - 1` (complete days only), not `day_of_month`.
 
-**Methodology source:** Reverse-engineered from Nelson's 2026-07-22 live-Looker screenshot: 51 conversions ÷ 22 day-of-month × 31 days = 71.86, an exact match to Looker's displayed trajectory. The prior Supabase `chart_sql` divided by `day_of_month - 1` and over-projected; the ticket's own fix candidate guessed `day_of_month + 1`, which is also wrong. The correct divisor is plain `day_of_month`.
+**Methodology source:** Method Monday convention (`docs/superpowers/specs/2026-08-10-method-monday-design.md`), adopted 2026-08-10, superseding the prior `day_of_month`/through-today convention. Verified against the live Looker Studio "Method Monday (PROD)" page, report `510f74bb`, page `p_rh9bepy1rd`, read 2026-08-14.
 
-**Parity-verified against:** Live Looker Studio Sales Scorecard (report `510f74bb`), read 2026-07-31 — ours 75.00 vs Looker 75, exact. This confirms the `day_of_month` divisor that had previously only been derived from a screenshot, and closes the open ticket where this metric read ~86 under the superseded Supabase formula.
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
 
 **Status:** **queued**
 
 **Known caveats:**
-- Divisor is `day_of_month`, which means the projection is noisy in the first few days of a month. Expect wide swings before roughly the 5th.
-- Supersedes the old Supabase `chart_sql`, which divided by `day_of_month - 1` and over-projected by roughly 5%.
+- **Excludes today by design.** The numerator (Conversions MTD, #408) counts through yesterday only. Not the same number as the corresponding full-month primitive, Conversions (#56).
+- **The trajectory divides by complete elapsed days** (`day_of_month - 1`). This is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this metric now follows the Method Monday one. Convention changed 2026-08-10, moving this metric from 55.36 to 57.23 (measured 2026-08-14) and cascading to Supabase metrics 321, 322 and 323.
+- History: before 2026-08-10 this metric used a through-today numerator divided by plain `day_of_month`, matching Looker's Sales page (verified there 2026-07-31, exact at 75.00 vs Looker's 75; that reading cascaded to #321 12.45%, #322 −5.52%, #323 69.28%). That parity record no longer applies — it was for the superseded convention.
+- Divisor is complete days, so the projection is still noisy in the first few days of a month. Expect wide swings before roughly the 5th.
 - Single-row by design. Do not chart it as a time series.
 - Shared identically by both Sales Scorecard conversion sections (trials and sync) — same numerator, same KPI, shown twice by design so the two sections read as a matched pair.
 
 **Used by:**
 - Sales Scorecard (Conversion Rate section and Sync Conversion Rate section)
 - Sync Conversion Rate Trajectory (#400) as an input
+- Method Monday scorecard (Conversion section) — see §4g
 
 ---
 
@@ -1241,7 +1258,9 @@ LEFT JOIN forecast f USING (period)
 
 ### #400 Sync Conversion Rate Trajectory
 
-**What it answers in one sentence:** If the current month continues at its month-to-date pace, what sync conversion rate will it finish at?
+> **Revised 2026-08-14 — Method Monday complete-days convention.** Both inputs (#296, #295) switched conventions under the Method Monday scorecard work (Task 3); this entry replaces the prior version below. Do not re-add a duplicate entry when Task 8's parity read lands.
+
+**What it answers in one sentence:** If the current month continues at its pace through complete days only, what sync conversion rate will it finish at?
 
 **The math:**
 ```sql
@@ -1256,14 +1275,18 @@ FULL OUTER JOIN v_metric__syncs_trajectory s ON c.period = s.period
 
 **Filters / exclusions:** None beyond those inherited from Conversions Trajectory (#296) and Syncs Trajectory (#295).
 
-**Methodology source:** Ratio of the two trajectory projections, which both follow the Looker divisor convention derived 2026-07-22 (`day_of_month`). Same-month, no lag, matching Sync-to-Conversion Rate (#301).
+**Methodology source:** Ratio of the two trajectory projections, which both follow the Method Monday complete-days convention adopted 2026-08-10 (superseding the Looker-Sales-page-derived `day_of_month` convention from 2026-07-22). Same-month, no lag, matching Sync-to-Conversion Rate (#301). Verified against the live Looker Studio "Method Monday (PROD)" page, report `510f74bb`, page `p_rh9bepy1rd`, read 2026-08-14 — note this exact KPI still has no Looker counterpart (see caveats), so that read is a first observation, not a match.
 
-**Parity-verified against:** First observation 2026-07-31: 33.19% at month end. No Looker counterpart exists for this exact KPI (Nelson's sync section does not exist in Looker), so this is a first-observation value, not a match. Single-row metric returning only the current month — it read 14.29% on 2026-08-04 with three days of August, which is the documented first-days noise.
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
 
 **Status:** **queued**
 
 **Known caveats:**
-- Two sync-family caveats above.
+- **Excludes today by design** in both inputs — the numerators (#407 Syncs MTD, #408 Conversions MTD) count through yesterday only. Not the same number as the corresponding full-month primitives (Syncs #55, Conversions #56).
+- **The trajectory divides by complete elapsed days** (`day_of_month - 1`) on both sides. This is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this metric now follows the Method Monday one. The ratio itself is scale-invariant to the convention change (both sides moved together), but the underlying MTD counts differ, so the rate moved: 25.25% (25/99) → 24.74% (24/97), measured 2026-08-14.
+- History: before 2026-08-10 this metric read 33.19% at month-end 2026-07-31 and 14.29% on 2026-08-04 under the superseded `day_of_month`/through-today convention. Those readings are not comparable to readings taken after 2026-08-10.
+- No Looker counterpart exists for this exact KPI — the sync conversion section is not part of any published Looker page. Record any browser read as a first observation, not a match.
+- Two sync-family caveats still apply (event-grain/signup-dated denominator, ~1.5% monthly fan-in, not the 9–13% previously stated; not level-comparable to the trials Conversion Rate Trajectory, which uses a lagged denominator).
 - Single-row by design. Do not chart it as a time series.
 
 **Used by:**
@@ -1437,3 +1460,431 @@ FULL OUTER JOIN syncs s ON c.week = s.week
 
 **Used by:**
 - Sales Scorecard (Sync Conversion Rate section)
+
+---
+
+## 4g. Method Monday scorecard — queued, 2026-08-14
+
+Task 8 of the `2026-08-10-method-monday` plan (`.superpowers/sdd/2026-08-10-method-monday/task-8-brief.md`). One dbt intermediate (`int_method_monday`) computes every quantity the page needs in one place, on a single convention: **every actual counts through yesterday, and every trajectory divides by complete elapsed days.** Eleven thin `v_metric__*` views read off it (nine below; the other two, #295 and #296, already had entries above and were revised in place — see §4f). Thirteen Supabase registry rows point at them (nine pointers + four formulas below).
+
+**Shared arithmetic (all nine views below):**
+```
+elapsed_days  = EXTRACT(DAY FROM CURRENT_DATE()) - 1
+trajectory    = mtd ÷ elapsed_days × days_in_month
+forecast_mtd  = forecast × elapsed_days ÷ days_in_month
+```
+On the 1st of the month `elapsed_days` is 0 and every trajectory is NULL by design (`SAFE_DIVIDE` returns NULL rather than raising — a projection from zero complete days is undefined, not zero).
+
+**Shared methodology source (all thirteen metrics in this section):** the live Looker Studio "Method Monday (PROD)" page, report `510f74bb`, page `p_rh9bepy1rd`, read 2026-08-14.
+
+**The two caveats every metric in this section carries — stated once here, referenced per-entry:**
+
+1. **Excludes today by design.** The MTD actual is not the same number as the corresponding full-month primitive (Trials #54, Syncs #55, Conversions #56, Churn #59) — those count the whole month; these stop at yesterday.
+2. **The trajectory divides by complete elapsed days.** That is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this page follows the former.
+
+**Parity for every metric in this section:** **PENDING — browser verification 2026-08-14.** The browser-verification half of Task 8 is blocked on a human login and is being handled separately; none of these have been visually confirmed against the Looker page yet. Do not read `queued` + `PENDING` here as "probably fine" — no comparison has happened.
+
+**Status for every metric in this section: `queued`.** Promotion to `live` is Nic's decision and requires the browser evidence from Task 8's Steps 2–3 in front of him.
+
+---
+
+### #406 Trials MTD
+
+**What it answers in one sentence:** How many trials have we had this month, counting only finished days? Value 2026-08-14: 194.
+
+**The math:**
+```sql
+SELECT period, CAST(trials_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- trials_mtd: COUNT(*) FROM int_trials WHERE DATE_TRUNC(SignupDate, MONTH) = current period
+--             AND SignupDate < CURRENT_DATE()
+```
+
+**Grain:** Single row, current month. Account-grain (see Trials #54).
+
+**Filters / exclusions:**
+- `SignupDate < CURRENT_DATE()` — today is unfinished; including it would not match the trajectory divisor.
+- Inherits `int_trials`'s filters (excludes `IsConversionException`, Method Integration partner rows, the `0001-01-01` sentinel) — carried from Trials #54.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design. Not the same number as Trials (#54), the full-month primitive.
+2. The trajectory built on this MTD figure (Trials Trajectory #410) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #407 Syncs MTD
+
+**What it answers in one sentence:** How many syncs have we had this month, counting only finished days? Value 2026-08-14: 97.
+
+**The math:**
+```sql
+SELECT period, CAST(syncs_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- syncs_mtd: COUNT(*) FROM int_syncs WHERE DATE_TRUNC(SyncDate, MONTH) = current period
+--            AND SyncDate < CURRENT_DATE()
+```
+
+**Grain:** Single row, current month. Account-grain (see Syncs #55).
+
+**Filters / exclusions:**
+- `SyncDate < CURRENT_DATE()` — today is unfinished; including it would not match the trajectory divisor.
+- Inherits `int_syncs`'s filters — carried from Syncs #55.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design. Not the same number as Syncs (#55), the full-month primitive.
+2. The trajectory divides by complete elapsed days (see #295 Syncs Trajectory, revised §4f) — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #408 Conversions MTD
+
+**What it answers in one sentence:** How many conversions have we had this month, counting only finished days? Value 2026-08-14: 24.
+
+**The math:**
+```sql
+SELECT period, CAST(conversions_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- conversions_mtd: COUNT(*) FROM int_conversions
+--   WHERE DATE_TRUNC(FirstSaaSInvoiceTxnDate, MONTH) = current period
+--   AND FirstSaaSInvoiceTxnDate < CURRENT_DATE()
+```
+
+**Grain:** Single row, current month. Account-grain (see Conversions #56).
+
+**Filters / exclusions:**
+- `FirstSaaSInvoiceTxnDate < CURRENT_DATE()` — today is unfinished; including it would not match the trajectory divisor.
+- Inherits `int_conversions`'s filters — carried from Conversions #56.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design. Not the same number as Conversions (#56), the full-month primitive.
+2. The trajectory built on the same numerator (Conversions Trajectory #296, revised §4f) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Also backs both Conversions tiles on the Sales Scorecard, replacing #56 there (moves that tile from 21 to 20).
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Conversion section), Sales Scorecard (Conversions tile, both sections).
+
+---
+
+### #409 Churn MTD
+
+**What it answers in one sentence:** How much churn have we had this month, counting only finished days? Value 2026-08-14: 46.
+
+**The math:**
+```sql
+SELECT period, CAST(churn_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- churn_mtd: COUNT(DISTINCT CompanyAccount) FROM int_cancellations
+--   WHERE DATE_TRUNC(CancellationDate, MONTH) = current period
+--   AND CancellationDate < CURRENT_DATE()
+```
+
+**Grain:** Single row, current month. **CompanyAccount-grain** (uses `COUNT(DISTINCT CompanyAccount)`), matching metric 344's basis — not the event/row counts the other three MTD metrics use.
+
+**Filters / exclusions:**
+- `CancellationDate < CURRENT_DATE()` — today is unfinished; including it would not match the trajectory divisor.
+- Inherits `int_cancellations`'s filters — carried from Churn #59.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design. Not the same number as Churn (#59), the full-month primitive.
+2. The trajectory built on this MTD figure (Churn Trajectory #411) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- CompanyAccount grain, matching metric 344 (Churn Rate) — a customer with multiple canceling accounts in the same month counts once. The other three MTD metrics (#406–#408) are account/event counts, not customer counts.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Retention section).
+
+---
+
+### #410 Trials Trajectory
+
+**What it answers in one sentence:** If the current month continues at its pace through complete days only, how many trials will it finish with? Value 2026-08-14: 462.6.
+
+**The math:**
+```sql
+SELECT period, trials_trajectory AS value
+FROM int_method_monday
+-- trials_trajectory = SAFE_DIVIDE(trials_mtd, elapsed_days) * days_in_month
+```
+
+**Grain:** Single row, current month. Account-grain (see Trials #54).
+
+**Filters / exclusions:** inherits `int_method_monday.trials_mtd`, which excludes `SignupDate >= CURRENT_DATE()` — today is unfinished; the trajectory divides by complete days only.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design (the MTD numerator, Trials MTD #406, counts through yesterday). Not the same number as Trials (#54), the full-month primitive.
+2. **Divides by complete elapsed days** (`day_of_month - 1`). This is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this page follows the former.
+- NULL on the 1st of the month, when `elapsed_days` is 0.
+- Noisy in the first few days of a month — a projection from one or two complete days swings widely.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition section); Trials Forecast vs Trajectory (#415) and Trials Attainment (#416) as an input.
+
+---
+
+### #411 Churn Trajectory
+
+**What it answers in one sentence:** If the current month continues at its pace through complete days only, how many churned accounts will it finish with? Value 2026-08-14: 109.7.
+
+**The math:**
+```sql
+SELECT period, churn_trajectory AS value
+FROM int_method_monday
+-- churn_trajectory = SAFE_DIVIDE(churn_mtd, elapsed_days) * days_in_month
+```
+
+**Grain:** Single row, current month. CompanyAccount grain, matching metric 344's basis (see Churn #59 / Churn MTD #409).
+
+**Filters / exclusions:** inherits `int_method_monday.churn_mtd`, which excludes `CancellationDate >= CURRENT_DATE()` — today is unfinished; the trajectory divides by complete days only.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design (the MTD numerator, Churn MTD #409, counts through yesterday). Not the same number as Churn (#59), the full-month primitive.
+2. **Divides by complete elapsed days** (`day_of_month - 1`). This is Looker's **Method Monday** convention, not its **Sales** convention — the two Looker pages disagree with each other, and this page follows the former.
+- CompanyAccount grain, matching metric 344 — see Churn MTD (#409) caveat.
+- NULL on the 1st of the month, when `elapsed_days` is 0.
+- Noisy in the first few days of a month.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition/Retention section).
+
+---
+
+### #412 Conversions Forecast MTD
+
+**What it answers in one sentence:** How many conversions should we have by today, if the full-month forecast lands evenly? Value 2026-08-14: 44.5.
+
+**The math:**
+```sql
+SELECT period, CAST(conversions_forecast_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- conversions_forecast_mtd = SAFE_DIVIDE(conversions_forecast * elapsed_days, days_in_month)
+-- conversions_forecast = SUM(Forecasted_Conversion) FROM method_forecast for the current month
+```
+
+**Grain:** Single row, current month. Period-level, derived from a full-month forecast total prorated to the elapsed window.
+
+**Filters / exclusions:** proration is `elapsed_days ÷ days_in_month`, matching the elapsed window used by the MTD actual (#408) it is compared against.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. This is a forecast comparator, not an actual — the "excludes today" caveat applies to what it's compared against (Conversions MTD #408), which is the through-yesterday actual, not the corresponding full-month primitive (Conversions #56).
+2. It is prorated using the same complete-elapsed-days window as the trajectory metrics on this page — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Source is `revenue.method_forecast`, an `EXTERNAL` table over a Google Sheet. A column rename in the sheet breaks this silently.
+- Straight-line proration, not shaped to the forecast's own daily curve — assumes even distribution across the month.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition/Retention section).
+
+---
+
+### #413 Churn Forecast MTD
+
+**What it answers in one sentence:** How many churned accounts should we have by today, if the full-month forecast lands evenly? Value 2026-08-14: 41.5.
+
+**The math:**
+```sql
+SELECT period, CAST(churn_forecast_mtd AS FLOAT64) AS value
+FROM int_method_monday
+-- churn_forecast_mtd = SAFE_DIVIDE(churn_forecast * elapsed_days, days_in_month)
+-- churn_forecast = SUM(Forecasted_Churn) FROM method_forecast for the current month
+```
+
+**Grain:** Single row, current month. Period-level, derived from a full-month forecast total prorated to the elapsed window.
+
+**Filters / exclusions:** proration is `elapsed_days ÷ days_in_month`, matching the elapsed window used by the MTD actual (#409) it is compared against.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. This is a forecast comparator, not an actual — the "excludes today" caveat applies to what it's compared against (Churn MTD #409), which is the through-yesterday actual, not the corresponding full-month primitive (Churn #59).
+2. It is prorated using the same complete-elapsed-days window as the trajectory metrics on this page — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Source is `revenue.method_forecast`, an `EXTERNAL` table over a Google Sheet. A column rename in the sheet breaks this silently.
+- Straight-line proration, not shaped to the forecast's own daily curve — assumes even distribution across the month.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition/Retention section).
+
+---
+
+### #414 Sync Rate MTD
+
+**What it answers in one sentence:** What share of this month's trials have synced so far, counting only finished days? Value 2026-08-14: 50.0.
+
+**The math:**
+```sql
+SELECT period, CAST(SAFE_DIVIDE(syncs_mtd, trials_mtd) * 100 AS FLOAT64) AS value
+FROM int_method_monday
+```
+
+**Grain:** Single row, current month. Period-level ratio over account-grain counts (see Trials #54, Syncs #55).
+
+**Filters / exclusions:** inherits `int_method_monday.syncs_mtd` and `.trials_mtd`, both strictly before today — keeps this consistent with every other MTD tile on the page.
+
+**Methodology source:** see §4g shared methodology source above.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Excludes today by design in both numerator and denominator. Not the same number as Sync Rate (#300), the full-month ratio.
+2. Both sides of the ratio (Syncs MTD #407, Trials MTD #406) divide their trajectories by complete elapsed days elsewhere on the page — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- **Emits a percentage (50.0), not a decimal (0.50).** Matches Sync Rate #300 and Forecasted Sync Rate #361's convention so the tiles can sit side by side without rescaling.
+- NULL when `trials_mtd` is 0 — early in a month that is genuinely undefined, not zero.
+- Single-row by design. Do not chart it as a time series.
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #415 Trials Forecast vs Trajectory
+
+**What it answers in one sentence:** How far ahead of or behind the trials forecast is the current month projected to land, in trials?
+
+**The math:** Supabase formula metric — no dbt model. `{410} - {285}`, i.e. `Trials Trajectory − Trials Forecast`. Both inputs are counts (not percentages), so no scale correction is needed.
+
+**Grain:** Single row, current month (inherits from #410 and the pre-existing Trials Forecast #285).
+
+**Filters / exclusions:** none — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** registered as a Supabase formula metric in `scripts/register_method_monday_metrics.py`. See §4g shared methodology source for the Looker comparison page.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Its trajectory input (#410) excludes today by design and is not the full-month primitive (Trials #54).
+2. Its trajectory input (#410) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Has no dbt model — pure Supabase-formula arithmetic over #410 and #285. If either input's definition changes, this changes silently with it.
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #416 Trials Attainment
+
+**What it answers in one sentence:** What percentage of the trials forecast is the current month's trajectory pacing at? 100% means exactly on forecast.
+
+**The math:** Supabase formula metric — no dbt model. `SAFE_DIVIDE({410}, {285}) * 100`, i.e. `(Trials Trajectory ÷ Trials Forecast) × 100`.
+
+**Grain:** Single row, current month (inherits from #410 and #285).
+
+**Filters / exclusions:** none — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** registered as a Supabase formula metric in `scripts/register_method_monday_metrics.py`. See §4g shared methodology source for the Looker comparison page.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Its trajectory input (#410) excludes today by design and is not the full-month primitive (Trials #54).
+2. Its trajectory input (#410) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- **Emits a percentage.** Do not treat as a decimal rate.
+- Has no dbt model — pure Supabase-formula arithmetic over #410 and #285.
+- Looker's own tile for this figure is labeled "Forecast vs Trajectory," which is the wrong label — it computes attainment (a ratio), not the forecast-minus-trajectory difference that #415 computes. Don't let the Looker label imply this metric and #415 are the same thing.
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #417 Syncs Forecast vs Trajectory
+
+**What it answers in one sentence:** How far ahead of or behind the syncs forecast is the current month projected to land, in syncs?
+
+**The math:** Supabase formula metric — no dbt model. `{295} - {286}`, i.e. `Syncs Trajectory − Syncs Forecast`. #295 is the pre-existing Syncs Trajectory metric (revised under this same convention change — see §4f), not one of this task's nine new pointers.
+
+**Grain:** Single row, current month (inherits from #295 and the pre-existing Syncs Forecast #286).
+
+**Filters / exclusions:** none — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** registered as a Supabase formula metric in `scripts/register_method_monday_metrics.py`. See §4g shared methodology source for the Looker comparison page.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Its trajectory input (#295) excludes today by design and is not the full-month primitive (Syncs #55).
+2. Its trajectory input (#295) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- Has no dbt model — pure Supabase-formula arithmetic over #295 and #286. If either input's definition changes, this changes silently with it.
+- Inherits #295's sync-family denominator caveats (event-grain, signup-dated).
+
+**Used by:** Method Monday (Acquisition section).
+
+---
+
+### #418 Syncs Attainment
+
+**What it answers in one sentence:** What percentage of the syncs forecast is the current month's trajectory pacing at? 100% means exactly on forecast.
+
+**The math:** Supabase formula metric — no dbt model. `SAFE_DIVIDE({295}, {286}) * 100`, i.e. `(Syncs Trajectory ÷ Syncs Forecast) × 100`.
+
+**Grain:** Single row, current month (inherits from #295 and #286).
+
+**Filters / exclusions:** none — pure arithmetic over two already-filtered inputs.
+
+**Methodology source:** registered as a Supabase formula metric in `scripts/register_method_monday_metrics.py`. See §4g shared methodology source for the Looker comparison page.
+
+**Parity-verified against:** PENDING — browser verification 2026-08-14.
+
+**Status:** **queued**
+
+**Known caveats:**
+1. Its trajectory input (#295) excludes today by design and is not the full-month primitive (Syncs #55).
+2. Its trajectory input (#295) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
+- **Emits a percentage.** Do not treat as a decimal rate.
+- Has no dbt model — pure Supabase-formula arithmetic over #295 and #286.
+- Inherits #295's sync-family denominator caveats (event-grain, signup-dated).
+
+**Used by:** Method Monday (Acquisition section).
