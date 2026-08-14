@@ -201,7 +201,12 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
 
   // Non-breakdown sections render in config order, so a custom-component section
   // sits exactly where it's placed in the array (e.g. above the Customer List).
-  const mainSections = config.sections.filter(s => s.group !== 'breakdowns');
+  // `renderedBy` opts a section OUT of this loop entirely — it's still in
+  // config.sections so collectMetricIds (lib/sql/plan.js) loads its kpis into
+  // dataMap, but the named custom component (matched below) is responsible for
+  // rendering it, e.g. inline inside an expanded row rather than as an
+  // always-visible block. See method-monday-scorecard.js's "renderedBy" note.
+  const mainSections = config.sections.filter(s => s.group !== 'breakdowns' && !s.renderedBy);
   const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
 
   return (
@@ -250,7 +255,13 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
             </h2>
             {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
             {section.component === 'retentionTriangle' && <RetentionTriangle />}
-            {section.component === 'methodMondayPace' && <MethodMondayPaceView dataMap={dataMap} />}
+            {section.component === 'methodMondayPace' && (
+              <MethodMondayPaceView
+                dataMap={dataMap}
+                detailSections={config.sections.filter((s) => s.renderedBy === section.component)}
+                onMetricClick={handleMetricClick}
+              />
+            )}
           </div>
         ) : (
           <ScorecardSection

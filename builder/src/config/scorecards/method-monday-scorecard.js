@@ -41,6 +41,19 @@
  * below are unchanged in substance — same metric ids, same formats — only
  * regrouped from 3 undifferentiated rows into one section per metric so a
  * reader can go from the pace bar straight to that metric's own tiles.
+ *
+ * ── Progressive disclosure (2026-08-14, round 2) ─────────────────────
+ * Keeping all 25 detail tiles AND the 7 pace rows on screen at once put
+ * every number on the page twice — Nic's "so many numbers" feedback. The 7
+ * sections below (Sync %, Trials, ... Churn) now carry `renderedBy:
+ * 'methodMondayPace'`, which tells Scorecard.jsx's main render loop to skip
+ * them as always-visible blocks. They still live in `sections` — unchanged
+ * — so `collectMetricIds` (lib/sql/plan.js) still finds every kpi and still
+ * loads all the same data into `dataMap`. MethodMondayPaceView reads them
+ * back out (matched by title == pace row label) and renders each one,
+ * unmodified, as the expanded detail under its own pace row — reusing
+ * ScorecardSection/KpiColumn/KpiTile exactly as they already exist, not a
+ * second copy of them.
  */
 
 const EXCLUDES_TODAY =
@@ -63,6 +76,9 @@ export default {
     // ── Sync % ────────────────────────────────────────────────────
     {
       title: 'Sync %',
+      // Rendered inline by MethodMondayPaceView when its Pace row expands,
+      // not as its own always-visible block — see renderedBy note below.
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -76,6 +92,7 @@ export default {
     // ── Trials ────────────────────────────────────────────────────
     {
       title: 'Trials',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -96,6 +113,7 @@ export default {
     // ── Syncs ─────────────────────────────────────────────────────
     {
       title: 'Syncs',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -117,6 +135,7 @@ export default {
     // ── Conversions ───────────────────────────────────────────────
     {
       title: 'Conversions',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -136,6 +155,7 @@ export default {
     // ── Conversion Rate (trials-level) ───────────────────────────
     {
       title: 'Conversion Rate',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -165,6 +185,7 @@ export default {
     // ── Sync Conversion Rate ──────────────────────────────────────
     {
       title: 'Sync Conversion Rate',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -181,6 +202,7 @@ export default {
     // ── Churn ─────────────────────────────────────────────────────
     {
       title: 'Churn',
+      renderedBy: 'methodMondayPace',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [

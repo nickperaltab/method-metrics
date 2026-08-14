@@ -115,4 +115,18 @@ describe('Method Monday scorecard', () => {
     expect(allIds.length).toBe(25);
     expect(detailSections().length).toBe(7);
   });
+
+  it('every detail section opts out of the always-visible main render loop (progressive disclosure, round 2)', () => {
+    // Scorecard.jsx filters `renderedBy` sections out of mainSections so they
+    // don't render as always-visible blocks; MethodMondayPaceView renders
+    // them itself, inline, only when their pace row is expanded. The kpis
+    // stay in `sections` (asserted above) so collectMetricIds still loads
+    // them into dataMap regardless of whether the block is ever expanded.
+    for (const s of detailSections()) {
+      expect(s.renderedBy).toBe('methodMondayPace');
+    }
+    // The Pace section itself is NOT opted out — it's the one always-visible
+    // block, rendered by Scorecard.jsx's normal component dispatch.
+    expect(methodMonday.sections[0].renderedBy).toBeUndefined();
+  });
 });
