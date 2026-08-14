@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: int_method_monday
+    description: >
+      One row for the current month carrying every quantity the Method Monday
+      scorecard needs: MTD actuals through yesterday, full-month forecasts,
+      complete-days trajectories, and forecasts prorated to the elapsed window.
+      The elapsed-days arithmetic lives here and nowhere else so the sixteen
+      tiles built on it cannot drift apart. On the 1st of the month
+      elapsed_days is 0 and every trajectory is NULL by design.
+    columns:
+      - name: period
+        description: First of the current month. Exactly one row.
+        tests: [not_null, unique]
+      - name: elapsed_days
+        description: >
+          Complete days so far this month, i.e. day_of_month - 1. Zero on the
+          1st, which makes every trajectory NULL.
+        tests: [not_null]
+      - name: days_in_month
+        description: Calendar days in the current month.
+        tests: [not_null]
+      - name: trials_mtd
+        description: Trials with SignupDate this month, strictly before today.
+      - name: syncs_mtd
+        description: Sync events with SyncDate this month, strictly before today.
+      - name: conversions_mtd
+        description: Conversions with FirstSaaSInvoiceTxnDate this month, strictly before today.
+      - name: churn_mtd
+        description: >
+          Distinct CompanyAccounts cancelled this month, strictly before today.
+          CompanyAccount grain, matching metric 344's basis.
+      - name: trials_trajectory
+        description: trials_mtd / elapsed_days * days_in_month. NULL on the 1st.
+      - name: conversions_forecast_mtd
+        description: >
+          Full-month forecast prorated to the elapsed window, so the MTD
+          comparison bar is like-for-like rather than month-vs-part-month.
