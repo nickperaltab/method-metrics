@@ -1039,7 +1039,8 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 --   last_year_full   = SUM(Att_*) over the same month last year, full
 --   yoy_pct          = (trajectory - last_year_full) / last_year_full
 --   mom_pct          = (trajectory - prior_month_full) / prior_month_full
--- Trials: revenue.Account by SignupDate. Syncs: revenue.Funnel EventType='Sync'.
+-- Trials: revenue.Account by SignupDate. Syncs: revenue.Account WHERE SyncTypeRegion != '',
+--   also dated by SignupDate (what Funnel's EventType='Sync' branch resolves to).
 -- Attribution: fractional multi-touch — Att_* are already fractional weights, summed directly.
 -- sync_rate = syncs / trials at each level (trials-weighted total).
 ```
@@ -1062,8 +1063,10 @@ Only `motion_trackable` cohorts (`signup_month >= 2024-01-01`) are reliable for 
 
 **Known caveats / things consumers should know:**
 - **Syncs use fractional multi-touch attribution** (an account touched by PPC+SEO contributes 0.5 to each), which is why channel values can be non-integers (e.g. 14.5).
-- **Email has no Funnel sync attribution** — `Att_Email` exists on `Account` (trials) but not `Funnel` (syncs), so Email syncs and Email sync rate are null.
-- **`CustDatFirstSyncCompleted` is deliberately not used** — syncs come only from Funnel sync events.
+- **Backlinks is rolled into SEO** (requested 2026-08-10). Deliberate deviation from Looker, which reports Backlinks separately — SEO here runs ~0.5–2.0 above Looker's SEO in the ~9-in-24 months where Backlinks is nonzero. The breakout remains in `int_channel_funnel_daily`.
+- **Syncs read `Account` directly, not the `revenue.Funnel` view.** Funnel's `EventType='Sync'` branch is the same filter re-dated to `SignupDate`, but its SELECT list omits `Att_Email`, so it silently dropped every email-attributed sync — 5.6 of 230 rows in Jul 2026, leaving the syncs Total understated and Email syncs / Email sync rate null. Fixed 2026-08-10; verified bit-identical to the Funnel path on the 17 shared channels across 5,078 days / 214 months.
+- **Sync months grow retroactively.** A sync is dated by `SignupDate` but gated on `SyncTypeRegion`, which flips when the account eventually syncs. The same window returns different numbers on different days, so any "matches Looker" claim holds only at a single instant.
+- **`CustDatFirstSyncCompleted` is deliberately not used** — syncs come only from the `SyncTypeRegion` gate.
 - Trajectory method is **calendar-day linear** (`mtd/days_elapsed*days_in_month`), NOT the prior-month-shape method used for Net SaaS.
 
 **Used by:** Channel Trajectory scorecard (Labs) in the chart builder.

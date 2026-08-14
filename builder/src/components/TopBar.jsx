@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
+import { MOCK_MODE } from '../dev/mockMode';
 
 
 const styles = {
@@ -15,6 +16,12 @@ const styles = {
   userInfo: { color: '#6b7280', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", display: 'flex', alignItems: 'center', gap: 8 },
   userName: { color: '#374151' },
   switchBtn: { background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 11, padding: 0, textDecoration: 'underline', fontFamily: "'JetBrains Mono', monospace" },
+  // Loud on purpose: nothing on these screens is real in offline UI mode.
+  mockBadge: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700,
+    letterSpacing: '.12em', textTransform: 'uppercase', color: '#b45309',
+    background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: '4px 8px',
+  },
 };
 
 function routerNavStyle({ isActive }) {
@@ -32,15 +39,21 @@ export default function TopBar({ connected, userEmail, onConnect }) {
         <a href="/method-metrics/index.html" style={{ ...styles.logo, textDecoration: 'none' }}>Method</a>
         <NavLink to="/chat" style={routerNavStyle}>Chat</NavLink>
         <NavLink to="/dashboards" style={routerNavStyle}>Dashboards</NavLink>
+        <NavLink to="/ps" style={routerNavStyle}>PS</NavLink>
         {/*
           Call Prep is intentionally not linked here. The /call-prep routes stay
           registered in App.jsx and remain reachable by direct URL — this only
           removes it from the nav so it is not discoverable by browsing.
           Requested 2026-08-14.
         */}
+        <NavLink to="/handoffs" style={routerNavStyle}>Handoffs</NavLink>
+        {/* Projects has no backing store yet — only linked in offline mock mode
+            so it can't be clicked into an empty screen in production. */}
+        {MOCK_MODE && <NavLink to="/projects" style={routerNavStyle}>Projects</NavLink>}
         <a href="../tracker.html" style={styles.navLink}>Metrics</a>
       </div>
       <div style={styles.right}>
+        {MOCK_MODE && <span style={styles.mockBadge}>Mock data</span>}
         {currentUser && (
           <span style={styles.userInfo}>
             <span style={styles.userName}>{currentUser.name}</span>

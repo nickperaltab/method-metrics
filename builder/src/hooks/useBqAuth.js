@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { initBqAuth, connectBq, disconnectBq } from '../lib/bigquery';
 import posthog from '../lib/posthog';
+import { MOCK_MODE, MOCK_EMAIL } from '../dev/mockMode';
 
 export function useBqAuth() {
-  const [connected, setConnected] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
+  // Offline UI mode reports a signed-in consultant so App's sign-in gate opens
+  // and every screen renders against fixtures. Dev-only (see dev/mockMode.js).
+  const [connected, setConnected] = useState(MOCK_MODE);
+  const [userEmail, setUserEmail] = useState(MOCK_MODE ? MOCK_EMAIL : null);
   const [userAvatar, setUserAvatar] = useState(null);
 
   useEffect(() => {
+    if (MOCK_MODE) return;
     initBqAuth(
       (token) => {
         setConnected(true);

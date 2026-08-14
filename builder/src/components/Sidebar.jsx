@@ -10,6 +10,11 @@ const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
 ];
 
+// Professional services screens. Call Prep is intentionally not listed:
+// its /call-prep routes stay registered in App.jsx and remain reachable by
+// direct URL, but it is not discoverable by browsing. Requested 2026-08-14.
+// The PS section returns here when a screen other than Call Prep needs it.
+
 const ADMIN_ITEMS = [
   { path: '/admin/insights', label: 'AI Insights', icon: '\u25C8' },
 ];

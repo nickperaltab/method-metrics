@@ -190,6 +190,61 @@ GitHub Pages auto-deploys on push to `main`. Do NOT use `vercel --prod`.
 
 Push to `main` → GitHub Pages auto-deploys to `https://nickperaltab.github.io/method-metrics/`
 
+## Local UI Dev Note
+
+For UI-only work on the Vite builder, run the offline mock mode:
+
+```bash
+npm run dev:mock
+```
+
+No Google sign-in, no network. Serves synthetic fixtures in place of BigQuery
+and Supabase, shows a **Mock data** badge in the top bar, and stubs out PostHog.
+All of it is gated on `import.meta.env.DEV` as well as the env var, so a
+production build can never serve fixtures.
+
+**Full reference: `docs/local-ui-dev.md`** — read it before adding a screen, and
+before touching anything in `builder/src/dev/`. The fixtures are public-repo-safe
+fakes and must stay that way; never paste a real BQ result into them.
+
+The PS project tracker (`/projects`) is built — board, create/edit, per-project
+work log with markdown notes, and delivered-vs-promised efficiency ratings — but
+has **no backing store yet**, so it only works in mock mode and is kept out of the
+nav. Read `docs/ps-project-tracker.md` before extending it: the fixture shape is
+its draft schema, `lib/projectsStore.js` is the seam a real store plugs into, and
+the store choice (BigQuery vs. Supabase) is still open.
+
+The customer page (`/accounts/:recordId`) is the exception — it reads **real**
+BigQuery tables (`customer_signals.v_conversations`, `call_audits.*`,
+`customer_signals.signals_by_call`, `call_prep.snapshots`) and works outside mock
+mode. Read `docs/ps-customer-page.md` first; it documents two upstream data
+problems that constrain it: the audit tables key on an account *name* so only
+~28% of PPU audits can be joined, and `customer_signals.conversations` is 291 MB
+unclustered, so touching `transcript_text` scans the whole table.
+
+The older `VITE_BYPASS_AUTH=true` flag still works but only opens the sign-in
+gate — BigQuery stays real, so the PS pages error out. Prefer `dev:mock`. Do not
+enable either in shared/staging/prod environments.
+
+## UI copy and design standards
+
+Before writing or reviewing any user-facing text, screen, form or table in
+`builder/`, load the **`ui-review`** skill
+(`builder/.claude/skills/ui-review/SKILL.md`). It holds the AI-slop tells with
+rewrites, microcopy length limits, the measured contrast table for this codebase's
+tokens, and the interaction/accessibility checklist.
+
+**The recurring defect to avoid:** a statement, an em dash, then reasoning nobody
+asked for. Design rationale belongs in a code comment, never in the interface —
+comments are free, UI text is not.
+
+The `ui-auditor` agent (`.claude/agents/ui-auditor.md`) sweeps a feature area and
+returns file:line findings with replacement text. Its first run is
+`docs/ui-audit-2026-08-05.md` — 106 open findings on the project tracker, including
+five contrast tokens that fail WCAG AA, 36 unlabelled form controls and 41 `<th>`
+cells with no `scope`. Read that before adding a screen, so new work doesn't inherit
+the same faults.
+
 ## Knowledge Base
 
 The `knowledge/` directory is the accumulated learning from solving metrics. It grows every time a metric is verified.

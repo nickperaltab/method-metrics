@@ -1,3 +1,5 @@
+import { MOCK_SUPABASE, mockSupabaseFetch } from '../dev/mockSupabase.js';
+
 export const SUPABASE_URL = 'https://agkubdpgnpwudzpzcvhs.supabase.co';
 export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna3ViZHBnbnB3dWR6cHpjdmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDU4MzEsImV4cCI6MjA4ODk4MTgzMX0.tfpIArmqYQn7IHOrIUY6L-Wc4HcpMLXiTR6vKPJLDjY';
 
@@ -19,6 +21,9 @@ export function setCurrentUserEmail(email) {
 
 // Fetch with 15s timeout to prevent indefinite hangs
 async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
+  // Offline UI mode: answer from fixtures and never touch the shared database.
+  // Single chokepoint — every Supabase call in this file goes through here.
+  if (MOCK_SUPABASE) return mockSupabaseFetch(url, opts);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
