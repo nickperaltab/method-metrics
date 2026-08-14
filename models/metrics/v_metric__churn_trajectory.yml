@@ -1,0 +1,35 @@
+# Canonical metric definition for "Churn Trajectory".
+
+models:
+  - name: v_metric__churn_trajectory
+    description: |
+      Month-end projection of churn for the in-progress month. Divides
+      churn_mtd (counted through yesterday, CompanyAccount grain) by complete
+      days so far, and scales to the full month. NULL on the 1st, when there
+      are no complete days to project from.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, how many churned accounts will it finish with?"
+        grain: "Single row, current month. CompanyAccount grain, matching metric 344's basis (see Churn #59)."
+        filters:
+          - rule: "inherits int_method_monday.churn_mtd, which excludes CancellationDate >= CURRENT_DATE()"
+            why: "today is unfinished; the trajectory divides by complete days only"
+        methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10: 27 / 9 * 31 = 93.0, shown as 93."
+        parity_verified:
+          against: "PENDING — Task 8 records the browser comparison"
+          values: "PENDING"
+        caveats:
+          - "Noisy in the first few days of a month — a projection from one or two complete days swings widely."
+          - "NULL on the 1st of the month, when elapsed_days is 0."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Method Monday (Acquisition/Retention section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: int_method_monday
+        source_measure_safe: ''
+        depends_on: '59'
