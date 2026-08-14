@@ -28,7 +28,7 @@ models:
         used_by:
           - "Method Monday (Retention section)"
       labels:
-        metric_id: ''
+        metric_id: '409'
         layer: metrics
         type: simple
         status: queued

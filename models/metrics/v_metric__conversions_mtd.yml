@@ -30,7 +30,7 @@ models:
           - "Method Monday (Conversion section)"
           - "Sales Scorecard (Conversions tile)"
       labels:
-        metric_id: ''
+        metric_id: '408'
         layer: metrics
         type: simple
         status: queued

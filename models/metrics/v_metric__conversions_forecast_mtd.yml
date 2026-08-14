@@ -25,7 +25,7 @@ models:
         used_by:
           - "Method Monday (Acquisition/Retention section)"
       labels:
-        metric_id: ''
+        metric_id: '412'
         layer: metrics
         type: derived
         status: queued
