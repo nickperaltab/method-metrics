@@ -17,6 +17,7 @@ import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
 import { card, color, font, type, weight, radius, sectionGap } from '../styles/tokens';
+import { IconButton, Pill, ScorecardStyles } from '../components/scorecards/ui';
 
 const DATE_PRESETS = [
   { label: '3M', value: 3 },
@@ -32,25 +33,16 @@ const GRAIN_OPTIONS = [
   { label: 'Quarterly', value: 'quarter' },
 ];
 
-function PillGroup({ options, value, onChange }) {
+function PillGroup({ options, value, onChange, label }) {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div role="group" aria-label={label} style={{ display: 'flex', gap: 4 }}>
       {options.map(opt => (
-        <button
+        <Pill
           key={opt.label}
+          label={opt.label}
+          selected={value === opt.value}
           onClick={() => onChange(opt.value)}
-          style={{
-            padding: '4px 12px', fontSize: type.label,
-            fontWeight: value === opt.value ? weight.medium : weight.regular,
-            fontFamily: font.sans,
-            background: value === opt.value ? color.accentBg : color.surfaceAlt,
-            color: value === opt.value ? color.accentText : color.inkMuted,
-            border: 'none', borderRadius: radius.control, cursor: 'pointer',
-            transition: 'background 150ms, color 150ms',
-          }}
-        >
-          {opt.label}
-        </button>
+        />
       ))}
     </div>
   );
@@ -60,8 +52,12 @@ function ScoreCardFilters({ lastNMonths, onLastNMonths }) {
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: type.label, color: color.inkMuted, fontFamily: font.sans }}>RANGE</span>
-        <PillGroup options={DATE_PRESETS} value={lastNMonths} onChange={onLastNMonths} />
+        <PillGroup
+          options={DATE_PRESETS}
+          value={lastNMonths}
+          onChange={onLastNMonths}
+          label="Date range"
+        />
       </div>
     </div>
   );
@@ -79,23 +75,20 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, gr
         Breakdowns
       </h2>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div
+        role="tablist"
+        aria-label="Breakdowns"
+        style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}
+      >
         {sections.map((section, i) => (
-          <button
+          <Pill
             key={section.title}
+            role="tab"
+            size="lg"
+            label={section.title.replace(/^By /, '')}
+            selected={active === i}
             onClick={() => setActive(i)}
-            style={{
-              padding: '6px 16px', fontSize: type.body,
-              fontWeight: active === i ? weight.medium : weight.regular,
-              fontFamily: font.sans,
-              background: active === i ? color.accentBg : color.surfaceAlt,
-              color: active === i ? color.accentText : color.inkSecondary,
-              border: 'none', borderRadius: radius.control, cursor: 'pointer',
-              transition: 'background 150ms, color 150ms',
-            }}
-          >
-            {section.title.replace(/^By /, '')}
-          </button>
+          />
         ))}
       </div>
 
@@ -138,7 +131,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     return (
       <div style={{ padding: 48, textAlign: 'center', color: color.inkMuted }}>
         <h2>Scorecard not found</h2>
-        <p>No scorecard with ID "{id}"</p>
+        <p>Check the link or pick one from the sidebar.</p>
       </div>
     );
   }
@@ -214,6 +207,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
     // The wash sits on the full-width canvas, not on the 1400px content column,
     // so there is no seam where the content stops on a wide screen.
     <div style={{ background: color.canvasWash, minHeight: '100%' }}>
+      <ScorecardStyles />
       <div style={{ padding: 32, maxWidth: 1400 }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -257,11 +251,11 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
               }}>
                 {section.title}
                 {section.dbtModel && (
-                  <span
+                  <IconButton
+                    label={`How ${section.title} is derived`}
                     onClick={() => setInspected({ dbtModel: section.dbtModel })}
-                    title="How this is derived (dbt)"
-                    style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', marginLeft: 8 }}
-                  >ⓘ</span>
+                    style={{ marginLeft: 8, verticalAlign: 'middle' }}
+                  />
                 )}
               </h2>
               {section.component === 'cohortSurvival' && <CohortSurvivalChart />}

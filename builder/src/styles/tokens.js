@@ -95,6 +95,36 @@ export const radius = {
 };
 
 /**
+ * Keyboard focus ring. `accent` on `surface` measures well above the 3:1 that
+ * AA requires of a non-text indicator, and the 2px offset keeps it clear of the
+ * control's own border. Applied through the `:focus-visible` rule in
+ * components/scorecards/ui.jsx, so it appears for keyboard users and not on
+ * every mouse click.
+ */
+export const focusRing = {
+  outline: `2px solid ${color.accent}`,
+  outlineOffset: 2,
+};
+
+/**
+ * Visually hidden, still in the accessibility tree. For the text half of a
+ * glyph — an em dash a sighted reader understands as "no data" is silence to a
+ * screen reader. `display: none` and `visibility: hidden` would remove it from
+ * the tree too, which defeats the point.
+ */
+export const srOnly = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+  borderWidth: 0,
+};
+
+/**
  * One shadow, used one way. Depth on this page should be felt, not seen: the
  * card border does the containing, and the shadow only lifts it off the canvas.
  * There is deliberately no second level, no coloured shadow and no glow —

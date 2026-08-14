@@ -23,6 +23,7 @@ const SCOPE = [
   'components/scorecards/KpiColumn.jsx',
   'components/scorecards/ScorecardSection.jsx',
   'components/scorecards/utils.js',
+  'components/scorecards/ui.jsx',
   'pages/Scorecard.jsx',
   'lib/chartUtils.js',
   'components/EChart.jsx',

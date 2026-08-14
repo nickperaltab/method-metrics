@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { buildPaceRows } from '../../lib/methodMondayPace';
 import ScorecardSection from '../scorecards/ScorecardSection';
+import { FOCUSABLE, SrOnly } from '../scorecards/ui';
 import { color, font, type, weight, radius, numeric, shadow } from '../../styles/tokens';
 
 /**
@@ -54,8 +55,13 @@ const BAND_TEXT_COLORS = {
 
 const fontSans = font.sans;
 
+/**
+ * A dash where there is no number, matching the KPI tiles. The dash alone is
+ * silence to a screen reader, so the two halves are rendered separately and the
+ * caller pairs them.
+ */
 function formatAttainment(value) {
-  if (value == null || Number.isNaN(value)) return 'No data';
+  if (value == null || Number.isNaN(value)) return null;
   return `${value.toFixed(1)}%`;
 }
 
@@ -88,6 +94,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
   const bandColor = BAND_COLORS[row.band];
   const bandTextColor = BAND_TEXT_COLORS[row.band];
   const detailId = `method-monday-pace-detail-${row.key}`;
+  const attainment = formatAttainment(row.attainment);
 
   return (
     <div style={{ borderBottom: `1px solid ${color.borderSubtle}` }}>
@@ -102,6 +109,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
       */}
       <button
         type="button"
+        className={FOCUSABLE}
         onClick={onToggle}
         aria-expanded={isOpen}
         aria-controls={detailId}
@@ -194,7 +202,12 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
           textAlign: 'right',
           ...numeric,
         }}>
-          {formatAttainment(row.attainment)}
+          {attainment ?? (
+            <>
+              <span aria-hidden="true">—</span>
+              <SrOnly>No data</SrOnly>
+            </>
+          )}
         </span>
       </button>
 
@@ -202,7 +215,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
         <div id={detailId} style={{ padding: '4px 8px 20px 36px' }}>
           {row.inverted && (
             <div style={{ fontSize: type.label, color: color.warning, fontFamily: fontSans, marginBottom: 8 }}>
-              Inverted metric: for {row.label.toLowerCase()}, more than forecast is bad, not good.
+              Inverted metric: more than forecast is bad for {row.label.toLowerCase()}.
             </div>
           )}
           <ScorecardSection
@@ -241,8 +254,8 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
       }}
     >
       <div style={{ fontSize: type.label, color: color.inkMuted, fontFamily: fontSans, marginBottom: 16 }}>
-        Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn inverts —
-        a longer bar is worse for churn, unlike every other row. Click a row for detail.
+        Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn&apos;s bar is
+        reversed: longer means worse.
       </div>
 
       {rows.map((row) => (

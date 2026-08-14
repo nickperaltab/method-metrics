@@ -4,7 +4,8 @@ import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
 import ChannelTable from './ChannelTable';
-import { card, color, font, type, weight, radius, sectionGap } from '../../styles/tokens';
+import { card, color, font, type, sectionGap, weight } from '../../styles/tokens';
+import { IconButton, Pill } from './ui';
 
 const sectionTitleStyle = {
   fontSize: type.sectionTitle,
@@ -48,12 +49,10 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
             {section.title}
           </h2>
           {section.metricId && onMetricClick && (
-            <span
+            <IconButton
+              label={`How ${section.title} is defined`}
               onClick={() => onMetricClick(section.metricId, null, null)}
-              style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', transition: 'color 100ms' }}
-              onMouseEnter={e => { e.target.style.color = color.accentText; }}
-              onMouseLeave={e => { e.target.style.color = color.inkMuted; }}
-            >ⓘ</span>
+            />
           )}
         </div>
         <RawTable config={section} dataMap={dataMap} />
@@ -87,23 +86,17 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
           )}
         </div>
         {onGrain && (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          // No visible caption: a segmented control is self-explanatory, and an
+          // 11px uppercase label is the tell this restyle exists to remove. The
+          // group name goes to assistive tech instead.
+          <div role="group" aria-label="Time grain" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             {GRAIN_OPTIONS.map(opt => (
-              <button
+              <Pill
                 key={opt.label}
+                label={opt.label}
+                selected={grain === opt.value}
                 onClick={() => onGrain(opt.value)}
-                style={{
-                  padding: '4px 12px', fontSize: type.label,
-                  fontWeight: grain === opt.value ? weight.medium : weight.regular,
-                  fontFamily: font.sans,
-                  background: grain === opt.value ? color.accentBg : color.surfaceAlt,
-                  color: grain === opt.value ? color.accentText : color.inkMuted,
-                  border: 'none', borderRadius: radius.control, cursor: 'pointer',
-                  transition: 'background 150ms, color 150ms',
-                }}
-              >
-                {opt.label}
-              </button>
+              />
             ))}
           </div>
         )}
