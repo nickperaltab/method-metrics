@@ -54,8 +54,8 @@ describe('Method Monday scorecard', () => {
   });
 
   it('uses the correct format for every percentage-emitting metric', () => {
-    const percentIds = new Set([361, 414, 416, 418]);
-    const decimalRateIds = new Set([400, 402]);
+    const percentIds = new Set([361, 414, 416, 418, 321]);
+    const decimalRateIds = new Set([400, 402, 319, 357]);
     for (const s of methodMonday.sections) {
       for (const k of s.kpis) {
         if (percentIds.has(k.metricId)) expect(k.format).toBe('percent');
@@ -70,5 +70,27 @@ describe('Method Monday scorecard', () => {
     for (const id of expected) {
       expect(allIds.filter((x) => x === id).length).toBe(1);
     }
+  });
+
+  it('includes all reused pre-existing ids exactly once (fix round 1: full seven-group scope)', () => {
+    // 295/296/400/361/402/285/286/273 from the original build, plus
+    // 319/357/321 (trials Conversion Rate) and 274 (Forecasted Churn) added
+    // in fix round 1 to complete the spec's seven groups.
+    const expected = [295, 296, 400, 361, 402, 285, 286, 273, 319, 357, 321, 274];
+    const allIds = methodMonday.sections.flatMap((s) => s.kpis.map((k) => k.metricId));
+    for (const id of expected) {
+      expect(allIds.filter((x) => x === id).length).toBe(1);
+    }
+  });
+
+  it('has the trials Conversion Rate group in Conversion, distinct from Sync Conversion Rate', () => {
+    const conversion = methodMonday.sections.find((s) => s.title === 'Conversion');
+    const ids = conversion.kpis.map((k) => k.metricId);
+    expect(ids).toEqual(expect.arrayContaining([319, 357, 321]));
+  });
+
+  it('has Forecasted Churn (274) in the Churn section', () => {
+    const churn = methodMonday.sections.find((s) => s.title === 'Churn');
+    expect(churn.kpis.map((k) => k.metricId)).toContain(274);
   });
 });

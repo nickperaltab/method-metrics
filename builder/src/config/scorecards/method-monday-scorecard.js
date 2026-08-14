@@ -16,7 +16,10 @@
  * Sync Conversion Rate gets one tile, not two: on this convention its
  * trajectory equals its actual (numerator and denominator both scale by
  * days_in_month / elapsed_days, so the ratio is scale-invariant). A separate
- * trajectory tile would just repeat the same number.
+ * trajectory tile would just repeat the same number. The trials-level
+ * Conversion Rate group (#319/#357/#321) is NOT scale-invariant — its
+ * denominator is the lagged full-month trials figure and doesn't scale with
+ * elapsed days — so it keeps forecast, actual and trajectory as three tiles.
  *
  * Churn Rate (Looker metrics 344/345) is deliberately not included — both are
  * raw chart_sql on the through-today convention, and putting them on this
@@ -90,6 +93,27 @@ export default {
         { metricId: 296, label: 'Conversions Trajectory', format: 'number',
           valueSelector: 'current_or_latest' },
 
+        // Trials-level Conversion Rate group. Distinct from the sync
+        // conversion rate below: this denominator is the lagged full-month
+        // trials figure and does NOT scale with elapsed days, so forecast
+        // and trajectory are genuinely different numbers here (Looker shows
+        // 18.0% forecast against 13.2% trajectory) — unlike Sync Conversion
+        // Rate, this group needs two tiles.
+        //
+        // Formats are deliberately not uniform, copied verbatim from
+        // sales-scorecard.js:189-195: 319/357 emit decimals; 321's formula
+        // (SAFE_DIVIDE({296},{320})*100) emits a percentage (8.49). #321
+        // depends on #296, so it inherits the complete-days convention this
+        // page uses and its value moves accordingly — it will disagree with
+        // Looker's Sales page, consistently with the rest of this change.
+        { metricId: 319, label: 'Forecasted Conversion Rate', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        { metricId: 357, label: 'Conversion Rate', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        // 321 formula outputs percentage number (8.49), not decimal — use 'percent'
+        { metricId: 321, label: 'Conversion Rate Trajectory', format: 'percent',
+          valueSelector: 'current_or_latest' },
+
         // One tile, not two — see file header. #400 emits a decimal rate
         // (0.2474), not a percentage; 'decimal_rate' renders it as 24.74%.
         { metricId: 400, label: 'Sync Conversion Rate', format: 'decimal_rate',
@@ -106,6 +130,9 @@ export default {
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
+        // Full-month forecast, matching how 285/286 sit in Acquisition.
+        { metricId: 274, label: 'Forecasted Churn', format: 'number',
+          valueSelector: 'current_or_latest' },
         { metricId: 413, label: 'Churn Forecast MTD', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 409, label: 'Churn MTD', format: 'number',
