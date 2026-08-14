@@ -14,7 +14,11 @@ It is a **rebuild**, not a replica. Same metrics, corrected conventions, honest 
 
 Looker's seven groups, plus Sync Conversion Rate:
 
-Sync %, Trials, Syncs, Conversions, Conversion Rate, **Sync Conversion Rate**, Churn, Churn Rate.
+Sync %, Trials, Syncs, Conversions, Conversion Rate, **Sync Conversion Rate**, Churn, ~~Churn Rate~~.
+
+**Churn Rate is deferred, not dropped.** Metrics 344 and 345 are raw `chart_sql` computing `churn ÷ (BOM + conversions)` on the through-today convention. Putting them on a through-yesterday page would reintroduce exactly the mismatch this design removes. Doing it properly means a churn-rate pair on the new convention: the actual is `churn_mtd ÷ (BOM + conversions_mtd)`, and the trajectory is `churn_trajectory ÷ (BOM + conversions_trajectory)` — note BOM does **not** scale with elapsed days, so unlike the sync conversion rate these two are genuinely different numbers.
+
+That is a further task, and the page ships with seven groups until it lands. Metric 344 was verified against Looker on 2026-08-04 (Apr 2.41%, Jun 2.70% exact), so the basis is sound — only the window needs changing.
 
 Not included: the Revenue and Retention families. Nineteen dbt `.yml` files list Method Monday under `used_by` for GRR, NRR and the MRR movements, but no such section exists on the page today and nobody asked for one. Those `used_by` entries are aspirational and should be corrected separately.
 
@@ -73,7 +77,7 @@ The elapsed-days logic appears once. Thin `v_metric__*` views select one column 
 
 ### Metrics
 
-Ten new `v_metric__*` views over the intermediate, plus a convention change to two existing ones:
+Nine new `v_metric__*` views over the intermediate, plus a convention change to two existing ones:
 
 | View | Today | Note |
 |---|---|---|
@@ -87,8 +91,9 @@ Ten new `v_metric__*` views over the intermediate, plus a convention change to t
 | `v_metric__syncs_trajectory` | 220 | **convention change** |
 | `v_metric__conversions_forecast_mtd` | 31 | new |
 | `v_metric__churn_forecast_mtd` | 29 | new |
-| `v_metric__sync_rate_forecast` | 63.1% | new — syncs_forecast ÷ trials_forecast |
 | `v_metric__sync_rate_mtd` | 48.5% | new — syncs_mtd ÷ trials_mtd |
+
+That is **nine** new views, not ten. The Sync % Forecast tile needs no new model: Supabase **#361 Forecasted Sync Rate** already computes `SAFE_DIVIDE({286},{285})*100` = 391/620 = 63.1%, which is exactly the tile.
 
 Reused unchanged: `v_metric__sync_conversion_rate_forecasted` (#402, 27.11% — already `SUM(Forecasted_Conversion) ÷ SUM(Forecasted_Syncs)`, which is exactly this tile).
 
