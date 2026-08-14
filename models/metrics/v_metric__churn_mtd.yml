@@ -1,0 +1,37 @@
+# Canonical metric definition for "Churn MTD (through yesterday)".
+
+models:
+  - name: v_metric__churn_mtd
+    description: |
+      Cancellations with a CancellationDate in the current month, strictly
+      before today, counted at CompanyAccount grain (matching metric 344).
+      Pairs with the complete-days trajectory. Distinct from Churn (#59),
+      which is the full-month total and stays that way.
+    config:
+      materialized: view
+      meta:
+        answers: "How much churn have we had this month, counting only finished days?"
+        grain: "Single row, current month. CompanyAccount-grain, matching metric 344 (see Churn #59)."
+        filters:
+          - rule: "CancellationDate < CURRENT_DATE()"
+            why: "today is unfinished; including it would not match the trajectory divisor"
+          - rule: "COUNT(DISTINCT CompanyAccount), inherits int_cancellations"
+            why: "carried from Churn #59, CompanyAccount grain matching metric 344"
+        methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
+        parity_verified:
+          against: "PENDING — Task 8 records the browser comparison"
+          values: "PENDING"
+        caveats:
+          - "Excludes today by design. Not the same number as Churn #59 for the current month."
+          - "CompanyAccount grain, matching metric 344."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Method Monday (Retention section)"
+      labels:
+        metric_id: ''
+        layer: metrics
+        type: simple
+        status: queued
+        source_table: int_method_monday
+        source_measure_safe: ''
+        depends_on: '59'
