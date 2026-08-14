@@ -15,7 +15,7 @@ describe('Sync Conversion Rate section', () => {
     const sync = byTitle('Sync Conversion Rate');
     expect(sync.kpis).toHaveLength(trials.kpis.length);
     expect(sync.kpis.map((k) => k.label)).toEqual([
-      'Conversion',
+      'Conversions (excl. today)',
       'Conversion Trajectory',
       'Forecasted Sync Conversion Rate',
       'Sync Conversion Rate',

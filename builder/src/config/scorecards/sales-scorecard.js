@@ -180,8 +180,14 @@ export default {
     {
       title: 'Conversion Rate',
       layout: 'scorecard-row',
+      // Trajectory #296 now divides by complete elapsed days (through
+      // yesterday). The actual beside it must share that window, so this
+      // tile reads #408 (Conversions MTD, through yesterday) instead of
+      // #56 (full-month total). #56 stays as-is for Marketing and the AI
+      // builder, which still want the full-month figure.
+      description: 'Conversions and its trajectory exclude today — both now divide by complete elapsed days. Looker\'s Sales page still includes today in its denominator, so the two will read differently by design.',
       kpis: [
-        { metricId: 56, label: 'Conversion', format: 'number',
+        { metricId: 408, label: 'Conversions (excl. today)', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true,
           deltaWindow: 'same-period' },
         { metricId: 296, label: 'Conversion Trajectory', format: 'number',
@@ -241,9 +247,14 @@ export default {
       layout: 'scorecard-row',
       // `description` is the field ScorecardSection.jsx renders (line 63).
       // There is no `note` prop — using one renders nothing.
-      description: 'Conversions ÷ sync events, same month, no lag. Not comparable in level to the trials Conversion Rate above, which uses a lagged denominator — compare trend and attainment, not level.',
+      description: 'Conversions ÷ sync events, same month, no lag. Not comparable in level to the trials Conversion Rate above, which uses a lagged denominator — compare trend and attainment, not level. Conversions and its trajectory exclude today — both now divide by complete elapsed days. Looker\'s Sales page still includes today in its denominator, so the two will read differently by design.',
       kpis: [
-        { metricId: 56, label: 'Conversion', format: 'number',
+        // Trajectory #400 now divides by complete elapsed days (through
+        // yesterday). The actual beside it must share that window, so this
+        // tile reads #408 (Conversions MTD, through yesterday) instead of
+        // #56 (full-month total). #56 stays as-is for Marketing and the AI
+        // builder, which still want the full-month figure.
+        { metricId: 408, label: 'Conversions (excl. today)', format: 'number',
           valueSelector: 'current_or_latest', showDelta: true,
           deltaWindow: 'same-period' },
         { metricId: 296, label: 'Conversion Trajectory', format: 'number',

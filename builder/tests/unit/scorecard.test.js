@@ -172,7 +172,7 @@ describe('Sales scorecard config', () => {
   it('Conversion Rate section has correct KPI metric IDs', () => {
     const convRate = salesScorecard.sections[0];
     const ids = convRate.kpis.map(k => k.metricId);
-    expect(ids).toEqual([56, 296, 319, 357, 321, 322, 323]);
+    expect(ids).toEqual([408, 296, 319, 357, 321, 322, 323]);
   });
 
   it('Churn Rate section uses metric 274 (Forecasted Churn) first', () => {
