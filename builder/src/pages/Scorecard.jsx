@@ -12,6 +12,7 @@ import IntakeMixDrill from '../components/scorecards/IntakeMixDrill';
 import ChannelTrajectoryScorecard from '../components/scorecards/ChannelTrajectoryScorecard';
 import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
 import RetentionTriangle from '../components/scorecards/RetentionTriangle';
+import MethodMondayPaceView from '../components/method-monday/MethodMondayPaceView';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -249,6 +250,7 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
             </h2>
             {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
             {section.component === 'retentionTriangle' && <RetentionTriangle />}
+            {section.component === 'methodMondayPace' && <MethodMondayPaceView dataMap={dataMap} />}
           </div>
         ) : (
           <ScorecardSection

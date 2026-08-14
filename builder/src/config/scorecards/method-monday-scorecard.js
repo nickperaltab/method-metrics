@@ -25,6 +25,22 @@
  * raw chart_sql on the through-today convention, and putting them on this
  * through-yesterday page would reintroduce the exact mismatch this page
  * exists to remove. Deferred, not dropped; see the design doc.
+ *
+ * ── Redesign (2026-08-14) ────────────────────────────────────────────
+ * The original build rendered all 25 tiles below as 3 equal-weight rows —
+ * nothing told the reader which metric was in trouble. This adds a headline
+ * "Pace" section: one shared 0–150% axis, one bar per metric group, sorted
+ * worst-first, colored by how far off pace each metric is IN THE HARMFUL
+ * DIRECTION (churn inverts — see lib/methodMondayPace.js). It replaces
+ * Looker's seven small forecast-vs-actual charts, which each have their own
+ * y-axis and so can't be compared to each other or read at a glance.
+ *
+ * The pace section is a page-scoped component (see
+ * components/method-monday/MethodMondayPaceView.jsx), not a change to the
+ * shared components/scorecards/ rendering surface. The 25 detail tiles
+ * below are unchanged in substance — same metric ids, same formats — only
+ * regrouped from 3 undifferentiated rows into one section per metric so a
+ * reader can go from the pace bar straight to that metric's own tiles.
  */
 
 const EXCLUDES_TODAY =
@@ -38,9 +54,15 @@ export default {
     int_method_monday: { dateCol: 'period' },
   },
   sections: [
-    // ── Acquisition: Sync %, Trials, Syncs ───────────────────────
+    // ── Pace: shared-axis attainment view, worst-first ───────────
     {
-      title: 'Acquisition',
+      title: 'Pace',
+      component: 'methodMondayPace',
+    },
+
+    // ── Sync % ────────────────────────────────────────────────────
+    {
+      title: 'Sync %',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -48,7 +70,15 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 414, label: 'Sync % Actual', format: 'percent',
           valueSelector: 'current_or_latest' },
+      ],
+    },
 
+    // ── Trials ────────────────────────────────────────────────────
+    {
+      title: 'Trials',
+      layout: 'scorecard-row',
+      description: EXCLUDES_TODAY,
+      kpis: [
         { metricId: 285, label: 'Trials Forecast', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 406, label: 'Trials MTD', format: 'number',
@@ -60,7 +90,15 @@ export default {
         // Attainment, not "Forecast vs Trajectory" — see file header.
         { metricId: 416, label: 'Trials Attainment', format: 'percent',
           valueSelector: 'current_or_latest' },
+      ],
+    },
 
+    // ── Syncs ─────────────────────────────────────────────────────
+    {
+      title: 'Syncs',
+      layout: 'scorecard-row',
+      description: EXCLUDES_TODAY,
+      kpis: [
         { metricId: 286, label: 'Syncs Forecast', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 407, label: 'Syncs MTD', format: 'number',
@@ -76,9 +114,9 @@ export default {
       ],
     },
 
-    // ── Conversion: Conversions, Sync Conversion Rate ────────────
+    // ── Conversions ───────────────────────────────────────────────
     {
-      title: 'Conversion',
+      title: 'Conversions',
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
@@ -92,7 +130,15 @@ export default {
         // to the complete-days convention in Task 3. Not a new pointer.
         { metricId: 296, label: 'Conversions Trajectory', format: 'number',
           valueSelector: 'current_or_latest' },
+      ],
+    },
 
+    // ── Conversion Rate (trials-level) ───────────────────────────
+    {
+      title: 'Conversion Rate',
+      layout: 'scorecard-row',
+      description: EXCLUDES_TODAY,
+      kpis: [
         // Trials-level Conversion Rate group. Distinct from the sync
         // conversion rate below: this denominator is the lagged full-month
         // trials figure and does NOT scale with elapsed days, so forecast
@@ -113,7 +159,15 @@ export default {
         // 321 formula outputs percentage number (8.49), not decimal — use 'percent'
         { metricId: 321, label: 'Conversion Rate Trajectory', format: 'percent',
           valueSelector: 'current_or_latest' },
+      ],
+    },
 
+    // ── Sync Conversion Rate ──────────────────────────────────────
+    {
+      title: 'Sync Conversion Rate',
+      layout: 'scorecard-row',
+      description: EXCLUDES_TODAY,
+      kpis: [
         // One tile, not two — see file header. #400 emits a decimal rate
         // (0.2474), not a percentage; 'decimal_rate' renders it as 24.74%.
         { metricId: 400, label: 'Sync Conversion Rate', format: 'decimal_rate',
@@ -130,7 +184,7 @@ export default {
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
-        // Full-month forecast, matching how 285/286 sit in Acquisition.
+        // Full-month forecast, matching how 285/286 sit in the other groups.
         { metricId: 274, label: 'Forecasted Churn', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 413, label: 'Churn Forecast MTD', format: 'number',
