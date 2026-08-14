@@ -7,6 +7,7 @@ import {
   classifyBand,
   buildPaceRow,
   buildPaceRows,
+  isDayOneOfMonth,
 } from '../../src/lib/methodMondayPace';
 import methodMonday from '../../src/config/scorecards/method-monday-scorecard.js';
 
@@ -172,7 +173,10 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       414: 50.0, 361: 63.1,                 // sync %: derive 79.2%
       400: 0.2474, 402: 0.2711,             // sync conversion rate: derive 91.3%
       411: 109.69, 274: 99,                 // churn: derive 110.8%, inverted
-      321: 8.49, 319: 0.18,                 // conversion rate: unresolved live inputs, computed here for shape only
+      // Conversion Rate: live values reported back after review — #321
+      // (percent, already 0-100) and #319 (decimal_rate, 0-1) normalize to
+      // 10.95 / 17.97 = 60.9% attainment.
+      321: 10.95, 319: 0.1797,
     });
     const rows = buildPaceRows(dataMap);
     expect(rows.length).toBe(7);
@@ -191,5 +195,81 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
     expect(byKey.syncConversionRate.attainment).toBeCloseTo(91.3, 0);
     expect(byKey.churn.attainment).toBeCloseTo(110.8, 1);
     expect(byKey.churn.band).not.toBe('green');
+    // Reviewer-confirmed: #321=10.95, #319=0.1797 -> 60.9% attainment,
+    // still the second-worst row (behind Conversions at 54.0%, ahead of
+    // Syncs at 59.2%... actually between Syncs 59.2 and Trials 74.6 by
+    // harmful distance). Assert the value and that it participates
+    // correctly in the worst-first sort rather than asserting a fixed
+    // position, since the exact rank among close values is incidental.
+    expect(byKey.conversionRate.attainment).toBeCloseTo(60.9, 0);
+    expect(byKey.conversionRate.harmfulDistance).toBeCloseTo(100 - 60.9, 0);
+  });
+});
+
+describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectories NULL)', () => {
+  const day1 = new Date(2026, 8, 1); // 2026-09-01 — first real occurrence per review
+  const day2 = new Date(2026, 8, 2);
+
+  it('isDayOneOfMonth is true only on the 1st', () => {
+    expect(isDayOneOfMonth(day1)).toBe(true);
+    expect(isDayOneOfMonth(day2)).toBe(false);
+  });
+
+  it('on the 1st, every trajectory-backed row is "unknown" — never a real (or loader-coerced) 0%', () => {
+    // Populate the dataMap with values that WOULD render as a maximally
+    // harmful 0% attainment if the day-1 guard were missing or broken —
+    // this is exactly the shape load.js's `Number(r.value) || 0` produces
+    // for a NULL trajectory. The guard must win regardless of what's here.
+    const dataMap = mapFrom({
+      416: 0, 410: 0, 285: 311,
+      418: 0, 295: 0, 286: 220,
+      296: 0, 273: 106,
+      414: 0, 361: 63.1,
+      400: 0, 402: 0.2711,
+      411: 0, 274: 99,
+      321: 0, 319: 0.1797,
+    });
+    const rows = buildPaceRows(dataMap, { now: day1 });
+    expect(rows.length).toBe(7);
+    for (const row of rows) {
+      expect(row.attainment).toBeNull();
+      expect(row.band).toBe('unknown');
+      expect(row.harmfulDistance).toBeNull();
+    }
+  });
+
+  it('none of the day-1 "unknown" rows sorts above a row with real data', () => {
+    // Simulate the boundary directly: build one real (bad) row for the 2nd
+    // and one guarded row as if it were the 1st, then sort them together
+    // the same way buildPaceRows does.
+    const realBadRow = buildPaceRow(
+      METRIC_DEFS.find((d) => d.key === 'conversions'),
+      mapFrom({ 296: 10, 273: 106 }), // ~9.4% attainment — genuinely terrible
+      { now: day2 }
+    );
+    const day1Row = buildPaceRow(
+      METRIC_DEFS.find((d) => d.key === 'trials'),
+      mapFrom({ 410: 0, 285: 311 }),
+      { now: day1 }
+    );
+    expect(day1Row.attainment).toBeNull();
+    expect(realBadRow.attainment).not.toBeNull();
+
+    const sorted = [day1Row, realBadRow].sort((a, b) => {
+      if (a.harmfulDistance == null && b.harmfulDistance == null) return 0;
+      if (a.harmfulDistance == null) return 1;
+      if (b.harmfulDistance == null) return -1;
+      return b.harmfulDistance - a.harmfulDistance;
+    });
+    expect(sorted[0].key).toBe('conversions');
+    expect(sorted[1].key).toBe('trials');
+  });
+
+  it('a genuine zero on day 2+ is NOT treated as missing (day-1 guard only fires on the 1st)', () => {
+    const def = METRIC_DEFS.find((d) => d.key === 'conversions');
+    const dataMap = mapFrom({ 296: 0, 273: 106 }); // real zero conversions so far
+    const row = buildPaceRow(def, dataMap, { now: day2 });
+    expect(row.attainment).toBe(0);
+    expect(row.band).not.toBe('unknown');
   });
 });

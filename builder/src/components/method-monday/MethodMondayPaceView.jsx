@@ -18,6 +18,11 @@ import { buildPaceRows } from '../../lib/methodMondayPace';
 const AXIS_MAX = 150;
 const ON_PACE_X = (100 / AXIS_MAX) * 100; // % position of the 100% rule on the track
 
+// Every row (label / track / pair / attainment) uses this same grid so the
+// footer caption below can share it and stay aligned with the rule at any
+// container width — see ROW_GRID usage in the footer.
+const ROW_GRID = '160px 1fr 150px 90px';
+
 const BAND_COLORS = {
   green: '#059669',
   amber: '#b45309',
@@ -54,7 +59,7 @@ export default function MethodMondayPaceView({ dataMap }) {
     >
       <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: fontSans, marginBottom: 16 }}>
         Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn inverts —
-        more cancellations than forecast is bad, not good.
+        a longer bar is worse for churn, unlike every other row.
       </div>
 
       {rows.map((row) => {
@@ -68,26 +73,46 @@ export default function MethodMondayPaceView({ dataMap }) {
             key={row.key}
             style={{
               display: 'grid',
-              gridTemplateColumns: '160px 1fr 150px 90px',
+              gridTemplateColumns: ROW_GRID,
               alignItems: 'center',
               gap: 16,
               padding: '10px 0',
               borderBottom: '1px solid #f1f3f5',
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', fontFamily: fontSans }}>
-              {row.label}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', fontFamily: fontSans }}>
+                {row.label}
+              </div>
               {row.inverted && (
-                <span
-                  title="Inverted: over 100% is bad for this metric"
-                  style={{ marginLeft: 6, fontSize: 10, color: '#9ca3af', fontFamily: fontMono }}
+                <div
+                  title="Inverted: for churn, over 100% is bad, not good"
+                  style={{ fontSize: 10, color: '#b45309', fontFamily: fontMono, marginTop: 1 }}
                 >
-                  inv
-                </span>
+                  over forecast = bad
+                </div>
               )}
             </div>
 
             <div style={{ position: 'relative', height: 20, background: '#f3f4f6', borderRadius: 4 }}>
+              {/* Danger-zone tint: for an inverted metric (churn), the region
+                  past the 100% rule is the harmful direction. Shaded whether
+                  or not the bar currently reaches it, so the meaning of
+                  "past this line" is visible at a glance, not just implied
+                  by the rule + a text tag. */}
+              {row.inverted && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${ON_PACE_X}%`,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    background: 'rgba(220, 38, 38, 0.08)',
+                    borderRadius: '0 4px 4px 0',
+                  }}
+                />
+              )}
               {/* on-pace rule at 100% */}
               <div
                 style={{
@@ -124,10 +149,28 @@ export default function MethodMondayPaceView({ dataMap }) {
         );
       })}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, paddingBottom: 4 }}>
-        <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: fontSans, marginRight: 90 }}>
-          | 100% on pace
+      {/* Footer caption shares ROW_GRID + ON_PACE_X with the rows above, so
+          the "100% on pace" label stays under the rule it names at any
+          container width instead of drifting via a hardcoded margin. */}
+      <div style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 16, paddingTop: 8, paddingBottom: 4 }}>
+        <div />
+        <div style={{ position: 'relative', height: 14 }}>
+          <div
+            style={{
+              position: 'absolute',
+              left: `${ON_PACE_X}%`,
+              transform: 'translateX(-50%)',
+              fontSize: 11,
+              color: '#9ca3af',
+              fontFamily: fontSans,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            100% on pace
+          </div>
         </div>
+        <div />
+        <div />
       </div>
     </div>
   );

@@ -168,11 +168,48 @@ export function classifyBand(attainment, inverted) {
 }
 
 /**
+ * True on the 1st of the month, when elapsed_days is 0 for every trajectory
+ * in int_method_monday and SAFE_DIVIDE returns NULL for all of them.
+ *
+ * This has to be checked directly against the day-of-month — NOT inferred
+ * from a value being 0 — because `builder/src/lib/sql/load.js:277` does
+ * `Number(r.value) || 0`, so a real NULL trajectory arrives here already
+ * coerced to 0. A genuine zero is also possible on day 2+ (e.g. zero
+ * conversions or zero churn so far), and treating that as "no data" would
+ * hide a real signal. `load.js` is the shared NULL-as-0 surface and is out
+ * of scope to fix here (see task constraints) — this guard exists so this
+ * page doesn't draw seven false "0% / red / worst" bars on day 1 every
+ * month, sorted to the very top, before any real trajectory value exists.
+ */
+export function isDayOneOfMonth(now = new Date()) {
+  return now.getDate() === 1;
+}
+
+/**
  * Resolve one metric definition against the loaded dataMap into a fully
  * computed pace row: attainment, band, harmful distance, and the raw
  * trajectory/forecast pair (normalized to the same scale for display).
+ *
+ * `now` is injectable for testing the day-1 guard deterministically.
  */
-export function buildPaceRow(def, dataMap) {
+export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
+  if (isDayOneOfMonth(now)) {
+    // Every trajectory is genuinely NULL today — do not let the loader's
+    // NULL-as-0 coercion masquerade as a real (and maximally harmful) 0%.
+    return {
+      key: def.key,
+      label: def.label,
+      inverted: !!def.inverted,
+      attainment: null,
+      band: 'unknown',
+      harmfulDistance: null,
+      numerator: null,
+      denominator: null,
+      numeratorFormat: def.numeratorFormat,
+      denominatorFormat: def.denominatorFormat,
+    };
+  }
+
   const rawNumerator = resolveKpiValue(dataMap.get(def.numeratorId), 'current_or_latest');
   const rawDenominator = resolveKpiValue(dataMap.get(def.denominatorId), 'current_or_latest');
   const numerator = normalize(rawNumerator, def.numeratorFormat);
@@ -182,6 +219,26 @@ export function buildPaceRow(def, dataMap) {
   if (def.attainmentId) {
     const rawAttainment = resolveKpiValue(dataMap.get(def.attainmentId), 'current_or_latest');
     attainment = normalize(rawAttainment, def.attainmentFormat);
+
+    // Dev-time consistency check: Trials/Syncs display the raw
+    // numerator/denominator pair (#410/#285, #295/#286) beside an
+    // attainment value read from a SEPARATE registered metric (#416/#418).
+    // Nothing enforces those two stay in sync at the data layer, so if
+    // #416/#418's formula ever drifts from numerator/denominator, the bar
+    // and the printed pair would silently disagree. This only warns in
+    // dev (no throw, no user-visible effect) and is skipped whenever either
+    // side is unavailable to compare.
+    if (import.meta.env?.DEV && numerator != null && denominator) {
+      const derived = computeAttainmentPercent(numerator, denominator);
+      if (derived != null && Math.abs(derived - attainment) > 0.5) {
+        console.warn(
+          `[methodMondayPace] ${def.label}: registered attainment (#${def.attainmentId}) ` +
+          `= ${attainment.toFixed(1)}% disagrees with derived ${def.numeratorId}/${def.denominatorId} ` +
+          `= ${derived.toFixed(1)}%. The bar (attainment) and the printed pair (numerator/denominator) ` +
+          `will visibly disagree on the page.`
+        );
+      }
+    }
   } else {
     attainment = computeAttainmentPercent(numerator, denominator);
   }
@@ -204,10 +261,11 @@ export function buildPaceRow(def, dataMap) {
  * Build every pace row and sort worst-first, i.e. descending by harmful
  * distance. A row with unknown/missing attainment sorts last (harmful
  * distance null is treated as "least urgent", not "most urgent" — we don't
- * want a data gap to visually outrank a real problem).
+ * want a data gap to visually outrank a real problem). This is also what
+ * keeps day-1's seven "unknown" rows from sorting above real data.
  */
-export function buildPaceRows(dataMap) {
-  const rows = METRIC_DEFS.map((def) => buildPaceRow(def, dataMap));
+export function buildPaceRows(dataMap, { now = new Date() } = {}) {
+  const rows = METRIC_DEFS.map((def) => buildPaceRow(def, dataMap, { now }));
   return rows.sort((a, b) => {
     if (a.harmfulDistance == null && b.harmfulDistance == null) return 0;
     if (a.harmfulDistance == null) return 1;
