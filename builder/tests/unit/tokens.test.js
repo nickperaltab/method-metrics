@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { color, chartPalette, weight } from '../../src/styles/tokens.js';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { color, chartPalette, weight, shadow, card, sectionGap } from '../../src/styles/tokens.js';
+import ScorecardSection from '../../src/components/scorecards/ScorecardSection.jsx';
+import MethodMondayPaceView from '../../src/components/method-monday/MethodMondayPaceView.jsx';
 import { COLORS, buildEChartsOption } from '../../src/lib/chartUtils.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -102,6 +106,108 @@ describe('contrast: inkFaint never lands on text', () => {
     // is only legitimate as a fill/mark (`background:`, a chart band colour).
     const src = stripComments(read(rel));
     expect(src).not.toMatch(/color:\s*color\.inkFaint/);
+  });
+});
+
+describe('depth: one shadow, used one way', () => {
+  it('exactly one shadow token exists', () => {
+    expect(Object.keys(shadow)).toEqual(['card']);
+    expect(shadow.card).toBe('0 1px 2px rgba(16, 24, 40, 0.06)');
+  });
+
+  it('no file in scope defines a shadow of its own', () => {
+    // A second shadow level, a coloured shadow, a glow or a filter:drop-shadow
+    // is how a flat page gets "fixed" wrongly. There is one token; use it.
+    for (const rel of SCOPE) {
+      const src = stripComments(read(rel));
+      const literals = [...src.matchAll(/boxShadow:\s*'([^']*)'/g)].map(m => m[1]);
+      expect(literals).toEqual([]);
+      expect(src).not.toMatch(/drop-shadow/);
+    }
+  });
+
+  it('the card is the only consumer shape: surface, border, radius, one shadow', () => {
+    expect(card.boxShadow).toBe(shadow.card);
+    expect(card.background).toBe(color.surface);
+    expect(card.borderRadius).toBe(10);
+  });
+});
+
+describe('the wash is on the page canvas and nowhere else', () => {
+  it('canvasWash is the only gradient in the token set', () => {
+    const gradients = Object.entries(color).filter(([, v]) => String(v).includes('gradient'));
+    expect(gradients.map(([k]) => k)).toEqual(['canvasWash']);
+  });
+
+  it('no gradient string appears outside the canvas token', () => {
+    // No gradient on any card, tile, bar or button.
+    for (const rel of SCOPE) {
+      const src = stripComments(read(rel));
+      const hits = [...src.matchAll(/[^\n]*gradient[^\n]*/g)].map(m => m[0].trim());
+      const allowed = rel === 'styles/tokens.js'
+        ? hits.filter(h => !h.startsWith('canvasWash:'))
+        : hits.filter(h => !h.includes('color.canvasWash'));
+      expect(allowed).toEqual([]);
+    }
+  });
+
+  it('canvas keeps a flat fallback alongside the wash', () => {
+    expect(color.canvas).toBe('#f7f9fc');
+  });
+});
+
+describe('section containment', () => {
+  const dataMap = new Map();
+  const section = { title: 'Section', kpis: [{ metricId: 1, label: 'A', format: 'number' }] };
+
+  function render(props) {
+    return renderToStaticMarkup(React.createElement(ScorecardSection, { section, dataMap, ...props }));
+  }
+
+  it('a section renders as a card by default', () => {
+    const html = render({});
+    expect(html).toContain(`background:${color.surface}`);
+    expect(html).toContain(`border:1px solid ${color.border}`);
+    expect(html).toContain('box-shadow:0 1px 2px rgba(16, 24, 40, 0.06)');
+    expect(html).toContain('padding:18px 20px');
+  });
+
+  it('variant="plain" opts out, for a section a parent has already contained', () => {
+    const html = render({ variant: 'plain' });
+    expect(html).not.toContain('box-shadow');
+    expect(html).not.toContain(`border:1px solid ${color.border}`);
+  });
+
+  it('the inter-section gap shrank now that the card edge does the separating', () => {
+    expect(sectionGap).toBe(14);
+    expect(render({})).toContain(`margin-bottom:${sectionGap}px`);
+  });
+
+  it('a KPI group gets a hairline between adjacent tiles, none above the first', () => {
+    const twoTiles = {
+      title: 'Section',
+      kpis: [
+        { metricId: 1, label: 'A', format: 'number' },
+        { metricId: 2, label: 'B', format: 'number' },
+        { metricId: 3, label: 'C', format: 'number' },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(ScorecardSection, { section: twoTiles, dataMap })
+    );
+    const rules = html.match(new RegExp(`border-top:1px solid ${color.borderSubtle}`, 'g')) || [];
+    expect(rules.length).toBe(twoTiles.kpis.length - 1);
+  });
+});
+
+describe('MethodMondayPaceView is not boxed twice', () => {
+  it('draws its own card, so the page must not wrap it in another', () => {
+    // It renders through the same section path as everything else; the page
+    // opts it out. One shadow in the whole subtree is the proof.
+    const html = renderToStaticMarkup(
+      React.createElement(MethodMondayPaceView, { dataMap: new Map(), detailSections: [] })
+    );
+    expect((html.match(/box-shadow/g) || []).length).toBe(1);
   });
 });
 

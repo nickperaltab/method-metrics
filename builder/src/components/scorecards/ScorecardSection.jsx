@@ -4,7 +4,7 @@ import Chart from './Chart';
 import DataTable from './DataTable';
 import RawTable from './RawTable';
 import ChannelTable from './ChannelTable';
-import { color, font, type, weight, radius } from '../../styles/tokens';
+import { card, color, font, type, weight, radius, sectionGap } from '../../styles/tokens';
 
 const sectionTitleStyle = {
   fontSize: type.sectionTitle,
@@ -14,6 +14,21 @@ const sectionTitleStyle = {
   fontFamily: font.sans,
 };
 
+/**
+ * Wrapper for every section. A card by default: surface on the page canvas,
+ * hairline border, one shadow.
+ *
+ * `variant="plain"` is the opt-out, for a section a parent has already
+ * contained — MethodMondayPaceView renders each expanded detail section inside
+ * its own card, and boxing it again would double the containment. All three
+ * section types (default, rawTable, channelTable) render correctly carded:
+ * none of them draws a surface of its own, so none needs to opt out.
+ */
+function sectionWrapperStyle(variant) {
+  if (variant === 'plain') return { marginBottom: sectionGap };
+  return { ...card, marginBottom: sectionGap };
+}
+
 const GRAIN_OPTIONS = [
   { label: 'Daily', value: 'day' },
   { label: 'Weekly', value: 'week' },
@@ -21,11 +36,13 @@ const GRAIN_OPTIONS = [
   { label: 'Quarterly', value: 'quarter' },
 ];
 
-export default function ScorecardSection({ section, dataMap, onMetricClick, filterLastNMonths, grain, onGrain }) {
+export default function ScorecardSection({ section, dataMap, onMetricClick, filterLastNMonths, grain, onGrain, variant }) {
+  const wrapperStyle = sectionWrapperStyle(variant);
+
   // Raw table sections render differently — full width, no chart grid
   if (section.type === 'rawTable') {
     return (
-      <div style={{ marginBottom: 48 }}>
+      <div style={wrapperStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <h2 style={sectionTitleStyle}>
             {section.title}
@@ -47,7 +64,7 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
   // Channel breakdown table — dimension rows × metric columns, filters + drill-down.
   if (section.type === 'channelTable') {
     return (
-      <div style={{ marginBottom: 48 }}>
+      <div style={wrapperStyle}>
         <h2 style={{ ...sectionTitleStyle, margin: '0 0 16px' }}>
           {section.title}
         </h2>
@@ -57,7 +74,7 @@ export default function ScorecardSection({ section, dataMap, onMetricClick, filt
   }
 
   return (
-    <div style={{ marginBottom: 48 }}>
+    <div style={wrapperStyle}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h2 style={sectionTitleStyle}>

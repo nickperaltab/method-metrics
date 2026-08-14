@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { buildPaceRows } from '../../lib/methodMondayPace';
 import ScorecardSection from '../scorecards/ScorecardSection';
-import { color, font, type, weight, radius, numeric } from '../../styles/tokens';
+import { color, font, type, weight, radius, numeric, shadow } from '../../styles/tokens';
 
 /**
  * Method Monday — shared-axis pace view. Page-scoped: this component is not
@@ -209,6 +209,7 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
             section={detailSection}
             dataMap={dataMap}
             onMetricClick={onMetricClick}
+            variant="plain"
           />
         </div>
       )}
@@ -235,6 +236,7 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
         background: color.surface,
         border: `1px solid ${color.border}`,
         borderRadius: radius.card,
+        boxShadow: shadow.card,
         padding: '20px 24px 12px',
       }}
     >

@@ -16,7 +16,7 @@ import MethodMondayPaceView from '../components/method-monday/MethodMondayPaceVi
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
-import { color, font, type, weight, radius } from '../styles/tokens';
+import { card, color, font, type, weight, radius, sectionGap } from '../styles/tokens';
 
 const DATE_PRESETS = [
   { label: '3M', value: 3 },
@@ -71,7 +71,7 @@ function BreakdownTabs({ sections, dataMap, onMetricClick, filterLastNMonths, gr
   const [active, setActive] = useState(0);
 
   return (
-    <div style={{ marginBottom: 48 }}>
+    <div style={{ ...card, marginBottom: sectionGap }}>
       <h2 style={{
         fontSize: type.sectionTitle, fontWeight: weight.medium, color: color.ink, marginBottom: 16,
         fontFamily: font.sans,
@@ -211,92 +211,103 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const breakdownSections = config.sections.filter(s => s.group === 'breakdowns');
 
   return (
-    <div style={{ padding: 32, maxWidth: 1400 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 32,
-      }}>
-        <div>
-          <h1 style={{
-            fontSize: type.pageTitle, fontWeight: weight.medium, color: color.ink, margin: 0,
-            fontFamily: font.sans,
-          }}>
-            {config.title}
-          </h1>
-          {config.description && (
-            <div style={{ fontSize: type.body, color: color.inkMuted, marginTop: 4, maxWidth: 700, fontFamily: font.sans }}>
-              {config.description}
-            </div>
-          )}
-        </div>
-        {!config.hideDateFilter && (
-          <ScoreCardFilters
-            lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
-          />
-        )}
-      </div>
-
-      <StaleIndicator freshness={freshness} refreshedAt={refreshedAt} />
-
-      {mainSections.map((section, i) => (
-        section.component ? (
-          <div key={section.title} style={{ marginTop: 32 }}>
-            <h2 style={{
-              fontSize: type.sectionTitle, fontWeight: weight.medium, color: color.ink, margin: '0 0 12px',
+    // The wash sits on the full-width canvas, not on the 1400px content column,
+    // so there is no seam where the content stops on a wide screen.
+    <div style={{ background: color.canvasWash, minHeight: '100%' }}>
+      <div style={{ padding: 32, maxWidth: 1400 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 24,
+        }}>
+          <div>
+            <h1 style={{
+              fontSize: type.pageTitle, fontWeight: weight.medium, color: color.ink, margin: 0,
               fontFamily: font.sans,
             }}>
-              {section.title}
-              {section.dbtModel && (
-                <span
-                  onClick={() => setInspected({ dbtModel: section.dbtModel })}
-                  title="How this is derived (dbt)"
-                  style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', marginLeft: 8 }}
-                >ⓘ</span>
-              )}
-            </h2>
-            {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
-            {section.component === 'retentionTriangle' && <RetentionTriangle />}
-            {section.component === 'methodMondayPace' && (
-              <MethodMondayPaceView
-                dataMap={dataMap}
-                detailSections={config.sections.filter((s) => s.renderedBy === section.component)}
-                onMetricClick={handleMetricClick}
-              />
+              {config.title}
+            </h1>
+            {config.description && (
+              <div style={{ fontSize: type.body, color: color.inkMuted, marginTop: 4, maxWidth: 700, fontFamily: font.sans }}>
+                {config.description}
+              </div>
             )}
           </div>
-        ) : (
-          <ScorecardSection
-            key={section.title}
-            section={section}
+          {!config.hideDateFilter && (
+            <ScoreCardFilters
+              lastNMonths={filterLastNMonths} onLastNMonths={setFilterLastNMonths}
+            />
+          )}
+        </div>
+
+        <StaleIndicator freshness={freshness} refreshedAt={refreshedAt} />
+
+        {mainSections.map((section, i) => (
+          section.component ? (
+            // MethodMondayPaceView already draws its own card (surface, border,
+            // radius.card), so it opts out rather than being boxed twice.
+            <div
+              key={section.title}
+              style={section.component === 'methodMondayPace'
+                ? { marginBottom: sectionGap }
+                : { ...card, marginBottom: sectionGap }}
+            >
+              <h2 style={{
+                fontSize: type.sectionTitle, fontWeight: weight.medium, color: color.ink, margin: '0 0 12px',
+                fontFamily: font.sans,
+              }}>
+                {section.title}
+                {section.dbtModel && (
+                  <span
+                    onClick={() => setInspected({ dbtModel: section.dbtModel })}
+                    title="How this is derived (dbt)"
+                    style={{ fontSize: 14, color: color.inkMuted, cursor: 'pointer', marginLeft: 8 }}
+                  >ⓘ</span>
+                )}
+              </h2>
+              {section.component === 'cohortSurvival' && <CohortSurvivalChart />}
+              {section.component === 'retentionTriangle' && <RetentionTriangle />}
+              {section.component === 'methodMondayPace' && (
+                <MethodMondayPaceView
+                  dataMap={dataMap}
+                  detailSections={config.sections.filter((s) => s.renderedBy === section.component)}
+                  onMetricClick={handleMetricClick}
+                />
+              )}
+            </div>
+          ) : (
+            <ScorecardSection
+              key={section.title}
+              section={section}
+              dataMap={dataMap}
+              onMetricClick={handleMetricClick}
+              filterLastNMonths={filterLastNMonths}
+              grain={i === 0 && !config.hideGrain ? grain : null}
+              onGrain={i === 0 && !config.hideGrain ? setGrain : null}
+            />
+          )
+        ))}
+
+        {breakdownSections.length > 0 && (
+          <BreakdownTabs
+            sections={breakdownSections}
             dataMap={dataMap}
             onMetricClick={handleMetricClick}
             filterLastNMonths={filterLastNMonths}
-            grain={i === 0 && !config.hideGrain ? grain : null}
-            onGrain={i === 0 && !config.hideGrain ? setGrain : null}
+            grain={null}
           />
-        )
-      ))}
+        )}
 
-      {breakdownSections.length > 0 && (
-        <BreakdownTabs
-          sections={breakdownSections}
-          dataMap={dataMap}
-          onMetricClick={handleMetricClick}
-          filterLastNMonths={filterLastNMonths}
-          grain={null}
+        <MetricInspector
+          metricId={inspected?.metricId}
+          dbtModel={inspected?.dbtModel}
+          currentValue={inspected?.value}
+          valueFormat={inspected?.format}
+          metricsCache={metricsCache}
+          customInfo={inspected?.customInfo}
+          deltaInfo={inspected?.deltaInfo}
+          onClose={() => setInspected(null)}
         />
-      )}
-
-      <MetricInspector
-        metricId={inspected?.metricId}
-        dbtModel={inspected?.dbtModel}
-        currentValue={inspected?.value}
-        valueFormat={inspected?.format}
-        metricsCache={metricsCache}
-        customInfo={inspected?.customInfo}
-        deltaInfo={inspected?.deltaInfo}
-        onClose={() => setInspected(null)}
-      />
+      </div>
     </div>
   );
 }

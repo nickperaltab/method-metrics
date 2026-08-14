@@ -30,6 +30,13 @@ export const color = {
   surface: '#ffffff',
   surfaceAlt: '#f9fafb',
 
+  // Page background behind the section cards. `canvas` is the flat value;
+  // `canvasWash` is a very soft vertical version for the scorecard page. The
+  // wash is deliberately near-imperceptible — if you can see where it starts,
+  // it is too strong. Page canvas only: never on a card, tile, bar or button.
+  canvas: '#f7f9fc',
+  canvasWash: 'linear-gradient(#f7f9fc, #eef2f7)',
+
   // ── Accent (green; the old #2563eb UI accent is retired) ────────
   accent: '#059669',       // chart marks, bar fills, active states
   accentText: '#047857',   // link and chip TEXT (passes AA where #059669 does not)
@@ -86,6 +93,32 @@ export const radius = {
   control: 8,
   card: 10,
 };
+
+/**
+ * One shadow, used one way. Depth on this page should be felt, not seen: the
+ * card border does the containing, and the shadow only lifts it off the canvas.
+ * There is deliberately no second level, no coloured shadow and no glow —
+ * raising this to make it visible is the wrong fix for a flat-looking page.
+ */
+export const shadow = {
+  card: '0 1px 2px rgba(16, 24, 40, 0.06)',
+};
+
+/** The section card. Every scorecard section renders inside one of these. */
+export const card = {
+  background: color.surface,
+  border: `1px solid ${color.border}`,
+  borderRadius: radius.card,
+  boxShadow: shadow.card,
+  padding: '18px 20px',
+};
+
+/**
+ * Gap between section cards. Much tighter than the 48px that separated the old
+ * bare divs — the card edge now does the separating, so the large gap only made
+ * the page feel sparse.
+ */
+export const sectionGap = 14;
 
 /** Every figure. Digits must not change width between renders. */
 export const numeric = { fontVariantNumeric: 'tabular-nums' };

@@ -2,11 +2,12 @@ import React from 'react';
 import KpiTile from './KpiTile';
 import { resolveKpiValue, computeDelta, resolveFilteredKpiSeries } from './utils';
 import { evaluateFormula } from '../../lib/sanitize';
+import { color } from '../../styles/tokens';
 
 export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 200 }}>
-      {kpis.map((kpi) => {
+      {kpis.map((kpi, kpiIndex) => {
         let value;
         let series;
 
@@ -62,16 +63,24 @@ export default function KpiColumn({ kpis, dataMap, onMetricClick }) {
           }
         }
 
+        // A hairline between adjacent tiles, so a group of KPIs reads as one
+        // instrument rather than N floating numbers. These tiles stack
+        // vertically inside the section's 220px column, so the rule sits on
+        // top of each tile after the first.
         return (
-          <KpiTile
+          <div
             key={`${kpi.metricId}-${kpi.label}`}
-            label={kpi.label}
-            value={value}
-            format={kpi.format}
-            deltaPercent={deltaPercent}
-            noData={noData}
-            onClick={() => onMetricClick?.(kpi.metricId, value, kpi.format, null, deltaInfo)}
-          />
+            style={kpiIndex === 0 ? undefined : { borderTop: `1px solid ${color.borderSubtle}` }}
+          >
+            <KpiTile
+              label={kpi.label}
+              value={value}
+              format={kpi.format}
+              deltaPercent={deltaPercent}
+              noData={noData}
+              onClick={() => onMetricClick?.(kpi.metricId, value, kpi.format, null, deltaInfo)}
+            />
+          </div>
         );
       })}
     </div>
