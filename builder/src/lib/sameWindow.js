@@ -12,8 +12,14 @@
  *
  *     delta = MTD / (prior month, day 1 through today's day-of-month) - 1
  *
- * The window is INCLUSIVE of today, matching the trajectory numerator
- * convention in models/metrics/v_metric__conversions_trajectory.sql.
+ * The window is INCLUSIVE of today. This is a same-window comparison, not a
+ * trajectory: it sums the day-grain series the scorecard already fetches
+ * over two matching calendar ranges, so it has no need to exclude today the
+ * way a trajectory's complete-days divisor does. Verified against Looker
+ * directly (see the four readings above) — it does not derive its
+ * correctness from any trajectory view's convention, which is free to change
+ * (and did, in Task 3 of the 2026-08-10 Method Monday work) without this
+ * still being right.
  *
  * Everything here is pure: it reads the day-grain series the scorecard
  * already fetches (the `<id>:day` plan entries) and does arithmetic. No new
