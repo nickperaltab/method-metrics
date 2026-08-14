@@ -35,7 +35,6 @@ models:
         layer: metrics
         type: derived
         status: queued
-        verified_at: '2026-08-04'
-        source_table: int_syncs
-        source_measure_safe: count_star
+        source_table: int_method_monday
+        source_measure_safe: ''
         depends_on: '55'
