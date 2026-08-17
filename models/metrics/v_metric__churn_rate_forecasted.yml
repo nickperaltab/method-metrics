@@ -1,5 +1,16 @@
 version: 2
 
+# Canonical id is Supabase #342 ("Forecasted Churn Rate %"), a pre-existing
+# metric repointed at this dbt view 2026-08-17 -- NOT #424, which was a
+# duplicate minted by mistake (the "check for an existing forecasted churn
+# rate metric first" step in this family's brief was followed for the
+# denominator column but missed that #342 already existed as a registered
+# Supabase metric with the exact same formula). #424 is deprecated in
+# #342's favor; its Supabase description carries the DEPRECATED marker
+# (see the retirement note there). Both ids still point at this same view
+# (repointing #424 elsewhere would just create a second orphan), but only
+# #342 is used by the page config / attainment formula going forward.
+
 models:
   - name: v_metric__churn_rate_forecasted
     description: |
@@ -9,7 +20,10 @@ models:
       forecast columns, the forecast sheet already publishes a churn-rate
       column -- no derivation needed. Emits a PERCENTAGE (2.5), not the
       source column's own decimal scale (0.025) -- see filters below for why
-      this view deliberately rescales.
+      this view deliberately rescales. Backs Supabase #342 ("Forecasted
+      Churn Rate %"), a pre-existing metric verified 2026-08-17 to already
+      compute this exact figure (13/13 months matched exactly against #342's
+      prior raw chart_sql before it was repointed here).
     config:
       materialized: view
       meta:
@@ -34,25 +48,28 @@ models:
               shape left #322/#323 wrong by 100x for months. Rescaling
               HERE, at the source view, means the Accounts Churned Rate
               Attainment formula (#425) can be
-              SAFE_DIVIDE({345}, {424}) * 100 -- identical in shape to
+              SAFE_DIVIDE({345}, {342}) * 100 -- identical in shape to
               every other attainment metric on the page (#416/#418/#419/
               #420/#421/#422/#423) -- instead of carrying a silent
               compensating omission. Do NOT remove this *100 to "match the
               sheet" -- matching this metric's siblings is the contract,
-              not the sheet's native scale.
-        methodology_source: "Read directly from the forecast sheet's own Forecasted_Churn_Rate__ column (Justin's forecast model), rescaled from decimal to percentage; not otherwise derived."
+              not the sheet's native scale. Also matches the pre-existing
+              #342's own ROUND(AVG(...) * 100, 2) chart_sql, which already
+              did this rescale for years before this dbt view existed.
+        methodology_source: "Read directly from the forecast sheet's own Forecasted_Churn_Rate__ column (Justin's forecast model), rescaled from decimal to percentage; not otherwise derived. Matches the pre-existing #342's own methodology exactly."
         parity_verified:
-          against: "Same source as Forecasted Churn (#274/#413), which reads Forecasted_Churn from the same sheet."
-          values: "Aug 2026 forecast read as 2.5 (source column 0.025 * 100) on 2026-08-17, consistent with Forecasted Churn #274 (99) / bom+conversions scale for the month."
+          against: "Same source as Forecasted Churn (#274/#413), which reads Forecasted_Churn from the same sheet. Also verified 2026-08-17 against #342's pre-existing chart_sql (which grouped by Forecasted_Month instead of DATE_TRUNC(Date, MONTH) -- confirmed those two groupings always agree, 0 mismatches across the full forecast range)."
+          values: "Aug 2026 forecast read as 2.5 (source column 0.025 * 100) on 2026-08-17, consistent with Forecasted Churn #274 (99) / bom+conversions scale for the month. 13/13 months (Dec 2025 - Dec 2026) matched #342's pre-existing chart_sql exactly, to the cent, before #342 was repointed at this view."
         caveats:
-          - "Emits a PERCENTAGE (2.5), not a decimal (0.025) -- deliberately rescaled from the source column, which is itself a decimal in the sheet. See filters above for why. Accounts Churned Rate Attainment (#425) assumes this scale; if a future edit reverts this to a decimal, #425's formula (SAFE_DIVIDE({345}, {424}) * 100) would silently read 100x high."
+          - "Emits a PERCENTAGE (2.5), not a decimal (0.025) -- deliberately rescaled from the source column, which is itself a decimal in the sheet. See filters above for why. Accounts Churned Rate Attainment (#425) assumes this scale; if a future edit reverts this to a decimal, #425's formula (SAFE_DIVIDE({345}, {342}) * 100) would silently read 100x high."
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename or edit in the sheet breaks or silently changes this."
           - "Account-grain forecast (like Forecasted Churn #274/#413) compared against a CompanyAccount-grain actual -- consistent with the rest of the Churn family, not customer-grain."
-          - "The source column, before rescaling, is Looker's own forecast-implied denominator in disguise: Forecasted_Churn / Forecasted_Churn_Rate__ = 99 / 0.025 = 3,960 for Aug 2026, which is what Looker's Churn Rate Trajectory tile actually divides by (see v_metric__churn_rate_trajectory.yml). This metric (#424) itself is unaffected by, and unrelated to, the 2026-08-17 bom_customers bug fix -- it never reads int_bom_customers."
+          - "The source column, before rescaling, is Looker's own forecast-implied denominator in disguise: Forecasted_Churn / Forecasted_Churn_Rate__ = 99 / 0.025 = 3,960 for Aug 2026, which is what Looker's Churn Rate Trajectory tile actually divides by (see v_metric__churn_rate_trajectory.yml). This metric is unaffected by, and unrelated to, the 2026-08-17 bom_customers bug fix -- it never reads int_bom_customers."
+          - "Supabase #424 ('Forecasted Accounts Churned Rate') also points at this view but is DEPRECATED -- it was a duplicate of the pre-existing #342, minted by mistake on 2026-08-17. #342 is the canonical id; #424 is kept queued, not deleted, for audit trail."
         used_by:
           - "Method Monday (Churn Rate section)"
       labels:
-        metric_id: '424'
+        metric_id: '342'
         layer: metrics
         type: derived
         status: queued

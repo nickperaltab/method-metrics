@@ -1,11 +1,13 @@
--- Pins the emitted scale of v_metric__churn_rate_forecasted (#424) as a
--- PERCENTAGE, not a decimal -- the third instance in this project of the
--- #319 trap (a rate metric quietly emitting a decimal that a downstream
--- attainment formula has to compensate for). #322/#323 on the Sales
--- Scorecard were wrong 100x for months from exactly this shape; this test
--- exists so a future "simplification" back to the source sheet's native
--- decimal scale fails loudly instead of silently breaking #425's formula
--- (SAFE_DIVIDE({345}, {424}) * 100, which assumes #424 is already a
+-- Pins the emitted scale of v_metric__churn_rate_forecasted (Supabase
+-- #342, the pre-existing metric this view now backs -- #424 was a
+-- duplicate, deprecated 2026-08-17) as a PERCENTAGE, not a decimal -- the
+-- third instance in this project of the #319 trap (a rate metric quietly
+-- emitting a decimal that a downstream attainment formula has to
+-- compensate for). #322/#323 on the Sales Scorecard were wrong 100x for
+-- months from exactly this shape; this test exists so a future
+-- "simplification" back to the source sheet's native decimal scale fails
+-- loudly instead of silently breaking #425's formula
+-- (SAFE_DIVIDE({345}, {342}) * 100, which assumes #342 is already a
 -- percentage).
 --
 -- Two checks:

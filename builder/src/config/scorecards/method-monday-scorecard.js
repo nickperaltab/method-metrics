@@ -241,12 +241,17 @@ export default {
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
-        // #424 emits a PERCENTAGE (2.5), deliberately rescaled from the source
-        // sheet's decimal (0.025) -- see v_metric__churn_rate_forecasted.yml.
-        // Sharing one scale with #344/#345 is what lets #425's attainment
-        // formula stay in the standard SAFE_DIVIDE(a, b) * 100 shape instead
-        // of carrying a silent compensating omission (the #319 trap).
-        { metricId: 424, label: 'Churn Rate Forecast', format: 'percent',
+        // #342 ("Forecasted Churn Rate %") is the pre-existing metric,
+        // repointed 2026-08-17 at v_metric__churn_rate_forecasted -- #424
+        // was a duplicate minted by mistake and is deprecated (kept
+        // queued, not deleted, for audit trail; see that metric's
+        // description in Supabase). #342 emits a PERCENTAGE (2.5),
+        // deliberately rescaled from the source sheet's decimal (0.025) --
+        // see v_metric__churn_rate_forecasted.yml. Sharing one scale with
+        // #344/#345 is what lets #425's attainment formula stay in the
+        // standard SAFE_DIVIDE(a, b) * 100 shape instead of carrying a
+        // silent compensating omission (the #319 trap).
+        { metricId: 342, label: 'Churn Rate Forecast', format: 'percent',
           valueSelector: 'current_or_latest' },
         // #344/#345 both emit a PERCENTAGE (2.41, not 0.0241) -- use 'percent',
         // not 'decimal_rate'. Getting this backwards is exactly the 3289%-scale

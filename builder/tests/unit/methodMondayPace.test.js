@@ -207,11 +207,12 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       // 10.95 / 17.97 = 60.9% attainment, now read from registered #420.
       420: 60.9, 321: 10.95, 319: 0.1797,
       // Churn Rate: 2026-08-17 corrected live values (after the
-      // bom_customers prior-settled-month fix AND the #424 percent-scale
-      // normalization) -- #345 (percent, 3.73%) over #424 (percent, 2.5,
-      // no longer decimal_rate) -> 149.2% attainment, inverted (more churn
-      // than forecast is bad), read from #425.
-      425: 149.2, 345: 3.73, 424: 2.5,
+      // bom_customers prior-settled-month fix AND the forecast-rate
+      // percent-scale normalization) -- #345 (percent, 3.73%) over #342
+      // ("Forecasted Churn Rate %", percent, 2.5 -- the pre-existing
+      // metric; #424 was a deprecated duplicate) -> 149.2% attainment,
+      // inverted (more churn than forecast is bad), read from #425.
+      425: 149.2, 345: 3.73, 342: 2.5,
     });
     const rows = buildPaceRows(dataMap);
     expect(rows.length).toBe(8);
@@ -265,7 +266,7 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
       422: 0, 400: 0, 402: 0.2711,
       423: 0, 411: 0, 274: 99,
       420: 0, 321: 0, 319: 0.1797,
-      425: 0, 345: 0, 424: 2.5,
+      425: 0, 345: 0, 342: 2.5,
     });
     const rows = buildPaceRows(dataMap, { now: day1 });
     expect(rows.length).toBe(8);

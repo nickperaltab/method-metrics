@@ -2,9 +2,9 @@
 
   create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__churn_rate_forecasted`
   OPTIONS(
-      description="""Forecasted accounts-churned rate by month, read directly from\nmethod_forecast's Forecasted_Churn_Rate__ column. Unlike Forecasted\nConversion Rate (#319), which derives a rate by summing two absolute\nforecast columns, the forecast sheet already publishes a churn-rate\ncolumn -- no derivation needed. Emits a PERCENTAGE (2.5), not the\nsource column's own decimal scale (0.025) -- see filters below for why\nthis view deliberately rescales.\n""",
+      description="""Forecasted accounts-churned rate by month, read directly from\nmethod_forecast's Forecasted_Churn_Rate__ column. Unlike Forecasted\nConversion Rate (#319), which derives a rate by summing two absolute\nforecast columns, the forecast sheet already publishes a churn-rate\ncolumn -- no derivation needed. Emits a PERCENTAGE (2.5), not the\nsource column's own decimal scale (0.025) -- see filters below for why\nthis view deliberately rescales. Backs Supabase #342 (\"Forecasted\nChurn Rate %\"), a pre-existing metric verified 2026-08-17 to already\ncompute this exact figure (13/13 months matched exactly against #342's\nprior raw chart_sql before it was repointed here).\n""",
     
-      labels=[('metric_id', '424'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
+      labels=[('metric_id', '342'), ('layer', 'metrics'), ('type', 'derived'), ('status', 'queued'), ('source_table', 'method_forecast'), ('source_measure_safe', ''), ('depends_on', '')]
     )
   as 
 

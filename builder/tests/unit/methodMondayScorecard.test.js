@@ -72,15 +72,16 @@ describe('Method Monday scorecard', () => {
   });
 
   it('uses the correct format for every percentage-emitting metric', () => {
-    // 344/345/424 all emit a PERCENTAGE -- 424 (Forecasted Accounts Churned
-    // Rate) is deliberately rescaled from the source sheet's decimal (0.025)
-    // to a percentage (2.5) in its own dbt view, specifically so it shares
-    // one scale with its two siblings (see
+    // 344/345/342 all emit a PERCENTAGE -- 342 ("Forecasted Churn Rate %",
+    // the pre-existing metric this group repoints to; #424 was a deprecated
+    // duplicate) is deliberately rescaled from the source sheet's decimal
+    // (0.025) to a percentage (2.5) in its own dbt view, specifically so it
+    // shares one scale with its two siblings (see
     // v_metric__churn_rate_forecasted.yml). Pinned here per the Task 5
     // "scale trap" requirement, since getting this backwards is exactly how
     // a tile once read 3289% -- and #319 emitting an un-rescaled decimal is
     // the same trap that left #322/#323 wrong by 100x on the Sales Scorecard.
-    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423, 344, 345, 424, 425]);
+    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423, 344, 345, 342, 425]);
     const decimalRateIds = new Set([400, 402, 319, 357]);
     for (const s of detailSections()) {
       for (const k of s.kpis) {
@@ -101,8 +102,11 @@ describe('Method Monday scorecard', () => {
   it('includes all reused pre-existing ids exactly once (fix round 1: full seven-group scope)', () => {
     // 295/296/400/361/402/285/286/273 from the original build, plus
     // 319/357/321 (trials Conversion Rate) and 274 (Forecasted Churn) added
-    // in fix round 1 to complete the spec's seven groups.
-    const expected = [295, 296, 400, 361, 402, 285, 286, 273, 319, 357, 321, 274];
+    // in fix round 1 to complete the spec's seven groups, plus 342
+    // ("Forecasted Churn Rate %") added 2026-08-17 for the Churn Rate group
+    // once it was discovered pre-existing (replacing the deprecated
+    // duplicate 424).
+    const expected = [295, 296, 400, 361, 402, 285, 286, 273, 319, 357, 321, 274, 342];
     const allIds = detailSections().flatMap((s) => s.kpis.map((k) => k.metricId));
     for (const id of expected) {
       expect(allIds.filter((x) => x === id).length).toBe(1);
@@ -125,7 +129,8 @@ describe('Method Monday scorecard', () => {
     // it's just organized by metric instead of by the old 3-section layout.
     // 34: the original 30 (25 pre-existing tiles plus the five
     // newly-registered attainment metrics 419-423) plus the 4-tile Churn
-    // Rate group (424, 344, 345, 425) added 2026-08-17.
+    // Rate group (342, 344, 345, 425) added 2026-08-17 (342 replacing the
+    // briefly-used, now-deprecated duplicate 424).
     const allIds = detailSections().flatMap((s) => s.kpis.map((k) => k.metricId));
     expect(allIds.length).toBe(34);
     expect(detailSections().length).toBe(8);
