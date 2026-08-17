@@ -27,7 +27,6 @@ models:
           - "Existing customers ONLY — net-new customer revenue lives in a different metric (Start MRR contributes new customers separately)."
           - "Current month NOT shown."
         used_by:
-          - "Method Monday (Revenue / Retention section)"
           - "Monthly NRR (#383) as input — the 'N' (net) part of NRR comes from expansions"
           - "(Not used in GRR — gross retention excludes expansion)"
       labels:

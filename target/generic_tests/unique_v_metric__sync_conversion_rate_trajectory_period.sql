@@ -1,0 +1,1 @@
+{{ test_unique(column_name="period", model=get_where_subquery(ref('v_metric__sync_conversion_rate_trajectory'))) }}

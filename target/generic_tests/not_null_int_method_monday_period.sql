@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="period", model=get_where_subquery(ref('int_method_monday'))) }}

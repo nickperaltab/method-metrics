@@ -27,7 +27,7 @@ models:
           - "Single-row by design. Do not chart it as a time series."
           - "Also backs the Sales Scorecard Conversions tile (moves 21 -> 20)."
         used_by:
-          - "Method Monday (Conversion section)"
+          - "Method Monday (Conversions section)"
           - "Sales Scorecard (Conversions tile)"
       labels:
         metric_id: '408'
@@ -37,3 +37,13 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '56'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: Conversions MTD count. COUNT(*) is always defined, so never NULL.
+        tests:
+          - not_null

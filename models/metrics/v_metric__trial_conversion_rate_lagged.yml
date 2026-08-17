@@ -120,6 +120,7 @@ models:
           - "Until 2026-08-04, BigQuery's schema autodetect had typed Forecasted_Trials INTEGER on method_forecast, rounding every daily fractional forecast value before it could be summed. Fixed 2026-08-04 by retyping method_forecast itself to FLOAT64 for that column; a since-retired interim parallel table stood in during the gap."
         used_by:
           - "Sales Scorecard (Conversion Rate section)"
+          - "Method Monday (Conversion Rate section)"
       labels:
         metric_id: '357'
         layer: metrics

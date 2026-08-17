@@ -40,7 +40,6 @@ models:
           - "~13% inflation in numerator from re-sync events (see Syncs #55 caveats). This is part of the metric definition — re-syncs contribute to the rate."
           - "'Sync Rate' here is 'syncs per trial' volume ratio at account/event grain. Not the same as '% of unique customers who ever synced' — that's a different metric."
         used_by:
-          - "Method Monday (Conversion section)"
           - "AI chart builder"
           - "Forecast / budget comparison"
       labels:

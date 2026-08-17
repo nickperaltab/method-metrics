@@ -23,7 +23,6 @@ models:
         caveats:
           - "Account-grain by design. For unique-customer conversion counts, use Customers (#373) cohort analyses."
         used_by:
-          - "Method Monday (Conversion section)"
           - "Sync-to-Conversion Rate (#301)"
           - "Trial-to-Conversion Rate (#302)"
       labels:

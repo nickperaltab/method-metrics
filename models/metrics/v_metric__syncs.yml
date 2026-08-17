@@ -31,7 +31,6 @@ models:
           - "SyncDate is the same column as SignupDate — revenue.Funnel's Sync branch projects SignupDate AS Date for the Sync union branch. So 'syncs in month M' means accounts that signed up in month M and have since completed a sync, not syncs that happened in month M."
           - "For an exact 'count of unique entities that ever synced this month,' use COUNT(DISTINCT EntityRecordID) instead — that's a different metric not currently in the live set."
         used_by:
-          - "Method Monday (Engagement section)"
           - "Sync Rate (#300) as numerator"
           - "AI chart builder"
       labels:

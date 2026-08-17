@@ -26,7 +26,6 @@ models:
           - "Distinction from Cancellations: downgrade = customer pays less; cancellation = customer pays zero. Both reduce MRR; tracked separately."
           - "Current month NOT shown."
         used_by:
-          - "Method Monday (Revenue / Retention section)"
           - "Monthly GRR (#382) as input"
           - "Monthly NRR (#383) as input"
       labels:

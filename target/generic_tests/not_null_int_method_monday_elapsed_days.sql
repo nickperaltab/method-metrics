@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="elapsed_days", model=get_where_subquery(ref('int_method_monday'))) }}

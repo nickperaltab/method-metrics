@@ -34,7 +34,6 @@ models:
           - "Excludes one-time Prepay Expiry write-offs (per CEO methodology) — diverges from board-deck monthly retention by ~4-6bp."
           - "Current month NOT shown."
         used_by:
-          - "Method Monday (Revenue / Retention section)"
           - "Monthly GRR (#382) as input"
           - "Monthly NRR (#383) as input"
       labels:

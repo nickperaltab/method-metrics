@@ -23,7 +23,6 @@ models:
         caveats:
           - "Conversions and Trials in the same month don't share a cohort — most conversions come from earlier-month trials. For cohort-locked conversion rate, a different metric is needed."
         used_by:
-          - "Method Monday (Acquisition / Conversion section)"
           - "funnel-stage analysis"
       labels:
         metric_id: '302'

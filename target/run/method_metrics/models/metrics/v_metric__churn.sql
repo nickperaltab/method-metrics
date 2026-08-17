@@ -1,8 +1,8 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__churn`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__churn`
   OPTIONS(
-      description="""Monthly count of distinct Method customers that canceled, grouped by\ncancellation month. Customer-grain \u2014 uses COUNT(DISTINCT CompanyAccount)\nso a customer with multiple canceling accounts in the same month\ncounts ONCE. Excludes test accounts and internal Method Integration\npartner rows. Note: this is account-count churn, not dollar churn \u2014\nsee Monthly Cancellations ($) (#379) for MRR lost.\n""",
+      description="""Monthly count of Method billing accounts (CompanyAccount grain) that\ncanceled, grouped by cancellation month. COUNT(DISTINCT CompanyAccount)\nis measured identical to COUNT(*) in every recent month (6/6 checked)\n\u2014 int_cancellations is already one row per Account, so the DISTINCT\nperforms no customer-level dedup. A customer that owns several\ncanceling CompanyAccounts (e.g. a franchise network closing multiple\nper-location accounts in one event) counts once per account, not once\nper customer. Excludes test accounts and internal Method Integration\npartner rows. Note: this is account-count churn, not dollar churn \u2014\nsee Monthly Cancellations ($) (#379) for MRR lost.\n""",
     
       labels=[('metric_id', '59'), ('layer', 'metrics'), ('type', 'simple'), ('status', 'live'), ('verified_at', '2026-05-14'), ('source_table', 'v_cancellations'), ('source_measure_safe', 'count_distinct_companyaccount'), ('depends_on', '')]
     )

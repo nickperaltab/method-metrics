@@ -36,7 +36,7 @@ models:
           it's a plain ratio of two already-disclosed cohort counts. Not
           renamed.
         used_by:
-          - "Method Monday (Acquisition section)"
+          - "Method Monday (Sync % section)"
       labels:
         metric_id: '414'
         layer: metrics
@@ -45,3 +45,13 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '55-54'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      # value: no not_null test. NULL is legitimate whenever trials_mtd is 0
+      # (SAFE_DIVIDE by zero, data-dependent not date-dependent, so it can't
+      # be exempted with a where clause). Non-negativity lives in
+      # tests/assert_method_monday_metric_bounds.sql instead.

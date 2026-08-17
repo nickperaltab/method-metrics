@@ -28,8 +28,6 @@ models:
         caveats:
           - "Account-count churn, not dollar churn. For MRR-lost-to-cancellations, use Monthly Cancellations ($) (#379)."
           - "Billing-account grain, not customer grain: a customer (EntityRecordID) with multiple canceling CompanyAccounts is counted once per account. A franchise network closing N per-location accounts in one cancellation event reads as N here, not 1 — see Accounts Churned MTD (#409) for a concrete example (2026-08-14, EntityRecordID 32049)."
-        used_by:
-          - "Method Monday (Retention section)"
       labels:
         metric_id: '59'
         layer: metrics

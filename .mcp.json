@@ -13,7 +13,11 @@
     },
     "metrics": {
       "command": "node",
-      "args": ["/Users/nicolas/Desktop/method-metrics/mcp/metrics/dist/index.js"]
+      "args": ["/Users/nicolas/Desktop/method-metrics/mcp/metrics/dist/index.js"],
+      "env": {
+        "REPO_ROOT": "/Users/nicolas/Desktop/method-metrics-sync-conversion",
+        "DBT_MANIFEST_PATH": "/Users/nicolas/Desktop/method-metrics-sync-conversion/target/manifest.json"
+      }
     }
   }
 }

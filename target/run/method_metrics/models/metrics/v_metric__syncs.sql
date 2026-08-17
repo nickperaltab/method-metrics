@@ -1,8 +1,8 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__syncs`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__syncs`
   OPTIONS(
-      description="""Monthly count of sync milestone events from Method's funnel pipeline.\nAccount-grain by intent \u2014 counts each time an account hits a sync\nmilestone. ~91% of accounts have one sync event; ~9% have 2+ from\nre-syncs after disconnect/reconnect, which are counted by design.\nFoundation for Sync Rate (#300).\n""",
+      description="""Monthly count of Method accounts that hit a sync milestone, per\nrevenue.Funnel's Sync branch. Account-grain \u2014 one row per account,\nnever per event: Funnel is a UNION ALL view over Account, not an\nevent log, so there is no such thing as a repeat sync event in this\ndata. Foundation for Sync Rate (#300).\n""",
     
       labels=[('metric_id', '55'), ('layer', 'metrics'), ('type', 'simple'), ('status', 'live'), ('verified_at', '2026-04-07'), ('source_table', 'v_syncs'), ('source_measure_safe', 'count_star'), ('depends_on', '')]
     )

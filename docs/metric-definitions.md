@@ -198,7 +198,6 @@ Where `int_trials` is the filter `SELECT * FROM revenue.Account WHERE IsConversi
 - Current month is incomplete; partial values for the in-progress month.
 
 **Used by:**
-- Method Monday (Acquisition section)
 - AI chart builder
 - Trial-to-Conversion Rate (#302) as denominator
 
@@ -238,7 +237,6 @@ Where `int_syncs` is `SELECT * FROM revenue.Funnel WHERE EventType = 'Sync'`.
 - For an exact "count of unique entities that ever synced this month," use `COUNT(DISTINCT EntityRecordID)` instead — that's a different metric not currently in the live set.
 
 **Used by:**
-- Method Monday (Engagement section)
 - Sync Rate (#300) as numerator
 - AI chart builder
 
@@ -277,7 +275,6 @@ So: `SUM(sync events in month) / SUM(trial events in month)`.
 - "Sync Rate" here is "syncs per trial" volume ratio at account/event grain. Not the same as "% of unique customers who ever synced" — that's a different metric.
 
 **Used by:**
-- Method Monday (Conversion section)
 - AI chart builder
 - Forecast / budget comparison
 
@@ -319,7 +316,6 @@ Where `int_customers` is the existing BQ view that aggregates `TransLineFlattene
 - Current month is incomplete; partial values for the in-progress month.
 
 **Used by:**
-- Method Monday (Revenue section)
 - ARPC calculations
 - Customer count for ratio metrics
 
@@ -362,7 +358,6 @@ Where `int_customer_mrr` computes per-(EntityRecordID, Month) MRR using Justin's
 - Current month NOT shown (int_customer_mrr excludes in-progress month).
 
 **Used by:**
-- Method Monday (Revenue section, foundation for Monthly GRR/NRR)
 - Monthly GRR (#382), Monthly NRR (#383) as denominator
 - AC reverse-ETL (potential — declining-MRR cohort audiences)
 
@@ -401,7 +396,6 @@ GROUP BY 1
 - Current month NOT shown.
 
 **Used by:**
-- Method Monday (Revenue / Retention section)
 - Monthly GRR (#382) as input
 - Monthly NRR (#383) as input
 
@@ -435,7 +429,6 @@ GROUP BY 1
 - Current month NOT shown.
 
 **Used by:**
-- Method Monday (Revenue / Retention section)
 - Monthly GRR (#382) as input
 - Monthly NRR (#383) as input
 
@@ -469,7 +462,6 @@ GROUP BY 1
 - Current month NOT shown.
 
 **Used by:**
-- Method Monday (Revenue / Retention section)
 - Monthly NRR (#383) as input — the "N" (net) part of NRR comes from expansions
 - (Not used in GRR — gross retention excludes expansion)
 
@@ -493,7 +485,7 @@ GROUP BY 1
 
 **Known caveats:** Account-grain by design. For unique-customer conversion counts, use Customers (#373) cohort analyses.
 
-**Used by:** Method Monday (Conversion section), Sync-to-Conversion Rate (#301), Trial-to-Conversion Rate (#302).
+**Used by:** Sync-to-Conversion Rate (#301), Trial-to-Conversion Rate (#302).
 
 ---
 
@@ -503,7 +495,7 @@ GROUP BY 1
 
 **The math:** `COUNT(DISTINCT CompanyAccount) FROM int_cancellations GROUP BY CancellationDate (month)`
 
-**Grain:** customer-level (uses DISTINCT). A customer with multiple canceling accounts in the same month counts ONCE.
+**Grain:** CompanyAccount (billing-account) grain, matching metric 344. The `DISTINCT` performs no customer-level dedup — `int_cancellations` is exactly one row per `CompanyAccount` (16,025 rows / 16,025 distinct `CompanyAccount`), so `COUNT(*)` is identical. A customer (EntityRecordID) with multiple canceling accounts in the same month counts once per account, not once overall: a franchise network closing 20 per-location accounts in one cancellation event reads as 20 here, not 1.
 
 **Filters:** Inherits from int_cancellations.
 
@@ -512,8 +504,6 @@ GROUP BY 1
 **Status:** **live**
 
 **Known caveats:** Account-count churn, not dollar churn. For MRR-lost-to-cancellations, use Monthly Cancellations ($) (#379).
-
-**Used by:** Method Monday (Retention section).
 
 ---
 
@@ -557,7 +547,7 @@ GROUP BY 1
 
 **Known caveats:** Conversions and Trials in the same month don't share a cohort — most conversions come from earlier-month trials. For cohort-locked conversion rate, a different metric is needed.
 
-**Used by:** Method Monday (Acquisition / Conversion section), funnel-stage analysis.
+**Used by:** funnel-stage analysis.
 
 ---
 
@@ -581,7 +571,7 @@ GROUP BY 1
 - Current month NOT shown.
 - Diverges from board-deck annual retention by ~4-6bp per the symmetric methodology.
 
-**Used by:** Method Monday (Revenue section, foundation for Annual GRR #388 / NRR #389).
+**Used by:** Annual GRR (#388), Annual NRR (#389) as inputs.
 
 ---
 
@@ -609,7 +599,7 @@ GROUP BY 1
 - **For any number heading to the board or external reporting, reconcile against the board deck first.** These numbers will not penny-match the deck.
 - Current month NOT shown.
 
-**Used by:** Method Monday (Retention section, headline metrics). Board reporting (with deck reconciliation).
+**Used by:** Board reporting (with deck reconciliation).
 
 ---
 
@@ -1147,7 +1137,7 @@ FROM mtd, bounds
 **Used by:**
 - Sales Scorecard (Sync Conversion Rate section)
 - Sync Conversion Rate Trajectory (#400) as an input
-- Method Monday scorecard (Engagement section) — see §4g
+- Method Monday scorecard (Syncs section) — see §4g
 
 ---
 
@@ -1198,7 +1188,7 @@ FROM mtd, bounds
 **Used by:**
 - Sales Scorecard (Conversion Rate section and Sync Conversion Rate section)
 - Sync Conversion Rate Trajectory (#400) as an input
-- Method Monday scorecard (Conversion section) — see §4g
+- Method Monday scorecard (Conversions section) — see §4g
 
 ---
 
@@ -1256,6 +1246,7 @@ LEFT JOIN forecast f USING (period)
 
 **Used by:**
 - Sales Scorecard (Conversion Rate section)
+- Method Monday scorecard (Conversion Rate section) — see §4g
 
 ---
 
@@ -1295,6 +1286,7 @@ FULL OUTER JOIN v_metric__syncs_trajectory s ON c.period = s.period
 **Used by:**
 - Sales Scorecard (Sync Conversion Rate section)
 - Sync Forecast vs. Trajectory (#404) and Sync Forecasted Attainment (#405) as an input
+- Method Monday scorecard (Sync Conversion Rate section) — see §4g
 
 ---
 
@@ -1366,6 +1358,7 @@ GROUP BY 1
 **Used by:**
 - Sales Scorecard (Sync Conversion Rate section, KPI and Month-over-Month chart)
 - Sync Forecast vs. Trajectory (#404) and Sync Forecasted Attainment (#405) as an input
+- Method Monday scorecard (Sync Conversion Rate section) — see §4g
 
 ---
 
@@ -1520,7 +1513,7 @@ FROM int_method_monday
 2. The trajectory built on this MTD figure (Trials Trajectory #410) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Trials section).
 
 ---
 
@@ -1553,7 +1546,7 @@ FROM int_method_monday
 2. The trajectory divides by complete elapsed days (see #295 Syncs Trajectory, revised §4f) — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Syncs section).
 
 ---
 
@@ -1588,7 +1581,7 @@ FROM int_method_monday
 - Also backs both Conversions tiles on the Sales Scorecard, replacing #56 there (moves that tile from 21 to 20).
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Conversion section), Sales Scorecard (Conversions tile, both sections).
+**Used by:** Method Monday (Conversions section), Sales Scorecard (Conversions tile, both sections).
 
 ---
 
@@ -1620,10 +1613,10 @@ FROM int_method_monday
 **Known caveats:**
 1. Excludes today by design. Not the same number as Churn (#59), the full-month primitive.
 2. The trajectory built on this MTD figure (Churn Trajectory #411) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
-- CompanyAccount grain, matching metric 344 (Churn Rate) — a customer with multiple canceling accounts in the same month counts once. The other three MTD metrics (#406–#408) are account/event counts, not customer counts.
+- CompanyAccount grain, matching metric 344 (Churn Rate) — the `DISTINCT` performs no customer-level dedup (`COUNT(*)` is identical on `int_cancellations`); a customer with multiple canceling accounts in the same month counts once per account, not once overall. A franchise network closing 20 per-location accounts in one cancellation event reads as 20 here, not 1 (EntityRecordID 32049, Granite Garage Floors, 2026-08-14). The other three MTD metrics (#406–#408) are account/event counts too, not customer counts.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Retention section).
+**Used by:** Method Monday (Churn section).
 
 ---
 
@@ -1655,7 +1648,7 @@ FROM int_method_monday
 - Noisy in the first few days of a month — a projection from one or two complete days swings widely.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition section); Trials Forecast vs Trajectory (#415) and Trials Attainment (#416) as an input.
+**Used by:** Method Monday (Trials section); Trials Forecast vs Trajectory (#415) and Trials Attainment (#416) as an input.
 
 ---
 
@@ -1688,7 +1681,7 @@ FROM int_method_monday
 - Noisy in the first few days of a month.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition/Retention section).
+**Used by:** Method Monday (Churn section).
 
 ---
 
@@ -1721,7 +1714,7 @@ FROM int_method_monday
 - Straight-line proration, not shaped to the forecast's own daily curve — assumes even distribution across the month.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition/Retention section).
+**Used by:** Method Monday (Conversions section).
 
 ---
 
@@ -1754,7 +1747,7 @@ FROM int_method_monday
 - Straight-line proration, not shaped to the forecast's own daily curve — assumes even distribution across the month.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition/Retention section).
+**Used by:** Method Monday (Churn section).
 
 ---
 
@@ -1785,7 +1778,7 @@ FROM int_method_monday
 - NULL when `trials_mtd` is 0 — early in a month that is genuinely undefined, not zero.
 - Single-row by design. Do not chart it as a time series.
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Sync % section).
 
 ---
 
@@ -1810,7 +1803,7 @@ FROM int_method_monday
 2. Its trajectory input (#410) divides by complete elapsed days — Looker's Method Monday convention, not its Sales convention. The two Looker pages disagree with each other; this page follows the former.
 - Has no dbt model — pure Supabase-formula arithmetic over #410 and #285. If either input's definition changes, this changes silently with it.
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Trials section).
 
 ---
 
@@ -1837,7 +1830,7 @@ FROM int_method_monday
 - Has no dbt model — pure Supabase-formula arithmetic over #410 and #285.
 - Looker's own tile for this figure is labeled "Forecast vs Trajectory," which is the wrong label — it computes attainment (a ratio), not the forecast-minus-trajectory difference that #415 computes. Don't let the Looker label imply this metric and #415 are the same thing.
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Trials section).
 
 ---
 
@@ -1863,7 +1856,7 @@ FROM int_method_monday
 - Has no dbt model — pure Supabase-formula arithmetic over #295 and #286. If either input's definition changes, this changes silently with it.
 - Inherits #295's sync-family denominator caveats (event-grain, signup-dated).
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Syncs section).
 
 ---
 
@@ -1890,4 +1883,4 @@ FROM int_method_monday
 - Has no dbt model — pure Supabase-formula arithmetic over #295 and #286.
 - Inherits #295's sync-family denominator caveats (event-grain, signup-dated).
 
-**Used by:** Method Monday (Acquisition section).
+**Used by:** Method Monday (Syncs section).

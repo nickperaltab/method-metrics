@@ -27,7 +27,7 @@ models:
           - "Returns 0, not NULL, on the 1st of the month (elapsed_days = 0 multiplies the forecast to zero rather than dividing into an undefined value). The paired trajectory metrics (#296 conversions, #410/#411/#295 etc.) return NULL in the same situation via SAFE_DIVIDE -- a known asymmetry between the *_forecast_mtd and *_trajectory families on day one of a month."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
-          - "Method Monday (Acquisition/Retention section)"
+          - "Method Monday (Conversions section)"
       labels:
         metric_id: '412'
         layer: metrics
@@ -36,3 +36,13 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '273'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: Prorated conversions forecast. Returns 0 (not NULL) on day 1, so never NULL any day of the month.
+        tests:
+          - not_null

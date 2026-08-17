@@ -27,7 +27,6 @@ models:
           - "For any number heading to the board or external reporting, reconcile against the board deck first. These numbers will not penny-match the deck."
           - "Current month NOT shown."
         used_by:
-          - "Method Monday (Retention section, headline metrics)"
           - "Board reporting (with deck reconciliation)"
       labels:
         metric_id: '389'

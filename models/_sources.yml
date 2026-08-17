@@ -126,7 +126,9 @@ sources:
           - name: Offering
             description: QuickBooks offering SKU (QBO accounts only).
           - name: Partner
-            description: Partner associated with the account (partner-referred / partner-managed context). Metric models exclude internal rows where Partner = 'Method Integration'.
+            description: Partner associated with the account (partner-referred / partner-managed context). Metric models exclude internal rows where Partner = 'Method Integration'. Never NULL today — the loader writes '' for "no partner" (0 of 147,005 rows NULL as of 2026-08-17), which is why the `!= 'Method Integration'` filter doesn't need three-valued-logic handling. The `not_null` test below converts that loader convention into a checked invariant instead of an unstated assumption.
+            tests:
+              - not_null
           - name: Platform
             description: Whether the account is on the new version, the classic version, or has access to both.
           - name: SaaSPayType
@@ -164,6 +166,20 @@ sources:
       # materialized table for performance. Consumers use ref().
       - name: int_conversions
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
+        columns:
+          - name: TotalSaaSAmount
+            description: >
+              HAZARD — entity-grain data on account-grain rows. Computed as
+              SUM(SaaSAmount) per EntityRecordID (a customer's lifetime SaaS
+              total) and attached to every CompanyAccount row that entity
+              owns; the view does not project EntityRecordID, so there is no
+              key to dedup with. SUM(TotalSaaSAmount) over this view
+              overstates by ~2.5x: $109.5M naive vs $43.7M correct (measured
+              2026-08-17). No Method Monday tile is affected — it only
+              COUNT(*)s this view — but the next consumer to SUM this column
+              will be wrong. See knowledge/schema.md, Known Data Integrity
+              Issues #4, and the dbt-infrastructure audit report §1.4 for the
+              drafted (not yet deployed) fix that projects EntityRecordID.
       - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).
 

@@ -43,7 +43,6 @@ models:
           - "Diverges from board-deck monthly retention by ~4–6bp because this view uses symmetric methodology while the board deck uses asymmetric (PE-only customers left in StartMRR but excluded from Cancellations)."
           - "Current month NOT shown (int_customer_mrr excludes in-progress month)."
         used_by:
-          - "Method Monday (Revenue section, foundation for Monthly GRR/NRR)"
           - "Monthly GRR (#382), Monthly NRR (#383) as denominator"
           - "AC reverse-ETL (potential — declining-MRR cohort audiences)"
       labels:

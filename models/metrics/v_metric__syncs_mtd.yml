@@ -36,7 +36,7 @@ models:
           Method's established funnel-stage term here, not an event-timing
           claim. Not renamed.
         used_by:
-          - "Method Monday (Acquisition section)"
+          - "Method Monday (Syncs section)"
       labels:
         metric_id: '407'
         layer: metrics
@@ -45,3 +45,13 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '55'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: Syncs MTD count. COUNT(*) is always defined, so never NULL.
+        tests:
+          - not_null

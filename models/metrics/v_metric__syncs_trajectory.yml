@@ -48,6 +48,7 @@ models:
           disclosure instead.
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
+          - "Method Monday (Syncs section)"
           - "Sync Conversion Rate Trajectory"
       labels:
         metric_id: '295'
@@ -57,3 +58,18 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '55'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: >
+          Month-end syncs projection. Legitimately NULL on day 1
+          (elapsed_days = 0), so the not_null test below exempts that one
+          day rather than being weakened to pass every day.
+        tests:
+          - not_null:
+              config:
+                where: "EXTRACT(DAY FROM CURRENT_DATE()) > 1"

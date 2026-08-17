@@ -108,24 +108,24 @@
       "start": {
         "line": 67,
         "col": 19,
-        "index": 9805
+        "index": 9948
       },
       "stop": {
         "line": 67,
         "col": 50,
-        "index": 9836
+        "index": 9979
       }
     },
     "expanded_span": {
       "start": {
         "line": 67,
         "col": 19,
-        "index": 9702
+        "index": 9845
       },
       "stop": {
         "line": 67,
         "col": 20,
-        "index": 9703
+        "index": 9846
       }
     }
   }

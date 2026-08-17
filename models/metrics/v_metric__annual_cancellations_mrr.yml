@@ -28,8 +28,6 @@ models:
           - "Annual = trailing 12-month cohort comparison."
           - "Current month NOT shown."
           - "Diverges from board-deck annual retention by ~4-6bp per the symmetric methodology."
-        used_by:
-          - "Method Monday (Revenue section, foundation for Annual GRR #388 / NRR #389)"
       labels:
         metric_id: '385'
         layer: metrics

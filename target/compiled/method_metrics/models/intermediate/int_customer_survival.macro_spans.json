@@ -108,24 +108,24 @@
       "start": {
         "line": 62,
         "col": 19,
-        "index": 1804
+        "index": 1947
       },
       "stop": {
         "line": 62,
         "col": 50,
-        "index": 1835
+        "index": 1978
       }
     },
     "expanded_span": {
       "start": {
         "line": 62,
         "col": 19,
-        "index": 1764
+        "index": 1907
       },
       "stop": {
         "line": 62,
         "col": 21,
-        "index": 1766
+        "index": 1909
       }
     }
   }

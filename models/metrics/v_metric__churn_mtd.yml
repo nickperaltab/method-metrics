@@ -29,7 +29,7 @@ models:
           - "CompanyAccount (billing-account) grain, matching metric 344 -- not customer grain. A franchise network closing 20 per-location accounts in one cancellation event reads as 20 here, not 1: on 2026-08-14, EntityRecordID 32049 (a Granite Garage Floors franchise network) closed 20 accounts (19 licenses, roughly $800 total SaaS) in a single day, and all 20 count individually."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
-          - "Method Monday (Retention section)"
+          - "Method Monday (Churn section)"
       labels:
         metric_id: '409'
         layer: metrics
@@ -38,3 +38,13 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '59'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: Churn MTD count (CompanyAccount grain). COUNT(DISTINCT ...) is always defined, so never NULL.
+        tests:
+          - not_null

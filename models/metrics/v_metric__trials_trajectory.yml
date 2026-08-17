@@ -24,7 +24,7 @@ models:
           - "NULL on the 1st of the month, when elapsed_days is 0."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
-          - "Method Monday (Acquisition section)"
+          - "Method Monday (Trials section)"
       labels:
         metric_id: '410'
         layer: metrics
@@ -33,3 +33,18 @@ models:
         source_table: int_method_monday
         source_measure_safe: ''
         depends_on: '54'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: >
+          Month-end trials projection. Legitimately NULL on day 1
+          (elapsed_days = 0), so the not_null test below exempts that one
+          day rather than being weakened to pass every day.
+        tests:
+          - not_null:
+              config:
+                where: "EXTRACT(DAY FROM CURRENT_DATE()) > 1"

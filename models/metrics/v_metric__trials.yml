@@ -39,7 +39,6 @@ models:
           - "Account-grain by design — customers with multiple accounts contribute multiple trials. This is intentional. Use Customers (#373) for unique-customer counts."
           - "Current month is incomplete; partial values for the in-progress month."
         used_by:
-          - "Method Monday (Acquisition section)"
           - "AI chart builder"
           - "Trial-to-Conversion Rate (#302) as denominator"
       labels:

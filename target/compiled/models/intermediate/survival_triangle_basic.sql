@@ -56,7 +56,7 @@ joined AS (
 SELECT
   vintage,
   tenure_k,
-  -- n_start = cohort size, constant across k (UNNEST drives one row per entity per tenure)
+  -- n_start = entities in the vintage observable at tenure k (right-censoring drops entities whose t0+k exceeds the censor month), so it shrinks at later k for recent vintages. GRR ratio is unaffected (num & denom share this subset).
   COUNT(*) AS n_start,
   COUNTIF(mrrk > 0) AS n_alive,
   SUM(mrr0) AS base_mrr,

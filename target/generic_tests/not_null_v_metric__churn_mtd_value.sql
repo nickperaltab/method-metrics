@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="value", model=get_where_subquery(ref('v_metric__churn_mtd'))) }}

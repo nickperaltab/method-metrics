@@ -36,7 +36,6 @@ models:
           - "Includes any customer with revenue activity in the month — not separately broken out into 'new customer this month' vs 'existing.' For new customers specifically, use New Customers — Actual (#39)."
           - "Current month is incomplete; partial values for the in-progress month."
         used_by:
-          - "Method Monday (Revenue section)"
           - "ARPC calculations"
           - "Customer count for ratio metrics"
       labels:

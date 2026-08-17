@@ -63,6 +63,7 @@ models:
           - "Single-row by design."
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
+          - "Method Monday (Sync Conversion Rate section)"
       labels:
         metric_id: '400'
         layer: metrics
@@ -71,3 +72,15 @@ models:
         source_table: ''
         source_measure_safe: ''
         depends_on: '296-295'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      # value: no not_null test. NULL is legitimate whenever either input
+      # trajectory is NULL (day 1) or the syncs trajectory is 0 (SAFE_DIVIDE
+      # by zero) -- neither is a date-only condition, so it can't be
+      # exempted with a where clause the way the day-1-only trajectories
+      # are above. Non-negativity and cross-model checks live in
+      # tests/assert_method_monday_metric_bounds.sql instead.
