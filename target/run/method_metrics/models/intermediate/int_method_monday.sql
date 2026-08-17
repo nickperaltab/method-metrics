@@ -55,9 +55,22 @@ actuals AS (
     -- model's header). This is the Churn Rate denominator's BOM term; it
     -- does NOT scale with elapsed days, unlike every other *_mtd figure
     -- above -- see the churn-rate section below.
+    --
+    -- BUG FIX 2026-08-17: the CURRENT month's own row is NOT used. It
+    -- derives from billing transactions that land throughout the month
+    -- (July settled at 3,788; August read 2,171 mid-month), so it
+    -- understates the real base and inflates the rate by ~75% if used
+    -- directly. Metric 344's own pre-existing chart_sql already knew this
+    -- -- its `bom_curr` CTE reads `DATE_SUB(CURRENT_DATE(), INTERVAL 1
+    -- MONTH)`, i.e. the PRIOR (settled) month's row, specifically because
+    -- the current month's isn't done accumulating. This reproduces that
+    -- exact behaviour: always read the most recently SETTLED month's BOM
+    -- row, one month back from `period`. Historical (non-current) months
+    -- are unaffected by this -- only ever queried against their own,
+    -- already-settled row.
     (SELECT COUNT(DISTINCT bc.CompanyAccount)
      FROM `project-for-method-dw`.`revenue`.`int_bom_customers` bc, bounds b
-     WHERE DATE_TRUNC(bc.TxnDate, MONTH) = b.period)                         AS bom_customers
+     WHERE DATE_TRUNC(bc.TxnDate, MONTH) = DATE_SUB(b.period, INTERVAL 1 MONTH)) AS bom_customers
 ),
 forecast AS (
   SELECT
@@ -109,7 +122,16 @@ SELECT
   -- Denominator choice (BOM + conversions, not BOM alone) is empirically
   -- settled: verified against Looker on 2026-08-04, Apr 2026 = 2.41% and
   -- Jun 2026 = 2.70%, both exact only with conversions included. See
-  -- churn-rate-report.md.
+  -- churn-rate-report.md. bom_customers itself is already the PRIOR
+  -- (settled) month's BOM row, not the current month's -- see that
+  -- column's own comment above for why.
+  --
+  -- We divide by the real (settled) base. Looker's Churn Rate Trajectory
+  -- divides by the FORECAST's implied base instead (Forecasted_Churn /
+  -- Forecasted_Churn_Rate__ = 99 / 0.025 = 3960), which is why its reading
+  -- (3.61% as of 2026-08-17) differs from ours (3.73%) -- this is an
+  -- intentional, documented divergence, not a parity failure. See
+  -- v_metric__churn_rate_trajectory.yml's caveats.
   --
   -- Reuses churn_mtd / conversions_mtd and the already-computed
   -- churn_trajectory / conversions_trajectory from `computed` above --

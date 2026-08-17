@@ -27,6 +27,7 @@ models:
           - "Emits a decimal rate (0.025), not a percentage (2.5) -- the source column's own scale. Accounts Churned Rate Attainment rescales it (x100) to compare against the percentage-scale trajectory."
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename or edit in the sheet breaks or silently changes this."
           - "Account-grain forecast (like Forecasted Churn #274/#413) compared against a CompanyAccount-grain actual -- consistent with the rest of the Churn family, not customer-grain."
+          - "This column is Looker's own forecast-implied denominator in disguise: Forecasted_Churn / Forecasted_Churn_Rate__ = 99 / 0.025 = 3,960 for Aug 2026, which is what Looker's Churn Rate Trajectory tile actually divides by (see v_metric__churn_rate_trajectory.yml). This metric (#424) itself is unaffected by, and unrelated to, the 2026-08-17 bom_customers bug fix -- it never reads int_bom_customers."
         used_by:
           - "Method Monday (Churn Rate section)"
       labels:

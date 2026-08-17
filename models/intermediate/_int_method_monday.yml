@@ -39,8 +39,14 @@ models:
           comparison bar is like-for-like rather than month-vs-part-month.
       - name: bom_customers
         description: >
-          Distinct CompanyAccounts in int_bom_customers for the current
-          month (beginning-of-month customer base). Does NOT scale with
+          Distinct CompanyAccounts in int_bom_customers for the PRIOR
+          (settled) month, not the current one -- the current month's own
+          row accumulates through the month as billing transactions land
+          (e.g. Aug 2026 read 2,171 mid-month vs July's settled 3,788) and
+          would inflate the churn rate by roughly 75% if used directly.
+          Metric 344's pre-existing chart_sql already did this shift
+          (its bom_curr CTE reads DATE_SUB(CURRENT_DATE(), INTERVAL 1
+          MONTH)); this model reproduces it. Does NOT scale with
           elapsed_days -- it is the same figure whether read on day 1 or
           day 30 of the month. Denominator term for churn_rate_mtd /
           churn_rate_trajectory, alongside conversions_mtd / conversions_trajectory.
