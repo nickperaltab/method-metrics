@@ -48,7 +48,10 @@ describe('methodMondayPace: churn inversion', () => {
 
   it('end-to-end: churn row at 110.8% attainment (109.69 / 99) is flagged harmful, not on-pace', () => {
     const churnDef = METRIC_DEFS.find((d) => d.key === 'churn');
-    const dataMap = mapFrom({ 411: 109.69, 274: 99 });
+    // 423 (Churn Attainment) is the registered metric the bar now reads —
+    // 411/274 (numerator/denominator) are kept alongside for the dev
+    // consistency check, not as the source of the displayed value.
+    const dataMap = mapFrom({ 423: 110.8, 411: 109.69, 274: 99 });
     const row = buildPaceRow(churnDef, dataMap);
     expect(row.attainment).toBeCloseTo(110.8, 1);
     expect(row.harmfulDistance).toBeGreaterThan(0);
@@ -74,7 +77,9 @@ describe('methodMondayPace: percentage/decimal normalization', () => {
     // ~100x. Sync Conversion Rate: #400 (decimal 0.2474) / #402 (decimal
     // 0.2711) — both normalized to the same 0-100 scale by buildPaceRow.
     const def = METRIC_DEFS.find((d) => d.key === 'syncConversionRate');
-    const dataMap = mapFrom({ 400: 0.2474, 402: 0.2711 });
+    // 422 (Sync Conversion Rate Attainment) is the registered metric that
+    // supplies the value; 400/402 are kept for the dev consistency check.
+    const dataMap = mapFrom({ 422: 91.3, 400: 0.2474, 402: 0.2711 });
     const row = buildPaceRow(def, dataMap);
     // Correct: (24.74 / 27.11) * 100 ~= 91.3%
     expect(row.attainment).toBeCloseTo(91.3, 0);
@@ -88,7 +93,10 @@ describe('methodMondayPace: percentage/decimal normalization', () => {
   it('Conversion Rate group: normalizes #319 (decimal) against #321 (already percent)', () => {
     const def = METRIC_DEFS.find((d) => d.key === 'conversionRate');
     // #321 = 8.49 (percent), #319 = 0.18 (decimal) -> forecast normalized to 18.0
-    const dataMap = mapFrom({ 321: 8.49, 319: 0.18 });
+    // 420 (Conversion Rate Attainment) is the registered metric supplying
+    // row.attainment; 321/319 remain for the dev consistency check and for
+    // row.denominator, which is still asserted below.
+    const dataMap = mapFrom({ 420: (8.49 / 18.0) * 100, 321: 8.49, 319: 0.18 });
     const row = buildPaceRow(def, dataMap);
     expect(row.denominator).toBeCloseTo(18.0, 5);
     expect(row.attainment).toBeCloseTo((8.49 / 18.0) * 100, 3);
@@ -120,6 +128,27 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
   it('has exactly seven metric groups, one per pace row', () => {
     expect(METRIC_DEFS.length).toBe(7);
   });
+
+  it('every pace row has a numeric registered attainmentId — none is JS-computed', () => {
+    // The whole point of Task 3: each of the seven attainment values shown
+    // on the page must resolve to a real Supabase metric id, not a formula
+    // evaluated only in this file. computeAttainmentPercent still exists
+    // (tested above) but only as the dev-time consistency check's own
+    // arithmetic, never as the value buildPaceRow returns.
+    for (const def of METRIC_DEFS) {
+      expect(typeof def.attainmentId).toBe('number');
+      expect(Number.isFinite(def.attainmentId)).toBe(true);
+    }
+    const attainmentIds = METRIC_DEFS.map((d) => d.attainmentId);
+    expect(new Set(attainmentIds).size).toBe(7); // all distinct metrics
+  });
+
+  it('buildPaceRow returns attainmentMetricId on every row so the UI can wire a click target', () => {
+    for (const def of METRIC_DEFS) {
+      const row = buildPaceRow(def, mapFrom({ [def.attainmentId]: 100 }));
+      expect(row.attainmentMetricId).toBe(def.attainmentId);
+    }
+  });
 });
 
 describe('methodMondayPace: worst-first ordering under the inverted rule', () => {
@@ -128,7 +157,7 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       // trials: 74.6% attainment (behind pace, harmfulDistance +25.4)
       416: 74.6, 410: 232, 285: 311,
       // churn: 110.8% attainment (over forecast, harmfulDistance +10.8)
-      411: 109.69, 274: 99,
+      423: 110.8, 411: 109.69, 274: 99,
       // syncs: exactly on pace (harmfulDistance 0)
       418: 100, 295: 100, 286: 100,
     });
@@ -167,16 +196,16 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
   it('buildPaceRows returns all seven rows sorted worst-first end to end', () => {
     // 2026-08-14 acceptance values from the design check.
     const dataMap = mapFrom({
-      416: 74.6, 410: 232, 285: 311,       // trials attainment given directly
-      418: 59.2, 295: 130, 286: 220,        // syncs attainment given directly
-      296: 57.23, 273: 106,                 // conversions: derive 54.0%
-      414: 50.0, 361: 63.1,                 // sync %: derive 79.2%
-      400: 0.2474, 402: 0.2711,             // sync conversion rate: derive 91.3%
-      411: 109.69, 274: 99,                 // churn: derive 110.8%, inverted
+      416: 74.6, 410: 232, 285: 311,         // trials attainment given directly
+      418: 59.2, 295: 130, 286: 220,          // syncs attainment given directly
+      419: 54.0, 296: 57.23, 273: 106,        // conversions attainment: 54.0%
+      421: 79.2, 414: 50.0, 361: 63.1,        // sync % attainment: 79.2%
+      422: 91.3, 400: 0.2474, 402: 0.2711,    // sync conversion rate attainment: 91.3%
+      423: 110.8, 411: 109.69, 274: 99,       // churn attainment: 110.8%, inverted
       // Conversion Rate: live values reported back after review — #321
       // (percent, already 0-100) and #319 (decimal_rate, 0-1) normalize to
-      // 10.95 / 17.97 = 60.9% attainment.
-      321: 10.95, 319: 0.1797,
+      // 10.95 / 17.97 = 60.9% attainment, now read from registered #420.
+      420: 60.9, 321: 10.95, 319: 0.1797,
     });
     const rows = buildPaceRows(dataMap);
     expect(rows.length).toBe(7);
@@ -223,11 +252,11 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
     const dataMap = mapFrom({
       416: 0, 410: 0, 285: 311,
       418: 0, 295: 0, 286: 220,
-      296: 0, 273: 106,
-      414: 0, 361: 63.1,
-      400: 0, 402: 0.2711,
-      411: 0, 274: 99,
-      321: 0, 319: 0.1797,
+      419: 0, 296: 0, 273: 106,
+      421: 0, 414: 0, 361: 63.1,
+      422: 0, 400: 0, 402: 0.2711,
+      423: 0, 411: 0, 274: 99,
+      420: 0, 321: 0, 319: 0.1797,
     });
     const rows = buildPaceRows(dataMap, { now: day1 });
     expect(rows.length).toBe(7);
@@ -244,7 +273,9 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
     // the same way buildPaceRows does.
     const realBadRow = buildPaceRow(
       METRIC_DEFS.find((d) => d.key === 'conversions'),
-      mapFrom({ 296: 10, 273: 106 }), // ~9.4% attainment — genuinely terrible
+      // ~9.4% attainment — genuinely terrible. 419 is the registered
+      // Conversions Attainment metric this row now reads.
+      mapFrom({ 419: (10 / 106) * 100, 296: 10, 273: 106 }),
       { now: day2 }
     );
     const day1Row = buildPaceRow(
@@ -267,7 +298,8 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
 
   it('a genuine zero on day 2+ is NOT treated as missing (day-1 guard only fires on the 1st)', () => {
     const def = METRIC_DEFS.find((d) => d.key === 'conversions');
-    const dataMap = mapFrom({ 296: 0, 273: 106 }); // real zero conversions so far
+    // real zero conversions so far — 419 is the registered attainment id.
+    const dataMap = mapFrom({ 419: 0, 296: 0, 273: 106 });
     const row = buildPaceRow(def, dataMap, { now: day2 });
     expect(row.attainment).toBe(0);
     expect(row.band).not.toBe('unknown');

@@ -24,11 +24,11 @@ function fullDataMap() {
   const values = {
     416: 74.6, 410: 232, 285: 311,
     418: 59.2, 295: 130, 286: 220,
-    296: 57.23, 273: 106,
-    414: 50.0, 361: 63.1,
-    400: 0.2474, 402: 0.2711,
-    411: 109.69, 274: 99,
-    321: 10.95, 319: 0.1797,
+    419: 54.0, 296: 57.23, 273: 106,
+    421: 79.2, 414: 50.0, 361: 63.1,
+    422: 91.3, 400: 0.2474, 402: 0.2711,
+    423: 110.8, 411: 109.69, 274: 99,
+    420: 60.9, 321: 10.95, 319: 0.1797,
     // detail-tile-only ids referenced by the per-metric sections
     406: 132, 407: 64, 408: 20, 409: 27, 412: 31, 413: 29, 415: -165, 417: -171, 357: 0.181,
   };
@@ -189,6 +189,61 @@ describe('MethodMondayPaceView: expansion reveals exactly one metric\'s detail',
     const both = trialsHtml + churnHtml;
     expect(both).toMatch(/Trials Forecast/);
     expect(both).toMatch(/Forecasted Churn/);
+  });
+});
+
+describe('MethodMondayPaceView: attainment number is a distinct inspect target', () => {
+  const trialsSection = detailSections().find((s) => s.title === 'Trials');
+
+  it('without onMetricClick, the row renders exactly one <button> (no inspect target)', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: { key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber', attainmentMetricId: 416 },
+        isOpen: false,
+        onToggle: () => {},
+        detailSection: trialsSection,
+        dataMap: fullDataMap(),
+      })
+    );
+    expect((html.match(/<button/g) || []).length).toBe(1);
+  });
+
+  it('with onMetricClick and an attainmentMetricId, the row renders two SIBLING buttons, not nested', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: { key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber', attainmentMetricId: 416 },
+        isOpen: false,
+        onToggle: () => {},
+        detailSection: trialsSection,
+        dataMap: fullDataMap(),
+        onMetricClick: () => {},
+      })
+    );
+    expect((html.match(/<button/g) || []).length).toBe(2);
+    // Not nested: the second <button opens strictly after the first one's
+    // closing tag, never inside it — invalid HTML otherwise.
+    const firstClose = html.indexOf('</button>');
+    const secondOpen = html.indexOf('<button', firstClose);
+    expect(firstClose).toBeGreaterThan(-1);
+    expect(secondOpen).toBeGreaterThan(firstClose);
+    // Only the toggle button carries aria-expanded; the inspect button does not.
+    expect((html.match(/aria-expanded/g) || []).length).toBe(1);
+    // The inspect button is independently labeled for screen readers.
+    expect(html).toMatch(/aria-label="Inspect Trials attainment metric"/);
+  });
+
+  it('the inspect button is absent when the row has no registered attainmentMetricId', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: { key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber', attainmentMetricId: null },
+        isOpen: false,
+        onToggle: () => {},
+        detailSection: trialsSection,
+        dataMap: fullDataMap(),
+        onMetricClick: () => {},
+      })
+    );
+    expect((html.match(/<button/g) || []).length).toBe(1);
   });
 });
 

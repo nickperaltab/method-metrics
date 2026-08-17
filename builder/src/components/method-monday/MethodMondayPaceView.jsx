@@ -88,6 +88,7 @@ export function toggleOpenKey(openKeys, key) {
  */
 export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetricClick }) {
   const [hovered, setHovered] = useState(false);
+  const [attainmentHovered, setAttainmentHovered] = useState(false);
   const barWidthPct = row.attainment == null
     ? 0
     : Math.max(0, Math.min(row.attainment, AXIS_MAX)) / AXIS_MAX * 100;
@@ -99,117 +100,170 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
   return (
     <div style={{ borderBottom: `1px solid ${color.borderSubtle}` }}>
       {/*
-        A real <button>, per the task's a11y requirement — native Enter/Space
-        activation and focus handling for free, no reimplemented keydown
-        logic. Affordance follows two patterns already in this codebase:
-        the hover background swap from KpiTile.jsx (components/scorecards/),
-        and the rotating "›" chevron from MetricInspector.jsx's
-        accordionTrigger (components/scorecards/, read for pattern only —
-        neither file is imported or modified here).
+        Two SIBLING <button>s share one grid row, not one button nested
+        inside another (invalid HTML, and the two actions — expand detail
+        vs. inspect the attainment metric — need independent, unambiguous
+        targets). The toggle button spans the first three grid columns with
+        its own matching internal widths; the inspect button owns the
+        fourth. A real <button>, per the task's a11y requirement — native
+        Enter/Space activation and focus handling for free. Affordance
+        follows two patterns already in this codebase: the hover background
+        swap from KpiTile.jsx (components/scorecards/), and the rotating "›"
+        chevron from MetricInspector.jsx's accordionTrigger
+        (components/scorecards/, read for pattern only — neither file is
+        imported or modified here).
       */}
-      <button
-        type="button"
-        className={FOCUSABLE}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        aria-controls={detailId}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+      <div
         style={{
           display: 'grid',
           gridTemplateColumns: ROW_GRID,
           alignItems: 'center',
           gap: 16,
           width: '100%',
-          padding: '10px 8px',
-          margin: 0,
-          border: 'none',
-          borderRadius: radius.control,
-          background: hovered ? color.surfaceAlt : 'transparent',
-          cursor: 'pointer',
-          font: 'inherit',
-          textAlign: 'left',
-          transition: 'background 150ms ease-out',
         }}
       >
-        <span
-          aria-hidden="true"
+        <button
+          type="button"
+          className={FOCUSABLE}
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-controls={detailId}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
           style={{
-            display: 'inline-block',
-            color: color.inkMuted,
-            fontSize: 16,
-            fontFamily: font.mono,
-            transform: isOpen ? 'rotate(90deg)' : 'none',
-            transition: 'transform 150ms ease-out',
+            display: 'grid',
+            gridTemplateColumns: '20px 160px 1fr',
+            alignItems: 'center',
+            gap: 16,
+            gridColumn: '1 / span 3',
+            padding: '10px 8px',
+            margin: 0,
+            border: 'none',
+            borderRadius: radius.control,
+            background: hovered ? color.surfaceAlt : 'transparent',
+            cursor: 'pointer',
+            font: 'inherit',
+            textAlign: 'left',
+            transition: 'background 150ms ease-out',
           }}
         >
-          ›
-        </span>
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block',
+              color: color.inkMuted,
+              fontSize: 16,
+              fontFamily: font.mono,
+              transform: isOpen ? 'rotate(90deg)' : 'none',
+              transition: 'transform 150ms ease-out',
+            }}
+          >
+            ›
+          </span>
 
-        <span style={{ fontSize: type.body, fontWeight: weight.medium, color: color.ink, fontFamily: fontSans }}>
-          {row.label}
-        </span>
+          <span style={{ fontSize: type.body, fontWeight: weight.medium, color: color.ink, fontFamily: fontSans }}>
+            {row.label}
+          </span>
 
-        <span style={{ position: 'relative', height: 20, background: color.surfaceAlt, borderRadius: 4 }}>
-          {/* Danger-zone tint: for an inverted metric (churn), the region
-              past the 100% rule is the harmful direction, shaded whether or
-              not the bar currently reaches it. Explanation of WHY lives in
-              the expanded detail section's header, not as extra text here —
-              the collapsed row shows name, bar, percentage and nothing else. */}
-          {row.inverted && (
+          <span style={{ position: 'relative', height: 20, background: color.surfaceAlt, borderRadius: 4 }}>
+            {/* Danger-zone tint: for an inverted metric (churn), the region
+                past the 100% rule is the harmful direction, shaded whether or
+                not the bar currently reaches it. Explanation of WHY lives in
+                the expanded detail section's header, not as extra text here —
+                the collapsed row shows name, bar, percentage and nothing else. */}
+            {row.inverted && (
+              <span
+                style={{
+                  position: 'absolute',
+                  left: `${ON_PACE_X}%`,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  // 8% tint of color.negative; rgba() has no token form.
+                  background: 'rgba(180, 35, 24, 0.08)',
+                  borderRadius: '0 4px 4px 0',
+                }}
+              />
+            )}
             <span
               style={{
                 position: 'absolute',
                 left: `${ON_PACE_X}%`,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                // 8% tint of color.negative; rgba() has no token form.
-                background: 'rgba(180, 35, 24, 0.08)',
-                borderRadius: '0 4px 4px 0',
+                top: -2,
+                bottom: -2,
+                width: 1,
+                background: color.inkMuted,
               }}
             />
-          )}
-          <span
-            style={{
-              position: 'absolute',
-              left: `${ON_PACE_X}%`,
-              top: -2,
-              bottom: -2,
-              width: 1,
-              background: color.inkMuted,
-            }}
-          />
-          <span
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: `${barWidthPct}%`,
-              background: bandColor,
-              borderRadius: 4,
-              transition: 'width 200ms ease-out',
-            }}
-          />
-        </span>
+            <span
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: `${barWidthPct}%`,
+                background: bandColor,
+                borderRadius: 4,
+                transition: 'width 200ms ease-out',
+              }}
+            />
+          </span>
+        </button>
 
-        <span style={{
-          fontSize: 14,
-          fontWeight: weight.medium,
-          fontFamily: fontSans,
-          color: bandTextColor,
-          textAlign: 'right',
-          ...numeric,
-        }}>
-          {attainment ?? (
-            <>
-              <span aria-hidden="true">—</span>
-              <SrOnly>No data</SrOnly>
-            </>
-          )}
-        </span>
-      </button>
+        {/* Distinct target from the toggle button above: clicking the
+            attainment number opens MetricInspector for the registered
+            metric behind it (row.attainmentMetricId), it does not expand
+            the row. Falls back to a non-interactive span when the row has
+            no registered attainment id or no click handler was wired. */}
+        {row.attainmentMetricId != null && onMetricClick ? (
+          <button
+            type="button"
+            className={FOCUSABLE}
+            onClick={() => onMetricClick(row.attainmentMetricId, row.attainment, 'percent')}
+            onMouseEnter={() => setAttainmentHovered(true)}
+            onMouseLeave={() => setAttainmentHovered(false)}
+            aria-label={`Inspect ${row.label} attainment metric`}
+            style={{
+              fontSize: 14,
+              fontWeight: weight.medium,
+              fontFamily: fontSans,
+              color: bandTextColor,
+              textAlign: 'right',
+              background: attainmentHovered ? color.surfaceAlt : 'transparent',
+              border: 'none',
+              borderRadius: radius.control,
+              padding: '10px 8px',
+              margin: 0,
+              cursor: 'pointer',
+              ...numeric,
+            }}
+          >
+            {attainment ?? (
+              <>
+                <span aria-hidden="true">—</span>
+                <SrOnly>No data</SrOnly>
+              </>
+            )}
+          </button>
+        ) : (
+          <span style={{
+            fontSize: 14,
+            fontWeight: weight.medium,
+            fontFamily: fontSans,
+            color: bandTextColor,
+            textAlign: 'right',
+            padding: '10px 8px',
+            ...numeric,
+          }}>
+            {attainment ?? (
+              <>
+                <span aria-hidden="true">—</span>
+                <SrOnly>No data</SrOnly>
+              </>
+            )}
+          </span>
+        )}
+      </div>
 
       {isOpen && detailSection && (
         <div id={detailId} style={{ padding: '4px 8px 20px 36px' }}>

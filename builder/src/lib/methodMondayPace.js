@@ -26,9 +26,15 @@
 import { resolveKpiValue } from '../components/scorecards/utils';
 
 /**
- * One entry per pace row. `attainmentId` is used directly when the metric
- * already has a registered attainment view (Trials #416, Syncs #418);
- * otherwise attainment is derived from numerator ÷ denominator.
+ * One entry per pace row. `attainmentId` names the registered Supabase
+ * formula metric that IS this row's attainment number (Trials #416, Syncs
+ * #418, Conversions #419, Conversion Rate #420, Sync % #421, Sync
+ * Conversion Rate #422, Churn #423) — every row reads its displayed
+ * percentage from a registered metric, never from a JS computation.
+ * `numeratorId`/`denominatorId` are kept only for the raw trajectory/
+ * forecast pair (unused directly by the page today, but exercised by the
+ * dev-time consistency check below and by tests) — they are not a
+ * fallback computation path.
  *
  * `numeratorFormat` / `denominatorFormat` / `attainmentFormat` describe the
  * RAW format each id's metric emits (see method-monday-scorecard.js), not
@@ -60,6 +66,8 @@ export const METRIC_DEFS = [
   {
     key: 'conversions',
     label: 'Conversions',
+    attainmentId: 419,
+    attainmentFormat: 'percent',
     numeratorId: 296,
     numeratorFormat: 'number',
     denominatorId: 273,
@@ -72,7 +80,11 @@ export const METRIC_DEFS = [
     // #321 emits a percentage (0–100). #319 emits a decimal (0–1) — it must
     // be normalized (×100) before it is comparable to #321. See the
     // method-monday-scorecard.js header comment for why these two aren't
-    // scale-invariant the way the sync conversion rate pair is.
+    // scale-invariant the way the sync conversion rate pair is. #420
+    // (Conversion Rate Attainment) does this same rescaling inside its own
+    // registered formula, so the bar and the registered metric agree.
+    attainmentId: 420,
+    attainmentFormat: 'percent',
     numeratorId: 321,
     numeratorFormat: 'percent',
     denominatorId: 319,
@@ -82,6 +94,8 @@ export const METRIC_DEFS = [
   {
     key: 'syncPercent',
     label: 'Sync %',
+    attainmentId: 421,
+    attainmentFormat: 'percent',
     numeratorId: 414,
     numeratorFormat: 'percent',
     denominatorId: 361,
@@ -94,6 +108,8 @@ export const METRIC_DEFS = [
     // Both #400 and #402 emit decimal rates (0–1) — same scale, no mixing
     // risk, but normalize() still runs so the displayed pair reads as a
     // percentage like the rest of the page.
+    attainmentId: 422,
+    attainmentFormat: 'percent',
     numeratorId: 400,
     numeratorFormat: 'decimal_rate',
     denominatorId: 402,
@@ -103,6 +119,8 @@ export const METRIC_DEFS = [
   {
     key: 'churn',
     label: 'Churn',
+    attainmentId: 423,
+    attainmentFormat: 'percent',
     numeratorId: 411,
     numeratorFormat: 'number',
     denominatorId: 274,
@@ -207,6 +225,7 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
       denominator: null,
       numeratorFormat: def.numeratorFormat,
       denominatorFormat: def.denominatorFormat,
+      attainmentMetricId: def.attainmentId,
     };
   }
 
@@ -215,32 +234,33 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
   const numerator = normalize(rawNumerator, def.numeratorFormat);
   const denominator = normalize(rawDenominator, def.denominatorFormat);
 
-  let attainment;
-  if (def.attainmentId) {
-    const rawAttainment = resolveKpiValue(dataMap.get(def.attainmentId), 'current_or_latest');
-    attainment = normalize(rawAttainment, def.attainmentFormat);
+  // Every group now has a registered attainment metric (Trials #416, Syncs
+  // #418, Conversions #419, Conversion Rate #420, Sync % #421, Sync
+  // Conversion Rate #422, Churn #423) — this is the ONE place the
+  // displayed percentage comes from. numerator/denominator are never used
+  // to compute it; they exist only for the raw pair and the consistency
+  // check below, so the registered formula and this file cannot silently
+  // diverge without a warning.
+  const rawAttainment = resolveKpiValue(dataMap.get(def.attainmentId), 'current_or_latest');
+  const attainment = normalize(rawAttainment, def.attainmentFormat);
 
-    // Dev-time consistency check: Trials/Syncs display the raw
-    // numerator/denominator pair (#410/#285, #295/#286) beside an
-    // attainment value read from a SEPARATE registered metric (#416/#418).
-    // Nothing enforces those two stay in sync at the data layer, so if
-    // #416/#418's formula ever drifts from numerator/denominator, the bar
-    // and the printed pair would silently disagree. This only warns in
-    // dev (no throw, no user-visible effect) and is skipped whenever either
-    // side is unavailable to compare.
-    if (import.meta.env?.DEV && numerator != null && denominator) {
-      const derived = computeAttainmentPercent(numerator, denominator);
-      if (derived != null && Math.abs(derived - attainment) > 0.5) {
-        console.warn(
-          `[methodMondayPace] ${def.label}: registered attainment (#${def.attainmentId}) ` +
-          `= ${attainment.toFixed(1)}% disagrees with derived ${def.numeratorId}/${def.denominatorId} ` +
-          `= ${derived.toFixed(1)}%. The bar (attainment) and the printed pair (numerator/denominator) ` +
-          `will visibly disagree on the page.`
-        );
-      }
+  // Dev-time consistency check: every row displays the raw
+  // numerator/denominator pair alongside an attainment value read from a
+  // SEPARATE registered metric. Nothing enforces those two stay in sync at
+  // the data layer, so if a registered formula ever drifts from this
+  // file's numerator/denominator pairing, the two would silently disagree.
+  // This only warns in dev (no throw, no user-visible effect) and is
+  // skipped whenever either side is unavailable to compare.
+  if (import.meta.env?.DEV && attainment != null && numerator != null && denominator) {
+    const derived = computeAttainmentPercent(numerator, denominator);
+    if (derived != null && Math.abs(derived - attainment) > 0.5) {
+      console.warn(
+        `[methodMondayPace] ${def.label}: registered attainment (#${def.attainmentId}) ` +
+        `= ${attainment.toFixed(1)}% disagrees with derived ${def.numeratorId}/${def.denominatorId} ` +
+        `= ${derived.toFixed(1)}%. The bar (attainment) and the printed pair (numerator/denominator) ` +
+        `will visibly disagree on the page.`
+      );
     }
-  } else {
-    attainment = computeAttainmentPercent(numerator, denominator);
   }
 
   return {
@@ -254,6 +274,7 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
     denominator,
     numeratorFormat: def.numeratorFormat,
     denominatorFormat: def.denominatorFormat,
+    attainmentMetricId: def.attainmentId,
   };
 }
 

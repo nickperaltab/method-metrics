@@ -89,6 +89,8 @@ export default {
           valueSelector: 'current_or_latest' },
         { metricId: 414, label: 'Sync % Actual', format: 'percent',
           valueSelector: 'current_or_latest' },
+        { metricId: 421, label: 'Sync % Attainment', format: 'percent',
+          valueSelector: 'current_or_latest' },
       ],
     },
 
@@ -152,6 +154,8 @@ export default {
         // to the complete-days convention in Task 3. Not a new pointer.
         { metricId: 296, label: 'Conversions Trajectory', format: 'number',
           valueSelector: 'current_or_latest' },
+        { metricId: 419, label: 'Conversions Attainment', format: 'percent',
+          valueSelector: 'current_or_latest' },
       ],
     },
 
@@ -182,6 +186,8 @@ export default {
         // 321 formula outputs percentage number (8.49), not decimal — use 'percent'
         { metricId: 321, label: 'Conversion Rate Trajectory', format: 'percent',
           valueSelector: 'current_or_latest' },
+        { metricId: 420, label: 'Conversion Rate Attainment', format: 'percent',
+          valueSelector: 'current_or_latest' },
       ],
     },
 
@@ -198,6 +204,8 @@ export default {
           valueSelector: 'current_or_latest' },
         // #402 also emits a decimal rate (0.2711).
         { metricId: 402, label: 'Sync Conversion Rate Forecast', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        { metricId: 422, label: 'Sync Conversion Rate Attainment', format: 'percent',
           valueSelector: 'current_or_latest' },
       ],
     },
@@ -217,6 +225,8 @@ export default {
         { metricId: 409, label: 'Churn MTD', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 411, label: 'Churn Trajectory', format: 'number',
+          valueSelector: 'current_or_latest' },
+        { metricId: 423, label: 'Churn Attainment', format: 'percent',
           valueSelector: 'current_or_latest' },
       ],
     },

@@ -61,14 +61,18 @@ describe('Method Monday scorecard', () => {
 
   it('has exactly one tile for the sync conversion rate (trajectory == actual)', () => {
     const section = methodMonday.sections.find((s) => s.title === 'Sync Conversion Rate');
+    // Excludes both the forecast tile and the attainment tile (#422) — this
+    // invariant is only about there not being a second trajectory-or-actual
+    // tile, since trajectory == actual on this convention (see file header).
+    // Attainment is a distinct third concept, not a duplicate of "actual".
     const syncRateTiles = section.kpis.filter((k) =>
-      /sync conversion rate/i.test(k.label) && !/forecast/i.test(k.label)
+      /sync conversion rate/i.test(k.label) && !/forecast/i.test(k.label) && !/attainment/i.test(k.label)
     );
     expect(syncRateTiles.length).toBe(1);
   });
 
   it('uses the correct format for every percentage-emitting metric', () => {
-    const percentIds = new Set([361, 414, 416, 418, 321]);
+    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423]);
     const decimalRateIds = new Set([400, 402, 319, 357]);
     for (const s of detailSections()) {
       for (const k of s.kpis) {
@@ -111,9 +115,22 @@ describe('Method Monday scorecard', () => {
   it('regroups the 25 pre-existing detail tiles per metric rather than three undifferentiated rows', () => {
     // Redesign requirement: nothing available before the redesign disappears,
     // it's just organized by metric instead of by the old 3-section layout.
+    // 30, not 25: the five newly-registered attainment metrics (419-423,
+    // see docs/metric-definitions.md) each got one tile added to their
+    // group's collapsed detail so plan.js loads their data and the pace
+    // row's attainment number has somewhere the value is independently
+    // visible and inspectable.
     const allIds = detailSections().flatMap((s) => s.kpis.map((k) => k.metricId));
-    expect(allIds.length).toBe(25);
+    expect(allIds.length).toBe(30);
     expect(detailSections().length).toBe(7);
+  });
+
+  it('includes all five newly-registered attainment metric ids exactly once', () => {
+    const expected = [419, 420, 421, 422, 423];
+    const allIds = detailSections().flatMap((s) => s.kpis.map((k) => k.metricId));
+    for (const id of expected) {
+      expect(allIds.filter((x) => x === id).length).toBe(1);
+    }
   });
 
   it('every detail section opts out of the always-visible main render loop (progressive disclosure, round 2)', () => {
