@@ -3,17 +3,21 @@
 models:
   - name: v_metric__churn
     description: |
-      Monthly count of distinct Method customers that canceled, grouped by
-      cancellation month. Customer-grain — uses COUNT(DISTINCT CompanyAccount)
-      so a customer with multiple canceling accounts in the same month
-      counts ONCE. Excludes test accounts and internal Method Integration
+      Monthly count of Method billing accounts (CompanyAccount grain) that
+      canceled, grouped by cancellation month. COUNT(DISTINCT CompanyAccount)
+      is measured identical to COUNT(*) in every recent month (6/6 checked)
+      — int_cancellations is already one row per Account, so the DISTINCT
+      performs no customer-level dedup. A customer that owns several
+      canceling CompanyAccounts (e.g. a franchise network closing multiple
+      per-location accounts in one event) counts once per account, not once
+      per customer. Excludes test accounts and internal Method Integration
       partner rows. Note: this is account-count churn, not dollar churn —
       see Monthly Cancellations ($) (#379) for MRR lost.
     config:
       materialized: view
       meta:
-        answers: "How many distinct Method customers canceled in each month?"
-        grain: "customer-level (uses DISTINCT). A customer with multiple canceling accounts in the same month counts ONCE."
+        answers: "How many Method billing accounts (CompanyAccounts) canceled in each month?"
+        grain: "CompanyAccount (billing-account) grain, not customer grain. COUNT(DISTINCT CompanyAccount) equals COUNT(*) here — there is no customer-level dedup happening despite the DISTINCT in the SQL."
         filters:
           - rule: "Inherits from int_cancellations"
             why: "carries the upstream cancellation filters"
@@ -23,6 +27,7 @@ models:
           values: "penny-match"
         caveats:
           - "Account-count churn, not dollar churn. For MRR-lost-to-cancellations, use Monthly Cancellations ($) (#379)."
+          - "Billing-account grain, not customer grain: a customer (EntityRecordID) with multiple canceling CompanyAccounts is counted once per account. A franchise network closing N per-location accounts in one cancellation event reads as N here, not 1 — see Accounts Churned MTD (#409) for a concrete example (2026-08-14, EntityRecordID 32049)."
         used_by:
           - "Method Monday (Retention section)"
       labels:

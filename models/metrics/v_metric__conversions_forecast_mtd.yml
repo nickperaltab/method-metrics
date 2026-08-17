@@ -16,8 +16,8 @@ models:
             why: "matches the elapsed window used by the MTD actual it is compared against"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "55 (Looker, rounded for display) vs 54.7 (model, unrounded) -- match. Also re-verified 2026-08-17: both this view and Supabase #273 read Forecasted_Conversion (106) from revenue.method_forecast -- an earlier audit pass had wrongly claimed #273 reads Budgeted_Conversion (128) instead; that claim was disproven by reading #273's chart_sql directly."
         caveats:
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename in the sheet breaks this silently."
           - "Straight-line proration, not shaped to the forecast's own daily curve. Assumes even distribution across the month."

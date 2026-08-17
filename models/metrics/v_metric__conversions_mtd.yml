@@ -20,8 +20,8 @@ models:
             why: "carried from Conversions #56"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "28 (Looker) = 28 (model), exact match. Note: at ~11:00 the same day this view read 27 against Looker's 28; by ~12:45 it read 28 -- a 2026-08-16 conversion landed in the nightly mirror between the two reads. Both readings were correct at the time they were taken; this pipeline is not intraday-reproducible by design (nightly mirror), which argues for a fixed daily snapshot rather than live reads for anything published from this data."
         caveats:
           - "Excludes today by design. Not the same number as Conversions #56 for the current month."
           - "Single-row by design. Do not chart it as a time series."

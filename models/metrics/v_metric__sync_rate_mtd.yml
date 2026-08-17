@@ -17,8 +17,8 @@ models:
             why: "today is unfinished; keeps this consistent with every other MTD tile on the page"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "50.6% (Looker) = 50.6% (model), exact match."
         caveats:
           - "Emits a percentage (50.0), not a decimal (0.50). Matches Sync Rate #300 and Forecasted Sync Rate #361's convention so the tiles can sit side by side without rescaling."
           - "Excludes today by design. Not the same number as Sync Rate #300, which is the full-month ratio."

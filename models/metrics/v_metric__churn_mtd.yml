@@ -1,29 +1,32 @@
-# Canonical metric definition for "Churn MTD (through yesterday)".
+# Canonical metric definition for "Accounts Churned MTD (through yesterday)".
+# Renamed 2026-08-17 from "Churn MTD" (Nic-approved: Churn -> Accounts
+# Churned, to state the true grain plainly in the name).
 
 models:
   - name: v_metric__churn_mtd
     description: |
       Cancellations with a CancellationDate in the current month, strictly
-      before today, counted at CompanyAccount grain (matching metric 344).
-      Pairs with the complete-days trajectory. Distinct from Churn (#59),
-      which is the full-month total and stays that way.
+      before today, counted at CompanyAccount (billing-account) grain,
+      matching metric 344. Pairs with the complete-days trajectory.
+      Distinct from Accounts Churned (#59), which is the full-month total
+      and stays that way.
     config:
       materialized: view
       meta:
-        answers: "How much churn have we had this month, counting only finished days?"
-        grain: "Single row, current month. CompanyAccount-grain, matching metric 344 (see Churn #59)."
+        answers: "How many billing accounts have churned this month, counting only finished days?"
+        grain: "Single row, current month. CompanyAccount (billing-account) grain, matching metric 344 (see Accounts Churned #59)."
         filters:
           - rule: "CancellationDate < CURRENT_DATE()"
             why: "today is unfinished; including it would not match the trajectory divisor"
           - rule: "COUNT(DISTINCT CompanyAccount), inherits int_cancellations"
-            why: "carried from Churn #59, CompanyAccount grain matching metric 344"
+            why: "carried from Accounts Churned #59, CompanyAccount grain matching metric 344 -- the DISTINCT performs no customer-level dedup (COUNT(*) is identical), see #59"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "74 (Looker) = 74 (model), exact match. Looker also reads at CompanyAccount grain, confirming the grain is shared with the incumbent (see #59, #423)."
         caveats:
-          - "Excludes today by design. Not the same number as Churn #59 for the current month."
-          - "CompanyAccount grain, matching metric 344."
+          - "Excludes today by design. Not the same number as Accounts Churned #59 for the current month."
+          - "CompanyAccount (billing-account) grain, matching metric 344 -- not customer grain. A franchise network closing 20 per-location accounts in one cancellation event reads as 20 here, not 1: on 2026-08-14, EntityRecordID 32049 (a Granite Garage Floors franchise network) closed 20 accounts (19 licenses, roughly $800 total SaaS) in a single day, and all 20 count individually."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
           - "Method Monday (Retention section)"

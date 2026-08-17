@@ -3,14 +3,16 @@
 models:
   - name: v_metric__syncs_mtd
     description: |
-      Syncs with a SyncDate in the current month, strictly before today.
-      Pairs with the complete-days trajectory. Distinct from Syncs (#55),
-      which is the full-month total and stays that way.
+      Signup-cohort syncs, strictly before today: accounts whose SyncDate
+      (the same column as SignupDate — see Syncs #55) falls in the current
+      month and that have hit the sync milestone. Pairs with the
+      complete-days trajectory. Distinct from Syncs (#55), which is the
+      full-month total and stays that way.
     config:
       materialized: view
       meta:
-        answers: "How many syncs have we had this month, counting only finished days?"
-        grain: "Single row, current month. Account-grain (see Syncs #55)."
+        answers: "How many accounts signed up this month and have since synced, counting only finished days?"
+        grain: "Single row, current month. Account-grain, signup-dated — not sync-completion-dated (see Syncs #55)."
         filters:
           - rule: "SyncDate < CURRENT_DATE()"
             why: "today is unfinished; including it would not match the trajectory divisor"
@@ -18,10 +20,11 @@ models:
             why: "carried from Syncs #55"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "2026-08-17: independent recomputation from revenue.Account/Funnel (BigQuery, read-only, no pipeline SQL reused) — zero variance. Looker's Method Monday page (report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM) does not surface this raw MTD count as its own tile; it only shows the derived Syncs Trajectory (#295), which separately matched Looker exactly (230.6 vs our 230.6) the same day."
+          values: "119 (model) = 119 (independent BigQuery recomputation), exact match."
         caveats:
           - "Excludes today by design. Not the same number as Syncs #55 for the current month."
+          - "SyncDate is SignupDate, not sync-completion date — revenue.Funnel's Sync branch projects SignupDate AS Date. This counts accounts that signed up this month and have since synced, not syncs that happened this month. Same caveat as Syncs #55; measured monthly fan-in for the account-vs-entity grain question is about 1.5% (see #55)."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
           - "Method Monday (Acquisition section)"

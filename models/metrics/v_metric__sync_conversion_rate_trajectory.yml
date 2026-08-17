@@ -28,27 +28,36 @@ unit_tests:
         - { period: '2026-07-01', value: null }
 
 models:
+  # Renamed 2026-08-17 to "Sync Conversion Rate (MTD)" (dropped
+  # "Trajectory") — see description and first caveat for why. The dbt
+  # model name below is unchanged: renaming it touches the BQ view object
+  # and every downstream ref, out of scope for a naming/description pass.
+  # Only the human-facing name (Supabase `name` column) moved.
   - name: v_metric__sync_conversion_rate_trajectory
     description: |
-      Month-end projection of the sync conversion rate for the in-progress
-      month — projected conversions divided by projected sync events. Both
-      sides use the same complete-days (day_of_month - 1) divisor and
-      through-yesterday numerator, so the ratio is internally consistent
-      through the month. Same-month, no lag, matching Sync-to-Conversion
-      Rate (#301). Emits a decimal rate, not a percentage.
+      The sync conversion rate for the in-progress month — signup-cohort
+      syncs (see Syncs #55) divided into conversions, both counted through
+      yesterday over the same complete-days (day_of_month - 1) window.
+      Despite the model name, this is NOT a projection: because both sides
+      scale by the identical divisor, it reduces algebraically to the
+      plain through-yesterday ratio (conversions_mtd / syncs_mtd) — it
+      carries no forward-looking information beyond what's already in the
+      MTD actuals. Same-month, no lag, matching Sync-to-Conversion Rate
+      (#301). Emits a decimal rate, not a percentage.
     config:
       materialized: view
       meta:
-        answers: "If the current month continues at its month-to-date pace, what sync conversion rate will it finish at?"
+        answers: "What is the sync conversion rate so far this month? (Not a projection — see description.)"
         grain: "Single row, current month. Period-level ratio."
-        methodology_source: "Ratio of the two trajectory projections, which follow the Method Monday complete-days convention adopted 2026-08-10 (superseding the Looker-derived day_of_month convention from 2026-07-22)."
+        methodology_source: "Ratio of the two trajectory projections, which follow the Method Monday complete-days convention adopted 2026-08-10 (superseding the Looker-derived day_of_month convention from 2026-07-22). The divisor cancels algebraically, so this is the MTD actual rate, not a distinct projection."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "No Looker counterpart exists for this metric on 'Method Monday (PROD)' (report 510f74bb, page p_rh9bepy1rd, read 2026-08-17) -- the page's 'Conversion Rate' tile is #321 (trials conversion rate, lagged denominator), a different metric. This is a first observation, not a parity match."
+          values: "First observed 2026-08-17: computed as conversions_trajectory (#296) / syncs_trajectory (#295) on that day's data. No independent target to compare against; recorded so a future re-read has a baseline."
         caveats:
+          - "Renamed 2026-08-17, dropping 'Trajectory': (conversions_trajectory / syncs_trajectory) = ((c/e*D) / (s/e*D)) = c/s, algebraically identical to the plain MTD ratio on every day of every month. It is not a projection and carries no forward-looking information; two tiles both reading 24.74% is not a coincidence meaning 'on pace,' it's the same number by construction."
           - "Convention changed 2026-08-10: both inputs (#296, #295) switched from a through-today numerator / day_of_month divisor to a through-yesterday numerator / complete-days divisor. The ratio itself is scale-invariant to this change (both sides moved together), but the underlying MTD counts differ, so the rate moved: 25.25% (25/99) -> 24.74% (24/97), measured 2026-08-14."
           - "History: prior to the 2026-08-10 convention change, this metric read 33.19% at month-end 2026-07-31 and 14.29% on 2026-08-04 (three days into August, documented first-days noise). Those readings were taken under the superseded day_of_month convention and are not comparable to readings taken after 2026-08-10."
-          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in M and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Denominator (syncs) is account-grain and signup-dated, not sync-completion-dated — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in M and have sync data. Measured fan-in at the monthly grain is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
           - "Against a true 'share of synced accounts that converted' read, the shipped basis measured +1.02 pp HIGH on the current 12 months — not low, as an earlier draft of this caveat stated — and +0.02 pp on the prior 12. Window-dependent, not a standing directional bias — quote it with the prior window beside it."
           - "Not comparable in LEVEL to the trials Conversion Rate Trajectory — that one uses a lagged denominator. Compare trend and attainment, not level."
           - "Single-row by design."

@@ -3,28 +3,30 @@
 models:
   - name: v_metric__syncs_trajectory
     description: |
-      Month-end projection of sync events for the in-progress month. Counts
-      syncs through yesterday, divides by COMPLETE days (day_of_month - 1),
-      and scales to the full month. Same divisor convention as Conversions
-      Trajectory (#296) so the two can be divided into a rate. Returns
-      exactly one row for the current month.
+      Month-end projection of signup-cohort syncs for the in-progress
+      month — accounts whose SyncDate (the same column as SignupDate, see
+      Syncs #55) falls in the current month and that have hit the sync
+      milestone. Counts through yesterday, divides by COMPLETE days
+      (day_of_month - 1), and scales to the full month. Same divisor
+      convention as Conversions Trajectory (#296) so the two can be
+      divided into a rate. Returns exactly one row for the current month.
     config:
       materialized: view
       meta:
-        answers: "If the current month continues at its month-to-date pace, how many sync events will it finish with?"
-        grain: "Single row, current month. Event-grain numerator (see Syncs #55)."
+        answers: "If the current month's signup cohort keeps completing syncs at its month-to-date pace, how many will it finish with?"
+        grain: "Single row, current month. Account-grain, signup-dated — not event-grain (see Syncs #55)."
         filters:
           - rule: "inherits int_method_monday.syncs_mtd, which excludes SyncDate >= CURRENT_DATE()"
             why: "today is unfinished; the trajectory divides by complete days only"
         methodology_source: "Method Monday convention (docs/superpowers/specs/2026-08-10-method-monday-design.md, Conventions). Mirrors the divisor convention adopted for Conversions Trajectory (#296)."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "230.6 (Looker) = 230.6 (model), exact match."
         caveats:
           - "Convention changed 2026-08-10: divides by COMPLETE days (day_of_month - 1) counting through yesterday. Previously counted through today and divided by day_of_month. Moves this metric 219.21 -> 231.31 (measured 2026-08-14) and cascades to any Sales Scorecard consumer. Deliberately diverges from Looker's Sales page, which retains the old convention; matches Looker's Method Monday page."
           - "History: numerator was corrected 2026-08-04 to count through TODAY under the old convention, reading 201.5 on 2026-08-10 (Looker parity confirmed then under that convention). That parity record no longer applies now that the divisor convention has changed again — see the line above."
-          - "Denominator is event-grain syncs dated by signup, not by sync completion — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in month M and have sync data. Measured fan-in at the monthly grain this metric carries is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
-          - "Not comparable in LEVEL to the trials Conversion Trajectory (#296) once divided into a rate — the sync rate has no lag where the trials rate does. Compare trend and attainment, not level."
+          - "This metric is signup-dated, not sync-completion-dated (it is the denominator when divided into the sync conversion rate) — revenue.Funnel's Sync branch projects SignupDate AS Date, so 'syncs in month M' means accounts that signed up in month M and have sync data. Measured fan-in at the monthly grain this metric carries is about 1.5%, not the 9-13% previously stated here: that figure was all-time cumulative, and the 're-syncs after disconnect/reconnect' mechanism it described does not exist in the data (there are zero repeat sync events; the ~9% of entities with multiple rows are multi-account customers). See scripts/reconcile_sync_denominators.py output."
+          - "Not comparable in LEVEL to the trials Conversion Rate Trajectory (#321) once divided into a rate — the sync rate has no lag where the trials rate does. Compare trend and attainment, not level. (#296 above is Conversions Trajectory, this metric's own partner in the sync conversion rate — a different metric from #321.)"
           - "Noisy in the first few days of a month, same as #296."
           - "Single-row by design. Do not chart it as a time series."
         used_by:

@@ -1,26 +1,30 @@
-# Canonical metric definition for "Churn Forecast MTD".
+# Canonical metric definition for "Accounts Churned Forecast MTD".
+# Renamed 2026-08-17 from "Churn Forecast MTD" (Nic-approved: Churn ->
+# Accounts Churned, to state the true grain plainly in the name).
 
 models:
   - name: v_metric__churn_forecast_mtd
     description: |
-      The full-month churn forecast prorated to the elapsed window
+      The full-month accounts-churned forecast (Forecasted_Churn, an
+      account-grain forecast) prorated to the elapsed window
       (churn_forecast * elapsed_days / days_in_month), so the MTD actual
       has a like-for-like comparison instead of the full-month total.
     config:
       materialized: view
       meta:
-        answers: "How many churned accounts should we have by today, if the full-month forecast lands evenly?"
-        grain: "Single row, current month. Period-level, derived from a full-month forecast total."
+        answers: "How many accounts should have churned by today, if the full-month forecast lands evenly?"
+        grain: "Single row, current month. Period-level, derived from a full-month, account-grain forecast total."
         filters:
           - rule: "inherits int_method_monday.churn_forecast_mtd, proration is elapsed_days / days_in_month"
             why: "matches the elapsed window used by the MTD actual it is compared against"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "51 (Looker, rounded for display) vs 51.1 (model, unrounded) -- match. Also re-verified 2026-08-17: both this view and Supabase #274 read Forecasted_Churn (99) from revenue.method_forecast -- an earlier audit pass had wrongly claimed #274 reads Budgeted_Churn (80) instead; that claim was disproven by reading #274's chart_sql directly."
         caveats:
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename in the sheet breaks this silently."
           - "Straight-line proration, not shaped to the forecast's own daily curve. Assumes even distribution across the month."
+          - "Account-grain forecast, calibrated on account-grain history — it is meant to be compared against Accounts Churned MTD (#409), which is also account-grain. A single franchise network's multi-location cancellation (see #409, #411 caveats) can make the actual overshoot this forecast sharply in one day without it reflecting a change in underlying churn rate."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
           - "Method Monday (Acquisition/Retention section)"

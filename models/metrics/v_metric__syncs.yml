@@ -7,27 +7,28 @@
 models:
   - name: v_metric__syncs
     description: |
-      Monthly count of sync milestone events from Method's funnel pipeline.
-      Account-grain by intent — counts each time an account hits a sync
-      milestone. ~91% of accounts have one sync event; ~9% have 2+ from
-      re-syncs after disconnect/reconnect, which are counted by design.
-      Foundation for Sync Rate (#300).
+      Monthly count of Method accounts that hit a sync milestone, per
+      revenue.Funnel's Sync branch. Account-grain — one row per account,
+      never per event: Funnel is a UNION ALL view over Account, not an
+      event log, so there is no such thing as a repeat sync event in this
+      data. Foundation for Sync Rate (#300).
     config:
       materialized: view
       meta:
-        answers: "How many sync milestone events were recorded in the Funnel pipeline in each month? (At account-grain by intent — see caveat below.)"
-        grain: "account-grain by intent (Method tracks funnel metrics at account level). Each row in Funnel is a sync milestone event. See caveats for the data-vs-intent nuance."
+        answers: "How many accounts hit the sync milestone in each month, per revenue.Funnel's Sync branch? (Account-grain, dated by signup — see caveats below.)"
+        grain: "Account-grain (one row per account; Funnel is not an event log). See caveats for the signup-dating and multi-account nuances."
         filters:
           - rule: "EventType = 'Sync'"
-            why: "filters Funnel to sync milestone events only (not all activity)"
+            why: "filters Funnel to sync milestone rows only (not all activity)"
         methodology_source: "Existing BQ view int_syncs, pre-dbt convention. Definition unchanged in migration."
         parity_verified:
           against: "Pre-migration BQ values (Round 3a)"
           date: "2026-05-08"
           values: "penny-match for 10+ months"
         caveats:
-          - "Account-grain by intent — but Funnel's data keys events to EntityRecordID, not RecordID. Funnel doesn't carry per-account identifiers. In practice this works out because most customers have one account, and Funnel events are tied to the lifecycle of an entity. A customer with 2 accounts will typically produce 1 sync event (one of their accounts hit the milestone), not 2."
-          - "~13% inflation from re-sync events: 91% of entities have exactly 1 sync event, 9% have 2+ (re-syncs after disconnect/reconnect). Method accepts this as part of the metric definition — re-syncs count."
+          - "Account-grain, one row per account. Funnel's data keys events to EntityRecordID, not RecordID: ~9% of entities have more than one sync row, but these are multi-account customers (the same person signing up again under a different CompanyAccount, months or years later) — not re-syncs. There are zero repeat sync events in this data."
+          - "Measured monthly fan-in — the gap between this account-grain count and a customer-grain COUNT(DISTINCT EntityRecordID) count — is about 1.5%, not the ~9-13% this file previously stated. That older figure was an all-time cumulative number describing a 're-syncs after disconnect/reconnect' mechanism that does not exist in the data. See scripts/reconcile_sync_denominators.py, 2026-07-31 run."
+          - "SyncDate is the same column as SignupDate — revenue.Funnel's Sync branch projects SignupDate AS Date for the Sync union branch. So 'syncs in month M' means accounts that signed up in month M and have since completed a sync, not syncs that happened in month M."
           - "For an exact 'count of unique entities that ever synced this month,' use COUNT(DISTINCT EntityRecordID) instead — that's a different metric not currently in the live set."
         used_by:
           - "Method Monday (Engagement section)"

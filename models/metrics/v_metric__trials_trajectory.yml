@@ -17,8 +17,8 @@ models:
             why: "today is unfinished; the trajectory divides by complete days only"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10: 132 / 9 * 31 = 454.67, shown as 455."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "455 (Looker, rounded for display) vs 455.3 (model, unrounded) -- match. Looker's own header reads 'MTD (Excluding Today)' and 'Aug 1 - Aug 16, 2026', independently confirming the complete-days convention."
         caveats:
           - "Noisy in the first few days of a month — a projection from one or two complete days swings widely."
           - "NULL on the 1st of the month, when elapsed_days is 0."

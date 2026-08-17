@@ -18,8 +18,8 @@ models:
             why: "carried from Trials #54"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "2026-08-17: independent recomputation from revenue.Account/Funnel (BigQuery, read-only, no pipeline SQL reused) — zero variance. Looker's Method Monday page (report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM) does not surface this raw MTD count as its own tile; it only shows the derived Trials Trajectory (#410), which separately matched Looker (455 vs our 455.3) the same day."
+          values: "235 (model) = 235 (independent BigQuery recomputation), exact match."
         caveats:
           - "Excludes today by design. Not the same number as Trials #54 for the current month."
           - "Single-row by design. Do not chart it as a time series."

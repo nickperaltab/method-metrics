@@ -1,26 +1,30 @@
-# Canonical metric definition for "Churn Trajectory".
+# Canonical metric definition for "Accounts Churned Trajectory".
+# Renamed 2026-08-17 from "Churn Trajectory" (Nic-approved: Churn ->
+# Accounts Churned, to state the true grain plainly in the name).
 
 models:
   - name: v_metric__churn_trajectory
     description: |
-      Month-end projection of churn for the in-progress month. Divides
-      churn_mtd (counted through yesterday, CompanyAccount grain) by complete
-      days so far, and scales to the full month. NULL on the 1st, when there
-      are no complete days to project from.
+      Month-end projection of accounts churned for the in-progress month.
+      Divides churn_mtd (counted through yesterday, CompanyAccount /
+      billing-account grain) by complete days so far, and scales to the
+      full month. NULL on the 1st, when there are no complete days to
+      project from.
     config:
       materialized: view
       meta:
-        answers: "If the current month continues at its month-to-date pace, how many churned accounts will it finish with?"
-        grain: "Single row, current month. CompanyAccount grain, matching metric 344's basis (see Churn #59)."
+        answers: "If the current month continues at its month-to-date pace, how many accounts will churn by month end?"
+        grain: "Single row, current month. CompanyAccount (billing-account) grain, matching metric 344's basis (see Accounts Churned #59)."
         filters:
           - rule: "inherits int_method_monday.churn_mtd, which excludes CancellationDate >= CURRENT_DATE()"
             why: "today is unfinished; the trajectory divides by complete days only"
         methodology_source: "Method Monday convention, verified against Looker report 510f74bb page p_rh9bepy1rd on 2026-08-10: 27 / 9 * 31 = 93.0, shown as 93."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "143 (Looker, rounded for display) vs 143.4 (model, unrounded) -- match. This reading is inflated by the 2026-08-14 franchise-network cancellation event (see caveats); Looker shows the same inflated number, confirming it is a property of the shared data, not a bug in this model."
         caveats:
           - "Noisy in the first few days of a month — a projection from one or two complete days swings widely."
+          - "Billing-account grain, not customer grain — a single franchise network cancelling many per-location accounts in one day moves this metric hard. On 2026-08-14, EntityRecordID 32049 (Granite Garage Floors) closed 20 of that day's 27 cancellations in one event; excluding that one day the trajectory would read roughly 91 instead of 143, in line with the 12-month norm (~95). A franchise closing 20 locations reads as 20 here, not 1."
           - "NULL on the 1st of the month, when elapsed_days is 0."
           - "Single-row by design. Do not chart it as a time series."
         used_by:

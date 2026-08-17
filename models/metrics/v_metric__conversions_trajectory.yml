@@ -18,8 +18,8 @@ models:
             why: "today is unfinished; the trajectory divides by complete days only"
         methodology_source: "Method Monday convention (docs/superpowers/specs/2026-08-10-method-monday-design.md, Conventions), superseding the prior Looker-Sales-page-derived convention."
         parity_verified:
-          against: "PENDING — Task 8 records the browser comparison"
-          values: "PENDING"
+          against: "Looker Studio 'Method Monday (PROD)', report 510f74bb, page p_rh9bepy1rd, data timestamp 12:39 PM, read 2026-08-17."
+          values: "54 (Looker, rounded for display) vs 54.25 (model, unrounded) -- match."
         caveats:
           - "Convention changed 2026-08-10: divides by COMPLETE days (day_of_month - 1) counting through yesterday. Previously counted through today and divided by day_of_month. Moves this metric 55.36 -> 57.23 (measured 2026-08-14) and cascades to Supabase metrics 321, 322 and 323. Deliberately diverges from Looker's Sales page, which retains the old convention; matches Looker's Method Monday page."
           - "History: the old through-today / day_of_month convention was verified exact against the live Looker Sales Scorecard on 2026-08-10 (65.1 vs 65.1; cascaded to #321 12.45%, #322 -5.52%, #323 69.28%). That parity record no longer applies — it was for the superseded convention. See the line above for the new one."
