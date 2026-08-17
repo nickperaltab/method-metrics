@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="CompanyAccount", model=get_where_subquery(ref('int_bom_customers'))) }}

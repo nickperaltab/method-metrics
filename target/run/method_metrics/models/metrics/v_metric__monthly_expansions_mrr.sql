@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__monthly_expansions_mrr`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__monthly_expansions_mrr`
   OPTIONS(
       description="""Total MRR gained from customer expansions each month (existing\ncustomers paying more than the previous month), in dollars summed\nacross all customers. Pre-FX \u2014 currencies (USD, CAD, UK) at face\nvalue, not USD-converted. Excludes internal Method accounts.\nInherits the v_customer_mrr Prepay Expiry methodology. Foundation\nfor monthly NRR.\n""",
     

@@ -9,7 +9,7 @@
 
     
     OPTIONS(
-      description=""""""
+      description="""Customer-month spine. One row per (Month, EntityRecordID) for every paying\ncustomer that had SaaS activity that month (from 2024-01-01 onward). This is\nthe dimension backbone the rest of the stack joins to for segment / tier /\nDEP / attribution / country slices.\n\nGrain: customer-month at the EntityRecordID level. A \"customer\" is an\nEntityRecordID, which can own multiple CompanyAccounts (see AccountCount) \u2014\nthis is the dbt-stack customer definition (matches Customers #373), NOT the\nCompanyAccount-as-customer convention used in some legacy Excel decks.\n\nMigrated from an orphaned BQ view (2026-06-04). The dimension picks\n(AttributionChannel / SignupCountry / Vertical / SyncType) were made\ndeterministic by adding a CompanyAccount ASC tiebreaker to the founding-account\nselection \u2014 see the .sql header for the full determinism-fix rationale.\n\nExcludes internal Method Integration partner rows and conversion-exception\naccounts. HasDEP / Segment / UserTier here are per-customer-month\n(point-in-time / honest), unlike the \"ever\"-style rollups in int_motion_funnel.\n"""
     )
     as (
       -- Migrated from the orphaned BQ view of the same name.

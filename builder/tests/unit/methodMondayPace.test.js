@@ -125,8 +125,8 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
     }
   });
 
-  it('has exactly seven metric groups, one per pace row', () => {
-    expect(METRIC_DEFS.length).toBe(7);
+  it('has exactly eight metric groups, one per pace row', () => {
+    expect(METRIC_DEFS.length).toBe(8);
   });
 
   it('every pace row has a numeric registered attainmentId — none is JS-computed', () => {
@@ -140,7 +140,7 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
       expect(Number.isFinite(def.attainmentId)).toBe(true);
     }
     const attainmentIds = METRIC_DEFS.map((d) => d.attainmentId);
-    expect(new Set(attainmentIds).size).toBe(7); // all distinct metrics
+    expect(new Set(attainmentIds).size).toBe(8); // all distinct metrics
   });
 
   it('buildPaceRow returns attainmentMetricId on every row so the UI can wire a click target', () => {
@@ -193,7 +193,7 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
     expect(sorted.map((r) => r.key)).toEqual(['trials', 'churn']);
   });
 
-  it('buildPaceRows returns all seven rows sorted worst-first end to end', () => {
+  it('buildPaceRows returns all eight rows sorted worst-first end to end', () => {
     // 2026-08-14 acceptance values from the design check.
     const dataMap = mapFrom({
       416: 74.6, 410: 232, 285: 311,         // trials attainment given directly
@@ -206,9 +206,13 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       // (percent, already 0-100) and #319 (decimal_rate, 0-1) normalize to
       // 10.95 / 17.97 = 60.9% attainment, now read from registered #420.
       420: 60.9, 321: 10.95, 319: 0.1797,
+      // Churn Rate: 2026-08-17 live values -- #345 (percent, 6.44%) over
+      // #424 (decimal_rate, 0.025 -> normalized 2.5) -> 257.6% attainment,
+      // inverted (more churn than forecast is bad), read from #425.
+      425: 257.6, 345: 6.44, 424: 0.025,
     });
     const rows = buildPaceRows(dataMap);
-    expect(rows.length).toBe(7);
+    expect(rows.length).toBe(8);
     // Descending harmful distance end to end (worst first).
     for (let i = 1; i < rows.length; i++) {
       const prevKnown = rows[i - 1].harmfulDistance;
@@ -224,6 +228,8 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
     expect(byKey.syncConversionRate.attainment).toBeCloseTo(91.3, 0);
     expect(byKey.churn.attainment).toBeCloseTo(110.8, 1);
     expect(byKey.churn.band).not.toBe('green');
+    expect(byKey.churnRate.attainment).toBeCloseTo(257.6, 1);
+    expect(byKey.churnRate.band).not.toBe('green');
     // Reviewer-confirmed: #321=10.95, #319=0.1797 -> 60.9% attainment,
     // still the second-worst row (behind Conversions at 54.0%, ahead of
     // Syncs at 59.2%... actually between Syncs 59.2 and Trials 74.6 by
@@ -257,9 +263,10 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
       422: 0, 400: 0, 402: 0.2711,
       423: 0, 411: 0, 274: 99,
       420: 0, 321: 0, 319: 0.1797,
+      425: 0, 345: 0, 424: 0.025,
     });
     const rows = buildPaceRows(dataMap, { now: day1 });
-    expect(rows.length).toBe(7);
+    expect(rows.length).toBe(8);
     for (const row of rows) {
       expect(row.attainment).toBeNull();
       expect(row.band).toBe('unknown');

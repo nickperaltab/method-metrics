@@ -9,7 +9,7 @@
 
     
     OPTIONS(
-      description=""""""
+      description="""Per-customer annual-cohort MRR with movement classification. Pairs month M\nagainst M-12 (12-month offset), unlike int_customer_mrr which pairs M vs M-1.\nThis is the engine behind the live annual MRR-family metrics (#384\u2013389).\n\nGrain: one row per (Month, EntityRecordID), customer level. A customer is an\nEntityRecordID (can own multiple CompanyAccounts). Movement is split into\nPARALLEL columns (NewMRR / Expansions / Downgrades / Cancellations), not a\nsingle movement_kind \u2014 a customer-month with all four = 0 is steady-state.\nDo not SUM the movement columns together expecting a net; combine per the\nmetric definitions.\n\nMigrated from an orphaned BQ view (2026-06-04) and materialized as a table for\nperformance. Parity-verified via scripts/parity_int_customer_mrr.py against the\npre-migration baseline. Methodology: CEO-confirmed symmetric Prepay-Expiry (PE)\nexclusion (2026-04-28; see memory project_annual_retention) \u2014 a customer-month\nwhose SaaS lines are entirely Prepay-Expiry Income is excluded from the base.\nExcludes test accounts (CompanyAccount m11%/m18%) and the current incomplete\nmonth.\n"""
     )
     as (
       -- Migrated from the orphaned BQ view of the same name (2026-06-04).

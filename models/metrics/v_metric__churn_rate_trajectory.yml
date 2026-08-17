@@ -1,0 +1,63 @@
+# Canonical metric definition for "Accounts Churned Rate Trajectory
+# (complete days)". Repoints Supabase #345 ("Churn Rate % Trajectory"),
+# which read a different BOM source (revenue.Account directly) and a
+# different window (through-yesterday numerator over a BOM-only
+# denominator) than #344 -- see churn-rate-report.md for the reconciliation.
+# Named consistently with the 2026-08-17 Ruling 9 rename (Churn -> Accounts
+# Churned) applied to #409/#411/#413.
+
+models:
+  - name: v_metric__churn_rate_trajectory
+    description: |
+      Month-end projection of the accounts-churned rate: churn_trajectory /
+      (beginning-of-month customers + conversions_trajectory), both divided
+      by complete days only. NULL on the 1st of the month, when there are
+      no complete days to project from. CompanyAccount (billing-account)
+      grain throughout.
+    config:
+      materialized: view
+      meta:
+        answers: "If the current month continues at its month-to-date pace, what percentage of active billing accounts will have churned by month end?"
+        grain: "Single row, current month. CompanyAccount (billing-account) grain in both numerator and denominator (see Accounts Churned Trajectory #411, int_bom_customers)."
+        filters:
+          - rule: "inherits int_method_monday.churn_trajectory and .conversions_trajectory, both projected from complete days only (elapsed_days = day_of_month - 1)"
+            why: "matches the complete-days convention used by the rest of Method Monday; today's partial data is excluded from the projection"
+          - rule: "denominator = bom_customers + conversions_trajectory -- bom_customers itself is NOT prorated by elapsed days"
+            why: "the beginning-of-month base does not scale with elapsed days -- unlike the sync conversion rate, this makes the trajectory a genuinely different number from the MTD actual (v_metric__churn_rate_mtd), not the same value twice"
+        methodology_source: "Method Monday convention (docs/superpowers/specs/2026-08-10-method-monday-design.md, 'Churn Rate is deferred, not dropped')."
+        parity_verified:
+          against: "Historical monthly recomputation from revenue.int_cancellations / int_conversions / v_bom_customers. For complete (historical) months, trajectory = actual (elapsed_days = days_in_month), so this reuses v_metric__churn_rate_mtd's parity record."
+          values: "Apr 2026: 2.41% (target) = 2.41% (model), exact. Jun 2026: 2.70% (target) = 2.70% (model), exact. Full 14-month series in churn-rate-report.md."
+        caveats:
+          - "Emits a percentage, matching #345's display_format: percent."
+          - "NULL on the 1st of the month (elapsed_days = 0 makes both churn_trajectory and conversions_trajectory NULL via SAFE_DIVIDE) -- matches the rest of the trajectory family, deliberately NOT the *_forecast_mtd family's day-1-returns-0 behaviour."
+          - "CompanyAccount (billing-account) grain -- inherits the franchise-fan-out caveat from Accounts Churned Trajectory #411: a single large cancellation event can swing this projection sharply, especially early in a month when few complete days back the projection. On 2026-08-14, EntityRecordID 32049 (Granite Garage Floors) closed 20 accounts in one day."
+          - "The beginning-of-month denominator term (bom_customers) accumulates across the current month's billing cycle and is read live, not from a frozen snapshot -- see v_metric__churn_rate_mtd's caveat on this. A trajectory read early in the month divides by a still-growing denominator."
+          - "Noisy in the first few days of a month, same as every other trajectory on this page."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Method Monday (Churn Rate section)"
+      labels:
+        metric_id: '345'
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: int_method_monday
+        source_measure_safe: ''
+        depends_on: '411-59'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: >
+          Month-end churn-rate projection, as a percentage. Legitimately
+          NULL on day 1 (elapsed_days = 0) -- the not_null test below
+          exempts that one day rather than being weakened to pass every
+          day.
+        tests:
+          - not_null:
+              config:
+                where: "EXTRACT(DAY FROM CURRENT_DATE()) > 1"

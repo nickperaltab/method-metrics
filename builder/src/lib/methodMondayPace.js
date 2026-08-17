@@ -17,10 +17,11 @@
  * comment for that incident). Every entry in METRIC_DEFS states its raw
  * format explicitly so the normalization is visible at the call site.
  *
- * Churn inverts: for every other metric, under 100% attainment is bad
- * (behind pace). For churn, OVER 100% is bad (more cancellations than
- * forecast). `harmfulDistance()` is the one function that encodes this —
- * every other function in this module is direction-agnostic.
+ * Churn and Churn Rate invert: for every other metric, under 100%
+ * attainment is bad (behind pace). For these two, OVER 100% is bad (more
+ * cancellations, or a higher churn rate, than forecast). `harmfulDistance()`
+ * is the one function that encodes this — every other function in this
+ * module is direction-agnostic.
  */
 
 import { resolveKpiValue } from '../components/scorecards/utils';
@@ -29,8 +30,8 @@ import { resolveKpiValue } from '../components/scorecards/utils';
  * One entry per pace row. `attainmentId` names the registered Supabase
  * formula metric that IS this row's attainment number (Trials #416, Syncs
  * #418, Conversions #419, Conversion Rate #420, Sync % #421, Sync
- * Conversion Rate #422, Churn #423) — every row reads its displayed
- * percentage from a registered metric, never from a JS computation.
+ * Conversion Rate #422, Churn #423, Churn Rate #425) — every row reads its
+ * displayed percentage from a registered metric, never from a JS computation.
  * `numeratorId`/`denominatorId` are kept only for the raw trajectory/
  * forecast pair (unused directly by the page today, but exercised by the
  * dev-time consistency check below and by tests) — they are not a
@@ -125,6 +126,23 @@ export const METRIC_DEFS = [
     numeratorFormat: 'number',
     denominatorId: 274,
     denominatorFormat: 'number',
+    inverted: true,
+  },
+  {
+    key: 'churnRate',
+    label: 'Churn Rate',
+    // #345 (trajectory) emits a percentage (0-100). #424 (forecast) emits a
+    // decimal rate (0-1) and must be normalized (x100) before comparison --
+    // same shape as the trials-level Conversion Rate pair above, and the
+    // registered attainment formula (#425) does this same rescaling inside
+    // itself (SAFE_DIVIDE({345}, {424} * 100) * 100).
+    attainmentId: 425,
+    attainmentFormat: 'percent',
+    numeratorId: 345,
+    numeratorFormat: 'percent',
+    denominatorId: 424,
+    denominatorFormat: 'decimal_rate',
+    // Inverted like Churn -- more churn than forecast is bad.
     inverted: true,
   },
 ];
@@ -236,8 +254,8 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
 
   // Every group now has a registered attainment metric (Trials #416, Syncs
   // #418, Conversions #419, Conversion Rate #420, Sync % #421, Sync
-  // Conversion Rate #422, Churn #423) — this is the ONE place the
-  // displayed percentage comes from. numerator/denominator are never used
+  // Conversion Rate #422, Churn #423, Churn Rate #425) — this is the ONE
+  // place the displayed percentage comes from. numerator/denominator are never used
   // to compute it; they exist only for the raw pair and the consistency
   // check below, so the registered formula and this file cannot silently
   // diverge without a warning.

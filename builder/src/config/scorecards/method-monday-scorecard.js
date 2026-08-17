@@ -21,10 +21,13 @@
  * denominator is the lagged full-month trials figure and doesn't scale with
  * elapsed days — so it keeps forecast, actual and trajectory as three tiles.
  *
- * Churn Rate (Looker metrics 344/345) is deliberately not included — both are
- * raw chart_sql on the through-today convention, and putting them on this
- * through-yesterday page would reintroduce the exact mismatch this page
- * exists to remove. Deferred, not dropped; see the design doc.
+ * Churn Rate (metrics 344/345) shipped 2026-08-17, repointed at
+ * v_metric__churn_rate_mtd / v_metric__churn_rate_trajectory on the
+ * complete-days convention -- see churn-rate-report.md. Unlike Sync
+ * Conversion Rate, this group needs both an actual and a trajectory tile:
+ * the denominator (beginning-of-month customer base) does not scale with
+ * elapsed days, so the two are genuinely different numbers, not one value
+ * shown twice.
  *
  * ── Redesign (2026-08-14) ────────────────────────────────────────────
  * The original build rendered all 25 tiles below as 3 equal-weight rows —
@@ -227,6 +230,28 @@ export default {
         { metricId: 411, label: 'Churn Trajectory', format: 'number',
           valueSelector: 'current_or_latest' },
         { metricId: 423, label: 'Churn Attainment', format: 'percent',
+          valueSelector: 'current_or_latest' },
+      ],
+    },
+
+    // ── Churn Rate ────────────────────────────────────────────────
+    {
+      title: 'Churn Rate',
+      renderedBy: 'methodMondayPace',
+      layout: 'scorecard-row',
+      description: EXCLUDES_TODAY,
+      kpis: [
+        // #424 emits a decimal rate (0.025) -- 'decimal_rate' renders it as 2.50%.
+        { metricId: 424, label: 'Churn Rate Forecast', format: 'decimal_rate',
+          valueSelector: 'current_or_latest' },
+        // #344/#345 both emit a PERCENTAGE (2.41, not 0.0241) -- use 'percent',
+        // not 'decimal_rate'. Getting this backwards is exactly the 3289%-scale
+        // bug this page's header comment and lib/methodMondayPace.js warn about.
+        { metricId: 344, label: 'Churn Rate MTD', format: 'percent',
+          valueSelector: 'current_or_latest' },
+        { metricId: 345, label: 'Churn Rate Trajectory', format: 'percent',
+          valueSelector: 'current_or_latest' },
+        { metricId: 425, label: 'Churn Rate Attainment', format: 'percent',
           valueSelector: 'current_or_latest' },
       ],
     },

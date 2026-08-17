@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__annual_expansions_mrr`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__annual_expansions_mrr`
   OPTIONS(
       description="""Total MRR gained from existing-customer expansions at annual cohort\ngrain (customers paying more than the prior year), in dollars summed\nacross all customers. Pre-FX \u2014 currencies (USD, CAD, UK) at face\nvalue, not USD-converted. Existing customers only \u2014 net-new customer\nrevenue is tracked separately. Foundation for annual NRR (#389).\n""",
     

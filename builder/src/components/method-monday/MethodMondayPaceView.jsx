@@ -21,10 +21,10 @@ import { color, font, type, weight, radius, numeric, shadow } from '../../styles
  * that closes the previous selection). Expansion state is local component
  * state — not persisted anywhere.
  *
- * `detailSections` are the same 7 per-metric config sections that used to
+ * `detailSections` are the same per-metric config sections that used to
  * render unconditionally above (Sync %, Trials, Syncs, Conversions,
- * Conversion Rate, Sync Conversion Rate, Churn) — see the `renderedBy`
- * note in method-monday-scorecard.js. They are matched to a pace row by
+ * Conversion Rate, Sync Conversion Rate, Churn, Churn Rate) — see the
+ * `renderedBy` note in method-monday-scorecard.js. They are matched to a pace row by
  * title === row.label and rendered via the real <ScorecardSection>, so the
  * expanded detail is exactly the tile group that existed before, not a
  * second copy of it.
@@ -308,8 +308,8 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
       }}
     >
       <div style={{ fontSize: type.label, color: color.inkMuted, fontFamily: fontSans, marginBottom: 16 }}>
-        Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn&apos;s bar is
-        reversed: longer means worse.
+        Attainment = trajectory ÷ full-month forecast, sorted worst-first. Churn and
+        Churn Rate bars are reversed: longer means worse.
       </div>
 
       {rows.map((row) => (

@@ -2,7 +2,7 @@
 
   create or replace view `project-for-method-dw`.`revenue`.`int_channel_funnel_trajectory`
   OPTIONS(
-      description="""Per channel \u00d7 metric (trials/syncs/sync_rate): current-month MTD (excl today), calendar-day linear trajectory, prior-month full, last-year full, and YoY/MoM %. Fractional multi-touch attribution. Trials from Account; syncs from Funnel EventType='Sync'. Recomputes live against CURRENT_DATE().\n"""
+      description="""Per channel \u00d7 metric (trials/syncs/sync_rate): current-month MTD (excl today), calendar-day linear trajectory, prior-month full, last-year full, and YoY/MoM %. Fractional multi-touch attribution. Trials from Account (SignupDate); syncs from Account where SyncTypeRegion != '', also dated by SignupDate (deliberately NOT CustDatFirstSyncCompleted). Recomputes live against CURRENT_DATE(). Backs the Channel Trajectory scorecard (Labs); status pending, not flipped to live. Parity-verified against the Looker Marketing Dashboard PDF (Jul 1\u20138 2026).\n\n\u26a0\ufe0f Use with care:\n- Trajectory is a linear run-rate projection (mtd/days_elapsed*days_in_month)\n  \u2014 noisy early in the month when few days have elapsed.\n\n- Fractional multi-touch attribution means channel values can be non-integers\n  (an account touched by PPC+SEO contributes 0.5 to each; e.g. 14.5 syncs).\n\n- Backlinks is rolled INTO SEO (requested 2026-08-10 \u2014 backlinks are SEO work\n  and were never wanted as their own line). This is a deliberate deviation\n  from Looker, which keeps Backlinks separate: SEO here runs ~0.5\u20132.0 above\n  Looker's SEO in the ~9-in-24 months where Backlinks is nonzero. The\n  breakout is still available in int_channel_funnel_daily.\n\n- Syncs read Account directly rather than the revenue.Funnel view. Funnel's\n  EventType='Sync' branch is the same filter re-dated to SignupDate, but its\n  SELECT list omits Att_Email, so it silently dropped every email-attributed\n  sync (5.6 of 230 rows in Jul 2026). Fixed 2026-08-10; before that date,\n  Email syncs and Email sync_rate were null and the syncs Total was\n  understated. Verified bit-identical to the Funnel path on the 17 shared\n  channels across 5,078 days / 214 months.\n\n- A sync is dated by SignupDate but gated on SyncTypeRegion, which flips when\n  the account eventually syncs. Historical sync months therefore keep growing\n  retroactively \u2014 the same window returns different numbers on different\n  days, and any \"matches Looker\" claim holds only at a single instant.\n\n- Trajectory method is calendar-day linear, NOT the prior-month-shape method\n  used for Net SaaS.\n"""
     )
   as 
 
@@ -13,7 +13,12 @@
 -- Attribution is FRACTIONAL multi-touch: Att_* are already fractional weights,
 -- summed directly (do NOT normalize, do NOT collapse to one channel).
 -- Trials  = revenue.Account by SignupDate.
--- Syncs   = revenue.Funnel where EventType='Sync' (NOT CustDatFirstSyncCompleted).
+-- Syncs   = revenue.Account where SyncTypeRegion != '', also by SignupDate (this
+--           is what revenue.Funnel's EventType='Sync' branch resolves to; we read
+--           Account directly because the Funnel view drops Att_Email). NOT
+--           CustDatFirstSyncCompleted. Because a sync is dated by SignupDate but
+--           gated on a field that flips later, historical sync months keep growing.
+-- Backlinks is rolled into SEO (see the events CTE).
 -- Window  = [DATE_TRUNC(CURRENT_DATE(),MONTH), CURRENT_DATE())  (MTD excl today).
 -- Trajectory = MTD / days_elapsed * days_in_month  (calendar-day linear run-rate).
 
@@ -55,19 +60,25 @@ trial_rows AS (
 ),
 
 sync_rows AS (
-  SELECT CAST(Date AS DATE) AS d, channel, weight FROM (
-    SELECT Date,
+  -- Sourced from Account, NOT the revenue.Funnel view — Funnel's 'Sync' branch is
+  -- this exact filter re-dated to SignupDate, but its SELECT list omits Att_Email
+  -- and so drops every email-attributed sync. See int_channel_funnel_daily.
+  SELECT SignupDate AS d, channel, weight FROM (
+    SELECT SignupDate,
       Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Direct,
-      Att_None, Att_Partners, Att_Content, Att_Social, Att_Other,
+      Att_None, Att_Email, Att_Partners, Att_Content, Att_Social, Att_Other,
       Att_Referral_Link, Att_Referral_Program, Att_Remarketing, Att_Backlinks,
       Att_Banner_Ads, Att_Help_Center, Att_Online_Chat_Tool, Att_Seminar_Conference
-    FROM `project-for-method-dw`.`revenue`.`Funnel`
-    WHERE EventType = 'Sync'
+    FROM `project-for-method-dw`.`revenue`.`Account`
+    WHERE IsConversionException = FALSE
+      AND Partner != 'Method Integration'
+      AND SignupDate != DATE('0001-01-01')
+      AND SyncTypeRegion != ''
   )
   UNPIVOT (weight FOR channel IN (
     Att_SEO AS 'SEO', Att_Pay_Per_Click AS 'PPC',
     Att_OPN_Other_Peoples_Networks AS 'OPN', Att_Direct AS 'Direct',
-    Att_None AS 'None', Att_Partners AS 'Partners',
+    Att_None AS 'None', Att_Email AS 'Email', Att_Partners AS 'Partners',
     Att_Content AS 'Content', Att_Social AS 'Social', Att_Other AS 'Other',
     Att_Referral_Link AS 'Referral', Att_Referral_Program AS 'Referral_Program',
     Att_Remarketing AS 'Remarketing', Att_Backlinks AS 'Backlinks',
@@ -76,10 +87,15 @@ sync_rows AS (
   WHERE weight <> 0
 ),
 
+-- Backlinks rolls up INTO SEO for reporting. Requested 2026-08-10: backlinks are
+-- SEO work and were never wanted as their own line. Deliberate deviation from the
+-- Looker report, which keeps them separate — so this view's SEO runs ~0.5–2.0
+-- above Looker's SEO in the ~9-in-24 months where Backlinks is nonzero. The
+-- breakout survives in int_channel_funnel_daily if it's ever needed back.
 events AS (
-  SELECT 'trials' AS metric, d, channel, weight FROM trial_rows
+  SELECT 'trials' AS metric, d, IF(channel = 'Backlinks', 'SEO', channel) AS channel, weight FROM trial_rows
   UNION ALL
-  SELECT 'syncs' AS metric, d, channel, weight FROM sync_rows
+  SELECT 'syncs' AS metric, d, IF(channel = 'Backlinks', 'SEO', channel) AS channel, weight FROM sync_rows
 ),
 
 agg AS (

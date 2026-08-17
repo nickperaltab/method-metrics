@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__monthly_cancellations_mrr`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__monthly_cancellations_mrr`
   OPTIONS(
       description="""Total MRR lost from customer cancellations each month, in dollars\nsummed across all customers. Pre-FX \u2014 currencies (USD, CAD, UK) at\nface value, not USD-converted. Excludes internal Method accounts.\nUses CEO-confirmed methodology that excludes one-time Prepay Expiry\nwrite-offs from both StartMRR and Cancellations. Foundation for\nmonthly GRR.\n""",
     

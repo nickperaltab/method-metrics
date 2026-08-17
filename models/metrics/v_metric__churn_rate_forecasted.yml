@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: v_metric__churn_rate_forecasted
+    description: |
+      Forecasted accounts-churned rate by month, read directly from
+      method_forecast's Forecasted_Churn_Rate__ column. Unlike Forecasted
+      Conversion Rate (#319), which derives a rate by summing two absolute
+      forecast columns, the forecast sheet already publishes a churn-rate
+      column -- no derivation needed. Emits a decimal rate (0.025), not a
+      percentage.
+    config:
+      materialized: view
+      meta:
+        answers: "What accounts-churned rate does the forecast imply for each month?"
+        grain: "Period-level ratio, one row per month present in the forecast sheet."
+        filters:
+          - rule: "Date IS NOT NULL"
+            why: "the federated sheet has trailing blank rows past the populated range; without this, GROUP BY DATE_TRUNC(Date, MONTH) collapses them into a bogus period=NULL row (same issue documented on v_metric__sync_conversion_rate_forecasted)"
+          - rule: "AVG(Forecasted_Churn_Rate__), not SUM"
+            why: "the column repeats one constant value across every day of a month (confirmed 2026-08-17: COUNT(DISTINCT ...) = 1 per month, 14 months checked) -- SUM would inflate by days_in_month"
+        methodology_source: "Read directly from the forecast sheet's own Forecasted_Churn_Rate__ column (Justin's forecast model), not derived."
+        parity_verified:
+          against: "Same source as Forecasted Churn (#274/#413), which reads Forecasted_Churn from the same sheet."
+          values: "Aug 2026 forecast read as 0.025 (2.5%) on 2026-08-17, consistent with Forecasted Churn #274 (99) / bom+conversions scale for the month."
+        caveats:
+          - "Emits a decimal rate (0.025), not a percentage (2.5) -- the source column's own scale. Accounts Churned Rate Attainment rescales it (x100) to compare against the percentage-scale trajectory."
+          - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename or edit in the sheet breaks or silently changes this."
+          - "Account-grain forecast (like Forecasted Churn #274/#413) compared against a CompanyAccount-grain actual -- consistent with the rest of the Churn family, not customer-grain."
+        used_by:
+          - "Method Monday (Churn Rate section)"
+      labels:
+        metric_id: '424'
+        layer: metrics
+        type: derived
+        status: queued
+        source_table: method_forecast
+        source_measure_safe: ''
+        depends_on: ''
+    columns:
+      - name: period
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: Forecasted churn rate as a decimal (0.025, not 2.5).

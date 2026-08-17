@@ -2,9 +2,9 @@
 
   create or replace view `project-for-method-dw`.`revenue`.`v_channel_arr_display`
   OPTIONS(
-      description="""DIRECTIONAL presentation view for the Channel ARR scorecard \u2014 final display\ncolumns per (channel \u00d7 first-invoice month) computed from v_channel_arr (on\nthe int_attribution_fractional real-multi-touch primitive). \"SaaS\" is the\nrun-rate (Custdatlastsaasamount) allocated by fractional attribution \u2014 NOT\ninvoiced revenue, does not tie to RevCogs. CAD ARR baked at a fixed 1.33.\nPenny-matched to the Looker \"Revenue by Channel\" dashboard (May 2026).\n""",
+      description="""DIRECTIONAL presentation view for the Channel ARR scorecard \u2014 final display\ncolumns per (channel \u00d7 first-invoice month) computed from v_channel_arr (on\nthe int_attribution_fractional real-multi-touch primitive). \"SaaS\" is the\nrun-rate (Custdatlastsaasamount) allocated by fractional attribution \u2014 NOT\ninvoiced revenue, does not tie to RevCogs. CAD ARR baked at a fixed 1.33 (stale\nif the USD\u2192CAD rate moves). Penny-matched to the Looker \"Revenue by Channel\"\ndashboard (May 2026).\n\nPresentation layer only \u2014 it duplicates v_channel_arr with formatting + a baked\nFX rate. For definition questions prefer v_channel_arr itself.\n[REVIEW: worth exposing at all as a definition surface, or keep internal since\nit's display formatting over v_channel_arr?]\n""",
     
-      labels=[('metric_id', '396-397-398-399'), ('layer', 'marketing'), ('type', 'presentation'), ('status', 'directional'), ('verified_at', '2026-06-02'), ('source_table', 'v_channel_arr')]
+      labels=[('layer', 'marketing'), ('type', 'presentation'), ('status', 'directional'), ('verified_at', '2026-06-02'), ('source_table', 'v_channel_arr')]
     )
   as 
 

@@ -43,7 +43,15 @@ actuals AS (
     (SELECT COUNT(DISTINCT x.CompanyAccount)
      FROM `project-for-method-dw`.`revenue`.`int_cancellations` x, bounds b
      WHERE DATE_TRUNC(x.CancellationDate, MONTH) = b.period
-       AND x.CancellationDate < CURRENT_DATE())                              AS churn_mtd
+       AND x.CancellationDate < CURRENT_DATE())                              AS churn_mtd,
+    -- Beginning-of-month customer base, CompanyAccount grain, from
+    -- int_bom_customers (mirrors revenue.v_bom_customers -- see that
+    -- model's header). This is the Churn Rate denominator's BOM term; it
+    -- does NOT scale with elapsed days, unlike every other *_mtd figure
+    -- above -- see the churn-rate section below.
+    (SELECT COUNT(DISTINCT bc.CompanyAccount)
+     FROM `project-for-method-dw`.`revenue`.`int_bom_customers` bc, bounds b
+     WHERE DATE_TRUNC(bc.TxnDate, MONTH) = b.period)                         AS bom_customers
 ),
 forecast AS (
   SELECT
@@ -54,29 +62,57 @@ forecast AS (
   FROM `project-for-method-dw`.`revenue`.`method_forecast` f, bounds b
   WHERE f.Date IS NOT NULL
     AND DATE_TRUNC(f.Date, MONTH) = b.period
+),
+computed AS (
+  SELECT
+    b.period,
+    b.elapsed_days,
+    b.days_in_month,
+
+    a.trials_mtd,
+    a.syncs_mtd,
+    a.conversions_mtd,
+    a.churn_mtd,
+    a.bom_customers,
+
+    f.trials_forecast,
+    f.syncs_forecast,
+    f.conversions_forecast,
+    f.churn_forecast,
+
+    SAFE_DIVIDE(a.trials_mtd,      b.elapsed_days) * b.days_in_month AS trials_trajectory,
+    SAFE_DIVIDE(a.syncs_mtd,       b.elapsed_days) * b.days_in_month AS syncs_trajectory,
+    SAFE_DIVIDE(a.conversions_mtd, b.elapsed_days) * b.days_in_month AS conversions_trajectory,
+    SAFE_DIVIDE(a.churn_mtd,       b.elapsed_days) * b.days_in_month AS churn_trajectory,
+
+    -- Forecast prorated to the same elapsed window, so the MTD bars compare
+    -- like with like. Looker's Conversions and Churn cards do this.
+    SAFE_DIVIDE(f.conversions_forecast * b.elapsed_days, b.days_in_month) AS conversions_forecast_mtd,
+    SAFE_DIVIDE(f.churn_forecast       * b.elapsed_days, b.days_in_month) AS churn_forecast_mtd
+  FROM bounds b, actuals a, forecast f
 )
 SELECT
-  b.period,
-  b.elapsed_days,
-  b.days_in_month,
+  c.*,
 
-  a.trials_mtd,
-  a.syncs_mtd,
-  a.conversions_mtd,
-  a.churn_mtd,
-
-  f.trials_forecast,
-  f.syncs_forecast,
-  f.conversions_forecast,
-  f.churn_forecast,
-
-  SAFE_DIVIDE(a.trials_mtd,      b.elapsed_days) * b.days_in_month AS trials_trajectory,
-  SAFE_DIVIDE(a.syncs_mtd,       b.elapsed_days) * b.days_in_month AS syncs_trajectory,
-  SAFE_DIVIDE(a.conversions_mtd, b.elapsed_days) * b.days_in_month AS conversions_trajectory,
-  SAFE_DIVIDE(a.churn_mtd,       b.elapsed_days) * b.days_in_month AS churn_trajectory,
-
-  -- Forecast prorated to the same elapsed window, so the MTD bars compare
-  -- like with like. Looker's Conversions and Churn cards do this.
-  SAFE_DIVIDE(f.conversions_forecast * b.elapsed_days, b.days_in_month) AS conversions_forecast_mtd,
-  SAFE_DIVIDE(f.churn_forecast       * b.elapsed_days, b.days_in_month) AS churn_forecast_mtd
-FROM bounds b, actuals a, forecast f
+  -- Churn Rate: churn / (BOM + conversions), on the same complete-days
+  -- convention as everything else on this page. BOM does NOT scale with
+  -- elapsed days -- unlike the sync conversion rate, actual and trajectory
+  -- are genuinely different numbers here, not one value twice (see design
+  -- doc, "Churn Rate is deferred, not dropped").
+  --
+  -- Denominator choice (BOM + conversions, not BOM alone) is empirically
+  -- settled: verified against Looker on 2026-08-04, Apr 2026 = 2.41% and
+  -- Jun 2026 = 2.70%, both exact only with conversions included. See
+  -- churn-rate-report.md.
+  --
+  -- Reuses churn_mtd / conversions_mtd and the already-computed
+  -- churn_trajectory / conversions_trajectory from `computed` above --
+  -- the elapsed-days arithmetic is not repeated here.
+  --
+  -- Trajectory is a SAFE_DIVIDE over two already-SAFE_DIVIDE'd quantities,
+  -- so it is NULL (not 0, not an error) on day 1, matching the rest of the
+  -- trajectory family -- NOT the *_forecast_mtd family's day-1-returns-0
+  -- behaviour, which is a documented asymmetry, not something to copy here.
+  SAFE_DIVIDE(c.churn_mtd, c.bom_customers + c.conversions_mtd) * 100 AS churn_rate_mtd,
+  SAFE_DIVIDE(c.churn_trajectory, c.bom_customers + c.conversions_trajectory) * 100 AS churn_rate_trajectory
+FROM computed c

@@ -1,0 +1,53 @@
+# Semantic model on v_bom_customers (hand-written BQ view, outside version
+# control, no INFORMATION_SCHEMA.TABLE_OPTIONS description -- this project's
+# own trust signal for "unverified"). DDL pulled 2026-08-17:
+#
+#   SELECT TxnDate, CompanyAccount
+#   FROM revenue.TransLineFlattened
+#   WHERE BOMCustomerGrouping = 'Customer'
+#     AND IsNewPayerThisMonth = FALSE
+#     AND IsConversionException = FALSE
+#     AND Partner != 'Method Integration'
+#
+# Grain: one row per (TxnDate, CompanyAccount) invoice LINE that counts
+# toward the beginning-of-month customer base -- NOT deduplicated by this
+# model, matching the source view exactly. Every existing consumer of
+# v_bom_customers does COUNT(DISTINCT CompanyAccount) per period (see
+# scripts/bq_views_backup_20260514.sql:1222-1224); int_method_monday does
+# the same.
+#
+# This is the denominator for Churn Rate (#344/#345): BOM + mid-month
+# conversions. See docs/superpowers/specs/2026-08-10-method-monday-design.md
+# and .superpowers/sdd/2026-08-10-method-monday/churn-rate-report.md for the
+# empirical confirmation that BOM + conversions (not BOM alone) matches
+# Looker (Apr 2026 2.41%, Jun 2026 2.70%).
+#
+# Do NOT replace or drop revenue.v_bom_customers -- this model lives
+# alongside it. Retiring the hand-written view is Nic's action.
+
+models:
+  - name: int_bom_customers
+    description: |
+      One row per (TxnDate, CompanyAccount) invoice line counting toward
+      the beginning-of-month customer base. Mirrors revenue.v_bom_customers
+      exactly (not deduplicated -- see header). Filters: BOM status =
+      'Customer' (excludes accounts that were not yet paying or already
+      lost as of month start), IsNewPayerThisMonth = FALSE (excludes
+      accounts that converted mid-month, which are added back separately
+      via the conversions_mtd term in the churn-rate denominator),
+      IsConversionException = FALSE, Partner != 'Method Integration'.
+    config:
+      meta:
+        layer: intermediate
+        grain: bom_customer_invoice_line
+        owner: nic
+
+    columns:
+      - name: TxnDate
+        description: Invoice transaction date. Group by month and COUNT(DISTINCT CompanyAccount) to get the BOM customer count for that period.
+        tests:
+          - not_null
+      - name: CompanyAccount
+        description: Billing-account identifier. Not unique per row -- see grain note above.
+        tests:
+          - not_null

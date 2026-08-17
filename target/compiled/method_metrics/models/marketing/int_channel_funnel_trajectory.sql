@@ -7,7 +7,12 @@
 -- Attribution is FRACTIONAL multi-touch: Att_* are already fractional weights,
 -- summed directly (do NOT normalize, do NOT collapse to one channel).
 -- Trials  = revenue.Account by SignupDate.
--- Syncs   = revenue.Funnel where EventType='Sync' (NOT CustDatFirstSyncCompleted).
+-- Syncs   = revenue.Account where SyncTypeRegion != '', also by SignupDate (this
+--           is what revenue.Funnel's EventType='Sync' branch resolves to; we read
+--           Account directly because the Funnel view drops Att_Email). NOT
+--           CustDatFirstSyncCompleted. Because a sync is dated by SignupDate but
+--           gated on a field that flips later, historical sync months keep growing.
+-- Backlinks is rolled into SEO (see the events CTE).
 -- Window  = [DATE_TRUNC(CURRENT_DATE(),MONTH), CURRENT_DATE())  (MTD excl today).
 -- Trajectory = MTD / days_elapsed * days_in_month  (calendar-day linear run-rate).
 
@@ -49,19 +54,25 @@ trial_rows AS (
 ),
 
 sync_rows AS (
-  SELECT CAST(Date AS DATE) AS d, channel, weight FROM (
-    SELECT Date,
+  -- Sourced from Account, NOT the revenue.Funnel view — Funnel's 'Sync' branch is
+  -- this exact filter re-dated to SignupDate, but its SELECT list omits Att_Email
+  -- and so drops every email-attributed sync. See int_channel_funnel_daily.
+  SELECT SignupDate AS d, channel, weight FROM (
+    SELECT SignupDate,
       Att_SEO, Att_Pay_Per_Click, Att_OPN_Other_Peoples_Networks, Att_Direct,
-      Att_None, Att_Partners, Att_Content, Att_Social, Att_Other,
+      Att_None, Att_Email, Att_Partners, Att_Content, Att_Social, Att_Other,
       Att_Referral_Link, Att_Referral_Program, Att_Remarketing, Att_Backlinks,
       Att_Banner_Ads, Att_Help_Center, Att_Online_Chat_Tool, Att_Seminar_Conference
-    FROM `project-for-method-dw`.`revenue`.`Funnel`
-    WHERE EventType = 'Sync'
+    FROM `project-for-method-dw`.`revenue`.`Account`
+    WHERE IsConversionException = FALSE
+      AND Partner != 'Method Integration'
+      AND SignupDate != DATE('0001-01-01')
+      AND SyncTypeRegion != ''
   )
   UNPIVOT (weight FOR channel IN (
     Att_SEO AS 'SEO', Att_Pay_Per_Click AS 'PPC',
     Att_OPN_Other_Peoples_Networks AS 'OPN', Att_Direct AS 'Direct',
-    Att_None AS 'None', Att_Partners AS 'Partners',
+    Att_None AS 'None', Att_Email AS 'Email', Att_Partners AS 'Partners',
     Att_Content AS 'Content', Att_Social AS 'Social', Att_Other AS 'Other',
     Att_Referral_Link AS 'Referral', Att_Referral_Program AS 'Referral_Program',
     Att_Remarketing AS 'Remarketing', Att_Backlinks AS 'Backlinks',
@@ -70,10 +81,15 @@ sync_rows AS (
   WHERE weight <> 0
 ),
 
+-- Backlinks rolls up INTO SEO for reporting. Requested 2026-08-10: backlinks are
+-- SEO work and were never wanted as their own line. Deliberate deviation from the
+-- Looker report, which keeps them separate — so this view's SEO runs ~0.5–2.0
+-- above Looker's SEO in the ~9-in-24 months where Backlinks is nonzero. The
+-- breakout survives in int_channel_funnel_daily if it's ever needed back.
 events AS (
-  SELECT 'trials' AS metric, d, channel, weight FROM trial_rows
+  SELECT 'trials' AS metric, d, IF(channel = 'Backlinks', 'SEO', channel) AS channel, weight FROM trial_rows
   UNION ALL
-  SELECT 'syncs' AS metric, d, channel, weight FROM sync_rows
+  SELECT 'syncs' AS metric, d, IF(channel = 'Backlinks', 'SEO', channel) AS channel, weight FROM sync_rows
 ),
 
 agg AS (

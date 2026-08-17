@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__customers`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__customers`
   OPTIONS(
       description="""Monthly count of unique active Method customers \u2014 companies with\nrevenue activity in the month. Customer-grain \u2014 a company with\nmultiple Method accounts counts ONCE per month (unlike Trials,\nwhich counts each account separately). Current month is incomplete;\npartial values until month-end.\n""",
     

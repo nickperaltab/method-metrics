@@ -4,7 +4,7 @@
   OPTIONS(
       description="""PRIMITIVE \u2014 real multi-touch (fractional) channel attribution. One row per\n(account \u00d7 channel) with the fractional attribution weight; each account's\nweights sum to exactly 1.0 across channels (one customer's credit spread\nacross the channels that touched them). Distinct from the single-touch\n`AttributionChannel` dimension (which collapses each account to one channel\nand buckets the rest as 'Unknown'). Carries signup/first-invoice dates,\nrun-rate plan amount (Custdatlastsaasamount), first-invoice net SaaS, and\nUS/non-US region, so any fractional \"X by channel\" measure is\nSUM(<measure> * attribution_weight) GROUP BY channel. Excludes test accounts\nand internal Method Integration partner rows.\n""",
     
-      labels=[('metric_id', '390-391-392-393-394-395'), ('layer', 'intermediate'), ('type', 'primitive'), ('status', 'directional'), ('verified_at', '2026-06-02'), ('grain', 'account_x_channel'), ('source_table', 'account')]
+      labels=[('layer', 'intermediate'), ('type', 'primitive'), ('status', 'directional'), ('verified_at', '2026-06-02'), ('grain', 'account_x_channel'), ('source_table', 'account')]
     )
   as 
 

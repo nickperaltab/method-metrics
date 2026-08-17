@@ -4,7 +4,7 @@ import { SCORECARDS } from '../../src/config/scorecards/index.js';
 
 const DETAIL_SECTION_TITLES = [
   'Sync %', 'Trials', 'Syncs', 'Conversions', 'Conversion Rate',
-  'Sync Conversion Rate', 'Churn',
+  'Sync Conversion Rate', 'Churn', 'Churn Rate',
 ];
 
 describe('Method Monday scorecard', () => {
@@ -72,8 +72,11 @@ describe('Method Monday scorecard', () => {
   });
 
   it('uses the correct format for every percentage-emitting metric', () => {
-    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423]);
-    const decimalRateIds = new Set([400, 402, 319, 357]);
+    // 344/345 emit a PERCENTAGE (2.41, not 0.0241) and 424 emits a decimal
+    // rate (0.025) -- pinned here per the Task 5 "scale trap" requirement,
+    // since getting this backwards is exactly how a tile once read 3289%.
+    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423, 344, 345, 425]);
+    const decimalRateIds = new Set([400, 402, 319, 357, 424]);
     for (const s of detailSections()) {
       for (const k of s.kpis) {
         if (percentIds.has(k.metricId)) expect(k.format).toBe('percent');
@@ -112,17 +115,15 @@ describe('Method Monday scorecard', () => {
     expect(churn.kpis.map((k) => k.metricId)).toContain(274);
   });
 
-  it('regroups the 25 pre-existing detail tiles per metric rather than three undifferentiated rows', () => {
+  it('regroups the pre-existing detail tiles per metric rather than three undifferentiated rows', () => {
     // Redesign requirement: nothing available before the redesign disappears,
     // it's just organized by metric instead of by the old 3-section layout.
-    // 30, not 25: the five newly-registered attainment metrics (419-423,
-    // see docs/metric-definitions.md) each got one tile added to their
-    // group's collapsed detail so plan.js loads their data and the pace
-    // row's attainment number has somewhere the value is independently
-    // visible and inspectable.
+    // 34: the original 30 (25 pre-existing tiles plus the five
+    // newly-registered attainment metrics 419-423) plus the 4-tile Churn
+    // Rate group (424, 344, 345, 425) added 2026-08-17.
     const allIds = detailSections().flatMap((s) => s.kpis.map((k) => k.metricId));
-    expect(allIds.length).toBe(30);
-    expect(detailSections().length).toBe(7);
+    expect(allIds.length).toBe(34);
+    expect(detailSections().length).toBe(8);
   });
 
   it('includes all five newly-registered attainment metric ids exactly once', () => {

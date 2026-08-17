@@ -1,0 +1,57 @@
+# Canonical metric definition for "Accounts Churned Rate MTD (through
+# yesterday)". Repoints Supabase #344 ("Churn Rate"), which was raw
+# chart_sql on the through-today convention -- see churn-rate-report.md for
+# the full parity record. Named consistently with the 2026-08-17 Ruling 9
+# rename (Churn -> Accounts Churned, to state the CompanyAccount/billing-
+# account grain plainly in the name) applied to #409/#411/#413.
+
+models:
+  - name: v_metric__churn_rate_mtd
+    description: |
+      Accounts churned this month (through yesterday) as a percentage of
+      the active account base: churn_mtd / (beginning-of-month customers +
+      mid-month conversions). CompanyAccount (billing-account) grain
+      throughout. Distinct from Churn Rate #344's prior through-today
+      window -- this is the complete-days convention used by the rest of
+      Method Monday.
+    config:
+      materialized: view
+      meta:
+        answers: "What percentage of active billing accounts have churned this month so far, counting only finished days?"
+        grain: "Single row, current month. CompanyAccount (billing-account) grain in both numerator and denominator (see Accounts Churned MTD #409, int_bom_customers)."
+        filters:
+          - rule: "inherits int_method_monday.churn_mtd (CancellationDate < CURRENT_DATE()) and .bom_customers / .conversions_mtd, both through yesterday"
+            why: "today is unfinished; keeps this consistent with every other MTD tile on the page"
+          - rule: "denominator = bom_customers + conversions_mtd, not bom_customers alone"
+            why: "empirically settled 2026-08-17: matches Looker exactly (Apr 2026 2.41%, Jun 2026 2.70%) only when mid-month conversions are added back to the beginning-of-month base -- a customer who converts and cancels in the same month must be countable in the denominator"
+        methodology_source: "Method Monday convention (docs/superpowers/specs/2026-08-10-method-monday-design.md, 'Churn Rate is deferred, not dropped'). Denominator choice re-verified 2026-08-17 against the two dates Churn Rate #344 had matched against Looker on 2026-08-04."
+        parity_verified:
+          against: "Historical monthly recomputation from revenue.int_cancellations / int_conversions / v_bom_customers (complete months, so MTD = full month for each), cross-checked against #344's own prior verification dates."
+          values: "Apr 2026: 2.41% (target) = 2.41% (model), exact. Jun 2026: 2.70% (target) = 2.70% (model), exact. Full 14-month series (2025-06 through 2026-08) in churn-rate-report.md."
+        caveats:
+          - "Emits a percentage (2.41), not a decimal (0.0241) -- matches #344's display_format: percent."
+          - "CompanyAccount (billing-account) grain, not customer grain -- inherits the franchise-fan-out caveat from Accounts Churned MTD #409: a franchise network closing many per-location accounts in one event moves this rate as if that many customers left. On 2026-08-14, EntityRecordID 32049 (Granite Garage Floors) closed 20 accounts (~$800 total SaaS) in one day."
+          - "The beginning-of-month denominator term (bom_customers, from int_bom_customers) accumulates as the current month's invoices are generated across the billing cycle -- it is NOT a fixed snapshot taken on day 1. Reading this metric intraday early in the month can show an inflated rate because the denominator hasn't finished accumulating yet, independent of any change in actual churn. This is inherited unchanged from revenue.v_bom_customers, which #344 already read the same way."
+          - "Excludes today by design. Different window from the prior Churn Rate #344 (through-today) -- moving to this convention is expected to change the CURRENT in-progress month's reading; historical (complete) months are unaffected."
+          - "Single-row by design. Do not chart it as a time series."
+        used_by:
+          - "Method Monday (Churn Rate section)"
+      labels:
+        metric_id: '344'
+        layer: metrics
+        type: ratio
+        status: queued
+        source_table: int_method_monday
+        source_measure_safe: ''
+        depends_on: '409-59'
+    columns:
+      - name: period
+        description: Current month (single row).
+        tests:
+          - not_null
+          - unique
+      - name: value
+        description: >
+          Churn rate as a percentage. NULL only if bom_customers +
+          conversions_mtd is 0, which does not occur in practice (there is
+          always an active account base).

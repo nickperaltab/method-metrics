@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__annual_start_mrr`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__annual_start_mrr`
   OPTIONS(
       description="""Total MRR at the start of each annual cohort, summed across all\ncustomers. Pre-FX \u2014 currencies (USD, CAD, UK) at face value, not\nUSD-converted. Excludes internal Method accounts. Uses CEO-confirmed\nmethodology that excludes one-time Prepay Expiry write-offs.\nFoundation for annual GRR / NRR (#388 / #389). Annual cohort\nreported monthly (trailing comparison).\n""",
     

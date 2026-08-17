@@ -1,6 +1,6 @@
 
 
-  create or replace view `project-for-method-dw`.`revenue`.`v_metric__annual_downgrades_mrr`
+  create or replace view `project-for-method-dw`.`revenue_metrics`.`v_metric__annual_downgrades_mrr`
   OPTIONS(
       description="""Total MRR lost from existing-customer downgrades at annual cohort\ngrain (customers paying less than the prior year but not canceling),\nin dollars summed across all customers. Pre-FX \u2014 currencies (USD,\nCAD, UK) at face value, not USD-converted. Excludes internal Method\naccounts. Inherits the v_customer_annual_mrr Prepay Expiry methodology.\n""",
     

@@ -9,7 +9,7 @@
 
     
     OPTIONS(
-      description=""""""
+      description="""Per-channel monthly forecast for trials and syncs, materialized as a native BQ\ntable. One row per (metric, forecast_date, channel). A pass-through UNION of the\ntwo Sheets-federated forecast views (v_trials_forecast_channel +\nv_syncs_forecast_channel).\n\nWhy materialized: the forecast views federate over Google Sheets (Drive), and\nreading them from the browser frontend requires a Drive OAuth scope the app does\nnot request \u2014 which 403'd users. dbt reads the Sheet once at build time (its\nservice account has Drive access) and lands this plain table the frontend can\njoin scope-free. Refreshed on the normal dbt run cadence.\n\n\u26a0\ufe0f Pass-through: the numbers are only as good as the upstream forecast Sheet \u2014 if\nthe Sheet is wrong or stale, this table is wrong. Values reflect the last dbt\nbuild, not live edits to the Sheet.\n"""
     )
     as (
       

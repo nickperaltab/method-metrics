@@ -2,11 +2,11 @@
 
 -- One row per (Partner, CompanyAccount): the accounts a partner referred.
 --
--- Partner = revenue.Account.Partner (raw string; NO normalization in v1, so
---   variant names like "Outdoor Living Brands, Inc" vs "...Inc" stay separate —
---   see spec follow-ups).
+-- Partner = revenue.Account.Partner (raw string; NO normalization in v1, so a
+--   partner whose name has a punctuation variant (", Inc" vs " Inc") stays split
+--   across rows — see spec follow-ups).
 -- IsActive uses the LIFECYCLE definition (first paid + not cancelled). It matches
---   the partner CRM "Active?" view exactly (SBS: 47/47) and is the first
+--   a reference partner's CRM "Active?" export exactly, and is the first
 --   account-grain active definition in the project (int_customers is
 --   customer-grain). MRR/Licenses are POINT-IN-TIME (latest complete month).
 -- IsActive and MRR intentionally do not reconcile: an account on a hard hold has

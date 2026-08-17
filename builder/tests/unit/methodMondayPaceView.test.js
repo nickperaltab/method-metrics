@@ -29,6 +29,7 @@ function fullDataMap() {
     422: 91.3, 400: 0.2474, 402: 0.2711,
     423: 110.8, 411: 109.69, 274: 99,
     420: 60.9, 321: 10.95, 319: 0.1797,
+    425: 257.6, 345: 6.44, 424: 0.025,
     // detail-tile-only ids referenced by the per-metric sections
     406: 132, 407: 64, 408: 20, 409: 27, 412: 31, 413: 29, 415: -165, 417: -171, 357: 0.181,
   };
@@ -97,9 +98,9 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
       })
     );
     const buttonCount = (html.match(/<button/g) || []).length;
-    expect(buttonCount).toBe(7);
+    expect(buttonCount).toBe(8);
     expect(html).not.toMatch(/aria-expanded="true"/);
-    expect((html.match(/aria-expanded="false"/g) || []).length).toBe(7);
+    expect((html.match(/aria-expanded="false"/g) || []).length).toBe(8);
   });
 
   it('the collapsed row shows no secondary numbers (no "x / y" pair, no raw trajectory/forecast)', () => {
