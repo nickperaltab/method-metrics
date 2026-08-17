@@ -9,6 +9,9 @@ models:
       account-grain forecast) prorated to the elapsed window
       (churn_forecast * elapsed_days / days_in_month), so the MTD actual
       has a like-for-like comparison instead of the full-month total.
+      Returns 0 (not NULL) on the 1st of the month, when elapsed_days is 0 --
+      the paired trajectory metric (#411) returns NULL in that same
+      situation, so the two do not fail the same way on day one.
     config:
       materialized: view
       meta:
@@ -25,6 +28,7 @@ models:
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename in the sheet breaks this silently."
           - "Straight-line proration, not shaped to the forecast's own daily curve. Assumes even distribution across the month."
           - "Account-grain forecast, calibrated on account-grain history — it is meant to be compared against Accounts Churned MTD (#409), which is also account-grain. A single franchise network's multi-location cancellation (see #409, #411 caveats) can make the actual overshoot this forecast sharply in one day without it reflecting a change in underlying churn rate."
+          - "Returns 0, not NULL, on the 1st of the month (elapsed_days = 0 multiplies the forecast to zero rather than dividing into an undefined value). The paired trajectory metric (#411) returns NULL in the same situation via SAFE_DIVIDE — a known asymmetry between the *_forecast_mtd and *_trajectory families on day one of a month."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
           - "Method Monday (Acquisition/Retention section)"
@@ -35,4 +39,4 @@ models:
         status: queued
         source_table: int_method_monday
         source_measure_safe: ''
-        depends_on: ''
+        depends_on: '274'

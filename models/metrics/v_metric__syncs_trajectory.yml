@@ -29,6 +29,23 @@ models:
           - "Not comparable in LEVEL to the trials Conversion Rate Trajectory (#321) once divided into a rate — the sync rate has no lag where the trials rate does. Compare trend and attainment, not level. (#296 above is Conversions Trajectory, this metric's own partner in the sync conversion rate — a different metric from #321.)"
           - "Noisy in the first few days of a month, same as #296."
           - "Single-row by design. Do not chart it as a time series."
+        name_audit: >
+          Flagged RENAME by the 2026-08-17 name-vs-math audit (grain/cohort
+          mismatch: name says "Syncs," math is a signup cohort that has since
+          synced, not sync-completion events). Judged 2026-08-17: keeping the
+          name. Reasoning -- (1) it inherits the exact naming precedent of its
+          parent Syncs (#55), which went through the identical audit and kept
+          "Syncs" with a corrected description rather than a rename; renaming
+          only the trajectory child while the parent stays "Syncs" would
+          recreate the #59-vs-#409 split naming already flagged as an open
+          inconsistency in naming-fixes-report.md. (2) The signup-cohort
+          caveat above discloses the true cohort definition explicitly, which
+          satisfies §3's "cohort definition match" question via disclosure
+          rather than renaming -- a reader who reads the caveat cannot be
+          misled. (3) "Syncs" is Method's own established term for this
+          funnel stage (signup, later confirmed by a sync), not a claim about
+          event timing. Not renamed; description and caveats carry the
+          disclosure instead.
         used_by:
           - "Sales Scorecard (Sync Conversion Rate section)"
           - "Sync Conversion Rate Trajectory"

@@ -6,6 +6,9 @@ models:
       The full-month conversions forecast prorated to the elapsed window
       (conversions_forecast * elapsed_days / days_in_month), so the MTD
       actual has a like-for-like comparison instead of the full-month total.
+      Returns 0 (not NULL) on the 1st of the month, when elapsed_days is 0 --
+      the paired trajectory metric (#296) returns NULL in that same
+      situation, so the two do not fail the same way on day one.
     config:
       materialized: view
       meta:
@@ -21,6 +24,7 @@ models:
         caveats:
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename in the sheet breaks this silently."
           - "Straight-line proration, not shaped to the forecast's own daily curve. Assumes even distribution across the month."
+          - "Returns 0, not NULL, on the 1st of the month (elapsed_days = 0 multiplies the forecast to zero rather than dividing into an undefined value). The paired trajectory metrics (#296 conversions, #410/#411/#295 etc.) return NULL in the same situation via SAFE_DIVIDE -- a known asymmetry between the *_forecast_mtd and *_trajectory families on day one of a month."
           - "Single-row by design. Do not chart it as a time series."
         used_by:
           - "Method Monday (Acquisition/Retention section)"
@@ -31,4 +35,4 @@ models:
         status: queued
         source_table: int_method_monday
         source_measure_safe: ''
-        depends_on: ''
+        depends_on: '273'

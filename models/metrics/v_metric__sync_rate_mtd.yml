@@ -24,6 +24,17 @@ models:
           - "Excludes today by design. Not the same number as Sync Rate #300, which is the full-month ratio."
           - "NULL when trials_mtd is 0 — early in a month that is genuinely undefined, not zero."
           - "Single-row by design. Do not chart it as a time series."
+        name_audit: >
+          Flagged RENAME by the 2026-08-17 name-vs-math audit, inherited from
+          the numerator/denominator both being signup-cohort counts rather
+          than event counts (see #55, #295's name_audit). Judged 2026-08-17:
+          keeping the name. Both operands of the ratio (Syncs MTD #407,
+          Trials MTD #406) share the identical grain and cohort convention,
+          so the §3 "numerator and denominator match" question is
+          satisfied -- there is no cross-grain drift for "Sync Rate" to hide.
+          The rate's own name doesn't assert anything about event timing;
+          it's a plain ratio of two already-disclosed cohort counts. Not
+          renamed.
         used_by:
           - "Method Monday (Acquisition section)"
       labels:

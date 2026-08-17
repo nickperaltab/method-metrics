@@ -26,6 +26,15 @@ models:
           - "Excludes today by design. Not the same number as Syncs #55 for the current month."
           - "SyncDate is SignupDate, not sync-completion date — revenue.Funnel's Sync branch projects SignupDate AS Date. This counts accounts that signed up this month and have since synced, not syncs that happened this month. Same caveat as Syncs #55; measured monthly fan-in for the account-vs-entity grain question is about 1.5% (see #55)."
           - "Single-row by design. Do not chart it as a time series."
+        name_audit: >
+          Flagged RENAME by the 2026-08-17 name-vs-math audit (same
+          grain/cohort mismatch as #295 -- see that model's name_audit).
+          Judged 2026-08-17: keeping the name, for the same three reasons --
+          matches its parent Syncs (#55)'s own precedent of a kept name with
+          a corrected description; the caveat above discloses the true
+          signup-cohort definition, satisfying §3 via disclosure; "Syncs" is
+          Method's established funnel-stage term here, not an event-timing
+          claim. Not renamed.
         used_by:
           - "Method Monday (Acquisition section)"
       labels:
