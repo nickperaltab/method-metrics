@@ -72,11 +72,16 @@ describe('Method Monday scorecard', () => {
   });
 
   it('uses the correct format for every percentage-emitting metric', () => {
-    // 344/345 emit a PERCENTAGE (2.41, not 0.0241) and 424 emits a decimal
-    // rate (0.025) -- pinned here per the Task 5 "scale trap" requirement,
-    // since getting this backwards is exactly how a tile once read 3289%.
-    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423, 344, 345, 425]);
-    const decimalRateIds = new Set([400, 402, 319, 357, 424]);
+    // 344/345/424 all emit a PERCENTAGE -- 424 (Forecasted Accounts Churned
+    // Rate) is deliberately rescaled from the source sheet's decimal (0.025)
+    // to a percentage (2.5) in its own dbt view, specifically so it shares
+    // one scale with its two siblings (see
+    // v_metric__churn_rate_forecasted.yml). Pinned here per the Task 5
+    // "scale trap" requirement, since getting this backwards is exactly how
+    // a tile once read 3289% -- and #319 emitting an un-rescaled decimal is
+    // the same trap that left #322/#323 wrong by 100x on the Sales Scorecard.
+    const percentIds = new Set([361, 414, 416, 418, 321, 419, 420, 421, 422, 423, 344, 345, 424, 425]);
+    const decimalRateIds = new Set([400, 402, 319, 357]);
     for (const s of detailSections()) {
       for (const k of s.kpis) {
         if (percentIds.has(k.metricId)) expect(k.format).toBe('percent');

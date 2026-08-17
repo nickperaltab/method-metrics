@@ -131,17 +131,20 @@ export const METRIC_DEFS = [
   {
     key: 'churnRate',
     label: 'Churn Rate',
-    // #345 (trajectory) emits a percentage (0-100). #424 (forecast) emits a
-    // decimal rate (0-1) and must be normalized (x100) before comparison --
-    // same shape as the trials-level Conversion Rate pair above, and the
-    // registered attainment formula (#425) does this same rescaling inside
-    // itself (SAFE_DIVIDE({345}, {424} * 100) * 100).
+    // #345 (trajectory) and #424 (forecast) BOTH emit a percentage (0-100) --
+    // unlike the trials-level Conversion Rate pair above (#321 percent vs
+    // #319 decimal_rate), no rescaling is needed here. #424 deliberately
+    // rescales the source sheet's decimal (0.025) to a percentage (2.5) in
+    // its own dbt view specifically so this pair shares one scale -- see
+    // v_metric__churn_rate_forecasted.yml. The registered attainment formula
+    // (#425) is the plain SAFE_DIVIDE({345}, {424}) * 100, identical in
+    // shape to every other attainment metric on this page.
     attainmentId: 425,
     attainmentFormat: 'percent',
     numeratorId: 345,
     numeratorFormat: 'percent',
     denominatorId: 424,
-    denominatorFormat: 'decimal_rate',
+    denominatorFormat: 'percent',
     // Inverted like Churn -- more churn than forecast is bad.
     inverted: true,
   },

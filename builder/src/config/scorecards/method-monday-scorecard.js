@@ -241,8 +241,12 @@ export default {
       layout: 'scorecard-row',
       description: EXCLUDES_TODAY,
       kpis: [
-        // #424 emits a decimal rate (0.025) -- 'decimal_rate' renders it as 2.50%.
-        { metricId: 424, label: 'Churn Rate Forecast', format: 'decimal_rate',
+        // #424 emits a PERCENTAGE (2.5), deliberately rescaled from the source
+        // sheet's decimal (0.025) -- see v_metric__churn_rate_forecasted.yml.
+        // Sharing one scale with #344/#345 is what lets #425's attainment
+        // formula stay in the standard SAFE_DIVIDE(a, b) * 100 shape instead
+        // of carrying a silent compensating omission (the #319 trap).
+        { metricId: 424, label: 'Churn Rate Forecast', format: 'percent',
           valueSelector: 'current_or_latest' },
         // #344/#345 both emit a PERCENTAGE (2.41, not 0.0241) -- use 'percent',
         // not 'decimal_rate'. Getting this backwards is exactly the 3289%-scale

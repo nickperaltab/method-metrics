@@ -206,10 +206,12 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       // (percent, already 0-100) and #319 (decimal_rate, 0-1) normalize to
       // 10.95 / 17.97 = 60.9% attainment, now read from registered #420.
       420: 60.9, 321: 10.95, 319: 0.1797,
-      // Churn Rate: 2026-08-17 live values -- #345 (percent, 6.44%) over
-      // #424 (decimal_rate, 0.025 -> normalized 2.5) -> 257.6% attainment,
-      // inverted (more churn than forecast is bad), read from #425.
-      425: 257.6, 345: 6.44, 424: 0.025,
+      // Churn Rate: 2026-08-17 corrected live values (after the
+      // bom_customers prior-settled-month fix AND the #424 percent-scale
+      // normalization) -- #345 (percent, 3.73%) over #424 (percent, 2.5,
+      // no longer decimal_rate) -> 149.2% attainment, inverted (more churn
+      // than forecast is bad), read from #425.
+      425: 149.2, 345: 3.73, 424: 2.5,
     });
     const rows = buildPaceRows(dataMap);
     expect(rows.length).toBe(8);
@@ -228,7 +230,7 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
     expect(byKey.syncConversionRate.attainment).toBeCloseTo(91.3, 0);
     expect(byKey.churn.attainment).toBeCloseTo(110.8, 1);
     expect(byKey.churn.band).not.toBe('green');
-    expect(byKey.churnRate.attainment).toBeCloseTo(257.6, 1);
+    expect(byKey.churnRate.attainment).toBeCloseTo(149.2, 1);
     expect(byKey.churnRate.band).not.toBe('green');
     // Reviewer-confirmed: #321=10.95, #319=0.1797 -> 60.9% attainment,
     // still the second-worst row (behind Conversions at 54.0%, ahead of
@@ -263,7 +265,7 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
       422: 0, 400: 0, 402: 0.2711,
       423: 0, 411: 0, 274: 99,
       420: 0, 321: 0, 319: 0.1797,
-      425: 0, 345: 0, 424: 0.025,
+      425: 0, 345: 0, 424: 2.5,
     });
     const rows = buildPaceRows(dataMap, { now: day1 });
     expect(rows.length).toBe(8);

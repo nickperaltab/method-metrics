@@ -7,8 +7,9 @@ models:
       method_forecast's Forecasted_Churn_Rate__ column. Unlike Forecasted
       Conversion Rate (#319), which derives a rate by summing two absolute
       forecast columns, the forecast sheet already publishes a churn-rate
-      column -- no derivation needed. Emits a decimal rate (0.025), not a
-      percentage.
+      column -- no derivation needed. Emits a PERCENTAGE (2.5), not the
+      source column's own decimal scale (0.025) -- see filters below for why
+      this view deliberately rescales.
     config:
       materialized: view
       meta:
@@ -19,15 +20,35 @@ models:
             why: "the federated sheet has trailing blank rows past the populated range; without this, GROUP BY DATE_TRUNC(Date, MONTH) collapses them into a bogus period=NULL row (same issue documented on v_metric__sync_conversion_rate_forecasted)"
           - rule: "AVG(Forecasted_Churn_Rate__), not SUM"
             why: "the column repeats one constant value across every day of a month (confirmed 2026-08-17: COUNT(DISTINCT ...) = 1 per month, 14 months checked) -- SUM would inflate by days_in_month"
-        methodology_source: "Read directly from the forecast sheet's own Forecasted_Churn_Rate__ column (Justin's forecast model), not derived."
+          - rule: "* 100 -- rescales the source column's decimal (0.025) to a percentage (2.5)"
+            why: >
+              2026-08-17, Nic-directed fix: this metric's two siblings,
+              v_metric__churn_rate_mtd (1.939) and
+              v_metric__churn_rate_trajectory (3.73), both emit
+              percentages. Leaving this one on the source sheet's native
+              decimal scale is the exact #319 (Forecasted Conversion Rate)
+              trap -- a decimal describing itself as a rate, a downstream
+              attainment formula compensating for it with an extra *100,
+              and that compensation reading as a mistake to the next
+              person who touches it. On the Sales Scorecard that same
+              shape left #322/#323 wrong by 100x for months. Rescaling
+              HERE, at the source view, means the Accounts Churned Rate
+              Attainment formula (#425) can be
+              SAFE_DIVIDE({345}, {424}) * 100 -- identical in shape to
+              every other attainment metric on the page (#416/#418/#419/
+              #420/#421/#422/#423) -- instead of carrying a silent
+              compensating omission. Do NOT remove this *100 to "match the
+              sheet" -- matching this metric's siblings is the contract,
+              not the sheet's native scale.
+        methodology_source: "Read directly from the forecast sheet's own Forecasted_Churn_Rate__ column (Justin's forecast model), rescaled from decimal to percentage; not otherwise derived."
         parity_verified:
           against: "Same source as Forecasted Churn (#274/#413), which reads Forecasted_Churn from the same sheet."
-          values: "Aug 2026 forecast read as 0.025 (2.5%) on 2026-08-17, consistent with Forecasted Churn #274 (99) / bom+conversions scale for the month."
+          values: "Aug 2026 forecast read as 2.5 (source column 0.025 * 100) on 2026-08-17, consistent with Forecasted Churn #274 (99) / bom+conversions scale for the month."
         caveats:
-          - "Emits a decimal rate (0.025), not a percentage (2.5) -- the source column's own scale. Accounts Churned Rate Attainment rescales it (x100) to compare against the percentage-scale trajectory."
+          - "Emits a PERCENTAGE (2.5), not a decimal (0.025) -- deliberately rescaled from the source column, which is itself a decimal in the sheet. See filters above for why. Accounts Churned Rate Attainment (#425) assumes this scale; if a future edit reverts this to a decimal, #425's formula (SAFE_DIVIDE({345}, {424}) * 100) would silently read 100x high."
           - "Source is revenue.method_forecast, an EXTERNAL table over a Google Sheet. A column rename or edit in the sheet breaks or silently changes this."
           - "Account-grain forecast (like Forecasted Churn #274/#413) compared against a CompanyAccount-grain actual -- consistent with the rest of the Churn family, not customer-grain."
-          - "This column is Looker's own forecast-implied denominator in disguise: Forecasted_Churn / Forecasted_Churn_Rate__ = 99 / 0.025 = 3,960 for Aug 2026, which is what Looker's Churn Rate Trajectory tile actually divides by (see v_metric__churn_rate_trajectory.yml). This metric (#424) itself is unaffected by, and unrelated to, the 2026-08-17 bom_customers bug fix -- it never reads int_bom_customers."
+          - "The source column, before rescaling, is Looker's own forecast-implied denominator in disguise: Forecasted_Churn / Forecasted_Churn_Rate__ = 99 / 0.025 = 3,960 for Aug 2026, which is what Looker's Churn Rate Trajectory tile actually divides by (see v_metric__churn_rate_trajectory.yml). This metric (#424) itself is unaffected by, and unrelated to, the 2026-08-17 bom_customers bug fix -- it never reads int_bom_customers."
         used_by:
           - "Method Monday (Churn Rate section)"
       labels:
@@ -44,4 +65,4 @@ models:
           - not_null
           - unique
       - name: value
-        description: Forecasted churn rate as a decimal (0.025, not 2.5).
+        description: Forecasted churn rate as a percentage (2.5, not 0.025).
