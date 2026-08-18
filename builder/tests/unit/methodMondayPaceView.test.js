@@ -103,18 +103,30 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
     expect((html.match(/aria-expanded="false"/g) || []).length).toBe(8);
   });
 
-  it('the collapsed row shows no secondary numbers (no "x / y" pair, no raw trajectory/forecast)', () => {
+  it('renders the Actual (MTD) / Trajectory / Forecast column headers, visible before any row is expanded', () => {
     const html = renderToStaticMarkup(
       React.createElement(MethodMondayPaceView, {
         dataMap: fullDataMap(),
         detailSections: detailSections(),
       })
     );
-    // The old round-1 layout printed the raw pair (e.g. "232 / 311") beside
-    // every bar. That column is gone; collapsed markup should not contain
-    // any of these known pair values as adjacent numbers.
-    expect(html).not.toMatch(/232.*\/.*311/);
-    expect(html).not.toMatch(/109\.69.*\/.*99/);
+    expect(html).toMatch(/Actual \(MTD\)/);
+    expect(html).toMatch(/Trajectory/);
+    expect(html).toMatch(/Forecast/);
+  });
+
+  it('renders the raw trajectory/forecast pair on the collapsed row (2026-08-18: restored after over-correcting to zero numbers)', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MethodMondayPaceView, {
+        dataMap: fullDataMap(),
+        detailSections: detailSections(),
+      })
+    );
+    // Trials: trajectory 232, forecast 311 (both format 'number', pass
+    // through normalize() unchanged) — both values now appear on the page,
+    // reversing round 2's "collapsed row shows no secondary numbers" removal.
+    expect(html).toMatch(/232/);
+    expect(html).toMatch(/311/);
   });
 });
 
@@ -286,5 +298,118 @@ describe('MethodMondayPaceView: keyboard semantics', () => {
     );
     expect(closed).toMatch(/aria-expanded="false"/);
     expect(open).toMatch(/aria-expanded="true"/);
+  });
+});
+
+describe('MethodMondayPaceView: Actual (MTD) column scale handling', () => {
+  it('a percent-format actual renders as-is (Sync % MTD #414 = 50.0 -> "50.0%")', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: {
+          key: 'syncPercent', label: 'Sync %', inverted: false, attainment: 79.2, band: 'amber',
+          actual: 50.0, actualFormat: 'percent',
+        },
+        isOpen: false,
+        onToggle: () => {},
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).toMatch(/50\.0%/);
+  });
+
+  it('a decimal_rate-format actual is normalized ×100 before rendering (Conversion Rate MTD #357 = 0.181 -> "18.1%", never "0.2%")', () => {
+    // This is exactly the shape of the 3289%/100x scale bug: skipping
+    // normalize() on a decimal_rate value before display renders it ~100x
+    // too small (0.181.toFixed(1) = "0.2") instead of the correct 18.1%.
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: {
+          key: 'conversionRate', label: 'Conversion Rate', inverted: false, attainment: 60.9, band: 'amber',
+          actual: 18.1, actualFormat: 'decimal_rate',
+        },
+        isOpen: false,
+        onToggle: () => {},
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).toMatch(/18\.1%/);
+    expect(html).not.toMatch(/0\.2%/);
+  });
+
+  it('a number-format actual renders as a plain integer, not a percentage (Trials MTD #406 = 132)', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: {
+          key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber',
+          actual: 132, actualFormat: 'number',
+        },
+        isOpen: false,
+        onToggle: () => {},
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).toMatch(/132/);
+    expect(html).not.toMatch(/132\.0%/);
+  });
+
+  it('a missing actual renders the dash treatment, never "0"', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: { key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber', actual: null, actualFormat: 'number' },
+        isOpen: false,
+        onToggle: () => {},
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).toMatch(/No data/);
+  });
+});
+
+describe('MethodMondayPaceView: actualEqualsTrajectory note', () => {
+  const syncConversionRateSection = detailSections().find((s) => s.title === 'Sync Conversion Rate');
+
+  it('shows the equals-trajectory note when the row is open and flagged', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: {
+          key: 'syncConversionRate', label: 'Sync Conversion Rate', inverted: false,
+          attainment: 91.3, band: 'green', actualEqualsTrajectory: true,
+        },
+        isOpen: true,
+        onToggle: () => {},
+        detailSection: syncConversionRateSection,
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).toMatch(/[Tt]rajectory and actual are the same number/);
+  });
+
+  it('does not show the note when the row is closed, even if flagged', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: {
+          key: 'syncConversionRate', label: 'Sync Conversion Rate', inverted: false,
+          attainment: 91.3, band: 'green', actualEqualsTrajectory: true,
+        },
+        isOpen: false,
+        onToggle: () => {},
+        detailSection: syncConversionRateSection,
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).not.toMatch(/same number/);
+  });
+
+  it('does not show the note for a row that is not flagged (e.g. Trials, which has its own trajectory)', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PaceRow, {
+        row: { key: 'trials', label: 'Trials', inverted: false, attainment: 74.6, band: 'amber', actualEqualsTrajectory: false },
+        isOpen: true,
+        onToggle: () => {},
+        detailSection: detailSections().find((s) => s.title === 'Trials'),
+        dataMap: fullDataMap(),
+      })
+    );
+    expect(html).not.toMatch(/same number/);
   });
 });

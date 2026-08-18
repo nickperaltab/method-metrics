@@ -115,13 +115,27 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
     methodMonday.sections.flatMap((s) => (s.kpis || []).map((k) => k.metricId))
   );
 
-  it('every numerator/denominator/attainment id referenced by METRIC_DEFS exists in the page config', () => {
+  it('every numerator/denominator/attainment/actual id referenced by METRIC_DEFS exists in the page config', () => {
     for (const def of METRIC_DEFS) {
       expect(configIds.has(def.numeratorId)).toBe(true);
       expect(configIds.has(def.denominatorId)).toBe(true);
+      expect(configIds.has(def.actualId)).toBe(true);
       if (def.attainmentId) {
         expect(configIds.has(def.attainmentId)).toBe(true);
       }
+    }
+  });
+
+  it('every pace row has a numeric actualId — the MTD figure the collapsed row displays', () => {
+    // Per-row mapping confirmed against method-monday-scorecard.js: Trials
+    // #406, Syncs #407, Conversions #408, Sync % #414, Conversion Rate #357,
+    // Sync Conversion Rate #400, Churn #409, Churn Rate #344.
+    const expected = {
+      trials: 406, syncs: 407, conversions: 408, conversionRate: 357,
+      syncPercent: 414, syncConversionRate: 400, churn: 409, churnRate: 344,
+    };
+    for (const def of METRIC_DEFS) {
+      expect(def.actualId).toBe(expected[def.key]);
     }
   });
 
@@ -148,6 +162,57 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
       const row = buildPaceRow(def, mapFrom({ [def.attainmentId]: 100 }));
       expect(row.attainmentMetricId).toBe(def.attainmentId);
     }
+  });
+});
+
+describe('methodMondayPace: actual (MTD) column', () => {
+  it('resolves each row\'s actual value to its own actualId, distinct from other rows\' data', () => {
+    const trialsDef = METRIC_DEFS.find((d) => d.key === 'trials');
+    const churnDef = METRIC_DEFS.find((d) => d.key === 'churn');
+    const dataMap = mapFrom({ 406: 132, 409: 27 });
+    const trialsRow = buildPaceRow(trialsDef, dataMap);
+    const churnRow = buildPaceRow(churnDef, dataMap);
+    expect(trialsRow.actual).toBe(132);
+    expect(churnRow.actual).toBe(27);
+  });
+
+  it('a number-format actual (Trials MTD #406) passes through unchanged — no normalization applied', () => {
+    const def = METRIC_DEFS.find((d) => d.key === 'trials');
+    const row = buildPaceRow(def, mapFrom({ 406: 132 }));
+    expect(row.actual).toBe(132);
+    expect(row.actualFormat).toBe('number');
+  });
+
+  it('a decimal_rate-format actual (Conversion Rate MTD #357) is normalized ×100, not left as a raw decimal', () => {
+    // This is the same trap as the 3289% regression: #357 emits 0.181, not
+    // 18.1. Skipping normalize() here would leave the Actual column reading
+    // ~100x smaller than the Trajectory/Forecast columns beside it.
+    const def = METRIC_DEFS.find((d) => d.key === 'conversionRate');
+    const row = buildPaceRow(def, mapFrom({ 357: 0.181 }));
+    expect(row.actual).toBeCloseTo(18.1, 5);
+    expect(row.actual).not.toBeCloseTo(0.181, 3);
+  });
+
+  it('a percent-format actual (Churn Rate MTD #344) passes through unchanged, already on the 0-100 scale', () => {
+    const def = METRIC_DEFS.find((d) => d.key === 'churnRate');
+    const row = buildPaceRow(def, mapFrom({ 344: 2.41 }));
+    expect(row.actual).toBeCloseTo(2.41, 5);
+  });
+
+  it('actualEqualsTrajectory is true only for the two ratio groups with no separate trajectory metric', () => {
+    const byKey = Object.fromEntries(METRIC_DEFS.map((d) => [d.key, d]));
+    const equalRow = (key) => buildPaceRow(byKey[key], mapFrom({ [byKey[key].actualId]: 1 }));
+    expect(equalRow('syncConversionRate').actualEqualsTrajectory).toBe(true);
+    expect(equalRow('syncPercent').actualEqualsTrajectory).toBe(true);
+    expect(equalRow('trials').actualEqualsTrajectory).toBe(false);
+    expect(equalRow('churn').actualEqualsTrajectory).toBe(false);
+    expect(equalRow('churnRate').actualEqualsTrajectory).toBe(false);
+  });
+
+  it('a missing actual resolves to null, not 0', () => {
+    const def = METRIC_DEFS.find((d) => d.key === 'trials');
+    const row = buildPaceRow(def, new Map());
+    expect(row.actual).toBeNull();
   });
 });
 
@@ -313,5 +378,16 @@ describe('methodMondayPace: day-1-of-month guard (elapsed_days=0, all trajectori
     const row = buildPaceRow(def, dataMap, { now: day2 });
     expect(row.attainment).toBe(0);
     expect(row.band).not.toBe('unknown');
+  });
+
+  it('on the 1st, actual (MTD) still resolves — only trajectory/attainment are guarded to null', () => {
+    // The actual figure is a real elapsed count, not a division by
+    // elapsed_days, so a genuine 0 on day 1 (no days have elapsed yet to
+    // count) is real information — unlike trajectory, it must NOT be
+    // masked by the day-1 guard.
+    const def = METRIC_DEFS.find((d) => d.key === 'trials');
+    const row = buildPaceRow(def, mapFrom({ 406: 0, 410: 0, 285: 311 }), { now: day1 });
+    expect(row.attainment).toBeNull();
+    expect(row.actual).toBe(0);
   });
 });

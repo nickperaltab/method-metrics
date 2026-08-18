@@ -13,6 +13,8 @@ import ChannelTrajectoryScorecard from '../components/scorecards/ChannelTrajecto
 import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
 import RetentionTriangle from '../components/scorecards/RetentionTriangle';
 import MethodMondayPaceView from '../components/method-monday/MethodMondayPaceView';
+import MethodMondayWindowLabel from '../components/method-monday/MethodMondayWindowLabel';
+import { useMethodMondayWindow } from '../hooks/useMethodMondayWindow';
 import Chart from '../components/scorecards/Chart';
 import MetricInspector from '../components/scorecards/MetricInspector';
 import StaleIndicator from '../components/StaleIndicator';
@@ -114,6 +116,10 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   const { id } = useParams();
   const config = SCORECARDS[id];
   const { dataMap, loading, freshness, refreshedAt, needsBq } = useScorecardData(config, metrics, bqConnected);
+  // Method Monday only: the queried window (period/elapsed_days/days_in_month)
+  // for the page header. Gated on this scorecard so every other page skips
+  // the extra fetch. See hooks/useMethodMondayWindow.js.
+  const { window: methodMondayWindow } = useMethodMondayWindow(config?.id === 'method-monday' && bqConnected);
 
   useEffect(() => {
     if (config?.id) posthog.capture('scorecard_opened', { scorecard_id: config.id });
@@ -224,6 +230,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
               <div style={{ fontSize: type.body, color: color.inkMuted, marginTop: 4, maxWidth: 700, fontFamily: font.sans }}>
                 {config.description}
               </div>
+            )}
+            {config.id === 'method-monday' && (
+              <MethodMondayWindowLabel window={methodMondayWindow} />
             )}
           </div>
           {!config.hideDateFilter && (

@@ -14,12 +14,21 @@ import { color, font, type, weight, radius, numeric, shadow } from '../../styles
  * existing detail-tile renderer, reused rather than copied (see below).
  *
  * ── Progressive disclosure (2026-08-14, round 2) ─────────────────────
- * Default state: seven rows, one number each — name, bar, attainment %.
- * Nothing else. Clicking a row expands that metric's existing detail tiles
- * underneath it; clicking again collapses. Multiple rows can be open at
- * once (comparing two metrics is a real use, so this is not an accordion
- * that closes the previous selection). Expansion state is local component
- * state — not persisted anywhere.
+ * Default state: eight rows, name + bar + attainment %. Clicking a row
+ * expands that metric's existing detail tiles underneath it; clicking again
+ * collapses. Multiple rows can be open at once (comparing two metrics is a
+ * real use, so this is not an accordion that closes the previous
+ * selection). Expansion state is local component state — not persisted
+ * anywhere.
+ *
+ * ── Actual/Trajectory/Forecast columns (2026-08-18) ───────────────────
+ * Round 2 stripped every number off the collapsed row except the bar and
+ * the attainment percentage, in reaction to ~60 numbers on screen at once.
+ * That overcorrected: a reader can no longer tell actual from forecast at a
+ * glance. Three right-aligned, header-labeled columns are back — Actual
+ * (MTD), Trajectory, Forecast — sourced from the same dataMap entries the
+ * expanded detail already uses (`actualId`/`numeratorId`/`denominatorId` in
+ * lib/methodMondayPace.js), not a second data path.
  *
  * `detailSections` are the same per-metric config sections that used to
  * render unconditionally above (Sync %, Trials, Syncs, Conversions,
@@ -33,9 +42,11 @@ import { color, font, type, weight, radius, numeric, shadow } from '../../styles
 const AXIS_MAX = 150;
 const ON_PACE_X = (100 / AXIS_MAX) * 100; // % position of the 100% rule on the track
 
-// Every row (chevron / label / track / attainment) shares this grid so the
-// footer caption below can stay aligned with the rule at any container width.
-const ROW_GRID = '20px 160px 1fr 90px';
+// Every row (chevron / label / track / attainment / actual / trajectory /
+// forecast) shares this grid so the footer caption and the column headers
+// stay aligned with the rows at any container width.
+const ROW_GRID = '20px 160px 1fr 90px 90px 90px 90px';
+const NUMERIC_COL_STYLE = { padding: '10px 8px', textAlign: 'right' };
 
 // Bar fill. `unknown` is a decorative empty-track marker, which is the only
 // legitimate use of inkFaint — it fails AA and must never colour text.
@@ -56,12 +67,21 @@ const BAND_TEXT_COLORS = {
 const fontSans = font.sans;
 
 /**
- * A dash where there is no number, matching the KPI tiles. The dash alone is
- * silence to a screen reader, so the two halves are rendered separately and the
- * caller pairs them.
+ * Format an already-normalize()'d row value for display. `format` is the
+ * RAW format the source metric declared (see METRIC_DEFS) — 'number' values
+ * pass through as an integer with thousands separators; 'percent' and
+ * 'decimal_rate' values have both already been put on the same 0–100 scale
+ * by normalize(), so both render as a one-decimal percentage here. Calling
+ * this on a value that hasn't been normalized first would reproduce the
+ * ~100x scale bug this page's header comment warns about.
+ *
+ * Returns null (not a string) when there's no number, so the caller renders
+ * the same dash + screen-reader-only "No data" treatment as everywhere else
+ * on this page — the dash alone is silence to a screen reader.
  */
-function formatAttainment(value) {
+function formatRowValue(value, format = 'percent') {
   if (value == null || Number.isNaN(value)) return null;
+  if (format === 'number') return Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
   return `${value.toFixed(1)}%`;
 }
 
@@ -95,7 +115,10 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
   const bandColor = BAND_COLORS[row.band];
   const bandTextColor = BAND_TEXT_COLORS[row.band];
   const detailId = `method-monday-pace-detail-${row.key}`;
-  const attainment = formatAttainment(row.attainment);
+  const attainment = formatRowValue(row.attainment, 'percent');
+  const actualText = formatRowValue(row.actual, row.actualFormat);
+  const trajectoryText = formatRowValue(row.numerator, row.numeratorFormat);
+  const forecastText = formatRowValue(row.denominator, row.denominatorFormat);
 
   return (
     <div style={{ borderBottom: `1px solid ${color.borderSubtle}` }}>
@@ -263,7 +286,42 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
             )}
           </span>
         )}
+
+        {/* Actual (MTD) / Trajectory / Forecast — plain, non-interactive
+            cells (the attainment number above is the one click target for
+            MetricInspector). Right-aligned with tabular figures so the
+            three columns scan vertically down the page. */}
+        <span style={{ ...NUMERIC_COL_STYLE, fontSize: 14, fontFamily: fontSans, color: color.ink, ...numeric }}>
+          {actualText ?? (
+            <>
+              <span aria-hidden="true">—</span>
+              <SrOnly>No data</SrOnly>
+            </>
+          )}
+        </span>
+        <span style={{ ...NUMERIC_COL_STYLE, fontSize: 14, fontFamily: fontSans, color: color.ink, ...numeric }}>
+          {trajectoryText ?? (
+            <>
+              <span aria-hidden="true">—</span>
+              <SrOnly>No data</SrOnly>
+            </>
+          )}
+        </span>
+        <span style={{ ...NUMERIC_COL_STYLE, fontSize: 14, fontFamily: fontSans, color: color.ink, ...numeric }}>
+          {forecastText ?? (
+            <>
+              <span aria-hidden="true">—</span>
+              <SrOnly>No data</SrOnly>
+            </>
+          )}
+        </span>
       </div>
+
+      {isOpen && row.actualEqualsTrajectory && (
+        <div style={{ padding: '0 8px 8px 36px', fontSize: type.label, color: color.inkMuted, fontFamily: fontSans }}>
+          Trajectory and actual are the same number for {row.label.toLowerCase()}.
+        </div>
+      )}
 
       {isOpen && detailSection && (
         <div id={detailId} style={{ padding: '4px 8px 20px 36px' }}>
@@ -312,6 +370,30 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
         Churn Rate bars are reversed: longer means worse.
       </div>
 
+      {/* Column headers for the three numeric columns, visible in the
+          default collapsed state — this is the labeling the sales director
+          was missing: without it, a bare number can't be told apart as
+          actual, trajectory, or forecast. Shares ROW_GRID with the rows
+          below so each header sits directly over its column. */}
+      <div
+        role="row"
+        style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 16, padding: '0 8px 4px' }}
+      >
+        <div />
+        <div />
+        <div />
+        <div />
+        <div style={{ ...NUMERIC_COL_STYLE, padding: '0 8px', fontSize: type.label, fontWeight: weight.medium, color: color.inkMuted, fontFamily: fontSans }}>
+          Actual (MTD)
+        </div>
+        <div style={{ ...NUMERIC_COL_STYLE, padding: '0 8px', fontSize: type.label, fontWeight: weight.medium, color: color.inkMuted, fontFamily: fontSans }}>
+          Trajectory
+        </div>
+        <div style={{ ...NUMERIC_COL_STYLE, padding: '0 8px', fontSize: type.label, fontWeight: weight.medium, color: color.inkMuted, fontFamily: fontSans }}>
+          Forecast
+        </div>
+      </div>
+
       {rows.map((row) => (
         <PaceRow
           key={row.key}
@@ -345,6 +427,9 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
             100% on pace
           </div>
         </div>
+        <div />
+        <div />
+        <div />
         <div />
       </div>
     </div>

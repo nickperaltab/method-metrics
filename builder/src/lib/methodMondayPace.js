@@ -32,14 +32,15 @@ import { resolveKpiValue } from '../components/scorecards/utils';
  * #418, Conversions #419, Conversion Rate #420, Sync % #421, Sync
  * Conversion Rate #422, Churn #423, Churn Rate #425) — every row reads its
  * displayed percentage from a registered metric, never from a JS computation.
- * `numeratorId`/`denominatorId` are kept only for the raw trajectory/
- * forecast pair (unused directly by the page today, but exercised by the
- * dev-time consistency check below and by tests) — they are not a
- * fallback computation path.
+ * `numeratorId`/`denominatorId` carry the raw trajectory/forecast pair, and
+ * `actualId` carries the MTD actual — all three are rendered as columns on
+ * the collapsed row (see MethodMondayPaceView.jsx) and are also exercised
+ * by the dev-time consistency check below and by tests.
  *
- * `numeratorFormat` / `denominatorFormat` / `attainmentFormat` describe the
- * RAW format each id's metric emits (see method-monday-scorecard.js), not
- * how it should be displayed — normalize() converts to a common 0–100 scale.
+ * `numeratorFormat` / `denominatorFormat` / `actualFormat` / `attainmentFormat`
+ * describe the RAW format each id's metric emits (see
+ * method-monday-scorecard.js), not how it should be displayed — normalize()
+ * converts to a common 0–100 scale.
  */
 export const METRIC_DEFS = [
   {
@@ -47,6 +48,8 @@ export const METRIC_DEFS = [
     label: 'Trials',
     attainmentId: 416,
     attainmentFormat: 'percent',
+    actualId: 406,
+    actualFormat: 'number',
     numeratorId: 410,
     numeratorFormat: 'number',
     denominatorId: 285,
@@ -58,6 +61,8 @@ export const METRIC_DEFS = [
     label: 'Syncs',
     attainmentId: 418,
     attainmentFormat: 'percent',
+    actualId: 407,
+    actualFormat: 'number',
     numeratorId: 295,
     numeratorFormat: 'number',
     denominatorId: 286,
@@ -69,6 +74,8 @@ export const METRIC_DEFS = [
     label: 'Conversions',
     attainmentId: 419,
     attainmentFormat: 'percent',
+    actualId: 408,
+    actualFormat: 'number',
     numeratorId: 296,
     numeratorFormat: 'number',
     denominatorId: 273,
@@ -86,6 +93,11 @@ export const METRIC_DEFS = [
     // registered formula, so the bar and the registered metric agree.
     attainmentId: 420,
     attainmentFormat: 'percent',
+    // #357 ("Conversion Rate") is the MTD actual paired with this group,
+    // copied verbatim from sales-scorecard.js — it emits a decimal (0–1),
+    // same trap as #319 above.
+    actualId: 357,
+    actualFormat: 'decimal_rate',
     numeratorId: 321,
     numeratorFormat: 'percent',
     denominatorId: 319,
@@ -97,6 +109,8 @@ export const METRIC_DEFS = [
     label: 'Sync %',
     attainmentId: 421,
     attainmentFormat: 'percent',
+    actualId: 414,
+    actualFormat: 'percent',
     numeratorId: 414,
     numeratorFormat: 'percent',
     denominatorId: 361,
@@ -111,6 +125,14 @@ export const METRIC_DEFS = [
     // percentage like the rest of the page.
     attainmentId: 422,
     attainmentFormat: 'percent',
+    // #400 is both the actual and the trajectory on this convention —
+    // numerator and denominator both scale by days_in_month/elapsed_days,
+    // so the ratio is scale-invariant (see method-monday-scorecard.js file
+    // header). buildPaceRow flags this via `actualEqualsTrajectory` so the
+    // UI can say so once in the expanded detail instead of printing the
+    // same number under two column headers.
+    actualId: 400,
+    actualFormat: 'decimal_rate',
     numeratorId: 400,
     numeratorFormat: 'decimal_rate',
     denominatorId: 402,
@@ -122,6 +144,8 @@ export const METRIC_DEFS = [
     label: 'Churn',
     attainmentId: 423,
     attainmentFormat: 'percent',
+    actualId: 409,
+    actualFormat: 'number',
     numeratorId: 411,
     numeratorFormat: 'number',
     denominatorId: 274,
@@ -143,6 +167,8 @@ export const METRIC_DEFS = [
     // attainment metric on this page.
     attainmentId: 425,
     attainmentFormat: 'percent',
+    actualId: 344,
+    actualFormat: 'percent',
     numeratorId: 345,
     numeratorFormat: 'percent',
     denominatorId: 342,
@@ -234,6 +260,20 @@ export function isDayOneOfMonth(now = new Date()) {
  * `now` is injectable for testing the day-1 guard deterministically.
  */
 export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
+  // The actual (MTD) figure is a real, already-elapsed count — it isn't
+  // divided by elapsed_days the way trajectory is, so a genuine 0 on day 1
+  // (no days have elapsed yet this month to count) is real information, not
+  // the loader's NULL-as-0 coercion. It is resolved on every path, day 1
+  // included, unlike numerator/denominator/attainment below.
+  const rawActual = resolveKpiValue(dataMap.get(def.actualId), 'current_or_latest');
+  const actual = normalize(rawActual, def.actualFormat);
+  // True when this row's trajectory and actual are the SAME registered
+  // metric (Sync % and Sync Conversion Rate: both are ratios that don't
+  // scale with elapsed days, so there is no separate trajectory tile). The
+  // UI uses this to say so once in the expanded detail rather than
+  // printing one number under two column headers.
+  const actualEqualsTrajectory = def.actualId === def.numeratorId;
+
   if (isDayOneOfMonth(now)) {
     // Every trajectory is genuinely NULL today — do not let the loader's
     // NULL-as-0 coercion masquerade as a real (and maximally harmful) 0%.
@@ -244,6 +284,9 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
       attainment: null,
       band: 'unknown',
       harmfulDistance: null,
+      actual,
+      actualFormat: def.actualFormat,
+      actualEqualsTrajectory,
       numerator: null,
       denominator: null,
       numeratorFormat: def.numeratorFormat,
@@ -293,6 +336,9 @@ export function buildPaceRow(def, dataMap, { now = new Date() } = {}) {
     attainment,
     band: classifyBand(attainment, def.inverted),
     harmfulDistance: harmfulDistance(attainment, def.inverted),
+    actual,
+    actualFormat: def.actualFormat,
+    actualEqualsTrajectory,
     numerator,
     denominator,
     numeratorFormat: def.numeratorFormat,

@@ -256,6 +256,31 @@ export async function fetchViewData(viewName) {
   return result;
 }
 
+/**
+ * Fetch the live queried window (period / elapsed_days / days_in_month) for
+ * the Method Monday scorecard from `int_method_monday` — the same
+ * complete-days figures every trajectory on that page divides by (see
+ * models/intermediate/int_method_monday.sql). A direct view read, not a
+ * registered metric: these are supporting figures for a header label, not
+ * a business metric a user would look up by id.
+ *
+ * BQ's REST API returns every field as a string; elapsed_days and
+ * days_in_month are coerced to Number here so callers get real numbers.
+ * Returns null when the view has no rows (should not happen — the model
+ * guarantees exactly one row — but this keeps the header from throwing if
+ * it ever does).
+ */
+export async function fetchMethodMondayWindow() {
+  const { rows } = await fetchViewData('int_method_monday');
+  if (!rows.length) return null;
+  const row = rows[0];
+  return {
+    period: row.period,
+    elapsedDays: Number(row.elapsed_days),
+    daysInMonth: Number(row.days_in_month),
+  };
+}
+
 export function clearViewCache() {
   Object.keys(viewCache).forEach(k => delete viewCache[k]);
 }
