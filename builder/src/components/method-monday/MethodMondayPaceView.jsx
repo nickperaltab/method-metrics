@@ -370,10 +370,11 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
         Churn Rate bars are reversed: longer means worse.
       </div>
 
-      {/* Column headers for the three numeric columns, visible in the
+      {/* Column headers for the four numeric columns, visible in the
           default collapsed state — this is the labeling the sales director
           was missing: without it, a bare number can't be told apart as
-          actual, trajectory, or forecast. Shares ROW_GRID with the rows
+          attainment, actual, trajectory, or forecast. Shares ROW_GRID with
+          the rows
           below so each header sits directly over its column. */}
       <div
         role="row"
@@ -382,7 +383,9 @@ export default function MethodMondayPaceView({ dataMap, detailSections = [], onM
         <div />
         <div />
         <div />
-        <div />
+        <div style={{ ...NUMERIC_COL_STYLE, padding: '0 8px', fontSize: type.label, fontWeight: weight.medium, color: color.inkMuted, fontFamily: fontSans }}>
+          Attainment
+        </div>
         <div style={{ ...NUMERIC_COL_STYLE, padding: '0 8px', fontSize: type.label, fontWeight: weight.medium, color: color.inkMuted, fontFamily: fontSans }}>
           Actual (MTD)
         </div>

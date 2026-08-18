@@ -158,3 +158,12 @@ describe('Method Monday scorecard', () => {
     expect(methodMonday.sections[0].renderedBy).toBeUndefined();
   });
 });
+
+describe('method monday — dead controls', () => {
+  it('hides the range filter, since no metric on the page is window-parameterised', () => {
+    // The 3M/6M/12M/All pills changed nothing: every metric hardcodes the
+    // current month in SQL. Scorecard.jsx renders them unless this is set,
+    // and a control that does nothing is worse than no control.
+    expect(methodMonday.hideDateFilter).toBe(true);
+  });
+});

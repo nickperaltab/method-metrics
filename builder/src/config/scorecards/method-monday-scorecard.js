@@ -69,6 +69,11 @@ export default {
   id: 'method-monday',
   title: 'Method Monday',
   status: 'pending',
+  // The 3M/6M/12M/All range pills are hidden: every metric on this page is
+  // hardcoded to the current month in SQL, so the control changed nothing.
+  // A dead filter is worse than no filter. Removed 2026-08-18 at Nic's
+  // request; restore it if/when the metrics become window-parameterised.
+  hideDateFilter: true,
   views: {
     int_method_monday: { dateCol: 'period' },
   },
