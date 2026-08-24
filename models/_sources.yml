@@ -151,6 +151,14 @@ sources:
         description: One row per invoice line. Source of truth for all revenue computation. SaaSAmount is the canonical revenue column.
       - name: Activity
         description: One row per CRM activity (demo, free-consulting session, call, etc.). EntityRecordID maps to a customer. ActivityType is the kind of touch; DueDateStart is the activity date (CreatedDate is NULL on most rows). Demo/free-consulting tracking effectively starts 2024.
+      - name: TimeTracking
+        description: >
+          One row per consultant time entry (Method's own staff logging work, not customer
+          data). GRAIN TRAP: EntityRecordID here is the METHOD STAFF MEMBER who logged the
+          time (joins to Entity.RecordID for their name) — unlike Activity, where
+          EntityRecordID is the customer. The account is MethodCompanyAccountRecordID
+          (joins to Account.RecordID); CustomerRecordID is the customer entity.
+          IsAttendenceEntry rows are internal clock-in/out with no account attached.
       - name: method_forecast
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
       - name: v_trials_forecast_channel
