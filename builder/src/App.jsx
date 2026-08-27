@@ -17,6 +17,7 @@ import PsOverview from './pages/PsOverview';
 import CallPrep from './pages/CallPrep';
 import CallPrepAccount from './pages/CallPrepAccount';
 import CallPrepBook from './pages/CallPrepBook';
+import FreeHours from './pages/FreeHours';
 import Handoffs from './pages/Handoffs';
 import HandoffAccount from './pages/HandoffAccount';
 import Projects from './pages/Projects';
@@ -127,6 +128,7 @@ export default function App() {
             <Route path="/call-prep" element={<CallPrep />} />
             <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
             <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
+            <Route path="/free-hours" element={<FreeHours />} />
             <Route path="/handoffs" element={<Handoffs />} />
             <Route path="/handoffs/account/:recordId" element={<HandoffAccount />} />
             {/* Project tracker. Reachable by URL in production but deliberately
