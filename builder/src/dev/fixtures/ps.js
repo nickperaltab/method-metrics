@@ -425,7 +425,24 @@ function build() {
     days_elapsed: String(o.elapsed ?? 120),
   });
 
-  const FREE_HOURS = [
+  // last_fh_month / account_fh_count are derived, not hand-maintained, so adding
+  // a session to an account cannot leave them stale.
+  const withLastFh = (rows) => {
+    const last = new Map();
+    const count = new Map();
+    for (const r of rows) {
+      const k = r.account_record_id;
+      if (!last.has(k) || r.call_date > last.get(k)) last.set(k, r.call_date);
+      count.set(k, (count.get(k) ?? 0) + 1);
+    }
+    return rows.map((r) => ({
+      ...r,
+      last_fh_month: last.get(r.account_record_id).slice(0, 7),
+      account_fh_count: String(count.get(r.account_record_id)),
+    }));
+  };
+
+  const FREE_HOURS = withLastFh([
     // Converted on a first Free Hour — the common winning shape.
     freeHour({ id: 8001, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
     freeHour({ id: 8002, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
@@ -445,7 +462,7 @@ function build() {
     // Too recent to have had a full 30 days — drives the "still converting" note.
     freeHour({ id: 8013, account: 4601, name: 'granite-state-tile', consultant: ME_FULL, date: iso(-6), elapsed: 6 }),
     freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),
-  ];
+  ]);
 
   return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS };
 }

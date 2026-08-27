@@ -10,6 +10,7 @@ import {
   isRepeat,
   matchesSegment,
   filterCalls,
+  distinctLastFhMonths,
   median,
   percent,
   summarize,
@@ -34,6 +35,8 @@ const fh = (o = {}) => ({
   daysToPpu: o.daysToPpu ?? null,
   daysToDep: o.daysToDep ?? null,
   daysToAgreement: o.daysToAgreement ?? null,
+  lastFhMonth: o.lastFhMonth ?? (o.callDate ?? '2026-03-10').slice(0, 7),
+  accountFhCount: o.accountFhCount ?? 1,
   paidHours90d: o.paidHours90d ?? 0,
   daysElapsed: o.daysElapsed ?? 200,
 });
@@ -144,6 +147,42 @@ describe('filterCalls', () => {
     expect(filterCalls(calls, { consultant: 'Ada Lovelace' }).map((c) => c.id)).toEqual([1, 3]);
     expect(filterCalls(calls, { segment: 'repeat' }).map((c) => c.id)).toEqual([2]);
     expect(filterCalls(calls, { from: '2026-03', consultant: 'Ada Lovelace' }).map((c) => c.id)).toEqual([3]);
+  });
+});
+
+describe('last Free Hour filter', () => {
+  // Same account, three sessions: the account's last Free Hour is May.
+  const calls = [
+    fh({ id: 1, month: '2026-01', lastFhMonth: '2026-05' }),
+    fh({ id: 2, month: '2026-03', lastFhMonth: '2026-05' }),
+    fh({ id: 3, month: '2026-05', lastFhMonth: '2026-05' }),
+    // A different account nobody has spoken to since February.
+    fh({ id: 4, month: '2026-02', lastFhMonth: '2026-02' }),
+  ];
+
+  it('selects on the account, not on the call in front of you', () => {
+    // January's session belongs to an account last seen in May, so bounding the
+    // last Free Hour to May keeps it — even though the call itself is January.
+    const may = filterCalls(calls, { lastFrom: '2026-05', lastTo: '2026-05' });
+    expect(may.map((c) => c.id)).toEqual([1, 2, 3]);
+  });
+
+  it('finds accounts nobody has spoken to since a given month', () => {
+    const cold = filterCalls(calls, { lastTo: '2026-02' });
+    expect(cold.map((c) => c.id)).toEqual([4]);
+  });
+
+  it('composes with the period filter rather than replacing it', () => {
+    const both = filterCalls(calls, { from: '2026-03', lastFrom: '2026-05' });
+    expect(both.map((c) => c.id)).toEqual([2, 3]);
+  });
+
+  it('is inert when neither bound is given', () => {
+    expect(filterCalls(calls, {}).map((c) => c.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('lists the distinct months an account was last seen', () => {
+    expect(distinctLastFhMonths(calls)).toEqual(['2026-02', '2026-05']);
   });
 });
 

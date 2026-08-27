@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   fetchFreeHours, filterCalls, summarize, byMonth, byConsultant, bySequence,
   conversions, conversionType, daysToConversion, distinctMonths, distinctConsultants,
+  distinctLastFhMonths,
   FAIR_WINDOW_DAYS,
 } from '../lib/freeHours';
 
@@ -104,6 +105,8 @@ export default function FreeHours() {
   const [to, setTo] = useState(null);
   const [consultant, setConsultant] = useState('all');
   const [segment, setSegment] = useState('all');
+  const [lastFrom, setLastFrom] = useState(null);
+  const [lastTo, setLastTo] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +116,8 @@ export default function FreeHours() {
         setCalls(rows);
         const months = distinctMonths(rows);
         if (months.length) { setFrom(months[0]); setTo(months[months.length - 1]); }
+        const last = distinctLastFhMonths(rows);
+        if (last.length) { setLastFrom(last[0]); setLastTo(last[last.length - 1]); }
       })
       .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
     return () => { cancelled = true; };
@@ -120,11 +125,12 @@ export default function FreeHours() {
 
   const months = useMemo(() => (calls ? distinctMonths(calls) : []), [calls]);
   const consultants = useMemo(() => (calls ? distinctConsultants(calls) : []), [calls]);
+  const lastMonths = useMemo(() => (calls ? distinctLastFhMonths(calls) : []), [calls]);
 
   // Period + consultant + segment. Everything below reads from this one set.
   const scoped = useMemo(
-    () => (calls ? filterCalls(calls, { from, to, consultant, segment }) : []),
-    [calls, from, to, consultant, segment],
+    () => (calls ? filterCalls(calls, { from, to, consultant, segment, lastFrom, lastTo }) : []),
+    [calls, from, to, consultant, segment, lastFrom, lastTo],
   );
   const totals = useMemo(() => summarize(scoped), [scoped]);
   const monthly = useMemo(() => byMonth(scoped), [scoped]);
@@ -135,8 +141,8 @@ export default function FreeHours() {
   // The sequence panel deliberately ignores the segment filter — it exists to
   // show the whole shape, and filtering to "first" would empty three of its rows.
   const sequence = useMemo(
-    () => (calls ? bySequence(filterCalls(calls, { from, to, consultant })) : []),
-    [calls, from, to, consultant],
+    () => (calls ? bySequence(filterCalls(calls, { from, to, consultant, lastFrom, lastTo })) : []),
+    [calls, from, to, consultant, lastFrom, lastTo],
   );
 
   if (error) {
@@ -182,6 +188,18 @@ export default function FreeHours() {
             <option value="all">All consultants</option>
             {consultants.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+        </div>
+        <div style={s.fg}>
+          <label style={s.label} htmlFor="fh-last-from">Last Free Hour</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <select id="fh-last-from" style={s.select} value={lastFrom ?? ''} onChange={(e) => setLastFrom(e.target.value)}>
+              {lastMonths.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+            <span style={{ color: '#6b7280', fontSize: 12.5 }}>to</span>
+            <select id="fh-last-to" style={s.select} value={lastTo ?? ''} onChange={(e) => setLastTo(e.target.value)}>
+              {lastMonths.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          </div>
         </div>
         <div style={s.fg}>
           <label style={s.label} htmlFor="fh-seg">Account context</label>

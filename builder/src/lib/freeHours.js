@@ -42,6 +42,8 @@ export function buildFreeHoursSql(start = REPORTING_START) {
       FORMAT_DATE('%Y-%m-%d', call_date) AS call_date,
       FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month,
       fh_seq,
+      FORMAT_DATE('%Y-%m', account_last_fh_date) AS last_fh_month,
+      account_fh_count,
       (had_ppu_before OR had_dep_before) AS already_paying,
       prior_consulting_case,
       IF(first_ppu_date IS NULL, NULL, DATE_DIFF(first_ppu_date, call_date, DAY)) AS days_to_ppu,
@@ -70,6 +72,10 @@ export function normalizeFreeHourRow(row) {
     callDate: toStr(row.call_date),
     month: toStr(row.cohort_month),
     seq: toInt(row.fh_seq, 1),
+    // The account's most recent Free Hour over the full history, not just the
+    // window loaded — lets you filter on how long ago the account last had one.
+    lastFhMonth: toStr(row.last_fh_month),
+    accountFhCount: toInt(row.account_fh_count, 1),
     alreadyPaying: toBool(row.already_paying),
     priorConsultingCase: toBool(row.prior_consulting_case),
     daysToPpu: toInt(row.days_to_ppu),
@@ -121,14 +127,31 @@ export function matchesSegment(call, segment) {
   return true;
 }
 
-/** Apply the screen's filters. Any of them may be omitted. */
-export function filterCalls(calls, { from = null, to = null, consultant = 'all', segment = 'all' } = {}) {
+/**
+ * Apply the screen's filters. Any of them may be omitted.
+ *
+ * `from`/`to` bound the Free Hour itself. `lastFrom`/`lastTo` bound the
+ * account's MOST RECENT Free Hour, which answers a different question: which
+ * accounts has nobody spoken to since a given month, whenever the call in front
+ * of you happened.
+ */
+export function filterCalls(
+  calls,
+  { from = null, to = null, consultant = 'all', segment = 'all', lastFrom = null, lastTo = null } = {},
+) {
   return calls.filter((c) => {
     if (from && c.month < from) return false;
     if (to && c.month > to) return false;
+    if (lastFrom && (c.lastFhMonth ?? '') < lastFrom) return false;
+    if (lastTo && (c.lastFhMonth ?? '') > lastTo) return false;
     if (consultant !== 'all' && c.consultant !== consultant) return false;
     return matchesSegment(c, segment);
   });
+}
+
+/** Distinct months in which accounts most recently had a Free Hour. */
+export function distinctLastFhMonths(calls) {
+  return [...new Set(calls.map((c) => c.lastFhMonth).filter(Boolean))].sort();
 }
 
 // ── Aggregation ────────────────────────────────────────────────────────────

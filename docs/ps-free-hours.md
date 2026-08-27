@@ -23,6 +23,20 @@ Their later billed hours are business as usual, not something the Free Hour
 produced. Counting them would inflate the rate; hiding them would understate how
 many Free Hours the team actually ran.
 
+## The two date filters do different things
+
+**Period** bounds the Free Hour itself — "what did we run in Q1, and how did it
+convert?"
+
+**Last Free Hour** bounds the account's *most recent* Free Hour, over its full
+history. It answers a different question: which accounts has nobody spoken to
+since a given month? A January session on an account last seen in May stays in
+when you filter Last Free Hour to May, because the filter selects the account,
+not the call in front of you.
+
+Both compose, so "sessions we ran in January, on accounts we have not touched
+since March" is one selection.
+
 ## Two traps in the upstream data
 
 **1. Do not count Free Hours from `revenue.Activity`.** It stores
