@@ -402,7 +402,52 @@ function build() {
     }),
   ];
 
-  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT };
+
+  // ── Free Hours ───────────────────────────────────────────────────────────
+  // Shaped to mirror the real distribution so the screen gets designed against
+  // reality: most Free Hours are an account's first and convert around 30%;
+  // repeats are fewer and skew heavily toward accounts already paying, so they
+  // sit outside the rate. See lib/freeHours.js.
+  const freeHour = (o) => ({
+    fh_id: String(o.id),
+    account_record_id: String(o.account),
+    account: o.name,
+    consultant: o.consultant,
+    call_date: o.date,
+    cohort_month: o.date.slice(0, 7),
+    fh_seq: String(o.seq ?? 1),
+    already_paying: String(!!o.alreadyPaying),
+    prior_consulting_case: String(!!o.priorCase),
+    days_to_ppu: o.ppu == null ? null : String(o.ppu),
+    days_to_dep: o.dep == null ? null : String(o.dep),
+    days_to_agreement: o.signed == null ? null : String(o.signed),
+    paid_hours_90d: String(o.hours ?? 0),
+    days_elapsed: String(o.elapsed ?? 120),
+  });
+
+  const FREE_HOURS = [
+    // Converted on a first Free Hour — the common winning shape.
+    freeHour({ id: 8001, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
+    freeHour({ id: 8002, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
+    freeHour({ id: 8003, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
+    freeHour({ id: 8004, account: 4488, name: 'cedar-mill-works', consultant: 'Cheryl Tong', date: iso(-70), dep: 21, signed: 16, hours: 30, elapsed: 70 }),
+    // Did not convert.
+    freeHour({ id: 8005, account: 4501, name: 'atlas-plumbing', consultant: ME_FULL, date: iso(-64), elapsed: 64 }),
+    freeHour({ id: 8006, account: 4523, name: 'quill-and-press', consultant: 'Vinesh Gobin', date: iso(-58), elapsed: 58 }),
+    freeHour({ id: 8007, account: 4544, name: 'bayside-marine', consultant: 'Cheryl Tong', date: iso(-51), elapsed: 51 }),
+    freeHour({ id: 8008, account: 4560, name: 'ridgeline-hvac', consultant: ME_FULL, date: iso(-44), elapsed: 44 }),
+    // Repeat Free Hours: mostly accounts already paying, so outside the rate.
+    freeHour({ id: 8009, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-38), seq: 2, alreadyPaying: true, priorCase: true, hours: 4, elapsed: 38 }),
+    freeHour({ id: 8010, account: 4310, name: 'lumen-fabrication', consultant: 'Vinesh Gobin', date: iso(-30), seq: 2, alreadyPaying: true, priorCase: true, elapsed: 30 }),
+    freeHour({ id: 8011, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-12), seq: 3, alreadyPaying: true, priorCase: true, elapsed: 12 }),
+    // A repeat that did convert — rarer, but it happens.
+    freeHour({ id: 8012, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
+    // Too recent to have had a full 30 days — drives the "still converting" note.
+    freeHour({ id: 8013, account: 4601, name: 'granite-state-tile', consultant: ME_FULL, date: iso(-6), elapsed: 6 }),
+    freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),
+  ];
+
+  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS };
 }
 
 let cache = null;

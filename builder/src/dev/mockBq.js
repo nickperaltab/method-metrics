@@ -46,6 +46,7 @@ const T = {
   account: 'revenue.Account',
   opportunityFit: 'call_prep.opportunity_fit',
   activity: 'revenue.Activity',
+  freeHourOutcomes: 'call_prep.free_hour_outcomes',
 };
 
 const hits = (sql, table) => sql.includes(table);
@@ -419,6 +420,13 @@ const ROUTES = [
       const rows = orderCol ? latestPerAccount(scoped, orderCol) : scoped;
       return rows.sort(desc('snapshot_date'));
     },
+  },
+  {
+    name: 'free hour outcomes',
+    when: (sql) => hits(sql, T.freeHourOutcomes),
+    // The screen filters by period, consultant and segment client-side, so the
+    // whole set comes back and only the ORDER BY has to be honoured here.
+    rows: () => [...fixtures().FREE_HOURS].sort((a, b) => b.call_date.localeCompare(a.call_date)),
   },
   {
     name: 'handoffs',

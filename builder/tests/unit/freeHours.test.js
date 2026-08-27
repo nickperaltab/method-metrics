@@ -1,0 +1,290 @@
+import { describe, it, expect } from 'vitest';
+import {
+  FREE_HOUR_VIEW,
+  FAIR_WINDOW_DAYS,
+  buildFreeHoursSql,
+  normalizeFreeHourRow,
+  conversionType,
+  daysToConversion,
+  canConvert,
+  isRepeat,
+  matchesSegment,
+  filterCalls,
+  median,
+  percent,
+  summarize,
+  byMonth,
+  byConsultant,
+  bySequence,
+  conversions,
+  fetchFreeHours,
+} from '../../src/lib/freeHours.js';
+
+/** A normalized Free Hour with only the fields an assertion cares about set. */
+const fh = (o = {}) => ({
+  id: o.id ?? 1,
+  accountRecordId: o.accountRecordId ?? 100,
+  account: o.account ?? 'acme',
+  consultant: o.consultant ?? 'Ada Lovelace',
+  callDate: o.callDate ?? '2026-03-10',
+  month: o.month ?? (o.callDate ?? '2026-03-10').slice(0, 7),
+  seq: o.seq ?? 1,
+  alreadyPaying: o.alreadyPaying ?? false,
+  priorConsultingCase: o.priorConsultingCase ?? false,
+  daysToPpu: o.daysToPpu ?? null,
+  daysToDep: o.daysToDep ?? null,
+  daysToAgreement: o.daysToAgreement ?? null,
+  paidHours90d: o.paidHours90d ?? 0,
+  daysElapsed: o.daysElapsed ?? 200,
+});
+
+describe('buildFreeHoursSql', () => {
+  it('reads the view and bounds the period to the reporting start', () => {
+    const sql = buildFreeHoursSql();
+    expect(sql).toContain(FREE_HOUR_VIEW);
+    expect(sql).toMatch(/cohort_month >= DATE '2026-01-01'/);
+    expect(sql).toMatch(/ORDER BY call_date DESC/);
+  });
+
+  it('computes day offsets in SQL so the client never does date maths', () => {
+    const sql = buildFreeHoursSql();
+    expect(sql).toMatch(/DATE_DIFF\(first_ppu_date, call_date, DAY\)\) AS days_to_ppu/);
+    expect(sql).toMatch(/DATE_DIFF\(first_dep_date, call_date, DAY\)\) AS days_to_dep/);
+    expect(sql).toMatch(/DATE_DIFF\(first_agreement_date, call_date, DAY\)\) AS days_to_agreement/);
+  });
+
+  it('refuses a malformed start rather than interpolating it', () => {
+    const sql = buildFreeHoursSql("2026-01-01'; DROP TABLE x --");
+    expect(sql).toContain("DATE '2026-01-01'");
+    expect(sql).not.toContain('DROP TABLE');
+  });
+});
+
+describe('normalizeFreeHourRow', () => {
+  it('types the BQ REST strings, including string booleans', () => {
+    const row = normalizeFreeHourRow({
+      fh_id: '9', account_record_id: '4242', account: 'acme', consultant: 'Ada Lovelace',
+      call_date: '2026-03-10', cohort_month: '2026-03', fh_seq: '2',
+      already_paying: 'true', prior_consulting_case: 'false',
+      days_to_ppu: '12', days_to_dep: '', days_to_agreement: '4',
+      paid_hours_90d: '18.5', days_elapsed: '90',
+    });
+    expect(row).toMatchObject({
+      id: 9, accountRecordId: 4242, seq: 2,
+      alreadyPaying: true, priorConsultingCase: false,
+      daysToPpu: 12, daysToDep: null, daysToAgreement: 4,
+      paidHours90d: 18.5, daysElapsed: 90,
+    });
+  });
+
+  it('treats a day-0 conversion as real, not as missing', () => {
+    const row = normalizeFreeHourRow({ fh_id: '1', days_to_agreement: '0' });
+    expect(row.daysToAgreement).toBe(0);
+    expect(conversionType({ ...fh(), daysToPpu: 0 })).toBe('ppu');
+  });
+});
+
+describe('conversionType', () => {
+  it('is null when nothing followed the call', () => {
+    expect(conversionType(fh())).toBeNull();
+  });
+
+  it('credits whichever paid engagement came first', () => {
+    expect(conversionType(fh({ daysToPpu: 30, daysToDep: 5 }))).toBe('dep');
+    expect(conversionType(fh({ daysToPpu: 5, daysToDep: 30 }))).toBe('ppu');
+  });
+
+  it('bounds to the window when one is given', () => {
+    const call = fh({ daysToPpu: 45 });
+    expect(conversionType(call)).toBe('ppu');
+    expect(conversionType(call, FAIR_WINDOW_DAYS)).toBeNull();
+  });
+
+  it('ignores a negative offset — paid work before the call is not a conversion', () => {
+    expect(conversionType(fh({ daysToPpu: -3 }))).toBeNull();
+  });
+});
+
+describe('daysToConversion', () => {
+  it('returns the offset of the engagement that was credited', () => {
+    expect(daysToConversion(fh({ daysToPpu: 5, daysToDep: 30 }))).toBe(5);
+    expect(daysToConversion(fh())).toBeNull();
+  });
+});
+
+describe('segments', () => {
+  it('splits first vs repeat on the account sequence', () => {
+    expect(isRepeat(fh({ seq: 1 }))).toBe(false);
+    expect(isRepeat(fh({ seq: 2 }))).toBe(true);
+    expect(matchesSegment(fh({ seq: 1 }), 'first')).toBe(true);
+    expect(matchesSegment(fh({ seq: 1 }), 'repeat')).toBe(false);
+    expect(matchesSegment(fh({ priorConsultingCase: true }), 'prior')).toBe(true);
+    expect(matchesSegment(fh({ seq: 7 }), 'all')).toBe(true);
+  });
+
+  it('excludes accounts already buying PS work from the rate', () => {
+    expect(canConvert(fh({ alreadyPaying: true }))).toBe(false);
+    expect(canConvert(fh())).toBe(true);
+  });
+});
+
+describe('filterCalls', () => {
+  const calls = [
+    fh({ id: 1, month: '2026-01', consultant: 'Ada Lovelace', seq: 1 }),
+    fh({ id: 2, month: '2026-03', consultant: 'Grace Hopper', seq: 2 }),
+    fh({ id: 3, month: '2026-05', consultant: 'Ada Lovelace', seq: 1 }),
+  ];
+
+  it('bounds the period inclusively at both ends', () => {
+    expect(filterCalls(calls, { from: '2026-03', to: '2026-05' }).map((c) => c.id)).toEqual([2, 3]);
+    expect(filterCalls(calls, { from: '2026-01', to: '2026-01' }).map((c) => c.id)).toEqual([1]);
+  });
+
+  it('combines consultant and segment with the period', () => {
+    expect(filterCalls(calls, { consultant: 'Ada Lovelace' }).map((c) => c.id)).toEqual([1, 3]);
+    expect(filterCalls(calls, { segment: 'repeat' }).map((c) => c.id)).toEqual([2]);
+    expect(filterCalls(calls, { from: '2026-03', consultant: 'Ada Lovelace' }).map((c) => c.id)).toEqual([3]);
+  });
+});
+
+describe('median', () => {
+  it('handles odd, even and empty', () => {
+    expect(median([5, 1, 3])).toBe(3);
+    expect(median([1, 2, 3, 6])).toBe(3); // rounded mean of the middle pair
+    expect(median([])).toBeNull();
+  });
+
+  it('drops nulls rather than treating them as zero', () => {
+    expect(median([null, 10, null, 20])).toBe(15);
+  });
+});
+
+describe('percent', () => {
+  it('is null on an empty denominator instead of NaN', () => {
+    expect(percent(0, 0)).toBeNull();
+    expect(percent(1, 3)).toBe(33);
+  });
+});
+
+describe('summarize', () => {
+  const calls = [
+    fh({ id: 1, daysToPpu: 4, daysToAgreement: 2, paidHours90d: 10 }),
+    fh({ id: 2, daysToDep: 40, daysToAgreement: 35, paidHours90d: 6 }),
+    fh({ id: 3 }),
+    fh({ id: 4, alreadyPaying: true, daysToDep: 3 }),
+  ];
+
+  it('keeps already-paying calls in the delivered count but out of the rate', () => {
+    const t = summarize(calls);
+    expect(t.delivered).toBe(4);
+    expect(t.alreadyPaying).toBe(1);
+    expect(t.eligible).toBe(3);
+    expect(t.converted).toBe(2);
+    expect(t.rate).toBe(67);
+  });
+
+  it('splits PPU and Dedicated and sums only converted hours', () => {
+    const t = summarize(calls);
+    expect(t.ppu).toBe(1);
+    expect(t.dep).toBe(1);
+    expect(t.paidHours).toBe(16);
+  });
+
+  it('reports the like-for-like rate on the same window on both sides', () => {
+    const t = summarize(calls);
+    // three eligible, all old enough; only the day-4 one converted inside 30 days
+    expect(t.fairReady).toBe(3);
+    expect(t.fairConverted).toBe(1);
+    expect(t.fairRate).toBe(33);
+    // and it is lower than the unbounded rate, which is the whole point
+    expect(t.fairRate).toBeLessThan(t.rate);
+  });
+
+  it('measures time to signature from the agreement, not the first billed hour', () => {
+    const t = summarize(calls);
+    expect(t.signedCount).toBe(2);
+    expect(t.medianDaysToAgreement).toBe(19); // (2 + 35) / 2
+  });
+
+  it('counts calls too recent to have had the full window', () => {
+    const t = summarize([fh({ daysElapsed: 3 }), fh({ daysElapsed: 400 })]);
+    expect(t.stillYoung).toBe(1);
+    expect(t.fairReady).toBe(1);
+  });
+
+  it('does not divide by zero on an empty set', () => {
+    const t = summarize([]);
+    expect(t.delivered).toBe(0);
+    expect(t.rate).toBeNull();
+    expect(t.medianDaysToAgreement).toBeNull();
+  });
+});
+
+describe('byMonth', () => {
+  it('returns one row per month, oldest first, with the youngest call age', () => {
+    const rows = byMonth([
+      fh({ month: '2026-05', daysElapsed: 5 }),
+      fh({ month: '2026-01', daysElapsed: 200 }),
+      fh({ month: '2026-05', daysElapsed: 40 }),
+    ]);
+    expect(rows.map((r) => r.month)).toEqual(['2026-01', '2026-05']);
+    expect(rows[1].delivered).toBe(2);
+    expect(rows[1].youngest).toBe(5);
+  });
+});
+
+describe('byConsultant', () => {
+  it('ranks by rate, then by volume', () => {
+    const rows = byConsultant([
+      fh({ consultant: 'Low', daysToPpu: null }),
+      fh({ consultant: 'High', daysToPpu: 3 }),
+      fh({ consultant: 'High', daysToPpu: 3 }),
+    ]);
+    expect(rows[0].consultant).toBe('High');
+    expect(rows[0].rate).toBe(100);
+    expect(rows[1].rate).toBe(0);
+  });
+});
+
+describe('bySequence', () => {
+  it('buckets 1st/2nd/3rd/4th+ and always returns all four', () => {
+    const rows = bySequence([fh({ seq: 1 }), fh({ seq: 2 }), fh({ seq: 9 })]);
+    expect(rows.map((r) => r.key)).toEqual(['1st', '2nd', '3rd', '4th+']);
+    expect(rows[0].delivered).toBe(1);
+    expect(rows[2].delivered).toBe(0);
+    expect(rows[3].delivered).toBe(1);
+  });
+
+  it('surfaces that repeats skew toward accounts already paying', () => {
+    const rows = bySequence([
+      fh({ seq: 1 }),
+      fh({ seq: 2, alreadyPaying: true }),
+      fh({ seq: 2, alreadyPaying: true }),
+    ]);
+    expect(rows[0].alreadyPaying).toBe(0);
+    expect(rows[1].alreadyPaying).toBe(2);
+    expect(rows[1].eligible).toBe(0);
+    expect(rows[1].rate).toBeNull();
+  });
+});
+
+describe('conversions', () => {
+  it('lists only converted, eligible calls, newest first', () => {
+    const rows = conversions([
+      fh({ id: 1, callDate: '2026-01-05', daysToPpu: 2 }),
+      fh({ id: 2, callDate: '2026-04-05', daysToDep: 9 }),
+      fh({ id: 3, callDate: '2026-05-05' }),
+      fh({ id: 4, callDate: '2026-06-05', alreadyPaying: true, daysToPpu: 1 }),
+    ]);
+    expect(rows.map((r) => r.id)).toEqual([2, 1]);
+  });
+});
+
+describe('fetchFreeHours', () => {
+  it('normalizes every row it is handed', async () => {
+    const query = async () => ({ rows: [{ fh_id: '1', already_paying: 'true', fh_seq: '3' }] });
+    const rows = await fetchFreeHours({ query });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 1, alreadyPaying: true, seq: 3 });
+  });
+});

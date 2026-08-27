@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 // returning users and on the picker for everyone else.
 const PS_ITEMS = [
   { path: '/call-prep', label: 'Call Prep', icon: '☎' },
+  { path: '/free-hours', label: 'Free Hours', icon: '◷' },
 ];
 
 const ADMIN_ITEMS = [
