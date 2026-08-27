@@ -9,6 +9,12 @@ import { describe, it, expect } from 'vitest';
 import { routeMockSql } from '../../src/dev/mockBq.js';
 import { ME_FULL, ME_SHORT } from '../../src/dev/fixtures/ps.js';
 import {
+  buildFreeHoursSql,
+  normalizeFreeHourRow,
+  summarize,
+  bySequence,
+} from '../../src/lib/freeHours.js';
+import {
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
@@ -232,6 +238,41 @@ describe('mock router — handoffs', () => {
     expect(ids).toContain(900109); // incoming to me
     expect(ids).toContain(900106); // outgoing from me
     expect(ids).not.toContain(900110); // neither side is me
+  });
+});
+
+describe('free hours', () => {
+  const calls = () => rowsFor(buildFreeHoursSql()).map(normalizeFreeHourRow);
+
+  it('routes the real SQL and normalizes what comes back', () => {
+    const rows = calls();
+    expect(rows.length).toBeGreaterThan(0);
+    // A fixture typo would surface here as nulls rather than as a blank screen.
+    expect(rows.every((c) => c.account && c.consultant && c.callDate && c.month)).toBe(true);
+    expect(rows.every((c) => Number.isInteger(c.seq) && c.seq >= 1)).toBe(true);
+  });
+
+  it('honours the newest-first ordering the screen relies on', () => {
+    const dates = calls().map((c) => c.callDate);
+    expect([...dates].sort().reverse()).toEqual(dates);
+  });
+
+  it('summarizes into a shape the screen can render', () => {
+    const t = summarize(calls());
+    expect(t.delivered).toBeGreaterThan(0);
+    expect(t.eligible + t.alreadyPaying).toBe(t.delivered);
+    expect(t.converted).toBeLessThanOrEqual(t.eligible);
+    expect(t.ppu + t.dep).toBe(t.converted);
+    expect(t.medianDaysToAgreement).not.toBeNull();
+  });
+
+  it('keeps repeat Free Hours skewed toward accounts already paying', () => {
+    const seq = bySequence(calls());
+    const first = seq.find((b) => b.key === '1st');
+    const second = seq.find((b) => b.key === '2nd');
+    expect(first.delivered).toBeGreaterThan(0);
+    expect(first.alreadyPaying).toBe(0);
+    expect(second.alreadyPaying).toBeGreaterThan(0);
   });
 });
 
