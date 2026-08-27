@@ -1,0 +1,92 @@
+version: 2
+
+models:
+  - name: int_consultant_work
+    description: >
+      Consultant-delivered work, one row per time entry. Answers "who did what on which
+      account, and for how long" without the caller needing to know the TimeTracking vs
+      Activity grain trap: EntityRecordID is the METHOD STAFF MEMBER on TimeTracking but
+      the CUSTOMER on Activity, so joining the wrong one to Entity silently yields
+      customer names in a consultant column. Excludes internal attendance rows
+      (IsAttendenceEntry — clock-in/out, no account) and deleted rows. Entries with no
+      account FK are kept with a NULL account so consultant hour totals still reconcile
+      against raw TimeTracking. Grading fields (AdminRating, ValidatedBy, AdminComments)
+      are NOT here — PSDEPChecklistEntry is not yet mirrored to BigQuery.
+    columns:
+      - name: time_tracking_record_id
+        description: PK. TimeTracking.RecordID.
+        tests: [not_null, unique]
+      - name: consultant_record_id
+        description: Method staff member who logged the time. TimeTracking.EntityRecordID.
+        tests: [not_null]
+      - name: consultant
+        description: Staff member's display name, from Entity.EntityFullName.
+        tests: [not_null]
+      - name: account_record_id
+        description: >
+          Method account the work was billed to. TimeTracking.MethodCompanyAccountRecordID,
+          joins Account.RecordID. NULL on ~5% of non-attendance entries.
+      - name: company_account
+        description: Account slug from Account.CompanyAccount. NULL when account_record_id is NULL.
+      - name: customer_record_id
+        description: Customer entity the work was for. TimeTracking.CustomerRecordID.
+      - name: txn_date
+        description: Date the work was performed.
+        tests: [not_null]
+      - name: txn_month
+        description: Month start of txn_date, for period rollups.
+        tests: [not_null]
+      - name: hours
+        description: DurationHours + DurationMinutes/60, rounded to 4 decimals. Excludes BreakMinutes.
+        tests: [not_null]
+      - name: method_support_type
+        description: Care model the entry was logged under (e.g. Dedicated).
+      - name: billable_status
+        description: Billing state of the entry (e.g. HasBeenBilled).
+      - name: is_invoiced
+        description: Whether the entry has been invoiced.
+      - name: is_demo
+        description: Whether the entry was logged as a demo.
+      - name: case_record_id
+        description: Case the time was logged against, when any.
+      - name: activity_record_id
+        description: Activity the time was logged against, when any.
+      - name: notes
+        description: >
+          Free-text note body. Richest qualitative record of what was actually done —
+          consultants paste checklist bodies and session summaries here.
+
+unit_tests:
+  - name: consultant_work_excludes_attendance_and_deleted
+    model: int_consultant_work
+    given:
+      - input: source('revenue', 'TimeTracking')
+        rows:
+          - { RecordID: 1, EntityRecordID: 10, MethodCompanyAccountRecordID: 100, CustomerRecordID: 900, TxnDate: '2026-07-10', DurationHours: 2, DurationMinutes: 30, MethodSupportType: 'Dedicated', BillableStatus: 'HasBeenBilled', IsInvoiced: true, IsDemo: false, CaseRecordID: null, ActivityRecordID: null, Notes: 'did the thing', IsDeleted: false, IsAttendenceEntry: false }
+          - { RecordID: 2, EntityRecordID: 10, MethodCompanyAccountRecordID: null, CustomerRecordID: null, TxnDate: '2026-07-11', DurationHours: 8, DurationMinutes: 0,  MethodSupportType: null, BillableStatus: null, IsInvoiced: false, IsDemo: false, CaseRecordID: null, ActivityRecordID: null, Notes: null, IsDeleted: false, IsAttendenceEntry: true }
+          - { RecordID: 3, EntityRecordID: 10, MethodCompanyAccountRecordID: 100, CustomerRecordID: 900, TxnDate: '2026-07-12', DurationHours: 1, DurationMinutes: 0,  MethodSupportType: 'Dedicated', BillableStatus: 'HasBeenBilled', IsInvoiced: false, IsDemo: false, CaseRecordID: null, ActivityRecordID: null, Notes: null, IsDeleted: true,  IsAttendenceEntry: false }
+      - input: source('revenue', 'Entity')
+        rows:
+          - { RecordID: 10, EntityFullName: 'Justin Lawlor' }
+      - input: source('revenue', 'Account')
+        rows:
+          - { RecordID: 100, CompanyAccount: 'centralauctiongroup' }
+    expect:
+      rows:
+        - { time_tracking_record_id: 1, consultant: 'Justin Lawlor', company_account: 'centralauctiongroup', txn_date: '2026-07-10', hours: 2.5 }
+
+  - name: consultant_work_keeps_entries_with_no_account
+    model: int_consultant_work
+    given:
+      - input: source('revenue', 'TimeTracking')
+        rows:
+          - { RecordID: 4, EntityRecordID: 10, MethodCompanyAccountRecordID: null, CustomerRecordID: 900, TxnDate: '2026-07-13', DurationHours: 0, DurationMinutes: 45, MethodSupportType: null, BillableStatus: null, IsInvoiced: false, IsDemo: false, CaseRecordID: null, ActivityRecordID: null, Notes: null, IsDeleted: false, IsAttendenceEntry: false }
+      - input: source('revenue', 'Entity')
+        rows:
+          - { RecordID: 10, EntityFullName: 'Justin Lawlor' }
+      - input: source('revenue', 'Account')
+        rows:
+          - { RecordID: 100, CompanyAccount: 'centralauctiongroup' }
+    expect:
+      rows:
+        - { time_tracking_record_id: 4, consultant: 'Justin Lawlor', account_record_id: null, company_account: null, hours: 0.75 }
