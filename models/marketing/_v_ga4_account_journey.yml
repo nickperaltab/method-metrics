@@ -1,0 +1,104 @@
+version: 2
+
+models:
+  - name: v_ga4_account_journey
+    description: |
+      CONSUMER VIEW. Page-by-page website journeys for visitors we can tie to a
+      Method account. Point Looker and ad-hoc analysis here, not at the raw
+      GA4 export.
+
+      HOW THE STITCH WORKS. user_pseudo_id is the _ga cookie and is stable per
+      browser. Most events carry no identity. But if any event on that browser
+      exposes the account (the signup completion URL, or a sign-in returnUrl),
+      the browser binds to the account and every other event on it is
+      attributed too, including pages read weeks earlier while anonymous. That
+      is why this works retroactively over data already collected rather than
+      only from the day identification was switched on.
+
+      IDENTITY. Uses account_slug parsed from the URL, deliberately NOT GA4's
+      user_id. The slug resolves for every event ever exported; user_id only
+      exists from 2026-08-31 and briefly carried malformed values that day.
+
+      GRAIN. One row per (browser, pageview). Only page_view events. A browser
+      appears only if it was bound to an account at some point.
+
+      READ THIS BEFORE QUOTING ANYTHING:
+
+      * No history before 2026-08-28. The GA4 export started then and does not
+        backfill. Journeys for customers acquired earlier do not exist.
+      * As of 2026-08-31 the sample is four days old and 90% sign-in traffic.
+        Only 3 blog pageviews are present. It is not yet usable for content
+        attribution; revisit once several months have accumulated.
+      * One browser is not one person. Read on a phone, sign in on a laptop,
+        and they are two unlinked rows. Cross-device is unsolved.
+      * GA4 is switched off inside the product (the GA4 config tag excludes
+        Method App Traffic), so in-app behaviour is largely absent by design.
+      * QA and dev hostnames are already excluded upstream in int_ga4_events.
+    columns:
+      - name: account_slug
+        description: Method account slug parsed from the URL. The join key. Lowercase.
+      - name: entity_record_id
+        description: Customer-level key from revenue.Account. NULL when the slug does not match a known account.
+      - name: company_account
+        description: CompanyAccount from revenue.Account. NULL when unmatched.
+      - name: is_known_account
+        description: >
+          TRUE when account_slug matched revenue.Account. About 24% do not,
+          mostly QA accounts (m11*) and nightly-mirror lag on same-day signups.
+          Filter on this for anything customer-facing.
+      - name: signup_date
+        description: Account signup date from revenue.Account.
+      - name: first_paid_date
+        description: First SaaS invoice date. Uses the 0001-01-01 sentinel for never-paid.
+      - name: is_paying
+        description: TRUE when first_paid_date is past the never-paid sentinel.
+      - name: user_pseudo_id
+        description: GA4 client id, the _ga cookie. Per-browser. The stitch key.
+      - name: account_count
+        description: >
+          Distinct accounts seen on this browser. Greater than 1 means a shared
+          machine, agency or partner; the view keeps only the most recent
+          binding. Treat those journeys with suspicion.
+      - name: step
+        description: 1-based position of this pageview within the browser's journey, ordered by time.
+      - name: total_steps
+        description: Total pageviews in this browser's journey. Often 1, which is a thin journey rather than a broken one.
+      - name: is_first_page
+        description: TRUE when step = 1. The earliest page we ever saw this browser on, which is not necessarily their true first visit.
+      - name: is_last_page
+        description: TRUE when step = total_steps.
+      - name: minutes_into_journey
+        description: Minutes between this pageview and the browser's first recorded pageview.
+      - name: was_identified_at_the_time
+        description: >
+          TRUE when this specific event carried the account in its URL. FALSE
+          means it was anonymous when it happened and was attributed later by
+          the stitch. The FALSE rows are the ones this model exists to recover.
+      - name: event_date
+        description: Event date in the property timezone.
+      - name: event_at
+        description: Event timestamp, UTC.
+      - name: is_intraday
+        description: TRUE when sourced from a partial intraday table. Exclude for anything that must reconcile.
+      - name: page_area
+        description: >
+          Coarse bucket: blog, pricing_guides, resources, marketing_site,
+          campaign_landing, signup, signin, forums, app, unknown.
+      - name: page_host
+        description: Hostname of the page viewed.
+      - name: page_path
+        description: Path of the page viewed, query string and trailing slash stripped.
+      - name: page_referrer
+        description: Referring URL where GA4 captured one.
+      - name: traffic_source
+        description: GA4 session traffic source.
+      - name: traffic_medium
+        description: GA4 session traffic medium.
+      - name: traffic_campaign
+        description: GA4 session campaign name.
+      - name: gclid
+        description: Google Ads click id when present. Bridges to the google_ads dataset. Sparse.
+      - name: device_category
+        description: desktop / mobile / tablet.
+      - name: country
+        description: Country from GA4 geo enrichment.

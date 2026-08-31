@@ -1,0 +1,87 @@
+version: 2
+
+models:
+  - name: int_ga4_events
+    description: |
+      Flattened GA4 events with QA/dev traffic removed. The only model that
+      should read the raw analytics_274554544 export.
+
+      Excludes ~23.3% of raw events that come from automated test instances
+      (m11*.methodwarehouse.com regression suites, mta*) and local dev boxes
+      (*.methodlocal.com) carrying the production GTM container. Regex validated
+      against all 290 hostnames in the export: 14,993 of 64,298 events excluded,
+      9 missed, zero false positives. Customer app subdomains on method.me are
+      real traffic and are kept.
+
+      GRAIN: one row per GA4 event.
+
+      NO IDENTITY YET. user_id is NULL on 100% of rows because nothing writes it
+      at sign-in. Events cannot be joined to a Method account. user_pseudo_id
+      (the _ga client id) is the only visitor handle, and it is per-browser, so
+      any journey built here is anonymous and does not survive a device change.
+
+      NO HISTORY BEFORE 2026-08-28. The GA4 BigQuery link was created that day
+      and GA4 does not backfill.
+
+      MIXED COMPLETENESS. Spans complete daily tables and partial intraday
+      tables. Filter is_intraday = false for anything that must reconcile.
+    columns:
+      - name: event_date
+        description: Event date in the property's timezone, parsed from the GA4 event_date string.
+      - name: event_at
+        description: Event timestamp (UTC), from event_timestamp microseconds.
+      - name: is_intraday
+        description: TRUE when the row came from an events_intraday_* table (partial, best-effort). FALSE for the complete daily export. Exclude intraday for reconciliation.
+      - name: event_name
+        description: GA4 event name (page_view, session_start, form_start, scroll, etc.).
+      - name: user_pseudo_id
+        description: GA4 client id, the value of the _ga cookie. Per-browser, not per-person. The only visitor identifier available today.
+      - name: user_id
+        description: >
+          GA4 reserved User-ID, set by GTM from 2026-08-31. Kept for GA4's own UI
+          reporting and cross-device stitching. PREFER account_slug for warehouse
+          joins: user_id has no history before 2026-08-31 and briefly carried
+          malformed full-URL values that day, which this model nulls out.
+      - name: account_slug
+        description: >
+          Method account slug parsed from the URL. THIS is the identity the
+          warehouse should join on, not user_id. Sourced from ?accountName= on
+          the signup completion page and from ?returnUrl=https://<slug>.method.me
+          on sign-in, so it resolves for every event ever exported rather than
+          only from the day GTM identification was switched on. Non-account
+          subdomains (www, grow, forums, help, info, blog, status, signin,
+          signup) are excluded. Joins to revenue.Account.CompanyAccount; about
+          24% do not match, mostly QA accounts and nightly-mirror lag on
+          same-day signups.
+      - name: page_host
+        description: Hostname parsed from page_location, lowercased. NULL on events with no page_location.
+      - name: page_path
+        description: Path portion of page_location with query string and trailing slash stripped. NULL when empty.
+      - name: page_location
+        description: Full page URL as GA4 recorded it.
+      - name: page_referrer
+        description: Referring URL for the pageview, where GA4 captured one.
+      - name: page_title
+        description: Document title at the time of the event.
+      - name: ga_session_id
+        description: GA4 session identifier. Unique only within a user_pseudo_id, so key sessions as (user_pseudo_id, ga_session_id).
+      - name: gclid
+        description: Google Ads click id when present. Bridges to the google_ads dataset. Sparse (285 of 64,414 events at time of writing).
+      - name: user_type
+        description: Custom parameter pushed by the sign-in app's dataLayer (e.g. SignedUp_More_1_Day_Ago). Coarse, not an identity.
+      - name: traffic_source
+        description: GA4's session traffic source dimension.
+      - name: traffic_medium
+        description: GA4's session traffic medium dimension.
+      - name: traffic_campaign
+        description: GA4's session campaign name dimension.
+      - name: device_category
+        description: desktop / mobile / tablet.
+      - name: country
+        description: Country from GA4 geo enrichment.
+      - name: page_area
+        description: >
+          Coarse bucket over page_host and page_path so downstream models stop
+          re-deriving it. One of blog, pricing_guides, resources, marketing_site,
+          campaign_landing, signup, signin, forums, app, unknown. `app` is real
+          customer usage on *.method.me instances, not noise.

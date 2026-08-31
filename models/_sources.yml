@@ -187,6 +187,26 @@ sources:
       - name: sheet_cac_raw
         description: Long-format rows (source_tab, block, channel, measure, month, scenario, value) from the marketing tracker's CAC:ARR 2025/2026 tabs. Channel names match revenue.int_customers.AttributionChannel where 1:1; TOTAL and sub-split blocks (PPC_TRIALGEN, PPC_BRANDING, Partners_NO_EVENTS) are non-canonical.
 
+  - name: ga4
+    database: project-for-method-dw
+    schema: analytics_274554544
+    description: |
+      GA4 BigQuery Export for the method.me property (measurement id
+      G-L2HEZNW53E), linked 2026-08-28. Daily `events_YYYYMMDD` plus
+      best-effort `events_intraday_*`. There is NO history before
+      2026-08-28 and GA4 does not backfill.
+
+      Identity: prefer `account_slug` from int_ga4_events, which is parsed
+      from the URL and therefore resolves for every event ever exported.
+      GA4's own `user_id` is only populated from 2026-08-31 (set by GTM) and
+      briefly carried malformed full-URL values that day.
+
+      ~23% of events come from QA/dev hostnames. Always read int_ga4_events,
+      never the raw export.
+    tables:
+      - name: events_*
+        description: One row per GA4 event, nested event_params and user_properties. Wildcard covers both events_YYYYMMDD (complete, daily) and events_intraday_YYYYMMDD (partial, best-effort). Filter and flatten via int_ga4_events.
+
   - name: v7_classification
     database: project-for-method-dw
     schema: v7_classification
