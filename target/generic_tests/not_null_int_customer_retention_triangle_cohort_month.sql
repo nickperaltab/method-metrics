@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="cohort_month", model=get_where_subquery(ref('int_customer_retention_triangle'))) }}

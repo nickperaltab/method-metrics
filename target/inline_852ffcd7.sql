@@ -1,1 +1,0 @@
-SELECT FORMAT_DATE('%Y-%m', DATE_TRUNC(Date, MONTH)) p, ROUND(SUM(Forecasted_Syncs),0) v FROM `project-for-method-dw.revenue.method_forecast` WHERE Date >= DATE_TRUNC(CURRENT_DATE(),MONTH) AND Date < DATE_ADD(DATE_TRUNC(CURRENT_DATE(),MONTH), INTERVAL 1 MONTH) GROUP BY 1

@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="movement_kind", model=get_where_subquery(ref('int_mrr_movement_decomposed'))) }}

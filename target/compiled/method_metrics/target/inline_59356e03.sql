@@ -1,1 +1,0 @@
-select count(*) as total_rows, countif(value is null) as null_rows, countif(value = 0) as zero_rows from `project-for-method-dw`.`revenue_metrics`.`v_metric__sync_conversion_rate_weekly`

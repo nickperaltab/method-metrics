@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="motion", model=get_where_subquery(ref('int_motion_funnel'))) }}

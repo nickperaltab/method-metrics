@@ -1,1 +1,0 @@
-{{ test_accepted_values(column_name="user_tier", model=get_where_subquery(ref('int_motion_funnel')), values=["Solo","Small (2-4)","SMB (5-10)","Mid (11+)","Unknown"]) }}

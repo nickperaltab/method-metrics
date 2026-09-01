@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="period", model=get_where_subquery(ref('v_metric__conversions_mtd'))) }}

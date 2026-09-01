@@ -1,1 +1,0 @@
-SELECT FORMAT_DATE('%Y-%m', SyncDate) AS period, COUNT(*) AS n FROM `project-for-method-dw.revenue.int_syncs` GROUP BY 1 ORDER BY 1 DESC LIMIT 12

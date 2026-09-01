@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="days_in_month", model=get_where_subquery(ref('int_method_monday'))) }}

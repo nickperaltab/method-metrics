@@ -1,7 +1,0 @@
-
-SELECT 'm295_new' k, FORMAT_DATE('%Y-%m', period) p, value FROM `project-for-method-dw.revenue_metrics.v_metric__syncs_trajectory`
-UNION ALL SELECT 'm296_new', FORMAT_DATE('%Y-%m', period), value FROM `project-for-method-dw.revenue_metrics.v_metric__conversions_trajectory`
-UNION ALL SELECT 'm402', FORMAT_DATE('%Y-%m', period), value FROM `project-for-method-dw.revenue_metrics.v_metric__sync_conversion_rate_forecasted` WHERE period=DATE_TRUNC(CURRENT_DATE(),MONTH)
-UNION ALL SELECT 'm295_OLD', FORMAT_DATE('%Y-%m', CURRENT_DATE()), ROUND(SAFE_DIVIDE(COUNT(DISTINCT CompanyAccount), (EXTRACT(DAY FROM CURRENT_DATE()) - 1)) * EXTRACT(DAY FROM DATE_SUB(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH), INTERVAL 1 DAY)), 0) FROM `project-for-method-dw.revenue.int_syncs` WHERE SyncDate >= DATE_TRUNC(CURRENT_DATE(), MONTH) AND SyncDate < CURRENT_DATE()
-UNION ALL SELECT 'm296_OLD', FORMAT_DATE('%Y-%m', CURRENT_DATE()), ROUND(SAFE_DIVIDE(COUNT(DISTINCT CompanyAccount), (EXTRACT(DAY FROM CURRENT_DATE()) - 1)) * EXTRACT(DAY FROM DATE_SUB(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH), INTERVAL 1 DAY)), 0) FROM `project-for-method-dw.revenue.int_conversions` WHERE FirstSaaSInvoiceTxnDate >= DATE_TRUNC(CURRENT_DATE(), MONTH) AND FirstSaaSInvoiceTxnDate < CURRENT_DATE()
-ORDER BY 1

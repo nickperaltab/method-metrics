@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS `project-for-method-dw.revenue.method_forecast_typed`

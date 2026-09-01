@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="entity_record_id", model=get_where_subquery(ref('int_customer_mrr_lines'))) }}

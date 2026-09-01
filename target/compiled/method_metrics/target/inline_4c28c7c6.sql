@@ -1,1 +1,0 @@
-SELECT 'm401' k, FORMAT_DATE('%Y-%m', period) AS period, value FROM `project-for-method-dw.revenue_metrics.v_metric__sync_conversion_rate_budgeted` UNION ALL SELECT 'm402', FORMAT_DATE('%Y-%m', period), value FROM `project-for-method-dw.revenue_metrics.v_metric__sync_conversion_rate_forecasted` ORDER BY 1,2 DESC
