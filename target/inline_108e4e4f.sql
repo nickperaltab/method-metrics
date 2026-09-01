@@ -1,1 +1,0 @@
-SELECT 1 AS x FROM `project-for-method-dw.revenue.method_forecast_typed`

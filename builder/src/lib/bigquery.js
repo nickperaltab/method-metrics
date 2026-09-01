@@ -37,6 +37,24 @@ const BQ_SCOPES = [
 // events-only scope. Still read-only — nothing here writes to a calendar.
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
+// BigQuery job labels. Every job this app submits carries app=method-metrics so
+// warehouse audits can attribute cost and volume directly instead of inferring
+// it from the shape of the SQL.
+//
+// `surface` is read from the route rather than fixed: queryBq backs scorecards,
+// the chart builder, call prep and the registry alike, so a constant would
+// mislabel most jobs. Label keys and values must be lowercase letters, digits,
+// dashes or underscores, max 63 chars, keys starting with a letter.
+function currentSurface() {
+  if (typeof window === 'undefined') return 'unknown';
+  const seg = (window.location.hash || '').replace(/^#\/?/, '').split(/[/?]/)[0];
+  return seg.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 63) || 'home';
+}
+
+export function jobLabels(surface) {
+  return { app: 'method-metrics', surface: surface || currentSurface() };
+}
+
 let bqToken = localStorage.getItem('bq_access_token');
 
 export function getBqToken() {
@@ -65,7 +83,7 @@ export async function initBqAuth(onSuccess, onFail) {
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${stored}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: 'SELECT 1', useLegacySql: false }),
+        body: JSON.stringify({ query: 'SELECT 1', useLegacySql: false, labels: jobLabels('auth-check') }),
       }
     );
     if (res.ok) {
@@ -183,7 +201,7 @@ async function runQueryBq(sql) {
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: cleanSql(sql), useLegacySql: false, maxResults: 10000 }),
+        body: JSON.stringify({ query: cleanSql(sql), useLegacySql: false, maxResults: 10000, labels: jobLabels() }),
         signal: controller.signal,
       }
     );

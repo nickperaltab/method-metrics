@@ -1,1 +1,0 @@
-{{ test_unique(column_name="account_record_id", model=get_where_subquery(ref('int_accounts'))) }}

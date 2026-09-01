@@ -1,1 +1,0 @@
-SELECT COUNT(*) c FROM `project-for-method-dw.revenue`.INFORMATION_SCHEMA.TABLES WHERE table_name='int_trials_forecast_channel'

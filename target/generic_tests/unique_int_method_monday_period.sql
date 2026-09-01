@@ -1,1 +1,0 @@
-{{ test_unique(column_name="period", model=get_where_subquery(ref('int_method_monday'))) }}

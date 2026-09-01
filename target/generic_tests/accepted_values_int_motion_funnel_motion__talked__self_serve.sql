@@ -1,1 +1,0 @@
-{{ test_accepted_values(column_name="motion", model=get_where_subquery(ref('int_motion_funnel')), values=["talked","self_serve"]) }}

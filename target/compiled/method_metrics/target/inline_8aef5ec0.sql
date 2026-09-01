@@ -1,1 +1,0 @@
-SELECT FORMAT_DATE('%Y-%m', period) AS period, value FROM `project-for-method-dw.revenue_metrics.v_metric__conversions_trajectory` ORDER BY 1

@@ -147,7 +147,7 @@ async function queryBq(sql) {
   const res = await fetch('https://bigquery.googleapis.com/bigquery/v2/projects/project-for-method-dw/queries', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${bqToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: clean, useLegacySql: false, maxResults: 10000 }),
+    body: JSON.stringify({ query: clean, useLegacySql: false, maxResults: 10000, labels: { app: 'method-metrics', surface: 'charts' } }),
   });
   if (!res.ok) {
     if (res.status === 401) { bqToken = null; localStorage.removeItem('bq_access_token'); }

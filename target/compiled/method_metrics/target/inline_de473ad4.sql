@@ -1,1 +1,0 @@
-SELECT SAFE_DIVIDE(20, 0) * 31 AS day_one_trajectory

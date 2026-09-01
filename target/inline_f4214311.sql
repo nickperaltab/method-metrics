@@ -1,1 +1,0 @@
-SELECT * FROM (SELECT FORMAT_DATE('%Y-%m-%d', period) AS period, value FROM `project-for-method-dw.revenue_metrics.v_metric__sync_conversion_rate_weekly` ORDER BY 1) sub WHERE period >= FORMAT_DATE('%Y-%m', DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 13 MONTH), MONTH)) ORDER BY 1 DESC

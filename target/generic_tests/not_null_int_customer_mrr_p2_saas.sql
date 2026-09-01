@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="p2_saas", model=get_where_subquery(ref('int_customer_mrr'))) }}
