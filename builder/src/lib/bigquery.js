@@ -21,6 +21,12 @@ const BQ_DATASET = 'revenue';
 const BQ_SCOPES = [
   'https://www.googleapis.com/auth/bigquery',
   'https://www.googleapis.com/auth/userinfo.email',
+  // Forecast and budget series read revenue.method_forecast, an EXTERNAL table
+  // federated over a Google Sheet. BigQuery resolves those with the caller's
+  // own Drive credentials, so a token without this scope 403s on every
+  // sheet-backed metric while ordinary views keep working — the series just
+  // renders empty. Read-only; nothing here writes to Drive.
+  'https://www.googleapis.com/auth/drive.readonly',
 ];
 // Read-only calendar, requested on top of the BQ scopes so the call-prep week
 // strip can show clock times.
