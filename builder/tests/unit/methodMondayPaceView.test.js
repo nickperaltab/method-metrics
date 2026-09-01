@@ -19,6 +19,11 @@ function fakeSeries(value) {
   return { labels: [period], data: [value] };
 }
 
+// buildPaceRows applies its day-1 guard against the real clock, so every
+// render here has to pin the date or assertions about trajectory numbers pass
+// 30 days a month and fail on the 1st.
+const MID_MONTH = new Date('2026-09-15T12:00:00Z');
+
 function fullDataMap() {
   const m = new Map();
   const values = {
@@ -80,6 +85,7 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
       React.createElement(MethodMondayPaceView, {
         dataMap: fullDataMap(),
         detailSections: detailSections(),
+        now: MID_MONTH,
       })
     );
     // Labels that only ever appear inside an expanded detail section's kpi
@@ -95,6 +101,7 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
       React.createElement(MethodMondayPaceView, {
         dataMap: fullDataMap(),
         detailSections: detailSections(),
+        now: MID_MONTH,
       })
     );
     const buttonCount = (html.match(/<button/g) || []).length;
@@ -108,6 +115,7 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
       React.createElement(MethodMondayPaceView, {
         dataMap: fullDataMap(),
         detailSections: detailSections(),
+        now: MID_MONTH,
       })
     );
     expect(html).toMatch(/Actual \(MTD\)/);
@@ -120,6 +128,7 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
       React.createElement(MethodMondayPaceView, {
         dataMap: fullDataMap(),
         detailSections: detailSections(),
+        now: MID_MONTH,
       })
     );
     // Trials: trajectory 232, forecast 311 (both format 'number', pass
@@ -127,6 +136,44 @@ describe('MethodMondayPaceView: collapsed-by-default structure', () => {
     // reversing round 2's "collapsed row shows no secondary numbers" removal.
     expect(html).toMatch(/232/);
     expect(html).toMatch(/311/);
+  });
+});
+
+describe('MethodMondayPaceView: day-1 guard reaches the rendered page', () => {
+  // The view had no way to pin the date until now, so nothing covered what it
+  // actually renders on the 1st. These two assert both sides explicitly rather
+  // than leaving it to whichever day CI happens to run.
+  const render = (now) =>
+    renderToStaticMarkup(
+      React.createElement(MethodMondayPaceView, {
+        dataMap: fullDataMap(),
+        detailSections: detailSections(),
+        now,
+      })
+    );
+
+  it('mid-month, the trajectory/forecast pair is printed', () => {
+    const html = render(MID_MONTH);
+    expect(html).toMatch(/232/);
+    expect(html).toMatch(/311/);
+  });
+
+  it('on the 1st, the trajectory/forecast pair is withheld, not shown as zero', () => {
+    const html = render(new Date('2026-09-01T12:00:00Z'));
+    // The day-1 guard nulls numerator AND denominator together, so neither
+    // half of the pair prints — the row falls back to the no-data marker.
+    // Asserting on the rendered pair rather than on '0%': the markup is full
+    // of CSS percentages (bar widths, gradient stops) that have nothing to do
+    // with a displayed attainment figure.
+    expect(html).not.toMatch(/232/);
+    expect(html).not.toMatch(/311/);
+    expect(html).toMatch(/—|No data/);
+  });
+
+  it('the actual (MTD) figure still resolves on the 1st — only trajectory is guarded', () => {
+    // #357 Conversion Rate MTD = 0.181 (decimal_rate) -> 18.1%. Actual is a
+    // real elapsed count, so withholding it would lose true information.
+    expect(render(new Date('2026-09-01T12:00:00Z'))).toMatch(/18\.1/);
   });
 });
 

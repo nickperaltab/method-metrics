@@ -20,6 +20,13 @@ function fakeSeries(value) {
   return { labels: [period], data: [value] };
 }
 
+// Every assertion about attainment/trajectory has to pin the date. The day-1
+// guard in buildPaceRow nulls attainment, numerator and denominator whenever
+// the real clock says the 1st (elapsed_days = 0, so every trajectory is
+// genuinely NULL), which made this file pass 30 days a month and fail on the
+// 1st. Tests that are ABOUT the guard inject their own date instead.
+const MID_MONTH = new Date('2026-09-15T12:00:00Z');
+
 function mapFrom(values) {
   const m = new Map();
   for (const [id, v] of Object.entries(values)) {
@@ -52,7 +59,7 @@ describe('methodMondayPace: churn inversion', () => {
     // 411/274 (numerator/denominator) are kept alongside for the dev
     // consistency check, not as the source of the displayed value.
     const dataMap = mapFrom({ 423: 110.8, 411: 109.69, 274: 99 });
-    const row = buildPaceRow(churnDef, dataMap);
+    const row = buildPaceRow(churnDef, dataMap, { now: MID_MONTH });
     expect(row.attainment).toBeCloseTo(110.8, 1);
     expect(row.harmfulDistance).toBeGreaterThan(0);
     expect(row.band).not.toBe('green');
@@ -80,7 +87,7 @@ describe('methodMondayPace: percentage/decimal normalization', () => {
     // 422 (Sync Conversion Rate Attainment) is the registered metric that
     // supplies the value; 400/402 are kept for the dev consistency check.
     const dataMap = mapFrom({ 422: 91.3, 400: 0.2474, 402: 0.2711 });
-    const row = buildPaceRow(def, dataMap);
+    const row = buildPaceRow(def, dataMap, { now: MID_MONTH });
     // Correct: (24.74 / 27.11) * 100 ~= 91.3%
     expect(row.attainment).toBeCloseTo(91.3, 0);
     // The bug this guards against: forgetting to normalize would compute
@@ -97,7 +104,7 @@ describe('methodMondayPace: percentage/decimal normalization', () => {
     // row.attainment; 321/319 remain for the dev consistency check and for
     // row.denominator, which is still asserted below.
     const dataMap = mapFrom({ 420: (8.49 / 18.0) * 100, 321: 8.49, 319: 0.18 });
-    const row = buildPaceRow(def, dataMap);
+    const row = buildPaceRow(def, dataMap, { now: MID_MONTH });
     expect(row.denominator).toBeCloseTo(18.0, 5);
     expect(row.attainment).toBeCloseTo((8.49 / 18.0) * 100, 3);
   });
@@ -159,7 +166,7 @@ describe('methodMondayPace: metric ids resolve against the actual page config', 
 
   it('buildPaceRow returns attainmentMetricId on every row so the UI can wire a click target', () => {
     for (const def of METRIC_DEFS) {
-      const row = buildPaceRow(def, mapFrom({ [def.attainmentId]: 100 }));
+      const row = buildPaceRow(def, mapFrom({ [def.attainmentId]: 100 }), { now: MID_MONTH });
       expect(row.attainmentMetricId).toBe(def.attainmentId);
     }
   });
@@ -170,15 +177,15 @@ describe('methodMondayPace: actual (MTD) column', () => {
     const trialsDef = METRIC_DEFS.find((d) => d.key === 'trials');
     const churnDef = METRIC_DEFS.find((d) => d.key === 'churn');
     const dataMap = mapFrom({ 406: 132, 409: 27 });
-    const trialsRow = buildPaceRow(trialsDef, dataMap);
-    const churnRow = buildPaceRow(churnDef, dataMap);
+    const trialsRow = buildPaceRow(trialsDef, dataMap, { now: MID_MONTH });
+    const churnRow = buildPaceRow(churnDef, dataMap, { now: MID_MONTH });
     expect(trialsRow.actual).toBe(132);
     expect(churnRow.actual).toBe(27);
   });
 
   it('a number-format actual (Trials MTD #406) passes through unchanged — no normalization applied', () => {
     const def = METRIC_DEFS.find((d) => d.key === 'trials');
-    const row = buildPaceRow(def, mapFrom({ 406: 132 }));
+    const row = buildPaceRow(def, mapFrom({ 406: 132 }), { now: MID_MONTH });
     expect(row.actual).toBe(132);
     expect(row.actualFormat).toBe('number');
   });
@@ -188,20 +195,20 @@ describe('methodMondayPace: actual (MTD) column', () => {
     // 18.1. Skipping normalize() here would leave the Actual column reading
     // ~100x smaller than the Trajectory/Forecast columns beside it.
     const def = METRIC_DEFS.find((d) => d.key === 'conversionRate');
-    const row = buildPaceRow(def, mapFrom({ 357: 0.181 }));
+    const row = buildPaceRow(def, mapFrom({ 357: 0.181 }), { now: MID_MONTH });
     expect(row.actual).toBeCloseTo(18.1, 5);
     expect(row.actual).not.toBeCloseTo(0.181, 3);
   });
 
   it('a percent-format actual (Churn Rate MTD #344) passes through unchanged, already on the 0-100 scale', () => {
     const def = METRIC_DEFS.find((d) => d.key === 'churnRate');
-    const row = buildPaceRow(def, mapFrom({ 344: 2.41 }));
+    const row = buildPaceRow(def, mapFrom({ 344: 2.41 }), { now: MID_MONTH });
     expect(row.actual).toBeCloseTo(2.41, 5);
   });
 
   it('actualEqualsTrajectory is true only for the two ratio groups with no separate trajectory metric', () => {
     const byKey = Object.fromEntries(METRIC_DEFS.map((d) => [d.key, d]));
-    const equalRow = (key) => buildPaceRow(byKey[key], mapFrom({ [byKey[key].actualId]: 1 }));
+    const equalRow = (key) => buildPaceRow(byKey[key], mapFrom({ [byKey[key].actualId]: 1 }), { now: MID_MONTH });
     expect(equalRow('syncConversionRate').actualEqualsTrajectory).toBe(true);
     expect(equalRow('syncPercent').actualEqualsTrajectory).toBe(true);
     expect(equalRow('trials').actualEqualsTrajectory).toBe(false);
@@ -211,7 +218,7 @@ describe('methodMondayPace: actual (MTD) column', () => {
 
   it('a missing actual resolves to null, not 0', () => {
     const def = METRIC_DEFS.find((d) => d.key === 'trials');
-    const row = buildPaceRow(def, new Map());
+    const row = buildPaceRow(def, new Map(), { now: MID_MONTH });
     expect(row.actual).toBeNull();
   });
 });
@@ -230,7 +237,7 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
     // build directly rather than depending on the other four groups' data.
     const rows = ['trials', 'churn', 'syncs']
       .map((key) => METRIC_DEFS.find((d) => d.key === key))
-      .map((def) => buildPaceRow(def, dataMap))
+      .map((def) => buildPaceRow(def, dataMap, { now: MID_MONTH }))
       .sort((a, b) => {
         if (a.harmfulDistance == null && b.harmfulDistance == null) return 0;
         if (a.harmfulDistance == null) return 1;
@@ -246,8 +253,8 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       416: 50, 410: 155, 285: 310, // trials: badly behind pace
       // churn deliberately has no data at all
     });
-    const trials = buildPaceRow(METRIC_DEFS.find((d) => d.key === 'trials'), dataMap);
-    const churn = buildPaceRow(METRIC_DEFS.find((d) => d.key === 'churn'), new Map());
+    const trials = buildPaceRow(METRIC_DEFS.find((d) => d.key === 'trials'), dataMap, { now: MID_MONTH });
+    const churn = buildPaceRow(METRIC_DEFS.find((d) => d.key === 'churn'), new Map(), { now: MID_MONTH });
     expect(churn.attainment).toBeNull();
     const sorted = [churn, trials].sort((a, b) => {
       if (a.harmfulDistance == null && b.harmfulDistance == null) return 0;
@@ -279,7 +286,7 @@ describe('methodMondayPace: worst-first ordering under the inverted rule', () =>
       // inverted (more churn than forecast is bad), read from #425.
       425: 149.2, 345: 3.73, 342: 2.5,
     });
-    const rows = buildPaceRows(dataMap);
+    const rows = buildPaceRows(dataMap, { now: MID_MONTH });
     expect(rows.length).toBe(8);
     // Descending harmful distance end to end (worst first).
     for (let i = 1; i < rows.length; i++) {
