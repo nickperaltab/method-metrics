@@ -125,7 +125,7 @@ function connectBq() {
   if (!window.google?.accounts?.oauth2) return;
   google.accounts.oauth2.initTokenClient({
     client_id: BQ_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/bigquery',
+    scope: 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/drive.readonly',
     callback: (r) => { if (r.access_token) { bqToken = r.access_token; localStorage.setItem('bq_access_token', bqToken); updateBqStatus(); renderPage(); } },
   }).requestAccessToken();
 }

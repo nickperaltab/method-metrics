@@ -1034,7 +1034,7 @@ async function loadViewSql(metricId, viewName) {
 let bqToken = null;
 
 const BQ_CLIENT_ID = '546732685010-nojjfak7esmun2taour8r5pakrsrg3aq.apps.googleusercontent.com';
-const BQ_SCOPES = 'https://www.googleapis.com/auth/bigquery';
+const BQ_SCOPES = 'https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/drive.readonly';
 
 function initBqAuth() {
   const stored = localStorage.getItem('bq_access_token');
