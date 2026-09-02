@@ -2,12 +2,13 @@
 // Route: #/free-hours. Every number is deterministic: a delivered Free Hour is
 // a logged `Free` time entry, a conversion is a billed PPU/Dedicated entry on
 // the same account afterwards. No call scoring, no judgement. See lib/freeHours.js.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  fetchFreeHours, filterCalls, summarize, byMonth, byConsultant, bySequence,
+  fetchFreeHours, fetchAgreementsSent, filterCalls, filterAgreements, summarize,
+  byMonth, byConsultant, bySequence, byAgreementSent, totalAgreementsSent,
   conversions, conversionType, daysToConversion, distinctMonths, distinctConsultants,
   distinctLastFhMonths, sortRows,
-  FAIR_WINDOW_DAYS,
+  FAIR_WINDOW_DAYS, AGREEMENT_WINDOW_DAYS,
 } from '../lib/freeHours';
 
 const PPU = '#1d4ed8';
@@ -118,6 +119,23 @@ const summaryOf = (m) => [
 const ppuPill = () => s.pill(PPU, '#eff6ff', '#bfdbfe');
 const depPill = () => s.pill(DEP, '#fffbeb', '#fde68a');
 
+// The three denominators on this screen are different, which is the single
+// thing people get wrong when reading it. Spelled out rather than left to
+// hover notes, because the difference between them changes what a rate means.
+const DEFINITIONS = [
+  ['Free Hours delivered', 'Every logged `Free` time entry with hours above zero. No exclusions — this is the raw count of sessions given.'],
+  ['Open case', 'The account had a consulting case still open when the call happened, so the hours it bills next were already committed. These stay in the delivered count but sit outside the rate. An account whose earlier case has closed counts as a fresh opportunity again.'],
+  ['Could convert', 'Delivered minus open-case. This, not delivered, is the denominator of the rate.'],
+  ['Rate', 'Converted divided by could-convert, counting a conversion whenever it happened. Older months therefore flatter themselves simply for having had more time.'],
+  [`Rate within ${FAIR_WINDOW_DAYS} days`, `Bounds both sides to ${FAIR_WINDOW_DAYS} days and counts only calls old enough to have had the full window. This is the one to compare month against month. Hover a bar in the chart to see it.`],
+  ['Trial Free Hours', 'Free Hours given to accounts with no paying SaaS subscription in the month of the call. The rest went to existing customers.'],
+  ['Agreements sent', 'Pay-Per-Use or Dedicated agreements a consultant created in the period, whether or not a Free Hour came first.'],
+  [`After trial FH`, `Trial Free Hours where the same consultant sent an agreement within ${AGREEMENT_WINDOW_DAYS} days. A proposal desk writes most agreements that follow a Free Hour; those are excluded here, so this is the rep's own follow-through.`],
+  ['Days to sign', 'Call date to the date an agreement was accepted. Signature, not send.'],
+  ['Days to 1st hour', 'Call date to the first billed Pay-Per-Use or Dedicated hour. Signing and starting are separate events, and the gap between them is scheduling.'],
+  ['Paid hrs', 'Billed hours in the 90 days after the call — a fixed window, independent of the dates above.'],
+].map(([term, def]) => ({ term, def }));
+
 const TipRow = ({ k, v, accent }) => (
   <div style={s.tipRow}>
     <span style={accent ? { color: '#047857', fontWeight: 600 } : undefined}>{k}</span>
@@ -139,7 +157,9 @@ const FH_CSS = `
 .fh-caret { font-size: 8px; line-height: 1; width: 7px; text-align: center; }
 `;
 
-const ALREADY_TIP = 'Accounts already buying Pay-Per-Use or Dedicated work before the call. Their later billed hours are business as usual, so they sit outside the rate but still count as Free Hours delivered.';
+const ALREADY_TIP = 'Accounts with a consulting case still open when the call happened. The hours they bill next were already committed, so they sit outside the rate but still count as Free Hours delivered. An account whose earlier case has closed is eligible again.';
+const TRIAL_TIP = 'Free Hours given to accounts with no paying SaaS subscription in the month of the call. The rest went to existing customers.';
+const SENT_TIP = 'Agreements the consultant who delivered the Free Hour sent themselves, within 90 days of it. A proposal desk writes most agreements that follow a Free Hour, and those are not counted here.';
 const CONSULTANT_RATE_TIP = 'Converted divided by the Free Hours that could convert, over the period selected above. A consultant with only a handful of Free Hours will swing wildly — read the Free Hours column first.';
 
 // Columns of the two sortable tables. `value` is what the column sorts on, which
@@ -149,11 +169,40 @@ const REP_COLS = [
   { key: 'consultant', label: 'Consultant', text: true, value: (r) => r.consultant },
   { key: 'delivered', label: 'Free Hours', value: (r) => r.delivered },
   {
-    key: 'alreadyPaying',
-    label: 'Already paying',
+    key: 'openCaseAtCall',
+    label: 'Open case',
     tip: ALREADY_TIP,
     tipLabel: 'About already-paying accounts',
-    value: (r) => r.alreadyPaying,
+    value: (r) => r.openCaseAtCall,
+  },
+  {
+    key: 'trialFreeHours',
+    label: 'Trial FH',
+    tip: TRIAL_TIP,
+    tipLabel: 'About trial Free Hours',
+    value: (r) => r.trialFreeHours,
+  },
+  {
+    key: 'agreementsSent',
+    label: 'Agr. sent',
+    tip: 'Every Pay-Per-Use or Dedicated agreement this consultant created in the period, whether or not a Free Hour came first.',
+    tipLabel: 'About agreements sent',
+    value: (r) => r.agreementsSent,
+  },
+  {
+    key: 'trialRepSentAgreement',
+    label: 'After trial FH',
+    tip: SENT_TIP,
+    tipLabel: 'About agreements after a trial Free Hour',
+    value: (r) => r.trialRepSentAgreement,
+  },
+  {
+    key: 'agreementRateOfTrial',
+    label: 'Agr. rate',
+    align: 'left',
+    tip: 'Trial Free Hours where the same consultant sent an agreement within 90 days, divided by their trial Free Hours.',
+    tipLabel: 'About the agreement rate',
+    value: (r) => (r.trialFreeHours ? r.agreementRateOfTrial : null),
   },
   { key: 'converted', label: 'Converted', value: (r) => r.converted },
   {
@@ -257,6 +306,7 @@ export default function FreeHours() {
   const [segment, setSegment] = useState('all');
   const [lastFrom, setLastFrom] = useState(null);
   const [lastTo, setLastTo] = useState(null);
+  const [agreements, setAgreements] = useState([]);
   const [tip, setTip] = useState(null);
 
   // Anchor the tooltip to the element rather than the pointer, so it sits in the
@@ -282,6 +332,17 @@ export default function FreeHours() {
     return () => { cancelled = true; };
   }, []);
 
+  // Agreements sent is a separate grain — every proposal a consultant wrote,
+  // Free Hour or not — so it loads on its own. A failure here leaves the rest of
+  // the screen working with an empty agreements set rather than blanking it.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAgreementsSent()
+      .then((rows) => { if (!cancelled) setAgreements(rows); })
+      .catch(() => { if (!cancelled) setAgreements([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   const months = useMemo(() => (calls ? distinctMonths(calls) : []), [calls]);
   const consultants = useMemo(() => (calls ? distinctConsultants(calls) : []), [calls]);
   const lastMonths = useMemo(() => (calls ? distinctLastFhMonths(calls) : []), [calls]);
@@ -291,7 +352,13 @@ export default function FreeHours() {
     () => (calls ? filterCalls(calls, { from, to, consultant, segment, lastFrom, lastTo }) : []),
     [calls, from, to, consultant, segment, lastFrom, lastTo],
   );
+  const scopedAgreements = useMemo(
+    () => filterAgreements(agreements, { from, to, consultant }),
+    [agreements, from, to, consultant],
+  );
   const totals = useMemo(() => summarize(scoped), [scoped]);
+  const agreementsSentTotal = useMemo(() => totalAgreementsSent(scopedAgreements), [scopedAgreements]);
+  const followThrough = useMemo(() => byAgreementSent(scoped), [scoped]);
   const monthly = useMemo(() => byMonth(scoped), [scoped]);
   const repSort = useSort('rate');
   const wonSort = useSort('callDate');
@@ -300,12 +367,12 @@ export default function FreeHours() {
   // off twenty. byConsultant already applies that order; sorting keeps it.
   const reps = useMemo(() => {
     const col = REP_COLS.find((c) => c.key === repSort.key) ?? REP_COLS[0];
-    return sortRows(byConsultant(scoped), {
+    return sortRows(byConsultant(scoped, scopedAgreements), {
       value: col.value,
       dir: repSort.dir,
       tiebreak: (a, b) => b.delivered - a.delivered || a.consultant.localeCompare(b.consultant),
     });
-  }, [scoped, repSort.key, repSort.dir]);
+  }, [scoped, scopedAgreements, repSort.key, repSort.dir]);
 
   const won = useMemo(() => {
     const col = WON_COLS.find((c) => c.key === wonSort.key) ?? WON_COLS[0];
@@ -367,13 +434,13 @@ export default function FreeHours() {
     <>
       <div style={s.tipHead}>{b.label} Free Hour on the account</div>
       <TipRow k="Free Hours" v={b.delivered} />
-      <TipRow k="Already paying" v={b.alreadyPaying} />
+      <TipRow k="Already paying" v={b.openCaseAtCall} />
       <TipRow k="Could convert" v={b.eligible} />
       <TipRow k="Converted" v={b.converted} />
       <TipRow k="Rate" v={b.rate == null ? '—' : `${b.rate}%`} accent />
       {b.delivered > 0 && (
         <div style={s.tipNote}>
-          {Math.round((b.alreadyPaying / b.delivered) * 100)}% of these went to accounts already buying PS work.
+          {Math.round((b.openCaseAtCall / b.delivered) * 100)}% of these went to accounts already buying PS work.
         </div>
       )}
     </>
@@ -431,6 +498,8 @@ export default function FreeHours() {
             <option value="first">First Free Hour on the account</option>
             <option value="repeat">Repeat (2nd or later)</option>
             <option value="prior">Had a prior consulting case</option>
+            <option value="trial">Trial (no paying SaaS that month)</option>
+            <option value="customer">Existing SaaS customer</option>
           </select>
         </div>
       </div>
@@ -440,8 +509,8 @@ export default function FreeHours() {
         <Tile
           lab={<>Led to paid work<InfoDot label="About the conversion rate" content={<div style={s.tipNote}>{RATE_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
           big={totals.converted}
-          foot={totals.alreadyPaying
-            ? `${totals.rate ?? '—'}% of the ${totals.eligible} that could convert · ${totals.alreadyPaying} already paying`
+          foot={totals.openCaseAtCall
+            ? `${totals.rate ?? '—'}% of the ${totals.eligible} that could convert · ${totals.openCaseAtCall} already paying`
             : `${totals.rate ?? '—'}% of ${totals.eligible}`}
         />
         <Tile lab="Split" big={`${totals.ppu} / ${totals.dep}`} foot={`${totals.ppu} Pay-Per-Use · ${totals.dep} Dedicated`} />
@@ -451,6 +520,18 @@ export default function FreeHours() {
           foot={totals.signedCount
             ? `${totals.signedSameDay} same day · ${totals.signedWithinWeek} within a week`
             : 'no signatures in this selection'}
+        />
+        <Tile
+          lab={<>Trial Free Hours<InfoDot label="About trial Free Hours" content={<div style={s.tipNote}>{TRIAL_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
+          big={totals.trialFreeHours}
+          foot={`${totals.customerFreeHours} went to existing customers`}
+        />
+        <Tile
+          lab={<>Agreements sent<InfoDot label="About agreements sent" content={<div style={s.tipNote}>{SENT_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
+          big={agreementsSentTotal}
+          foot={totals.trialFreeHours
+            ? `${totals.trialRepSentAgreement} after a trial Free Hour · ${totals.agreementRateOfTrial ?? 0}% of ${totals.trialFreeHours}`
+            : 'no trial Free Hours in this selection'}
         />
         <Tile lab="Paid hours booked" big={totals.paidHours} foot="within 90 days of the Free Hour" />
       </div>
@@ -529,7 +610,7 @@ export default function FreeHours() {
           {sequence.map((b, i) => {
             const widest = Math.max(1, ...sequence.map((x) => x.delivered));
             const w = (b.delivered / widest) * 100;
-            const aPct = b.delivered ? (b.alreadyPaying / b.delivered) * 100 : 0;
+            const aPct = b.delivered ? (b.openCaseAtCall / b.delivered) * 100 : 0;
             const cPct = b.delivered ? (b.eligible / b.delivered) * 100 : 0;
             return (
               <div key={b.key} style={{ ...s.seqRow, borderBottom: i === sequence.length - 1 ? 'none' : s.seqRow.borderBottom }}>
@@ -540,13 +621,13 @@ export default function FreeHours() {
                 <div
                   style={{ ...s.seqBar, width: `${Math.max(3, w)}%` }}
                   tabIndex={0}
-                  aria-label={`${b.label} Free Hour: ${b.delivered} delivered, ${b.alreadyPaying} already paying, ${b.converted} of ${b.eligible} converted`}
+                  aria-label={`${b.label} Free Hour: ${b.delivered} delivered, ${b.openCaseAtCall} already paying, ${b.converted} of ${b.eligible} converted`}
                   onMouseEnter={(e) => showTip(e, seqTip(b))}
                   onFocus={(e) => showTip(e, seqTip(b))}
                   onMouseLeave={hideTip}
                   onBlur={hideTip}
                 >
-                  {b.alreadyPaying > 0 && <i style={{ display: 'block', height: '100%', width: `${aPct}%`, background: DEP }} />}
+                  {b.openCaseAtCall > 0 && <i style={{ display: 'block', height: '100%', width: `${aPct}%`, background: DEP }} />}
                   {b.eligible > 0 && <i style={{ display: 'block', height: '100%', width: `${cPct}%`, background: PPU }} />}
                 </div>
                 <div style={s.seqRate}>
@@ -560,6 +641,51 @@ export default function FreeHours() {
             <span><i style={s.swatch(DEP)} />Already paying</span>
             <span><i style={s.swatch(PPU)} />Could convert</span>
           </div>
+        </div>
+      </div>
+
+      <div style={s.panel}>
+        <div style={s.phead}>
+          <div style={s.ph2}>Did the rep send an agreement?</div>
+          <div style={s.phsub}>
+            Free Hours split by whether the consultant who delivered it sent an agreement
+            within {AGREEMENT_WINDOW_DAYS} days. Agreements written by the proposal desk are not counted.
+          </div>
+        </div>
+        <table style={s.table} aria-label="Free Hours by whether the rep sent an agreement">
+          <thead>
+            <tr>
+              <th scope="col" style={s.th}>Account at the call</th>
+              <th scope="col" style={s.th}>Rep sent an agreement</th>
+              <th scope="col" style={{ ...s.th, ...s.thn }}>Free Hours</th>
+              <th scope="col" style={{ ...s.th, ...s.thn }}>Could convert</th>
+              <th scope="col" style={{ ...s.th, ...s.thn }}>Converted</th>
+              <th scope="col" style={{ ...s.th, ...s.thn }}>Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {followThrough.every((b) => b.delivered === 0) && (
+              <tr><td style={s.td} colSpan={6}><div style={s.note2}>No Free Hours in this selection.</div></td></tr>
+            )}
+            {followThrough.filter((b) => b.delivered > 0).map((b) => (
+              <tr key={b.key}>
+                <td style={s.td}>{b.label}</td>
+                <td style={s.td}>
+                  <span style={b.sent ? ppuPill() : s.pill('#6b7280', '#f3f4f6', '#e2e5e9')}>
+                    {b.sent ? 'Sent' : 'Not sent'}
+                  </span>
+                </td>
+                <td style={{ ...s.td, ...s.tdn }}>{b.delivered}</td>
+                <td style={{ ...s.td, ...s.tdn, color: '#6b7280' }}>{b.eligible}</td>
+                <td style={{ ...s.td, ...s.tdn }}>{b.converted}</td>
+                <td style={{ ...s.td, ...s.tdn, fontWeight: 700 }}>{b.eligible ? `${b.rate ?? 0}%` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ ...s.note, margin: '0 18px 14px' }}>
+          An agreement is close to a precondition for billed work, so read this as a funnel step
+          rather than a cause.
         </div>
       </div>
 
@@ -583,8 +709,16 @@ export default function FreeHours() {
                 <tr key={r.consultant}>
                   <td style={s.td}>{r.consultant}</td>
                   <td style={{ ...s.td, ...s.tdn }}>{r.delivered}</td>
-                  <td style={{ ...s.td, ...s.tdn, color: '#6b7280' }}>{r.alreadyPaying}</td>
-                  <td style={{ ...s.td, ...s.tdn }}>{r.converted}</td>
+                  <td style={{ ...s.td, ...s.tdn, color: '#6b7280' }}>{r.openCaseAtCall}</td>
+                  <td style={{ ...s.td, ...s.tdn }}>{r.trialFreeHours}</td>
+                <td style={{ ...s.td, ...s.tdn }}>{r.agreementsSent}</td>
+                <td style={{ ...s.td, ...s.tdn }}>{r.trialRepSentAgreement}</td>
+                <td style={s.td}>
+                  <span style={{ ...s.mono, minWidth: 32, display: 'inline-block' }}>
+                    {r.trialFreeHours ? `${r.agreementRateOfTrial ?? 0}%` : '—'}
+                  </span>
+                </td>
+                <td style={{ ...s.td, ...s.tdn }}>{r.converted}</td>
                   <td style={s.td}>
                     <div style={s.meter}>
                       <div style={s.track}><div style={{ height: '100%', width: `${((r.rate ?? 0) / best) * 100}%`, background: PPU, borderRadius: 3 }} /></div>
@@ -656,9 +790,26 @@ export default function FreeHours() {
         </div>
       )}
 
+      <details style={s.panel}>
+        <summary style={{ ...s.phead, cursor: 'pointer', borderBottom: 'none', fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>
+          How these numbers work
+        </summary>
+        <div style={{ padding: '0 18px 18px' }}>
+          <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'minmax(150px, 190px) 1fr', gap: '11px 18px', fontSize: 13.5 }}>
+            {DEFINITIONS.map((d) => (
+              <Fragment key={d.term}>
+                <dt style={{ fontWeight: 700, color: '#1a1a1a' }}>{d.term}</dt>
+                <dd style={{ margin: 0, color: '#4b5563', lineHeight: 1.5 }}>{d.def}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      </details>
+
       <div style={{ ...s.note, borderTop: '1px solid #e2e5e9', paddingTop: 14 }}>
-        Counts billed Pay-Per-Use and Dedicated work that followed a Free Hour. Accounts already buying
-        PS work are shown but sit outside the rate. See <code>docs/ps-free-hours.md</code>.
+        Counts billed Pay-Per-Use and Dedicated work that followed a Free Hour. Accounts with a
+        consulting case already open at the call are shown but sit outside the rate.
+        See <code>docs/ps-free-hours.md</code>.
       </div>
     </div>
   );

@@ -47,6 +47,7 @@ const T = {
   opportunityFit: 'call_prep.opportunity_fit',
   activity: 'revenue.Activity',
   freeHourOutcomes: 'call_prep.free_hour_outcomes',
+  psProposals: 'call_prep.ps_proposals',
 };
 
 const hits = (sql, table) => sql.includes(table);
@@ -420,6 +421,15 @@ const ROUTES = [
       const rows = orderCol ? latestPerAccount(scoped, orderCol) : scoped;
       return rows.sort(desc('snapshot_date'));
     },
+  },
+  {
+    // Agreements sent, a different grain from Free Hours: every proposal a
+    // consultant wrote, whether or not a Free Hour came first. Must precede the
+    // free-hour route only in spirit — it keys off the GROUP BY, which the
+    // free-hour query never has.
+    name: 'agreements sent by consultant',
+    when: (sql) => hits(sql, T.psProposals) && /GROUP BY consultant, month/.test(sql),
+    rows: () => [...fixtures().AGREEMENTS],
   },
   {
     name: 'free hour outcomes',

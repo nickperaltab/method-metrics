@@ -30,30 +30,112 @@ export const REPORTING_START = '2026-01-01';
 // this bounds both sides to the same 30 days so months can be compared.
 export const FAIR_WINDOW_DAYS = 30;
 
+// How long after a Free Hour an agreement still counts as following from it.
+export const AGREEMENT_WINDOW_DAYS = 90;
+
 export function buildFreeHoursSql(start = REPORTING_START) {
   // start is a module constant, never user input, but keep the shape strict.
   const from = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : REPORTING_START;
   return `
+    WITH v0 AS (
+      SELECT * FROM ${FREE_HOUR_VIEW} WHERE cohort_month >= DATE '${from}'
+    ),
+    -- Eligibility. An account already mid-engagement when the call happened
+    -- cannot be opened by it, but one that finished a case long ago can be
+    -- re-opened — which is why this is "open at the call", not "ever had one".
+    consulting_cases AS (
+      SELECT MethodCompanyAccountRecordID AS account_record_id,
+             DATE(CreatedDate) AS opened, DATE(ClosedDate) AS closed
+      FROM \`project-for-method-dw.revenue.Cases\`
+      WHERE NOT COALESCE(IsDeleted, FALSE)
+        AND CaseType = 'Consulting Request'
+        AND MethodCompanyAccountRecordID IS NOT NULL
+    ),
+    -- Trial vs existing customer needs two hops: the Free Hour grain carries
+    -- account_record_id, but SaaS MRR is keyed on entity_record_id. Joining MRR
+    -- directly on account_record_id silently matches under 4% of rows.
+    acct AS (
+      SELECT account_record_id, entity_record_id
+      FROM \`project-for-method-dw.revenue.int_accounts\`
+    ),
+    saas AS (
+      SELECT EntityRecordID, Month, StartMRR
+      FROM \`project-for-method-dw.revenue.int_customer_mrr\`
+      WHERE Month >= DATE_SUB(DATE '${from}', INTERVAL 12 MONTH)
+    ),
+    -- Agreements the Free Hour's OWN consultant sent. A proposal desk writes
+    -- most proposals that follow a Free Hour (69% of them), so matching on
+    -- assigned_to is what separates the rep's own follow-through from the desk's.
+    props AS (
+      SELECT account_record_id, assigned_to, DATE(created_date) AS sent_date
+      FROM \`project-for-method-dw.call_prep.ps_proposals\`
+      WHERE created_date IS NOT NULL AND account_record_id IS NOT NULL
+        AND contract_type IN ('Pay-Per-Use','Dedicated','Fast Track Dedicated')
+    ),
+    -- Attach the most recent MRR month AT OR BEFORE the call, not the call's own
+    -- month. int_customer_mrr publishes a month in arrears, so an exact-month
+    -- join reads every Free Hour in the current month as a trial — an error that
+    -- grows all month until the month closes. Ranking a <= join also covers an
+    -- account with a gap in its MRR history. BigQuery cannot de-correlate a
+    -- "latest row" subquery here, hence the window.
+    v AS (
+      SELECT v0.*, sa.StartMRR AS mrr_at_call,
+             ROW_NUMBER() OVER (PARTITION BY v0.fh_id ORDER BY sa.Month DESC) AS mrr_rn
+      FROM v0
+      LEFT JOIN acct a ON a.account_record_id = v0.account_record_id
+      LEFT JOIN saas sa
+        ON sa.EntityRecordID = a.entity_record_id
+       AND sa.Month <= DATE_TRUNC(v0.call_date, MONTH)
+    )
     SELECT
-      fh_id,
-      account_record_id,
-      account,
-      consultant,
-      FORMAT_DATE('%Y-%m-%d', call_date) AS call_date,
-      FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month,
-      fh_seq,
-      FORMAT_DATE('%Y-%m', account_last_fh_date) AS last_fh_month,
-      account_fh_count,
-      (had_ppu_before OR had_dep_before) AS already_paying,
-      prior_consulting_case,
-      IF(first_ppu_date IS NULL, NULL, DATE_DIFF(first_ppu_date, call_date, DAY)) AS days_to_ppu,
-      IF(first_dep_date IS NULL, NULL, DATE_DIFF(first_dep_date, call_date, DAY)) AS days_to_dep,
-      IF(first_agreement_date IS NULL, NULL, DATE_DIFF(first_agreement_date, call_date, DAY)) AS days_to_agreement,
-      ROUND(paid_hours_90d, 1) AS paid_hours_90d,
-      days_elapsed
-    FROM ${FREE_HOUR_VIEW}
-    WHERE cohort_month >= DATE '${from}'
-    ORDER BY call_date DESC`;
+      v.fh_id,
+      v.account_record_id,
+      v.account,
+      v.consultant,
+      FORMAT_DATE('%Y-%m-%d', v.call_date) AS call_date,
+      FORMAT_DATE('%Y-%m', v.cohort_month) AS cohort_month,
+      v.fh_seq,
+      FORMAT_DATE('%Y-%m', v.account_last_fh_date) AS last_fh_month,
+      v.account_fh_count,
+      (SELECT COUNT(1) > 0 FROM consulting_cases c
+         WHERE c.account_record_id = v.account_record_id
+           AND c.opened < v.call_date
+           AND (c.closed IS NULL OR c.closed >= v.call_date)) AS open_case_at_call,
+      COALESCE(v.mrr_at_call, 0) > 0 AS paying_saas_at_call,
+      v.mrr_at_call IS NULL AS saas_state_unknown,
+      v.prior_consulting_case,
+      IF(v.first_ppu_date IS NULL, NULL, DATE_DIFF(v.first_ppu_date, v.call_date, DAY)) AS days_to_ppu,
+      IF(v.first_dep_date IS NULL, NULL, DATE_DIFF(v.first_dep_date, v.call_date, DAY)) AS days_to_dep,
+      IF(v.first_agreement_date IS NULL, NULL, DATE_DIFF(v.first_agreement_date, v.call_date, DAY)) AS days_to_agreement,
+      DATE_DIFF((SELECT MIN(p.sent_date) FROM props p
+         WHERE p.account_record_id = v.account_record_id
+           AND p.assigned_to = v.consultant
+           AND p.sent_date >= v.call_date
+           AND p.sent_date <= DATE_ADD(v.call_date, INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY)
+        ), v.call_date, DAY) AS days_to_agreement_sent,
+      ROUND(v.paid_hours_90d, 1) AS paid_hours_90d,
+      v.days_elapsed
+    FROM v
+    WHERE v.mrr_rn = 1
+    ORDER BY v.call_date DESC`;
+}
+
+/** Agreements each consultant sent, by month. Independent of Free Hours. */
+export function buildAgreementsSentSql(start = REPORTING_START) {
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : REPORTING_START;
+  return `
+    SELECT
+      assigned_to AS consultant,
+      FORMAT_DATE('%Y-%m', DATE(created_date)) AS month,
+      COUNT(*) AS agreements_sent,
+      COUNTIF(accepted_date IS NOT NULL) AS agreements_accepted
+    FROM \`project-for-method-dw.call_prep.ps_proposals\`
+    WHERE created_date IS NOT NULL
+      AND assigned_to IS NOT NULL
+      AND contract_type IN ('Pay-Per-Use','Dedicated','Fast Track Dedicated')
+      AND DATE(created_date) >= DATE '${from}'
+    GROUP BY consultant, month
+    ORDER BY month DESC, agreements_sent DESC`;
 }
 
 const toInt = (v, fallback = null) => (v == null || v === '' ? fallback : parseInt(v, 10));
@@ -76,13 +158,32 @@ export function normalizeFreeHourRow(row) {
     // window loaded — lets you filter on how long ago the account last had one.
     lastFhMonth: toStr(row.last_fh_month),
     accountFhCount: toInt(row.account_fh_count, 1),
-    alreadyPaying: toBool(row.already_paying),
+    // A consulting case already OPEN when the call happened. This is what makes
+    // a Free Hour ineligible now; it used to be "billed PPU/DEP work ever",
+    // which discarded 31 real conversions on accounts whose earlier engagement
+    // had long since closed.
+    openCaseAtCall: toBool(row.open_case_at_call),
+    // Had paying SaaS MRR in the month of the call, so not a trial.
+    payingSaasAtCall: toBool(row.paying_saas_at_call),
+    saasStateUnknown: toBool(row.saas_state_unknown),
     priorConsultingCase: toBool(row.prior_consulting_case),
     daysToPpu: toInt(row.days_to_ppu),
     daysToDep: toInt(row.days_to_dep),
     daysToAgreement: toInt(row.days_to_agreement),
+    // Days until the SAME consultant sent an agreement, or null if they didn't.
+    daysToAgreementSent: toInt(row.days_to_agreement_sent),
     paidHours90d: toNum(row.paid_hours_90d, 0),
     daysElapsed: toInt(row.days_elapsed, 0),
+  };
+}
+
+/** One consultant's agreements-sent count for a month. */
+export function normalizeAgreementRow(row) {
+  return {
+    consultant: toStr(row.consultant),
+    month: toStr(row.month),
+    sent: toInt(row.agreements_sent, 0),
+    accepted: toInt(row.agreements_accepted, 0),
   };
 }
 
@@ -111,19 +212,31 @@ export function daysToConversion(call, withinDays = null) {
 }
 
 /**
- * An account already buying PS work before the call cannot "convert" — its
- * later billed hours are business as usual, not a result of the Free Hour. Such
- * calls stay in the delivered count but sit outside the rate.
+ * An account mid-engagement when the call happened cannot be opened by it — the
+ * hours it bills next were already committed. Such calls stay in the delivered
+ * count but sit outside the rate.
+ *
+ * Deliberately NOT "has ever bought PS work": an account whose consulting case
+ * closed a year ago is a real opportunity again, and excluding it threw away 31
+ * conversions in 2026 alone. Only a case still open at the call date disqualifies.
  */
-export const canConvert = (call) => !call.alreadyPaying;
+export const canConvert = (call) => !call.openCaseAtCall;
 export const isRepeat = (call) => call.seq > 1;
 
-export const SEGMENTS = ['all', 'first', 'repeat', 'prior'];
+/** A Free Hour given to an account with no paying SaaS MRR that month. */
+export const isTrial = (call) => !call.payingSaasAtCall;
+
+/** The Free Hour's own consultant sent an agreement within the window. */
+export const repSentAgreement = (call) => call.daysToAgreementSent != null;
+
+export const SEGMENTS = ['all', 'first', 'repeat', 'prior', 'trial', 'customer'];
 
 export function matchesSegment(call, segment) {
   if (segment === 'first') return call.seq === 1;
   if (segment === 'repeat') return call.seq > 1;
   if (segment === 'prior') return !!call.priorConsultingCase;
+  if (segment === 'trial') return isTrial(call);
+  if (segment === 'customer') return !isTrial(call);
   return true;
 }
 
@@ -174,12 +287,25 @@ export function summarize(calls) {
   // conversions inside it — the number to compare month against month.
   const ready = eligible.filter((c) => c.daysElapsed >= FAIR_WINDOW_DAYS);
   const fair = ready.filter((c) => conversionType(c, FAIR_WINDOW_DAYS));
+  // Trial Free Hours are the base the agreement-sent rate is measured against:
+  // an existing customer mid-relationship doesn't need a new agreement the way
+  // a trial does, so mixing them would flatter the rate.
+  const trials = calls.filter(isTrial);
+  const sentAny = calls.filter(repSentAgreement);
+  const trialSent = trials.filter(repSentAgreement);
   return {
     delivered: calls.length,
-    alreadyPaying: calls.length - eligible.length,
+    openCaseAtCall: calls.length - eligible.length,
     eligible: eligible.length,
     converted: won.length,
     rate: percent(won.length, eligible.length),
+    trialFreeHours: trials.length,
+    customerFreeHours: calls.length - trials.length,
+    // Agreements the delivering consultant sent themselves, and how often.
+    repSentAgreement: sentAny.length,
+    trialRepSentAgreement: trialSent.length,
+    agreementRateOfTrial: percent(trialSent.length, trials.length),
+    medianDaysToAgreementSent: median(sentAny.map((c) => c.daysToAgreementSent)),
     ppu: won.filter((c) => conversionType(c) === 'ppu').length,
     dep: won.filter((c) => conversionType(c) === 'dep').length,
     paidHours: Math.round(won.reduce((a, c) => a + (c.paidHours90d || 0), 0)),
@@ -212,11 +338,56 @@ export function byMonth(calls) {
   }));
 }
 
-/** One summary per consultant, best rate first, then by volume. */
-export function byConsultant(calls) {
+/**
+ * One summary per consultant, best rate first, then by volume.
+ *
+ * `agreements` is the optional agreements-sent set (see totalAgreementsSent):
+ * every proposal that consultant wrote in the period, whether or not a Free Hour
+ * preceded it. It is a wider count than `repSentAgreement`, which only counts
+ * agreements that followed one of their own Free Hours.
+ */
+export function byConsultant(calls, agreements = []) {
   return distinctConsultants(calls)
-    .map((consultant) => ({ consultant, ...summarize(calls.filter((c) => c.consultant === consultant)) }))
+    .map((consultant) => ({
+      consultant,
+      ...summarize(calls.filter((c) => c.consultant === consultant)),
+      agreementsSent: totalAgreementsSent(agreements, consultant),
+    }))
     .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.delivered - a.delivered);
+}
+
+/** Agreements one consultant sent across an already-filtered agreement set. */
+export function totalAgreementsSent(agreements, consultant = null) {
+  return agreements
+    .filter((a) => consultant == null || a.consultant === consultant)
+    .reduce((sum, a) => sum + a.sent, 0);
+}
+
+/** Bound the agreements-sent set to the same months the screen is showing. */
+export function filterAgreements(agreements, { from = null, to = null, consultant = 'all' } = {}) {
+  return agreements.filter((a) => {
+    if (from && a.month < from) return false;
+    if (to && a.month > to) return false;
+    if (consultant !== 'all' && a.consultant !== consultant) return false;
+    return true;
+  });
+}
+
+/**
+ * How Free Hours split by whether the delivering rep sent an agreement.
+ * Trials and existing customers are kept apart because they behave differently:
+ * a trial has no relationship to fall back on, so the agreement is the whole ask.
+ */
+export function byAgreementSent(calls) {
+  const buckets = [
+    { key: 'trial-sent', label: 'Trial', sent: true, test: (c) => isTrial(c) && repSentAgreement(c) },
+    { key: 'trial-none', label: 'Trial', sent: false, test: (c) => isTrial(c) && !repSentAgreement(c) },
+    { key: 'cust-sent', label: 'Existing customer', sent: true, test: (c) => !isTrial(c) && repSentAgreement(c) },
+    { key: 'cust-none', label: 'Existing customer', sent: false, test: (c) => !isTrial(c) && !repSentAgreement(c) },
+  ];
+  return buckets.map((b) => ({
+    key: b.key, label: b.label, sent: b.sent, ...summarize(calls.filter(b.test)),
+  }));
 }
 
 export const SEQUENCE_BUCKETS = [
@@ -279,4 +450,9 @@ export function sortRows(rows, { value, dir = 'desc', tiebreak = null } = {}) {
 export async function fetchFreeHours({ query = queryBqWithRetry, start = REPORTING_START } = {}) {
   const { rows } = await query(buildFreeHoursSql(start));
   return rows.map(normalizeFreeHourRow);
+}
+
+export async function fetchAgreementsSent({ query = queryBqWithRetry, start = REPORTING_START } = {}) {
+  const { rows } = await query(buildAgreementsSentSql(start));
+  return rows.map(normalizeAgreementRow);
 }

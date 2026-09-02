@@ -14,16 +14,66 @@ screen depends on how a call was scored or judged.
 |---|---|
 | Free Hour delivered | A consultant's own logged `Free` time entry with `hours > 0` |
 | Led to paid work | The first **billed** `Pay-per-use` or `Dedicated` time entry on that account, any time after the Free Hour |
-| Already paying | The account was already buying PS work before the call |
-| Time to sign | Days from the Free Hour to the `AcceptedDate` on a PPU/Dedicated agreement |
+| Open case | A `Consulting Request` case on the account still open at the call date |
+| Trial FH | The account had no paying SaaS MRR as of the call — see the MRR lag note below |
+| Agreements sent | Every PPU/Dedicated row in `call_prep.ps_proposals` a consultant created in the period (`created_date`, `assigned_to`) |
+| After trial FH | A trial Free Hour where **that same consultant** sent an agreement within 90 days |
+| Time to sign | Days from the Free Hour to the `accepted_date` on a PPU/Dedicated agreement |
 | Rate within 30 days | Conversions inside 30 days ÷ calls at least 30 days old |
 
-**Already-paying accounts stay in the delivered count but sit outside the rate.**
-Their later billed hours are business as usual, not something the Free Hour
-produced. Counting them would inflate the rate; hiding them would understate how
-many Free Hours the team actually ran.
+**Open-case accounts stay in the delivered count but sit outside the rate.** An
+account already mid-engagement when the call happened cannot be opened by it —
+the hours it bills next were already committed.
 
-## Two traps in the upstream data
+This is deliberately **not** "has ever bought PS work", which is what the screen
+used until Sept 2026. An account whose consulting case closed a year ago is a
+real opportunity again, and excluding it discarded **31 conversions in 2026
+alone** (eligible 546 → 649, converted 164 → 199). The blended rate barely moved
+— ~30% either way — so the old rule was costing attribution, not accuracy.
+
+### Agreements: the proposal desk
+
+Only **31%** of agreements that follow a Free Hour are written by the consultant
+who delivered it (77 of 252 in 2026). Shane Li, Phuong Phan, Harsh Patel, Urja
+Rao and Rafiya Syed write proposals but never deliver Free Hours — there is a
+proposal desk. So two different questions:
+
+- **"Agr. sent"** — everything that consultant wrote. Their own output.
+- **"After trial FH"** — agreements they sent following their own trial Free
+  Hour. Their follow-through, and the desk's work is excluded.
+
+A per-account "did anyone send one" number would be a third figure again, and
+much higher. Do not read the same-rep column as the funnel step.
+
+Note that an agreement is close to a **precondition** for billed PPU/Dedicated
+work, so the agreement-sent split (60.8% vs 5.9% on existing customers) is a
+funnel step, not a cause. Do not present it as one.
+
+### There is no "did the rep email them" metric
+
+`customer_signals.free_hour_journey.email_touches` exists but is **100% NULL**
+on all 1,287 rows, and that table stops at 2026-07-13. `revenue.Activity` has
+the email types but cannot be attributed to an account:
+`Free Consulting Follow Up` carries `MethodCompanyAccountRecordID` on **0 of 656**
+rows, `Email Outgoing` on 264 of 17,139, and the `Contacts` bridge fails too
+(`Contacts` has no account FK, and its `EntityRecordID` matched 2 of 633
+follow-ups). Agreement-sent is the available proxy. Do not re-derive this.
+
+## Four traps in the upstream data
+
+**3. SaaS MRR is keyed on `entity_record_id`, not `account_record_id`.** The
+Free Hour grain carries `account_record_id`; `revenue.int_customer_mrr` is keyed
+on `EntityRecordID`. Joining MRR straight onto `account_record_id` returns rows
+and looks fine but matches **25 of 663** — under 4%. Bridge through
+`revenue.int_accounts`, which carries both (663/663, then 654/663 to MRR).
+
+**4. `int_customer_mrr` publishes a month in arrears.** Its newest month is the
+*previous* one, so joining on the call's own month makes every Free Hour in the
+current month read as a trial — an error that grows all month. `buildFreeHoursSql`
+takes the latest MRR month **at or before** the call instead, which also covers
+accounts with a gap in their MRR history. BigQuery will not de-correlate a
+"latest row" subquery across tables here, hence the `ROW_NUMBER()` window; check
+`COUNT(DISTINCT fh_id)` still equals `COUNT(*)` if you touch that join.
 
 **1. Do not count Free Hours from `revenue.Activity`.** It stores
 `AI Summary - Free Hour` in two shapes:
