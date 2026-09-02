@@ -174,6 +174,13 @@ sources:
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
       - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).
+      - name: int_bom_customers
+        description: >
+          Beginning-of-month customer base at CompanyAccount grain, one row per
+          (CompanyAccount, TxnDate month). Mirrors revenue.v_bom_customers. Hand-written
+          BQ view, not yet dbt-managed. The current month's own row is unreliable — it
+          accumulates from billing transactions across the month — so consumers read the
+          most recently settled month instead. See int_method_monday.
 
   - name: marketing
     database: project-for-method-dw

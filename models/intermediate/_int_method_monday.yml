@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: int_method_monday
+    description: >
+      Method Monday MTD + trajectory building block for the CURRENT month only. One row.
+      Feeds the twelve v_metric__*_mtd / *_trajectory / *_forecast_mtd views. Every *_mtd
+      figure excludes today. Trajectory is calendar-day linear (MTD / complete elapsed days
+      * days in month) and is suppressed (NULL) for the first 7 days of the month — a
+      one-or-two-day sample extrapolated across a month is dominated by day-of-week shape.
+      Cannot answer for any month other than the current one.
+    config:
+      materialized: view
+      labels:
+        layer: intermediate
+        status: live
+        verified_at: '2026-09-02'
+      meta:
+        answers: "For the month in progress, how much has happened so far and where is it heading?"
+        grain: "period-only — exactly one row, always the current month"
+        filters:
+          - rule: "every *_mtd figure uses `< CURRENT_DATE()`"
+            why: "today is incomplete; including a partial day understates the daily rate and inflates the projection"
+          - rule: "bom_customers reads the PRIOR (settled) month's BOM row, not the current month's"
+            why: >
+              the current month's BOM row accumulates from billing transactions across the
+              month (July settled at 3,788; August read 2,171 mid-month), so using it directly
+              understates the base and inflates churn rate by ~75%
+          - rule: "trajectory returns NULL when elapsed_days < min_trajectory_days (7)"
+            why: >
+              seven days is the shortest window containing every weekday exactly once, so
+              day-of-week effects cancel rather than dominate; below it the projection is
+              noise wearing a number
+        methodology_source: >
+          Adopted into dbt 2026-09-02 from a hand-written BigQuery view that existed nowhere
+          in version control while being the shared upstream for 15 of the 19 unmanaged views
+          in revenue_metrics. SQL unchanged apart from ref()/source() substitution. The
+          trajectory floor was applied to the BQ view first and diff-verified before this
+          model was written.
+        parity_verified:
+          against: "the pre-change BQ view, column by column"
+          date: "2026-09-02"
+          values: >
+            Five trajectory columns moved to NULL as intended; trials_mtd 15, syncs_mtd 5,
+            conversions_mtd 3, churn_mtd 2, bom_customers 3778, churn_rate_mtd 0.0529,
+            conversions_forecast_mtd 2.5, churn_forecast_mtd 3.1 all identical.
+        limitations:
+          - >
+            Deliberately does NOT match Looker's Method Monday page. That page divides by
+            day-of-month while its MTD excludes today — an inconsistent pairing that
+            understates by day/(day-1), 2x on day 2. A mismatch there is not a parity failure.
+          - >
+            Looker's Method Monday trajectories are also wrong for closed months: with August
+            selected it showed a Trial Trajectory of 13,200 against an actual of 440
+            (actual × days_in_month). Do not use that page to verify any trajectory.
+        caveats:
+          - "Current month only. There is no way to query a prior month from this model."
+          - "Trajectory is NULL on days 1–6. Consumers must fall back to MTD + prior month, not render a blank."
+          - "Three upstreams are still hand-written BQ views: int_conversions, int_cancellations, int_bom_customers."
+        used_by:
+          - "Method Monday deck"
+          - "v_metric__{trials,syncs,conversions,churn}_{mtd,trajectory}"
+          - "v_metric__{sync_rate,churn_rate}_mtd, v_metric__churn_rate_trajectory"
+          - "v_metric__{conversions,churn}_forecast_mtd"
+
+    columns:
+      - name: period
+        description: First day of the current month. Always `DATE_TRUNC(CURRENT_DATE(), MONTH)`.
+      - name: elapsed_days
+        description: Complete days elapsed this month, excluding today. Zero on the 1st.
+      - name: days_in_month
+        description: Calendar days in the current month.
+      - name: min_trajectory_days
+        description: >
+          Threshold below which trajectory is suppressed (7). Exposed so consumers read it
+          rather than hardcoding the number.
+      - name: trials_mtd
+        description: Trials so far this month, excluding today.
+      - name: syncs_mtd
+        description: Syncs so far this month, excluding today.
+      - name: conversions_mtd
+        description: Conversions so far this month, excluding today.
+      - name: churn_mtd
+        description: Distinct CompanyAccounts cancelled so far this month, excluding today.
+      - name: bom_customers
+        description: >
+          Beginning-of-month customer base at CompanyAccount grain, from the most recently
+          SETTLED month — not the current month, whose row is still accumulating.
+      - name: trials_trajectory
+        description: Calendar-day linear projection of full-month trials. NULL before day 7.
+      - name: syncs_trajectory
+        description: Calendar-day linear projection of full-month syncs. NULL before day 7.
+      - name: conversions_trajectory
+        description: Calendar-day linear projection of full-month conversions. NULL before day 7.
+      - name: churn_trajectory
+        description: Calendar-day linear projection of full-month churn. NULL before day 7.
+      - name: churn_rate_mtd
+        description: "churn_mtd / (bom_customers + conversions_mtd), as a percentage."
+      - name: churn_rate_trajectory
+        description: >
+          churn_trajectory / (bom_customers + conversions_trajectory), as a percentage.
+          NULL before day 7, inherited from its inputs.
+      - name: conversions_forecast_mtd
+        description: Full-month conversion forecast prorated to the elapsed window. Not suppressed early.
+      - name: churn_forecast_mtd
+        description: Full-month churn forecast prorated to the elapsed window. Not suppressed early.
