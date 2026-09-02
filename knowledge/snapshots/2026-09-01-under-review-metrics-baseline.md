@@ -627,3 +627,77 @@ Budgeted / Forecasted Churn Rate % series — the last of which reads straight f
 
 New Net SaaS Details 588 · New DEP Revenue Details 63 · Churn Count Details 507 ·
 Total Net SaaS Details 1,496 · Total DEP Revenue Details 1,694 · NRR detail 31,244.
+
+---
+
+# Parity sweep — Sales page revenue sections, 2026-09-02 (sweep complete)
+
+Source: `Method - Scorecard (PROD) › Sales (PROD)` (`page/p_5wfqecngvd`), `get_page_text`.
+Footer: "Data Last Updated: 9/2/2026 4:21:22 PM".
+
+## Revenue budget / forecast — 36 of 36 exact
+
+| period | Bud New Net SaaS | Fcst New Net SaaS | Bud Total Net SaaS | Fcst Total Net SaaS | Bud Total DEP | Fcst Total DEP |
+|---|---:|---:|---:|---:|---:|---:|
+| Apr 2026 | 19,098.90 | 14,193.90 | 879,624 | 831,752 | 151,920 | 135,000 |
+| May 2026 | 18,353.89 | 13,619.42 | 897,731 | 838,518 | 157,237 | 134,973 |
+| Jun 2026 | 18,462.88 | 13,120.43 | 916,606 | 847,496 | 162,740 | 138,000 |
+| Jul 2026 | 17,205.92 | 11,849.22 | 934,420 | 851,355 | 168,436 | 138,026 |
+| Aug 2026 | 17,270.60 | 10,399.31 | 951,712 | 857,004 | 174,332 | 137,345 |
+| Sep 2026 | 18,462.60 | 10,230.64 | 970,718 | 852,270 | 180,433 | 136,825 |
+
+Every Looker value equals `SUM(<column>)` from `revenue.method_forecast` by month.
+
+**Gotcha for anyone querying these:** the currency columns in `method_forecast` are stored as
+**STRING**, not numeric — `SUM()` fails outright. Strip non-numerics before casting:
+`SAFE_CAST(REGEXP_REPLACE(CAST(col AS STRING), r'[^0-9.\-]', '') AS FLOAT64)`.
+
+## Budgeted / Forecasted Churn Rate % — 12 of 12 exact
+
+| period | Budgeted | Forecasted |
+|---|---:|---:|
+| Apr 2026 | 1.97% | 2.46% |
+| May 2026 | 1.90% | 2.28% |
+| Jun 2026 | 1.85% | 2.18% |
+| Jul 2026 | 1.85% | 2.43% |
+| Aug 2026 | 1.81% | 2.24% |
+| Sep 2026 | 1.78% | 2.40% |
+
+Stored as decimal fractions (0.0197), displayed as percentages. Multiply by 100.
+
+## Weekly churn counts — 5 of 6 exact
+
+| week starting | Looker | ours |
+|---|---:|---:|
+| 2026-07-27 | 1 | 16 |
+| 2026-08-03 | 26 | 26 |
+| 2026-08-10 | 47 | 47 |
+| 2026-08-17 | 20 | 20 |
+| 2026-08-24 | 18 | 18 |
+| 2026-08-31 | 8 | 8 |
+
+Same partial-week edge as trials and syncs: Looker's chart window opens inside the week of Jul 27,
+so its first bucket is truncated. Every complete week matches.
+
+---
+
+# Sweep complete — all four Looker pages
+
+| Page | Result |
+|---|---|
+| Marketing | trials, syncs, sync_rate (monthly 6/6, weekly 5/5 complete weeks); #406, #407, #414; forecast/budget series 36/36 |
+| Sales | #357, #319, #324; annual_nrr 8/8 within 0.23pp; churn_rate 5/5; revenue budget/forecast 36/36; churn rate % 12/12; weekly churn 5/5 complete weeks |
+| Sales Detailed | #357 settled via Looker's own Conversion Rate Details table; churn_rate confirmed again |
+| Method Monday | conversions, churn (Aug). Trajectories unverifiable — Looker's own are wrong there |
+
+**Roughly 150 individual values checked. Every closed-month comparison matched exactly**, with three
+understood exceptions:
+
+1. `annual_nrr` on recent months — up to 0.23pp, from the record-ID vs account-name join and
+   Looker's cached refresh. Documented, not chased.
+2. Partial first weeks on every weekly chart — an artefact of Looker's window, not a definition gap.
+3. In-progress-month values, which move intraday on both sides.
+
+**Nothing found wrong with any dbt-managed metric.** The problems this sweep surfaced were all in
+the label layer (metrics claiming `live` without evidence, or rendering on a scorecard while marked
+`queued`) and in the trajectory family, where both implementations were wrong in different ways.
