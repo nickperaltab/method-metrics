@@ -184,6 +184,17 @@ sources:
       refreshed by scripts/marketing_spend_sync.py (WRITE_TRUNCATE). Spend
       dollars live only in BQ and the sheet, never in this repo.
     tables:
+      - name: CampaignCookieClicks
+        description: >
+          One row per marketing click, from Alocet's pixel tracker. Carries the
+          raw click (Referrer, URL, Keyword, BrowserInfo) plus the channel
+          classification applied by CookieClickSplitterService
+          (CampaignAdjustedRecordID, SplitAdjusted, AdjustedByRuleRecordID,
+          LastAdjusted, OverrideRecordID) -- those adjusted columns only began
+          syncing on 2026-09-01. Read via int_cookie_clicks, which corrects
+          three known defects in the upstream rule engine.
+      - name: Campaign
+        description: Campaign lookup. RecordID joins to CampaignCookieClicks.CampaignAdjustedRecordID to give the channel name.
       - name: sheet_cac_raw
         description: Long-format rows (source_tab, block, channel, measure, month, scenario, value) from the marketing tracker's CAC:ARR 2025/2026 tabs. Channel names match revenue.int_customers.AttributionChannel where 1:1; TOTAL and sub-split blocks (PPC_TRIALGEN, PPC_BRANDING, Partners_NO_EVENTS) are non-canonical.
 
@@ -214,3 +225,19 @@ sources:
     tables:
       - name: v_entity_primary_label
         description: One row per customer_record_id (= EntityRecordID). Columns used, l1, is_multi_client. Same source the GRR-by-Industry page uses.
+
+  - name: customer_signals
+    database: project-for-method-dw
+    schema: customer_signals
+    description: >
+      Call transcript corpus. Zoom recordings ingested by Nic's pipeline,
+      2025-01 onward. Content-bearing — transcripts live here and must never be
+      copied into the repo or duplicated into another table.
+    tables:
+      - name: conversations
+        description: >
+          One row per recorded call. Keyed conversation_id. account_id joins to
+          revenue.Account.RecordID (= int_accounts.account_record_id), NOT to
+          EntityRecordID — verified 2,527/2,527 exact. call_type is derived from
+          the Method-side activity subject line, so it is NOT independent
+          evidence of what a call was about.

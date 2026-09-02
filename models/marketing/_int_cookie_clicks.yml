@@ -1,0 +1,88 @@
+version: 2
+
+models:
+  - name: int_cookie_clicks
+    description: |
+      One row per marketing click, with the channel corrected in dbt and AIO
+      promoted to a top-level channel.
+
+      WHY IT EXISTS. Channel classification happens upstream in Alocet: ~60
+      ordered rules in CampaignCookieSplitRules, applied by
+      CookieClickSplitterService, landing in CampaignAdjustedRecordID and
+      SplitAdjusted. Those columns only began syncing to BigQuery on
+      2026-09-01. The rule engine has three defects this model corrects
+      without waiting on a data edit to a production table that has no review
+      step:
+
+        1. Gemini invisible. Rule 23 matches any referrer containing "google"
+           at RuleOrder 130; every AI rule sits at 194+ and first match wins.
+           245 Gemini clicks in 2026 were credited to SEO.
+        2. Perplexity labelled "ChatGPT" (rule 70 sets the wrong SetSplitTo).
+        3. AI traffic with no referrer lands in Direct. Rule 15 catches blank
+           referrers at RuleOrder 50, before the UTM-based AI rules at 199+.
+           514 AI clicks in 2026 were credited to Direct.
+
+      The rules table stays the operational source for Slack alerts and the
+      Att_* stamp. This model is the reporting truth, and it is versioned,
+      reviewable and retroactive over the full click history back to 2013.
+
+      WHAT AIO MEANS. A click whose referrer or landing URL names an AI
+      assistant. Captures referred and UTM-tagged traffic. It CANNOT capture
+      Google AI Overview clicks, which arrive as ordinary google.com organic
+      with nothing to distinguish them. AIO is therefore a floor, not a total.
+
+      SIZE, so nobody is surprised. 2,036 AIO clicks in 2026 (0.24% of all
+      clicks). As a top-level channel it ranks around tenth, below Reddit Ads
+      and Cold Outbound. Volume by year: 625 (2023), 1,714 (2024), 5,246
+      (2025), 2,036 (2026 to date). The apparent decline after 2025 is most
+      likely measurement loss — assistants increasingly strip the referrer, so
+      those visits fall into Direct with nothing to match on — rather than a
+      real fall in AI-sourced traffic. Do not present it as a downward trend.
+
+      GRAIN: one row per click. Deleted and IsToBeIgnored clicks excluded.
+    columns:
+      - name: click_id
+        description: CampaignCookieClicks.RecordID. Unique per click.
+      - name: cookie_id
+        description: CampaignCookie.RecordID. Joins to Account.CookieRecordID to reach a customer.
+      - name: clicked_at
+        description: Click timestamp, UTC.
+      - name: clicked_date
+        description: Click date, UTC.
+      - name: referrer
+        description: Referring URL as captured by the pixel. Blank for direct and for assistants that strip it.
+      - name: landing_url
+        description: The page the pixel fired on. Carries UTM parameters where present.
+      - name: keyword
+        description: Campaign keyword token. "DirectSEO" is the catch-all for untagged organic and direct.
+      - name: browser_info
+        description: User agent string. The upstream catch-all rule matches on this.
+      - name: campaign_raw_id
+        description: CampaignRecordID before the split rules ran. Frequently null for organic traffic.
+      - name: campaign_adjusted_id
+        description: CampaignRecordID after the split rules ran. Populated on 99.9% of 2026 clicks.
+      - name: adjusted_by_rule_id
+        description: Which CampaignCookieSplitRules row set the adjusted campaign. Lineage, but not immutable — editing a rule changes what that id means retroactively.
+      - name: override_id
+        description: Manual human correction. Rare (111 rows in 2026) and deliberate; do not discard.
+      - name: split_adjusted
+        description: The sub-channel label the rule engine assigned. Unreliable for AI — Perplexity is labelled ChatGPT and Gemini is labelled Google. Prefer ai_source.
+      - name: channel_as_recorded
+        description: Channel name from the rule engine, before AIO promotion. Use to reconcile against Looker and the Slack alerts.
+      - name: ai_source
+        description: >
+          Which assistant the click came from: ChatGPT, Perplexity, Gemini,
+          Claude, Copilot, or Other AI. NULL for non-AI clicks. Derived from
+          referrer and landing URL, independent of the upstream rules.
+      - name: is_aio
+        description: TRUE when ai_source is set.
+      - name: channel
+        description: >
+          The corrected top-level channel. AIO where is_aio, otherwise
+          channel_as_recorded unchanged. This is the column reporting should
+          group by.
+      - name: channel_before_aio_promotion
+        description: >
+          For AIO clicks, the channel they were previously credited to. Makes
+          the promotion auditable and lets you quantify what SEO and Direct
+          lose. NULL for non-AIO clicks.
