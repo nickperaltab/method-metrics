@@ -248,6 +248,34 @@ export function conversions(calls) {
     .sort((a, b) => (b.callDate ?? '').localeCompare(a.callDate ?? ''));
 }
 
+// ── Sorting ────────────────────────────────────────────────────────────────
+
+/**
+ * Sort a set of aggregate rows by one column.
+ *
+ * `value` reads the column out of a row; `tiebreak` settles equal values so
+ * the order never wobbles between renders. Missing values sink to the bottom in
+ * BOTH directions — a consultant with no eligible Free Hours has no rate rather
+ * than the worst one, and sorting them to the top of an ascending rate column
+ * would bury the people the column exists to show.
+ */
+export function sortRows(rows, { value, dir = 'desc', tiebreak = null } = {}) {
+  const sign = dir === 'asc' ? 1 : -1;
+  const missing = (v) => v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v));
+  return [...rows].sort((a, b) => {
+    const av = value(a);
+    const bv = value(b);
+    if (missing(av) || missing(bv)) {
+      if (missing(av) && missing(bv)) return tiebreak ? tiebreak(a, b) : 0;
+      return missing(av) ? 1 : -1;
+    }
+    const cmp = typeof av === 'string' || typeof bv === 'string'
+      ? String(av).localeCompare(String(bv))
+      : av - bv;
+    return cmp * sign || (tiebreak ? tiebreak(a, b) : 0);
+  });
+}
+
 export async function fetchFreeHours({ query = queryBqWithRetry, start = REPORTING_START } = {}) {
   const { rows } = await query(buildFreeHoursSql(start));
   return rows.map(normalizeFreeHourRow);

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   fetchFreeHours, filterCalls, summarize, byMonth, byConsultant, bySequence,
   conversions, conversionType, daysToConversion, distinctMonths, distinctConsultants,
-  distinctLastFhMonths,
+  distinctLastFhMonths, sortRows,
   FAIR_WINDOW_DAYS,
 } from '../lib/freeHours';
 
@@ -125,6 +125,78 @@ const TipRow = ({ k, v, accent }) => (
   </div>
 );
 
+// Inline styles can't express :focus-visible or :hover, so the sort headers get a
+// real stylesheet — a header you can tab to but can't see focused is worse than
+// one you can't tab to at all.
+const FH_CSS = `
+.fh-sort {
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: 5px;
+}
+.fh-sort:hover { color: #1a1a1a; }
+.fh-sort:focus-visible { outline: 2px solid #047857; outline-offset: 3px; border-radius: 2px; }
+.fh-caret { font-size: 8px; line-height: 1; width: 7px; text-align: center; }
+`;
+
+const ALREADY_TIP = 'Accounts already buying Pay-Per-Use or Dedicated work before the call. Their later billed hours are business as usual, so they sit outside the rate but still count as Free Hours delivered.';
+const CONSULTANT_RATE_TIP = 'Converted divided by the Free Hours that could convert, over the period selected above. A consultant with only a handful of Free Hours will swing wildly — read the Free Hours column first.';
+
+// Columns of the two sortable tables. `value` is what the column sorts on, which
+// is not always what the cell prints: Rate sorts on null for a consultant with
+// nothing eligible so they sink instead of ranking as 0%.
+const REP_COLS = [
+  { key: 'consultant', label: 'Consultant', text: true, value: (r) => r.consultant },
+  { key: 'delivered', label: 'Free Hours', value: (r) => r.delivered },
+  {
+    key: 'alreadyPaying',
+    label: 'Already paying',
+    tip: ALREADY_TIP,
+    tipLabel: 'About already-paying accounts',
+    value: (r) => r.alreadyPaying,
+  },
+  { key: 'converted', label: 'Converted', value: (r) => r.converted },
+  {
+    key: 'rate',
+    label: 'Rate',
+    align: 'left',
+    tip: CONSULTANT_RATE_TIP,
+    tipLabel: 'About consultant rate',
+    value: (r) => (r.eligible ? r.rate : null),
+  },
+  { key: 'ppu', label: 'PPU', value: (r) => r.ppu },
+  { key: 'dep', label: 'DEP', value: (r) => r.dep },
+  { key: 'paidHours', label: 'Paid hrs', value: (r) => r.paidHours },
+];
+
+const WON_COLS = [
+  { key: 'callDate', label: 'Free Hour', text: true, align: 'left', open: 'desc', value: (c) => c.callDate },
+  { key: 'account', label: 'Account', text: true, align: 'left', value: (c) => c.account },
+  { key: 'consultant', label: 'Consultant', text: true, align: 'left', value: (c) => c.consultant },
+  { key: 'seq', label: 'Nth FH', value: (c) => c.seq },
+  { key: 'kind', label: 'Bought', text: true, align: 'left', value: (c) => conversionType(c) },
+  { key: 'daysToAgreement', label: 'Days to sign', value: (c) => c.daysToAgreement },
+  { key: 'daysToFirst', label: 'Days to 1st hour', value: (c) => daysToConversion(c) },
+  { key: 'paidHours90d', label: 'Paid hrs', value: (c) => c.paidHours90d || null },
+];
+
+/**
+ * Sort state for one table. A column you click for the first time opens the way
+ * you'd want to read it: names A–Z, counts and dates highest first. `open`
+ * overrides that per column.
+ */
+function useSort(defaultKey, defaultDir = 'desc') {
+  const [key, setKey] = useState(defaultKey);
+  const [dir, setDir] = useState(defaultDir);
+  const toggle = (col) => {
+    if (col.key === key) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setKey(col.key); setDir(col.open ?? (col.text ? 'asc' : 'desc')); }
+  };
+  return { key, dir, toggle };
+}
+
+const CARETS = { asc: '▲', desc: '▼' };
+
 /** A circled "i". Opens the same tooltip on hover and on keyboard focus. */
 function InfoDot({ label, content, onShow, onHide }) {
   const open = (e) => onShow(e, content);
@@ -140,6 +212,39 @@ function InfoDot({ label, content, onShow, onHide }) {
     >
       i
     </button>
+  );
+}
+
+/**
+ * One sortable header. The caret shows on every column so the row reads as
+ * sortable. Where a column also explains itself, the info dot sits BESIDE the
+ * sort button rather than inside it — nesting buttons is invalid HTML, and it
+ * keeps "read the note" from firing "re-sort the table".
+ */
+function SortTh({ col, sort, onShow, onHide }) {
+  const active = sort.key === col.key;
+  const right = col.align !== 'left' && !col.text;
+  return (
+    <th
+      scope="col"
+      style={{ ...s.th, ...(right ? s.thn : null), ...(active ? { color: '#1a1a1a' } : null) }}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className="fh-sort" onClick={() => sort.toggle(col)}>
+        {col.label}
+        <span className="fh-caret" style={{ opacity: active ? 1 : 0.4 }} aria-hidden="true">
+          {active ? CARETS[sort.dir] : '▼'}
+        </span>
+      </button>
+      {col.tip && (
+        <InfoDot
+          label={col.tipLabel}
+          content={<div style={s.tipNote}>{col.tip}</div>}
+          onShow={onShow}
+          onHide={onHide}
+        />
+      )}
+    </th>
   );
 }
 
@@ -188,8 +293,29 @@ export default function FreeHours() {
   );
   const totals = useMemo(() => summarize(scoped), [scoped]);
   const monthly = useMemo(() => byMonth(scoped), [scoped]);
-  const reps = useMemo(() => byConsultant(scoped), [scoped]);
-  const won = useMemo(() => conversions(scoped), [scoped]);
+  const repSort = useSort('rate');
+  const wonSort = useSort('callDate');
+
+  // Rate ties break on volume, so 100% off two Free Hours never outranks 100%
+  // off twenty. byConsultant already applies that order; sorting keeps it.
+  const reps = useMemo(() => {
+    const col = REP_COLS.find((c) => c.key === repSort.key) ?? REP_COLS[0];
+    return sortRows(byConsultant(scoped), {
+      value: col.value,
+      dir: repSort.dir,
+      tiebreak: (a, b) => b.delivered - a.delivered || a.consultant.localeCompare(b.consultant),
+    });
+  }, [scoped, repSort.key, repSort.dir]);
+
+  const won = useMemo(() => {
+    const col = WON_COLS.find((c) => c.key === wonSort.key) ?? WON_COLS[0];
+    return sortRows(conversions(scoped), {
+      value: col.value,
+      dir: wonSort.dir,
+      tiebreak: (a, b) => (b.callDate ?? '').localeCompare(a.callDate ?? ''),
+    });
+  }, [scoped, wonSort.key, wonSort.dir]);
+  // Sort first, cut second — the 50 rows shown are the top 50 of the chosen order.
   const wonShown = useMemo(() => won.slice(0, ROW_LIMIT), [won]);
 
   // The sequence panel deliberately ignores the segment filter — it exists to
@@ -254,10 +380,13 @@ export default function FreeHours() {
   );
 
   const RATE_TIP = `Counts a conversion whenever it happened, so an older period has had more time to accumulate them. Hover a bar in the chart below for that month's like-for-like rate within ${FAIR_WINDOW_DAYS} days.`;
-  const ALREADY_TIP = 'Accounts already buying Pay-Per-Use or Dedicated work before the call. Their later billed hours are business as usual, so they sit outside the rate but still count as Free Hours delivered.';
+  // Rate meters are scaled to the best rate on screen, so re-sorting the table
+  // never changes a bar's length.
+  const best = Math.max(1, ...reps.map((x) => x.rate ?? 0));
 
   return (
     <div style={s.wrap}>
+      <style>{FH_CSS}</style>
       <div style={s.title}>Free Hours</div>
       <div style={s.sub}>
         How many Free Hours we delivered, and how many turned into paid Pay-Per-Use or Dedicated work.
@@ -437,25 +566,19 @@ export default function FreeHours() {
       <div style={s.panel}>
         <div style={s.phead}>
           <div style={s.ph2}>By consultant</div>
-          <div style={s.phsub}>{period}. Ranked by conversion rate.</div>
+          <div style={s.phsub}>{period}. Click a column to sort.</div>
         </div>
         <table style={s.table} aria-label="Free Hour conversion by consultant">
           <thead>
             <tr>
-              <th scope="col" style={s.th}>Consultant</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Free Hours</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Already paying<InfoDot label="About already-paying accounts" content={<div style={s.tipNote}>{ALREADY_TIP}</div>} onShow={showTip} onHide={hideTip} /></th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Converted</th>
-              <th scope="col" style={s.th}>Rate<InfoDot label="About consultant rate" content={<div style={s.tipNote}>Converted divided by the Free Hours that could convert, over the period selected above. A consultant with only a handful of Free Hours will swing wildly — read the Free Hours column first.</div>} onShow={showTip} onHide={hideTip} /></th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>PPU</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>DEP</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Paid hrs</th>
+              {REP_COLS.map((c) => (
+                <SortTh key={c.key} col={c} sort={repSort} onShow={showTip} onHide={hideTip} />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {reps.length === 0 && <tr><td style={s.td} colSpan={8}><div style={s.note2}>No Free Hours in this selection.</div></td></tr>}
+            {reps.length === 0 && <tr><td style={s.td} colSpan={REP_COLS.length}><div style={s.note2}>No Free Hours in this selection.</div></td></tr>}
             {reps.map((r) => {
-              const best = Math.max(1, ...reps.map((x) => x.rate ?? 0));
               return (
                 <tr key={r.consultant}>
                   <td style={s.td}>{r.consultant}</td>
@@ -486,24 +609,19 @@ export default function FreeHours() {
             {won.length > 0 && won.length <= ROW_LIMIT
               && `${won.length} Free Hour${won.length === 1 ? '' : 's'} that produced billed work.`}
             {won.length > ROW_LIMIT
-              && `Showing ${ROW_LIMIT} of ${won.length}. Narrow the period or consultant to see the rest.`}
+              && `Top ${ROW_LIMIT} of ${won.length} in this order. Sort or filter to see others.`}
           </div>
         </div>
         <table style={s.table} aria-label="Free Hours that produced billed work">
           <thead>
             <tr>
-              <th scope="col" style={s.th}>Free Hour</th>
-              <th scope="col" style={s.th}>Account</th>
-              <th scope="col" style={s.th}>Consultant</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Nth FH</th>
-              <th scope="col" style={s.th}>Bought</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Days to sign</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Days to 1st hour</th>
-              <th scope="col" style={{ ...s.th, ...s.thn }}>Paid hrs</th>
+              {WON_COLS.map((c) => (
+                <SortTh key={c.key} col={c} sort={wonSort} onShow={showTip} onHide={hideTip} />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {won.length === 0 && <tr><td style={s.td} colSpan={8}><div style={s.note2}>Nothing to show.</div></td></tr>}
+            {won.length === 0 && <tr><td style={s.td} colSpan={WON_COLS.length}><div style={s.note2}>Nothing to show.</div></td></tr>}
             {wonShown.map((c) => {
               const kind = conversionType(c);
               return (
