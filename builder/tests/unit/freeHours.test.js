@@ -19,6 +19,14 @@ import {
   bySequence,
   conversions,
   sortRows,
+  isTrial,
+  byAgreementSent,
+  totalAgreementsSent,
+  filterAgreements,
+  normalizeAgreementRow,
+  buildAgreementsSentSql,
+  fetchAgreementsSent,
+  AGREEMENT_WINDOW_DAYS,
   fetchFreeHours,
 } from '../../src/lib/freeHours.js';
 
@@ -31,7 +39,10 @@ const fh = (o = {}) => ({
   callDate: o.callDate ?? '2026-03-10',
   month: o.month ?? (o.callDate ?? '2026-03-10').slice(0, 7),
   seq: o.seq ?? 1,
-  alreadyPaying: o.alreadyPaying ?? false,
+  openCaseAtCall: o.openCaseAtCall ?? false,
+  payingSaasAtCall: o.payingSaasAtCall ?? false,
+  saasStateUnknown: o.saasStateUnknown ?? false,
+  daysToAgreementSent: o.daysToAgreementSent ?? null,
   priorConsultingCase: o.priorConsultingCase ?? false,
   daysToPpu: o.daysToPpu ?? null,
   daysToDep: o.daysToDep ?? null,
@@ -47,14 +58,14 @@ describe('buildFreeHoursSql', () => {
     const sql = buildFreeHoursSql();
     expect(sql).toContain(FREE_HOUR_VIEW);
     expect(sql).toMatch(/cohort_month >= DATE '2026-01-01'/);
-    expect(sql).toMatch(/ORDER BY call_date DESC/);
+    expect(sql).toMatch(/ORDER BY v\.call_date DESC/);
   });
 
   it('computes day offsets in SQL so the client never does date maths', () => {
     const sql = buildFreeHoursSql();
-    expect(sql).toMatch(/DATE_DIFF\(first_ppu_date, call_date, DAY\)\) AS days_to_ppu/);
-    expect(sql).toMatch(/DATE_DIFF\(first_dep_date, call_date, DAY\)\) AS days_to_dep/);
-    expect(sql).toMatch(/DATE_DIFF\(first_agreement_date, call_date, DAY\)\) AS days_to_agreement/);
+    expect(sql).toMatch(/DATE_DIFF\(v\.first_ppu_date, v\.call_date, DAY\)\) AS days_to_ppu/);
+    expect(sql).toMatch(/DATE_DIFF\(v\.first_dep_date, v\.call_date, DAY\)\) AS days_to_dep/);
+    expect(sql).toMatch(/DATE_DIFF\(v\.first_agreement_date, v\.call_date, DAY\)\) AS days_to_agreement/);
   });
 
   it('refuses a malformed start rather than interpolating it', () => {
@@ -69,13 +80,13 @@ describe('normalizeFreeHourRow', () => {
     const row = normalizeFreeHourRow({
       fh_id: '9', account_record_id: '4242', account: 'acme', consultant: 'Ada Lovelace',
       call_date: '2026-03-10', cohort_month: '2026-03', fh_seq: '2',
-      already_paying: 'true', prior_consulting_case: 'false',
+      open_case_at_call: 'true', prior_consulting_case: 'false',
       days_to_ppu: '12', days_to_dep: '', days_to_agreement: '4',
       paid_hours_90d: '18.5', days_elapsed: '90',
     });
     expect(row).toMatchObject({
       id: 9, accountRecordId: 4242, seq: 2,
-      alreadyPaying: true, priorConsultingCase: false,
+      openCaseAtCall: true, priorConsultingCase: false,
       daysToPpu: 12, daysToDep: null, daysToAgreement: 4,
       paidHours90d: 18.5, daysElapsed: 90,
     });
@@ -126,8 +137,8 @@ describe('segments', () => {
     expect(matchesSegment(fh({ seq: 7 }), 'all')).toBe(true);
   });
 
-  it('excludes accounts already buying PS work from the rate', () => {
-    expect(canConvert(fh({ alreadyPaying: true }))).toBe(false);
+  it('excludes accounts with a consulting case open at the call', () => {
+    expect(canConvert(fh({ openCaseAtCall: true }))).toBe(false);
     expect(canConvert(fh())).toBe(true);
   });
 });
@@ -211,13 +222,13 @@ describe('summarize', () => {
     fh({ id: 1, daysToPpu: 4, daysToAgreement: 2, paidHours90d: 10 }),
     fh({ id: 2, daysToDep: 40, daysToAgreement: 35, paidHours90d: 6 }),
     fh({ id: 3 }),
-    fh({ id: 4, alreadyPaying: true, daysToDep: 3 }),
+    fh({ id: 4, openCaseAtCall: true, daysToDep: 3 }),
   ];
 
-  it('keeps already-paying calls in the delivered count but out of the rate', () => {
+  it('keeps open-case calls in the delivered count but out of the rate', () => {
     const t = summarize(calls);
     expect(t.delivered).toBe(4);
-    expect(t.alreadyPaying).toBe(1);
+    expect(t.openCaseAtCall).toBe(1);
     expect(t.eligible).toBe(3);
     expect(t.converted).toBe(2);
     expect(t.rate).toBe(67);
@@ -295,14 +306,14 @@ describe('bySequence', () => {
     expect(rows[3].delivered).toBe(1);
   });
 
-  it('surfaces that repeats skew toward accounts already paying', () => {
+  it('surfaces that repeats skew toward accounts mid-engagement', () => {
     const rows = bySequence([
       fh({ seq: 1 }),
-      fh({ seq: 2, alreadyPaying: true }),
-      fh({ seq: 2, alreadyPaying: true }),
+      fh({ seq: 2, openCaseAtCall: true }),
+      fh({ seq: 2, openCaseAtCall: true }),
     ]);
-    expect(rows[0].alreadyPaying).toBe(0);
-    expect(rows[1].alreadyPaying).toBe(2);
+    expect(rows[0].openCaseAtCall).toBe(0);
+    expect(rows[1].openCaseAtCall).toBe(2);
     expect(rows[1].eligible).toBe(0);
     expect(rows[1].rate).toBeNull();
   });
@@ -314,7 +325,7 @@ describe('conversions', () => {
       fh({ id: 1, callDate: '2026-01-05', daysToPpu: 2 }),
       fh({ id: 2, callDate: '2026-04-05', daysToDep: 9 }),
       fh({ id: 3, callDate: '2026-05-05' }),
-      fh({ id: 4, callDate: '2026-06-05', alreadyPaying: true, daysToPpu: 1 }),
+      fh({ id: 4, callDate: '2026-06-05', openCaseAtCall: true, daysToPpu: 1 }),
     ]);
     expect(rows.map((r) => r.id)).toEqual([2, 1]);
   });
@@ -366,7 +377,7 @@ describe('sortRows', () => {
 
   it('sinks a consultant with no eligible Free Hours rather than ranking them 0%', () => {
     const reps = byConsultant([
-      fh({ consultant: 'Only paying', alreadyPaying: true, daysToPpu: null }),
+      fh({ consultant: 'Only paying', openCaseAtCall: true, daysToPpu: null }),
       fh({ consultant: 'Converted', daysToPpu: 4 }),
       fh({ consultant: 'Missed', daysToPpu: null }),
     ]);
@@ -375,11 +386,172 @@ describe('sortRows', () => {
   });
 });
 
+describe('eligibility', () => {
+  it('frees an account whose earlier consulting case has closed', () => {
+    // The whole point of the rule change: past PS work no longer disqualifies.
+    expect(canConvert(fh({ openCaseAtCall: false, priorConsultingCase: true }))).toBe(true);
+    expect(canConvert(fh({ openCaseAtCall: true }))).toBe(false);
+  });
+
+  it('counts an open-case call as delivered but keeps it out of the rate', () => {
+    const t = summarize([
+      fh({ openCaseAtCall: true, daysToPpu: 5 }),
+      fh({ openCaseAtCall: false, daysToPpu: 5 }),
+    ]);
+    expect(t.delivered).toBe(2);
+    expect(t.openCaseAtCall).toBe(1);
+    expect(t.eligible).toBe(1);
+    expect(t.converted).toBe(1);
+    expect(t.rate).toBe(100);
+  });
+});
+
+describe('trial vs existing customer', () => {
+  it('treats no paying SaaS MRR in the call month as a trial', () => {
+    expect(isTrial(fh({ payingSaasAtCall: false }))).toBe(true);
+    expect(isTrial(fh({ payingSaasAtCall: true }))).toBe(false);
+    expect(matchesSegment(fh({ payingSaasAtCall: false }), 'trial')).toBe(true);
+    expect(matchesSegment(fh({ payingSaasAtCall: true }), 'customer')).toBe(true);
+    expect(matchesSegment(fh({ payingSaasAtCall: true }), 'trial')).toBe(false);
+  });
+
+  it('splits delivered into trial and existing-customer counts', () => {
+    const t = summarize([
+      fh({ payingSaasAtCall: false }),
+      fh({ payingSaasAtCall: false }),
+      fh({ payingSaasAtCall: true }),
+    ]);
+    expect(t.trialFreeHours).toBe(2);
+    expect(t.customerFreeHours).toBe(1);
+  });
+});
+
+describe('agreements the rep sent', () => {
+  it('rates agreements against trial Free Hours, not all of them', () => {
+    const t = summarize([
+      fh({ payingSaasAtCall: false, daysToAgreementSent: 3 }),
+      fh({ payingSaasAtCall: false, daysToAgreementSent: null }),
+      // An existing customer with an agreement must not lift the trial rate.
+      fh({ payingSaasAtCall: true, daysToAgreementSent: 1 }),
+    ]);
+    expect(t.trialFreeHours).toBe(2);
+    expect(t.repSentAgreement).toBe(2);
+    expect(t.trialRepSentAgreement).toBe(1);
+    expect(t.agreementRateOfTrial).toBe(50);
+  });
+
+  it('has no agreement rate when there were no trial Free Hours', () => {
+    expect(summarize([fh({ payingSaasAtCall: true })]).agreementRateOfTrial).toBeNull();
+  });
+
+  it('reports the median days until the rep sent one', () => {
+    const t = summarize([
+      fh({ daysToAgreementSent: 1 }),
+      fh({ daysToAgreementSent: 9 }),
+      fh({ daysToAgreementSent: 5 }),
+    ]);
+    expect(t.medianDaysToAgreementSent).toBe(5);
+  });
+
+  it('splits Free Hours four ways by account type and whether one was sent', () => {
+    const rows = byAgreementSent([
+      fh({ payingSaasAtCall: false, daysToAgreementSent: 2, daysToPpu: 10 }),
+      fh({ payingSaasAtCall: false, daysToAgreementSent: null }),
+      fh({ payingSaasAtCall: true, daysToAgreementSent: 4 }),
+    ]);
+    expect(rows.map((r) => r.key)).toEqual(['trial-sent', 'trial-none', 'cust-sent', 'cust-none']);
+    expect(rows[0]).toMatchObject({ delivered: 1, converted: 1, sent: true });
+    expect(rows[1]).toMatchObject({ delivered: 1, converted: 0, sent: false });
+    expect(rows[3].delivered).toBe(0);
+  });
+});
+
+describe('agreements-sent set', () => {
+  const agreements = [
+    { consultant: 'Ada Lovelace', month: '2026-01', sent: 3, accepted: 1 },
+    { consultant: 'Ada Lovelace', month: '2026-03', sent: 2, accepted: 2 },
+    { consultant: 'Grace Hopper', month: '2026-03', sent: 5, accepted: 0 },
+  ];
+
+  it('sums one consultant, or everyone when none is named', () => {
+    expect(totalAgreementsSent(agreements, 'Ada Lovelace')).toBe(5);
+    expect(totalAgreementsSent(agreements)).toBe(10);
+    expect(totalAgreementsSent(agreements, 'Nobody')).toBe(0);
+  });
+
+  it('bounds to the same period the screen is showing', () => {
+    expect(totalAgreementsSent(filterAgreements(agreements, { from: '2026-03' }))).toBe(7);
+    expect(totalAgreementsSent(filterAgreements(agreements, { to: '2026-01' }))).toBe(3);
+    expect(totalAgreementsSent(filterAgreements(agreements, { consultant: 'Grace Hopper' }))).toBe(5);
+  });
+
+  it('attaches each consultant their own count, zero when they sent none', () => {
+    const rows = byConsultant(
+      [fh({ consultant: 'Ada Lovelace' }), fh({ consultant: 'Zoe Quiet' })],
+      agreements,
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.consultant, r.agreementsSent]));
+    expect(by['Ada Lovelace']).toBe(5);
+    expect(by['Zoe Quiet']).toBe(0);
+  });
+
+  it('normalizes the BQ REST strings', () => {
+    expect(normalizeAgreementRow({ consultant: 'Ada', month: '2026-04', agreements_sent: '7', agreements_accepted: '2' }))
+      .toEqual({ consultant: 'Ada', month: '2026-04', sent: 7, accepted: 2 });
+  });
+});
+
+describe('buildAgreementsSentSql', () => {
+  it('groups by consultant and month, and only PS contract types', () => {
+    const sql = buildAgreementsSentSql();
+    expect(sql).toContain('ps_proposals');
+    expect(sql).toMatch(/GROUP BY consultant, month/);
+    expect(sql).toMatch(/'Pay-Per-Use','Dedicated','Fast Track Dedicated'/);
+    expect(sql).toMatch(/DATE\(created_date\) >= DATE '2026-01-01'/);
+  });
+
+  it('refuses a malformed start rather than interpolating it', () => {
+    const sql = buildAgreementsSentSql("2026-01-01'; DROP TABLE x --");
+    expect(sql).not.toContain('DROP TABLE');
+  });
+});
+
+describe('buildFreeHoursSql — the new columns', () => {
+  const sql = buildFreeHoursSql();
+
+  it('derives eligibility from a consulting case open at the call', () => {
+    expect(sql).toMatch(/CaseType = 'Consulting Request'/);
+    expect(sql).toMatch(/c\.closed IS NULL OR c\.closed >= v\.call_date/);
+    expect(sql).toContain('AS open_case_at_call');
+  });
+
+  it('bridges to SaaS MRR through entity_record_id, not account_record_id', () => {
+    // Joining MRR straight onto account_record_id matches under 4% of rows.
+    expect(sql).toMatch(/int_accounts/);
+    expect(sql).toMatch(/sa\.EntityRecordID = a\.entity_record_id/);
+    expect(sql).toContain('AS paying_saas_at_call');
+  });
+
+  it('counts only agreements the delivering consultant sent themselves', () => {
+    expect(sql).toMatch(/p\.assigned_to = v\.consultant/);
+    expect(sql).toMatch(new RegExp(`INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY`));
+    expect(sql).toContain('AS days_to_agreement_sent');
+  });
+});
+
+describe('fetchAgreementsSent', () => {
+  it('normalizes every row it is handed', async () => {
+    const query = async () => ({ rows: [{ consultant: 'Ada', month: '2026-02', agreements_sent: '4' }] });
+    const rows = await fetchAgreementsSent({ query });
+    expect(rows).toEqual([{ consultant: 'Ada', month: '2026-02', sent: 4, accepted: 0 }]);
+  });
+});
+
 describe('fetchFreeHours', () => {
   it('normalizes every row it is handed', async () => {
-    const query = async () => ({ rows: [{ fh_id: '1', already_paying: 'true', fh_seq: '3' }] });
+    const query = async () => ({ rows: [{ fh_id: '1', open_case_at_call: 'true', fh_seq: '3' }] });
     const rows = await fetchFreeHours({ query });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: 1, alreadyPaying: true, seq: 3 });
+    expect(rows[0]).toMatchObject({ id: 1, openCaseAtCall: true, seq: 3 });
   });
 });

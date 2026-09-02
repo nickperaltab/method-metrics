@@ -406,8 +406,10 @@ function build() {
   // ── Free Hours ───────────────────────────────────────────────────────────
   // Shaped to mirror the real distribution so the screen gets designed against
   // reality: most Free Hours are an account's first and convert around 30%;
-  // repeats are fewer and skew heavily toward accounts already paying, so they
-  // sit outside the rate. See lib/freeHours.js.
+  // repeats are fewer and skew toward accounts mid-engagement, so they sit
+  // outside the rate. Roughly 40% go to existing SaaS customers rather than
+  // trials, and the delivering rep sends the agreement on about 1 trial Free
+  // Hour in 10 — a proposal desk writes the rest. See lib/freeHours.js.
   const freeHour = (o) => ({
     fh_id: String(o.id),
     account_record_id: String(o.account),
@@ -416,11 +418,14 @@ function build() {
     call_date: o.date,
     cohort_month: o.date.slice(0, 7),
     fh_seq: String(o.seq ?? 1),
-    already_paying: String(!!o.alreadyPaying),
+    open_case_at_call: String(!!o.openCase),
+    paying_saas_at_call: String(!!o.payingSaas),
+    saas_state_unknown: 'false',
     prior_consulting_case: String(!!o.priorCase),
     days_to_ppu: o.ppu == null ? null : String(o.ppu),
     days_to_dep: o.dep == null ? null : String(o.dep),
     days_to_agreement: o.signed == null ? null : String(o.signed),
+    days_to_agreement_sent: o.sent == null ? null : String(o.sent),
     paid_hours_90d: String(o.hours ?? 0),
     days_elapsed: String(o.elapsed ?? 120),
   });
@@ -440,29 +445,47 @@ function build() {
     }));
   };
 
+  // Agreements sent per consultant per month. Deliberately larger than the
+  // agreements that follow a Free Hour: a proposal desk writes most of those,
+  // and reps also write agreements for accounts that never had a Free Hour.
+  const agreement = (consultant, month, sent, accepted) => ({
+    consultant, month, agreements_sent: String(sent), agreements_accepted: String(accepted),
+  });
+
+  const thisMonth = iso(0).slice(0, 7);
+  const lastMonth = iso(-32).slice(0, 7);
+  const AGREEMENTS = [
+    agreement(ME_FULL, thisMonth, 4, 2),
+    agreement(ME_FULL, lastMonth, 6, 5),
+    agreement('Vinesh Gobin', thisMonth, 2, 1),
+    agreement('Vinesh Gobin', lastMonth, 3, 2),
+    agreement('Cheryl Tong', thisMonth, 1, 0),
+    agreement('Cheryl Tong', lastMonth, 5, 4),
+  ];
+
   const FREE_HOURS = withLastFh([
     // Converted, first Free Hour — the common winning shape.
-    freeHour({ id: 8001, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
-    freeHour({ id: 8002, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
-    freeHour({ id: 8003, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
-    freeHour({ id: 8004, account: 4488, name: 'cedar-mill-works', consultant: 'Cheryl Tong', date: iso(-70), dep: 21, signed: 16, hours: 30, elapsed: 70 }),
+    freeHour({ id: 8001, sent: 2, payingSaas: true, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
+    freeHour({ id: 8002, sent: 5, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
+    freeHour({ id: 8003, sent: 1, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
+    freeHour({ id: 8004, sent: 12, account: 4488, name: 'cedar-mill-works', consultant: 'Cheryl Tong', date: iso(-70), dep: 21, signed: 16, hours: 30, elapsed: 70 }),
     // Did not convert.
-    freeHour({ id: 8005, account: 4501, name: 'atlas-plumbing', consultant: ME_FULL, date: iso(-64), elapsed: 64 }),
+    freeHour({ id: 8005, payingSaas: true, account: 4501, name: 'atlas-plumbing', consultant: ME_FULL, date: iso(-64), elapsed: 64 }),
     freeHour({ id: 8006, account: 4523, name: 'quill-and-press', consultant: 'Vinesh Gobin', date: iso(-58), elapsed: 58 }),
     freeHour({ id: 8007, account: 4544, name: 'bayside-marine', consultant: 'Cheryl Tong', date: iso(-51), elapsed: 51 }),
     freeHour({ id: 8008, account: 4560, name: 'ridgeline-hvac', consultant: ME_FULL, date: iso(-44), elapsed: 44 }),
-    // Repeat Free Hours: mostly accounts already paying, so out of the rate.
-    freeHour({ id: 8009, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-38), seq: 2, alreadyPaying: true, priorCase: true, hours: 4, elapsed: 38 }),
-    freeHour({ id: 8010, account: 4310, name: 'lumen-fabrication', consultant: 'Vinesh Gobin', date: iso(-30), seq: 2, alreadyPaying: true, priorCase: true, elapsed: 30 }),
-    freeHour({ id: 8011, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-12), seq: 3, alreadyPaying: true, priorCase: true, elapsed: 12 }),
+    // Repeat Free Hours: mostly accounts mid-engagement, so out of the rate.
+    freeHour({ id: 8009, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-38), seq: 2, openCase: true, priorCase: true, hours: 4, elapsed: 38 }),
+    freeHour({ id: 8010, account: 4310, name: 'lumen-fabrication', consultant: 'Vinesh Gobin', date: iso(-30), seq: 2, openCase: true, priorCase: true, elapsed: 30 }),
+    freeHour({ id: 8011, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-12), seq: 3, openCase: true, priorCase: true, elapsed: 12 }),
     // A repeat that did convert — rarer, but it happens.
-    freeHour({ id: 8012, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
+    freeHour({ id: 8012, sent: 4, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
     // Too recent to have had a full 30 days — drives the "still converting" note.
     freeHour({ id: 8013, account: 4601, name: 'granite-state-tile', consultant: ME_FULL, date: iso(-6), elapsed: 6 }),
     freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),
   ]);
 
-  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS };
+  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS, AGREEMENTS };
 }
 
 let cache = null;

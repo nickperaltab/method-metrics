@@ -10,9 +10,13 @@ import { routeMockSql } from '../../src/dev/mockBq.js';
 import { ME_FULL, ME_SHORT } from '../../src/dev/fixtures/ps.js';
 import {
   buildFreeHoursSql,
+  buildAgreementsSentSql,
   normalizeFreeHourRow,
+  normalizeAgreementRow,
   summarize,
   bySequence,
+  byConsultant,
+  totalAgreementsSent,
 } from '../../src/lib/freeHours.js';
 import {
   buildConsultantsSql,
@@ -257,22 +261,53 @@ describe('free hours', () => {
     expect([...dates].sort().reverse()).toEqual(dates);
   });
 
+  it('routes the agreements-sent query to its own route, not the Free Hour one', () => {
+    // Both queries name a call_prep table; only this one has the GROUP BY.
+    expect(routeFor(buildAgreementsSentSql())).toBe('agreements sent by consultant');
+    expect(routeFor(buildFreeHoursSql())).toBe('free hour outcomes');
+  });
+
+  it('serves agreements a consultant can be credited with', () => {
+    const rows = rowsFor(buildAgreementsSentSql()).map(normalizeAgreementRow);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.consultant && /^\d{4}-\d{2}$/.test(r.month))).toBe(true);
+    expect(rows.every((r) => Number.isInteger(r.sent) && r.sent >= 0)).toBe(true);
+    expect(rows.every((r) => r.accepted <= r.sent)).toBe(true);
+    expect(totalAgreementsSent(rows, ME_FULL)).toBeGreaterThan(0);
+  });
+
+  it('attaches agreements to the consultant rows the table renders', () => {
+    const agreements = rowsFor(buildAgreementsSentSql()).map(normalizeAgreementRow);
+    const reps = byConsultant(calls(), agreements);
+    expect(reps.length).toBeGreaterThan(0);
+    // Every rep row carries a number, and at least one of them sent something.
+    expect(reps.every((r) => Number.isInteger(r.agreementsSent))).toBe(true);
+    expect(reps.some((r) => r.agreementsSent > 0)).toBe(true);
+  });
+
+  it('splits trial from existing-customer Free Hours', () => {
+    const t2 = summarize(calls());
+    expect(t2.trialFreeHours + t2.customerFreeHours).toBe(t2.delivered);
+    expect(t2.customerFreeHours).toBeGreaterThan(0);
+    expect(t2.trialRepSentAgreement).toBeLessThanOrEqual(t2.trialFreeHours);
+  });
+
   it('summarizes into a shape the screen can render', () => {
     const t = summarize(calls());
     expect(t.delivered).toBeGreaterThan(0);
-    expect(t.eligible + t.alreadyPaying).toBe(t.delivered);
+    expect(t.eligible + t.openCaseAtCall).toBe(t.delivered);
     expect(t.converted).toBeLessThanOrEqual(t.eligible);
     expect(t.ppu + t.dep).toBe(t.converted);
     expect(t.medianDaysToAgreement).not.toBeNull();
   });
 
-  it('keeps repeat Free Hours skewed toward accounts already paying', () => {
+  it('keeps repeat Free Hours skewed toward accounts mid-engagement', () => {
     const seq = bySequence(calls());
     const first = seq.find((b) => b.key === '1st');
     const second = seq.find((b) => b.key === '2nd');
     expect(first.delivered).toBeGreaterThan(0);
-    expect(first.alreadyPaying).toBe(0);
-    expect(second.alreadyPaying).toBeGreaterThan(0);
+    expect(first.openCaseAtCall).toBe(0);
+    expect(second.openCaseAtCall).toBeGreaterThan(0);
   });
 });
 
