@@ -502,3 +502,62 @@ a documented object.
 3. **`int_method_monday` is still a hand-written BQ view.** This change makes it more correct but no
    more governed. It remains the highest-leverage single adoption — 15 of the 19 unmanaged views
    sit on it.
+
+---
+
+# Parity sweep continued — forecast/budget series and weekly grain, 2026-09-02
+
+Source: `Method - Scorecard (PROD) › Marketing (PROD)`, `get_page_text`.
+
+## Forecast and budget series — 36 of 36 values exact
+
+| period | Budgeted Trials | Forecasted Trials | Budgeted Syncs | Forecasted Syncs | Budgeted Sync % | Forecasted Sync % |
+|---|---:|---:|---:|---:|---:|---:|
+| Apr 2026 | 758.06 | 600 | 470 | 378 | 62.0% | 63.0% |
+| May 2026 | 795.16 | 620 | 493 | 391 | 62.0% | 63.1% |
+| Jun 2026 | 759.68 | 620 | 471 | 391 | 62.0% | 63.1% |
+| Jul 2026 | 682.26 | 560 | 423 | 353 | 62.0% | 63.0% |
+| Aug 2026 | 758.06 | 599 | 470 | 306 | 62.0% | 51.1% |
+| Sep 2026 | 774.19 | 560 | 480 | 286 | 62.0% | 51.1% |
+
+Every Looker value equals `SUM(<column>)` from `revenue.method_forecast` grouped by month.
+No transformation, no filter beyond `Date IS NOT NULL`.
+
+**Derivation confirmed:** Budgeted / Forecasted Sync % are not columns. Looker computes them as
+`Budgeted_Syncs / Budgeted_Trials` and `Forecasted_Syncs / Forecasted_Trials`. Every one of the
+twelve rate values reproduces exactly from that formula — including the Aug/Sep drop to 51.1%,
+which is a forecast revision (306/599 and 286/560), not a data problem.
+
+## Weekly grain — 5 of 6 weeks exact, both series
+
+Weeks start Monday. Source `int_trials`, syncs gated on `SyncTypeRegion != ''`.
+
+| week starting | Looker trials | ours | Looker syncs | ours |
+|---|---:|---:|---:|---:|
+| 2026-07-27 | 21 | 84 | 5 | 46 |
+| 2026-08-03 | 107 | 107 | 60 | 60 |
+| 2026-08-10 | 101 | 101 | 57 | 57 |
+| 2026-08-17 | 99 | 99 | 53 | 53 |
+| 2026-08-24 | 89 | 89 | 52 | 52 |
+| 2026-08-31 | 38 | 38 | 18 | 18 |
+
+The 2026-07-27 bucket is a **partial week**, not a discrepancy: Looker's chart window opens inside
+that week, so its bucket holds only the days from the window start to Aug 2, while ours holds the
+full Mon–Sun week. Every complete week matches exactly on both series.
+
+This confirms the weekly bucketing convention (Monday start) as well as the monthly one.
+
+## Running total for this sweep
+
+**Verified against Looker, exact unless noted:**
+`v_metric__trials`, `v_metric__syncs`, `v_metric__sync_rate` (monthly 6/6 and weekly 5/5 complete
+weeks) · `v_metric__conversions`, `v_metric__churn` (Aug) · `v_metric__annual_nrr` (5/8 exact,
+remainder <0.23pp, causes documented) · #357, #319, #324 · #406, #407, #414 ·
+`method_forecast` budget/forecast series (36/36).
+
+**Failed or unverifiable:** #410, #295 (elapsed-day convention — since fixed by the 7-day floor);
+the ten remaining MTD/trajectory metrics (no valid Looker counterpart — that page's own
+trajectories are wrong).
+
+**Not yet swept:** the Sales Detailed page. Sidebar navigation in Looker Studio does not respond to
+programmatic clicks; it needs its `page/` URL, the way Method Monday needed `p_rh9bepy1rd`.
