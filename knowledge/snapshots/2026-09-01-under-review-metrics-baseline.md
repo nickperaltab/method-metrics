@@ -561,3 +561,69 @@ trajectories are wrong).
 
 **Not yet swept:** the Sales Detailed page. Sidebar navigation in Looker Studio does not respond to
 programmatic clicks; it needs its `page/` URL, the way Method Monday needed `p_rh9bepy1rd`.
+
+---
+
+# Parity sweep — Sales Detailed page, 2026-09-02
+
+Source: `Method - Scorecard (PROD) › Sales Detailed (PROD)` (`page/p_npxgzx3eud`), `get_page_text`.
+Footer: "Data Last Updated: 9/2/2026 4:06:36 PM".
+
+## #357 — settled. Looker publishes its own working.
+
+The page carries a **Conversion Rate Details** table that exposes every input:
+
+| period | Budgeted CR | Forecasted CR | Conversion Rate | Conversion | Last Month's Trials | Forecasted Trials |
+|---|---:|---:|---:|---:|---:|---:|
+| Apr 2026 | 17.25% | 16.73% | 13.94% | 87 | 648 | 600 |
+| May 2026 | 17.25% | 17.09% | 14.96% | 87 | 543 | 620 |
+| Jun 2026 | 17.69% | 17.11% | 11.75% | 66 | 503 | 620 |
+| Jul 2026 | 17.06% | 16.33% | 14.68% | 78 | 503 | 560 |
+| Aug 2026 | 17.76% | 14.88% | 11.97% | 61 | 420 | 599 |
+| Sep 2026 | 18.37% | 15.05% | 0.8% | 4 | 440 | 560 |
+
+`Conversion / ((Last Month's Trials + Forecasted Trials) / 2)` reproduces the published rate on
+every closed month:
+
+- Apr `87 / ((648+600)/2)` = 87/624 = 13.94%
+- May `87 / ((543+620)/2)` = 87/581.5 = 14.96%
+- Jun `66 / ((503+620)/2)` = 66/561.5 = 11.75%
+- Jul `78 / ((503+560)/2)` = 78/531.5 = 14.68%
+- Aug `61 / ((420+599)/2)` = 61/509.5 = 11.97%
+
+**The blended actual-plus-forecast denominator is Looker's deliberate design, published as two named
+columns on its own detail table.** It is not drift and it is not something #357 invented. Both of
+our inputs also reconcile independently: conversions (87, 87, 66, 78, 61) and prior-month trials
+(648, 543, 503, 503, 420) both match our own queries exactly.
+
+This closes the question left open on 2026-09-01. The methodology note still stands — the metric
+moves with forecast error, and that belongs in `meta.limitations` — but there is nothing to fix.
+
+## Churn Rate — 5 of 5 exact, and the methodology now verified historically
+
+| period | Looker Churn Rate | ours | churned | conversions | bom_customers |
+|---|---:|---:|---:|---:|---:|
+| Apr 2026 | 2.41% | 2.41% | 95 | 87 | 3,852 |
+| May 2026 | 2.75% | 2.75% | 108 | 87 | 3,845 |
+| Jun 2026 | 2.70% | 2.70% | 105 | 66 | 3,819 |
+| Jul 2026 | 2.04% | 2.04% | 79 | 78 | 3,788 |
+| Aug 2026 | 3.05% | 3.05% | 117 | 61 | 3,778 |
+
+`churn / (bom_customers + conversions)` reproduces Looker on all five closed months. This extends
+the 2026-08-04 spot-check (Apr and Jun only) to a full run, and confirms the denominator choice —
+BOM **plus conversions**, not BOM alone — was right.
+
+Note the asymmetry is consistent with `int_method_monday`'s comment: closed months use their own
+settled BOM row, while the current month must borrow the prior month's because its own row is still
+accumulating from billing transactions.
+
+## Also on this page, already verified elsewhere
+
+`1 Year NRR by Month` (identical to the Sales page), the Conversion Rate MoM chart, and the
+Budgeted / Forecasted Churn Rate % series — the last of which reads straight from
+`method_forecast.Budgeted_Churn_Rate__` / `Forecasted_Churn_Rate__`.
+
+## Row counts, for reference
+
+New Net SaaS Details 588 · New DEP Revenue Details 63 · Churn Count Details 507 ·
+Total Net SaaS Details 1,496 · Total DEP Revenue Details 1,694 · NRR detail 31,244.
