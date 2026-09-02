@@ -139,6 +139,34 @@ If the change is structural (joins, filters change), use BigQuery time-travel (`
 
 This applies to: any view DDL changes, any column addition/removal to a view, any filter or projection change. The "I made a small change so it's probably fine" framing has produced bad parity checks. Always compare to the actual prior values.
 
+### Verify against what Looker *displays*, not against its SQL
+
+**Every parity check for a metric that also appears in Looker Studio must be tied to the number
+shown on the report.** Reconstructing Looker's definition from the SQL it sends BigQuery is not
+sufficient and has already produced one wrong conclusion (2026-09-01, metric #357: the
+reconstruction said "fails parity, −17.6%"; the report showed an exact match, 5 of 5 months).
+
+Why the SQL is not enough: Looker Studio fetches each series as a **separate query** and does the
+ratio, the chart filters, the date-range control and any calculated fields in the chart layer. The
+job log shows you the operands and never the operator. Filters you cannot see will change the
+number.
+
+**The cheap way to read it** — no screenshots, no zooming, no guessing at pixels:
+
+1. Open the report page with the browser tools (Claude in Chrome — it needs the Google session).
+2. Call `get_page_text` on the tab.
+
+Looker Studio renders an accessible data table behind every chart, so one call returns **exact
+values for every series on the page**, including series with no visible data labels. A screenshot
+costs image tokens and only shows the labelled series; `get_page_text` costs almost nothing and
+shows all of them. Do not reach for screenshots unless you need to see layout.
+
+The production scorecard is `Method - Scorecard (PROD)`,
+report `510f74bb-0d17-465c-aadc-f4c20e97772f`, pages: Marketing / Sales / Sales Detailed / Method Monday.
+
+Record the parity result with the source: `parity_source: looker_sales_scorecard_prod` in the BQ
+labels, and the matched values in the metric's `meta.parity_verified`.
+
 ### Define every metric before flipping it `live`
 
 A metric does not flip to `status: live` in dbt or Supabase until it has a filled-in entry in [`docs/metric-definitions.md`](docs/metric-definitions.md). The template + workflow live at the top of that file.

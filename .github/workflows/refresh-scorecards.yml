@@ -77,3 +77,18 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ONLY_SCORECARD: ${{ github.event.inputs.scorecard || 'marketing-scorecard' }}
         run: cd builder && node scripts/refresh-snapshots/index.js
+
+      # Warn-only audit of the `revenue_metrics` shelf. Reports views that dbt does
+      # not own (they carry descriptions and labels, so they read as verified to
+      # anyone querying BQ metadata) and live metrics with an incomplete definition.
+      # Deliberately non-blocking while the backlog is worked down — swap in --strict
+      # once the count reaches zero. See docs/superpowers/specs/2026-08-31-metrics-architecture-design.md §6.
+      - name: Audit metrics shelf (warn-only)
+        if: always()
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          printf '%s' "$GCP_SA_KEY" > /tmp/shelf-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/shelf-sa.json
+          pip install --quiet google-cloud-bigquery
+          python3 scripts/check_metrics_shelf.py
