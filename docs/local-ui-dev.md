@@ -79,6 +79,7 @@ logs its matched route and row count at `console.debug`.
 |---|---|---|
 | `VITE_MOCK_DATA` | `true` | Master switch. Without it, mock mode is off. |
 | `VITE_MOCK_EMAIL` | `b.saltzman@method.me` | Who you're signed in as. Needs a `first.last` shape — the PS scoping derives a consultant-name regex from it. |
+| `VITE_MOCK_ROLE` | `admin` | Role on the fake `users` row. `ps` renders the PS-only shell — one nav link, and every non-PS URL redirects to `/call-prep`. |
 | `VITE_MOCK_SUPABASE` | `true` | `false` keeps the **real** Supabase catalog and dashboards (anon key, no login needed) while BigQuery stays faked. Useful when you want a real metric list. |
 | `VITE_MOCK_LATENCY` | `140` | Fake per-query latency in ms, so loading states are visible. `0` = instant. |
 

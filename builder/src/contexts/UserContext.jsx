@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchUserByEmail, upsertUserByEmail, setCurrentUserEmail } from '../lib/supabase';
 
-const UserContext = createContext(null);
+// Exported so a test can render a component with a chosen user without standing
+// up UserProvider, whose lookup is an effect against Supabase. App code should
+// use useUser().
+export const UserContext = createContext(null);
 const IMPERSONATE_KEY = 'method_impersonate_email';
 
 export function UserProvider({ children, email }) {

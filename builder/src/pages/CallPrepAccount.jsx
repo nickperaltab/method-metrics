@@ -27,6 +27,8 @@ import {
   MOTION_LABELS, ACTIVITY_LIMIT, pitchableMotions, humanizeHook,
   likelyWorkflows, industryIsWeak,
 } from '../lib/callPrep';
+import { useUser } from '../contexts/UserContext';
+import { isPs } from '../lib/permissions';
 
 const PAPER = '#faf8f3';
 const SHEET = '#fffdf8';
@@ -508,6 +510,10 @@ const Card = ({ title, children }) => (
 export default function CallPrepAccount() {
   const { recordId } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useUser();
+  // PS users only have the call-prep routes, so the cross-link out to the
+  // customer page would redirect them back here.
+  const psOnly = isPs(currentUser);
   const [history, setHistory] = useState(null);
   const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
@@ -686,13 +692,15 @@ export default function CallPrepAccount() {
               page is the everything view — projects, full call history, audit
               feedback. Cross-linked rather than merged, because they're read at
               different moments. */}
-          <Link
-            style={s.crumb}
-            className="cp-crumb"
-            to={`/accounts/${encodeURIComponent(recordId)}`}
-          >
-            Customer view →
-          </Link>
+          {!psOnly && (
+            <Link
+              style={s.crumb}
+              className="cp-crumb"
+              to={`/accounts/${encodeURIComponent(recordId)}`}
+            >
+              Customer view →
+            </Link>
+          )}
         </div>
 
         <div style={s.toolbarGroup}>

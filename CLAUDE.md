@@ -223,6 +223,31 @@ reads real BigQuery (`call_prep.time_killer_findings`, written by the
 rather than `account_record_id`, and both write actions are blocked on a BigQuery
 write path and on Gmail OAuth scopes.
 
+## PS-only access
+
+Supabase `users.role` drives what the shell renders. `admin` and `viewer` see the
+whole app; **`ps` sees the Call Prep screens and nothing else** — no home, chart
+builder, dashboards, scorecards, registry or admin, and every other URL redirects
+to `/call-prep`. So the PS team gets a plain link to the app and lands in their
+own tool.
+
+- `builder/src/lib/permissions.js` — `isPs()`, `isPsPath()`, `PS_HOME`. Adding a
+  screen to the PS side means adding it to `PS_PATH_PREFIXES`, to `PsRoutes` in
+  `App.jsx`, and to `PS_ITEMS` in `Sidebar.jsx`. All three, or the nav and the
+  router disagree.
+- Roles are assigned in `supabase/migrations/20260813000000_ps_role.sql`. Rows are
+  seeded because `upsertUserByEmail()` creates unknown emails as `viewer`. That
+  migration ships with an **empty roster** — this repo is public, so the team's
+  addresses stay out of it. Fill in `ps_roster` and run it in the Supabase SQL
+  editor; as committed it is a valid no-op. Adding one person needs no migration:
+  `UPDATE users SET role = 'ps' WHERE email = ...`.
+- This scopes navigation, not data. BigQuery grants and Supabase RLS are the
+  actual access boundary. If the Supabase user lookup fails, `currentUser` is
+  null and the shell falls back to the full nav — treat the PS shell as a
+  focused workspace, not a wall.
+- To see it: admins can pick a PS person in the sidebar's **View as**, or run
+  `npm run dev:mock` with `VITE_MOCK_ROLE=ps`.
+
 The customer page (`/accounts/:recordId`) is the exception — it reads **real**
 BigQuery tables (`customer_signals.v_conversations`, `call_audits.*`,
 `customer_signals.signals_by_call`, `call_prep.snapshots`) and works outside mock

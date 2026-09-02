@@ -12,13 +12,19 @@ export const MOCK_MODE =
 /** The consultant the mock app is "signed in" as. Override in .env.mock. */
 export const MOCK_EMAIL = import.meta.env.VITE_MOCK_EMAIL || 'b.saltzman@method.me';
 
+/**
+ * Role the mock user gets. Defaults to admin so role-gated UI (impersonation,
+ * approvals) is reachable offline. Set VITE_MOCK_ROLE=ps to see the PS-only
+ * shell — one nav link, and every non-PS URL redirects to Call Prep.
+ */
+export const MOCK_ROLE = import.meta.env.VITE_MOCK_ROLE || 'admin';
+
 /** Fake user record standing in for the Supabase `users` row. */
 export const MOCK_USER = {
   id: 1,
   email: MOCK_EMAIL,
   name: 'Mock Consultant',
-  // admin so role-gated UI (impersonation, approvals) is reachable offline.
-  role: 'admin',
+  role: MOCK_ROLE,
 };
 
 /** Log once per distinct message so a re-rendering page can't spam the console. */

@@ -17,6 +17,7 @@ import PsOverview from './pages/PsOverview';
 import CallPrep from './pages/CallPrep';
 import CallPrepAccount from './pages/CallPrepAccount';
 import CallPrepBook from './pages/CallPrepBook';
+import FreeHours from './pages/FreeHours';
 import Handoffs from './pages/Handoffs';
 import HandoffAccount from './pages/HandoffAccount';
 import Projects from './pages/Projects';
@@ -24,12 +25,13 @@ import ProjectDetail from './pages/ProjectDetail';
 import ProjectNew from './pages/ProjectNew';
 import ProjectEdit from './pages/ProjectEdit';
 import CustomerPage from './pages/CustomerPage';
-import { UserProvider } from './contexts/UserContext';
+import { UserProvider, useUser } from './contexts/UserContext';
+import { isPs, PS_HOME } from './lib/permissions';
 import { useMetrics } from './hooks/useMetrics';
 import { useBqAuth } from './hooks/useBqAuth';
 
-const Loading = () => (
-  <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>Loading metrics...</p>
+const Loading = ({ label = 'Loading metrics...' }) => (
+  <p style={{ padding: 32, color: '#5a6370', textAlign: 'center' }}>{label}</p>
 );
 
 function PosthogPageview() {
@@ -79,6 +81,102 @@ function SignInGate({ onConnect }) {
   );
 }
 
+// The PS screens, and only those. Rendered in place of the full tree for
+// `role: 'ps'` users so no URL reaches the metrics side of the app — a
+// bookmarked or mistyped path lands on Call Prep instead of a page they
+// shouldn't be in.
+function PsRoutes() {
+  return (
+    <Routes>
+      <Route path="/call-prep" element={<CallPrep />} />
+      <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
+      <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
+      <Route path="/free-hours" element={<FreeHours />} />
+      <Route path="*" element={<Navigate to={PS_HOME} replace />} />
+    </Routes>
+  );
+}
+
+function FullRoutes({ metrics, metricsLoading, connected, userEmail, userAvatar, connect }) {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route
+        path="/chat"
+        element={
+          metricsLoading ? <Loading /> :
+          <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+        }
+      />
+      <Route
+        path="/explorer"
+        element={
+          metricsLoading ? <Loading /> :
+          <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
+        }
+      />
+      <Route path="/dashboards" element={<Navigate to="/" replace />} />
+      <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
+      <Route path="/approved" element={<Navigate to="/" replace />} />
+      <Route path="/scorecards/:id" element={
+        metricsLoading ? <Loading /> :
+        <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
+      } />
+      <Route path="/ps" element={<PsOverview />} />
+      <Route path="/call-prep" element={<CallPrep />} />
+      <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
+      <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
+      <Route path="/free-hours" element={<FreeHours />} />
+      {/* No /eod route: the End of Day screen is pulled out of the app until
+          its two write actions exist. pages/Eod.jsx and lib/eod.js are still in
+          the tree — see docs/ps-eod-followups.md. */}
+      <Route path="/handoffs" element={<Handoffs />} />
+      <Route path="/handoffs/account/:recordId" element={<HandoffAccount />} />
+      {/* Project tracker. Reachable by URL in production but deliberately
+          not in the nav yet — it has no backing store, so it only has data
+          under `npm run dev:mock`. See docs/local-ui-dev.md. */}
+      <Route path="/projects" element={<Projects />} />
+      {/* /new before /:projectId so "new" isn't parsed as a project id. */}
+      <Route path="/projects/new" element={<ProjectNew />} />
+      <Route path="/projects/:projectId" element={<ProjectDetail />} />
+      <Route path="/projects/:projectId/edit" element={<ProjectEdit />} />
+      {/* The customer page. Reads mostly real BigQuery tables, so unlike the
+          rest of the tracker it is useful outside mock mode. */}
+      <Route path="/accounts/:recordId" element={<CustomerPage />} />
+      <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
+      <Route path="/admin/registry" element={<Registry />} />
+      <Route path="/admin/dimensions" element={<Dimensions />} />
+      <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
+      {/* Disconnected admin route — no nav link, direct URL only. */}
+      <Route path="/exports/saas-data" element={<SaasDataExport bqConnected={connected} />} />
+    </Routes>
+  );
+}
+
+function AppShell({ metrics, metricsLoading, connected, userEmail, userAvatar, connect }) {
+  const { currentUser, loading } = useUser();
+
+  // Hold the first paint until the Supabase role is known. Rendering the full
+  // tree while it resolves would flash the metrics sidebar at a PS user.
+  if (loading) return <Loading label="Loading..." />;
+
+  return (
+    <Layout bqConnected={connected} userEmail={userEmail} onConnect={connect}>
+      {isPs(currentUser)
+        ? <PsRoutes />
+        : <FullRoutes
+            metrics={metrics}
+            metricsLoading={metricsLoading}
+            connected={connected}
+            userEmail={userEmail}
+            userAvatar={userAvatar}
+            connect={connect}
+          />
+      }
+    </Layout>
+  );
+}
+
 export default function App() {
   const { connected, userEmail, userAvatar, connect } = useBqAuth();
   const bypassAuth = import.meta.env.DEV && import.meta.env.VITE_BYPASS_AUTH === 'true';
@@ -99,55 +197,14 @@ export default function App() {
     <UserProvider email={userEmail}>
       <HashRouter>
         <PosthogPageview />
-        <Layout bqConnected={connected} userEmail={userEmail} onConnect={connect}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route
-              path="/chat"
-              element={
-                metricsLoading ? <Loading /> :
-                <ChatExplorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
-              }
-            />
-            <Route
-              path="/explorer"
-              element={
-                metricsLoading ? <Loading /> :
-                <Explorer metrics={metrics} bqConnected={connected} userEmail={userEmail} userAvatar={userAvatar} />
-              }
-            />
-            <Route path="/dashboards" element={<Navigate to="/" replace />} />
-            <Route path="/dashboards/:id" element={<DashboardView userEmail={userEmail} userAvatar={userAvatar} metrics={metrics} bqConnected={connected} />} />
-            <Route path="/approved" element={<Navigate to="/" replace />} />
-            <Route path="/scorecards/:id" element={
-              metricsLoading ? <Loading /> :
-              <Scorecard metrics={metrics} bqConnected={connected} onConnect={connect} />
-            } />
-            <Route path="/ps" element={<PsOverview />} />
-            <Route path="/call-prep" element={<CallPrep />} />
-            <Route path="/call-prep/account/:recordId" element={<CallPrepAccount />} />
-            <Route path="/call-prep/:consultant" element={<CallPrepBook />} />
-            <Route path="/handoffs" element={<Handoffs />} />
-            <Route path="/handoffs/account/:recordId" element={<HandoffAccount />} />
-            {/* Project tracker. Reachable by URL in production but deliberately
-                not in the nav yet — it has no backing store, so it only has data
-                under `npm run dev:mock`. See docs/local-ui-dev.md. */}
-            <Route path="/projects" element={<Projects />} />
-            {/* /new before /:projectId so "new" isn't parsed as a project id. */}
-            <Route path="/projects/new" element={<ProjectNew />} />
-            <Route path="/projects/:projectId" element={<ProjectDetail />} />
-            <Route path="/projects/:projectId/edit" element={<ProjectEdit />} />
-            {/* The customer page. Reads mostly real BigQuery tables, so unlike the
-                rest of the tracker it is useful outside mock mode. */}
-            <Route path="/accounts/:recordId" element={<CustomerPage />} />
-            <Route path="/mcp-token" element={<McpToken userEmail={userEmail} bqConnected={connected} onConnect={connect} />} />
-            <Route path="/admin/registry" element={<Registry />} />
-            <Route path="/admin/dimensions" element={<Dimensions />} />
-            <Route path="/admin/insights" element={<AdminInsights metrics={metrics} />} />
-            {/* Disconnected admin route — no nav link, direct URL only. */}
-            <Route path="/exports/saas-data" element={<SaasDataExport bqConnected={connected} />} />
-          </Routes>
-        </Layout>
+        <AppShell
+          metrics={metrics}
+          metricsLoading={metricsLoading}
+          connected={connected}
+          userEmail={userEmail}
+          userAvatar={userAvatar}
+          connect={connect}
+        />
       </HashRouter>
     </UserProvider>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
-import { isAdmin } from '../lib/permissions';
+import { isAdmin, isPs, PS_HOME } from '../lib/permissions';
 import { fetchMyDashboards, fetchApprovedDashboardsList, fetchStars, fetchUsers } from '../lib/supabase';
 import { SCORECARDS } from '../config/scorecards';
 import { getScorecardStars } from '../pages/Home';
@@ -10,9 +10,8 @@ const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: '\u2302', exact: true },
 ];
 
-// Professional services screens. `/call-prep` bounces straight to the
-// remembered consultant's book, so the link lands on the day view for
-// returning users and on the picker for everyone else.
+// Professional services screens. This is the whole nav for a `role: 'ps'`
+// user, so anything added here has to have a route in PsRoutes (App.jsx) too.
 const PS_ITEMS = [
   { path: '/call-prep', label: 'Call Prep', icon: '☎' },
 ];
@@ -30,6 +29,9 @@ export default function Sidebar({ collapsed, onToggle }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const realIsAdmin = realUser?.role === 'admin';
+  // PS users see the PS links and nothing else — no home, chart builder,
+  // dashboards, scorecards, registry or admin.
+  const psOnly = isPs(currentUser);
 
   useEffect(() => {
     if (!realIsAdmin) return;
@@ -37,7 +39,7 @@ export default function Sidebar({ collapsed, onToggle }) {
   }, [realIsAdmin]);
 
   const loadData = useCallback(() => {
-    if (!currentUser) return;
+    if (!currentUser || psOnly) return;
     Promise.all([
       fetchMyDashboards(currentUser.id),
       fetchApprovedDashboardsList(),
@@ -46,7 +48,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       setApprovedDashboards(approved);
     }).catch(() => {});
     fetchStars(currentUser.id).then(setStars).catch(() => {});
-  }, [currentUser]);
+  }, [currentUser, psOnly]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -112,7 +114,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       >
         {/* Logo */}
         <div style={{ padding: '20px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <NavLink to="/" style={{ textDecoration: 'none' }}>
+          <NavLink to={psOnly ? PS_HOME : '/'} style={{ textDecoration: 'none' }}>
             <span style={{
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 11,
@@ -132,7 +134,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
         {/* Main nav */}
         <nav style={{ flex: 1, overflowY: 'auto', paddingTop: 8 }}>
-          {NAV_ITEMS.map(item => (
+          {!psOnly && NAV_ITEMS.map(item => (
             <NavLink key={item.path} to={item.path} end={item.exact} style={linkStyle}>
               <span style={{ fontSize: 16 }}>{item.icon}</span>
               {item.label}
@@ -140,14 +142,21 @@ export default function Sidebar({ collapsed, onToggle }) {
           ))}
 
           {/* Chart Builder */}
-          <NavLink to="/chat" style={linkStyle}>
-            <span style={{ fontSize: 16 }}>{'\u2728'}</span>
-            Chart Builder
-          </NavLink>
+          {!psOnly && (
+            <NavLink to="/chat" style={linkStyle}>
+              <span style={{ fontSize: 16 }}>{'\u2728'}</span>
+              Chart Builder
+            </NavLink>
+          )}
 
-          {/* PS */}
-          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-          <div style={sectionLabel}>PS</div>
+          {/* PS. The heading only earns its place when there is something above
+              it to separate the section from. */}
+          {!psOnly && (
+            <>
+              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+              <div style={sectionLabel}>PS</div>
+            </>
+          )}
           {PS_ITEMS.map(item => (
             <NavLink key={item.path} to={item.path} end={item.exact} style={linkStyle}>
               <span style={{ fontSize: 16 }}>{item.icon}</span>
@@ -156,7 +165,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           ))}
 
           {/* My Dashboards (starred AI dashboards only) */}
-          {stars.length > 0 && (() => {
+          {!psOnly && stars.length > 0 && (() => {
             const starredDashboards = [...myDashboards, ...approvedDashboards]
               .filter((d, i, arr) => stars.includes(d.id) && arr.findIndex(x => x.id === d.id) === i)
               .slice(0, 8);
@@ -174,7 +183,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           })()}
 
           {/* Scorecards (starred only) */}
-          {scStars.length > 0 && (() => {
+          {!psOnly && scStars.length > 0 && (() => {
             const approved = Object.values(SCORECARDS).filter(sc => !sc.group && scStars.includes(sc.id));
             if (approved.length === 0) return null;
             return (
@@ -191,7 +200,7 @@ export default function Sidebar({ collapsed, onToggle }) {
           })()}
 
           {/* Labs — experimental dashboards, visible to ALL (not admin-gated, no star). */}
-          {(() => {
+          {!psOnly && (() => {
             const labs = Object.values(SCORECARDS).filter(sc => sc.labs);
             if (labs.length === 0) return null;
             return (
@@ -209,14 +218,18 @@ export default function Sidebar({ collapsed, onToggle }) {
           })()}
 
           {/* Metric Registry — visible to all, read-only for non-admins */}
-          <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
-          <NavLink to="/admin/registry" style={linkStyle}>
-            <span style={{ fontSize: 16 }}>{'\u2261'}</span>
-            Metric Registry
-          </NavLink>
+          {!psOnly && (
+            <>
+              <div style={{ height: 1, background: '#e2e5e9', margin: '12px 16px' }} />
+              <NavLink to="/admin/registry" style={linkStyle}>
+                <span style={{ fontSize: 16 }}>{'\u2261'}</span>
+                Metric Registry
+              </NavLink>
+            </>
+          )}
 
           {/* Admin — collapsible, with Funnel/Plan sub-headings */}
-          {isAdmin(currentUser) && (() => {
+          {!psOnly && isAdmin(currentUser) && (() => {
             const funnel = Object.values(SCORECARDS).filter(sc => sc.group === 'funnel');
             const plan = Object.values(SCORECARDS).filter(sc => sc.group === 'plan');
             const revenue = Object.values(SCORECARDS).filter(sc => sc.group === 'revenue' && !sc.labs);
