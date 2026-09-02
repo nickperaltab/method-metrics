@@ -214,6 +214,15 @@ nav. Read `docs/ps-project-tracker.md` before extending it: the fixture shape is
 its draft schema, `lib/projectsStore.js` is the seam a real store plugs into, and
 the store choice (BigQuery vs. Supabase) is still open.
 
+The EOD follow-through screen has **no route**. `pages/Eod.jsx`, `lib/eod.js` and
+their tests are still in the tree, but `/eod` was taken out of the router and the
+nav on 2026-08-13 — the screen lists findings it can't act on until the Draft and
+Dismiss writes exist. Read `docs/ps-eod-followups.md` before putting it back: it
+reads real BigQuery (`call_prep.time_killer_findings`, written by the
+`/time-killer` routine), the table is append-only and dedupes on `finding_id`
+rather than `account_record_id`, and both write actions are blocked on a BigQuery
+write path and on Gmail OAuth scopes.
+
 The customer page (`/accounts/:recordId`) is the exception — it reads **real**
 BigQuery tables (`customer_signals.v_conversations`, `call_audits.*`,
 `customer_signals.signals_by_call`, `call_prep.snapshots`) and works outside mock
