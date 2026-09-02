@@ -24,8 +24,9 @@ import {
   repSentPpuAgreement,
   repWonPsWork,
   byAgreementSent,
-  totalAgreementsSent,
-  filterAgreements,
+  agreementsAfterOwnFreeHours,
+  countAgreementsAfterOwnFreeHours,
+  daysBetween,
   normalizeAgreementRow,
   buildAgreementsSentSql,
   fetchAgreementsSent,
@@ -553,46 +554,119 @@ describe('agreements the rep sent', () => {
   });
 });
 
-describe('agreements-sent set', () => {
-  const agreements = [
-    { consultant: 'Ada Lovelace', month: '2026-01', sent: 3, accepted: 1 },
-    { consultant: 'Ada Lovelace', month: '2026-03', sent: 2, accepted: 2 },
-    { consultant: 'Grace Hopper', month: '2026-03', sent: 5, accepted: 0 },
-  ];
+describe('daysBetween', () => {
+  it('counts whole days forward and back, and refuses junk', () => {
+    expect(daysBetween('2026-03-01', '2026-03-11')).toBe(10);
+    expect(daysBetween('2026-03-11', '2026-03-01')).toBe(-10);
+    expect(daysBetween('2026-03-01', '2026-03-01')).toBe(0);
+    // spans a month boundary and a leap-year-adjacent February
+    expect(daysBetween('2026-02-26', '2026-03-03')).toBe(5);
+    expect(daysBetween(null, '2026-03-01')).toBeNull();
+    expect(daysBetween('nonsense', '2026-03-01')).toBeNull();
+  });
+});
 
-  it('sums one consultant, or everyone when none is named', () => {
-    expect(totalAgreementsSent(agreements, 'Ada Lovelace')).toBe(5);
-    expect(totalAgreementsSent(agreements)).toBe(10);
-    expect(totalAgreementsSent(agreements, 'Nobody')).toBe(0);
+describe('agreements sent to the rep’s own Free Hour accounts', () => {
+  const agr = (o) => ({
+    id: o.id,
+    accountRecordId: o.account,
+    consultant: o.consultant ?? 'Ada Lovelace',
+    contractType: o.type ?? 'Pay-Per-Use',
+    sentDate: o.date,
+    accepted: o.accepted ?? false,
+  });
+  const call = (o) => fh({
+    consultant: o.consultant ?? 'Ada Lovelace',
+    accountRecordId: o.account,
+    callDate: o.date,
+    month: (o.date ?? '2026-03-10').slice(0, 7),
   });
 
-  it('bounds to the same period the screen is showing', () => {
-    expect(totalAgreementsSent(filterAgreements(agreements, { from: '2026-03' }))).toBe(7);
-    expect(totalAgreementsSent(filterAgreements(agreements, { to: '2026-01' }))).toBe(3);
-    expect(totalAgreementsSent(filterAgreements(agreements, { consultant: 'Grace Hopper' }))).toBe(5);
+  it('counts an agreement the same rep sent to their own Free Hour account', () => {
+    const calls = [call({ account: 100, date: '2026-03-01' })];
+    const found = agreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 100, date: '2026-03-10' })]);
+    expect(found.map((a) => a.id)).toEqual([1]);
   });
 
-  it('attaches each consultant their own count, zero when they sent none', () => {
-    const rows = byConsultant(
-      [fh({ consultant: 'Ada Lovelace' }), fh({ consultant: 'Zoe Quiet' })],
-      agreements,
+  it('ignores an agreement on that account from a DIFFERENT rep', () => {
+    // This is the proposal desk, and it is the whole reason for the match.
+    const calls = [call({ account: 100, date: '2026-03-01' })];
+    const desk = [agr({ id: 1, account: 100, date: '2026-03-10', consultant: 'Phuong Phan' })];
+    expect(agreementsAfterOwnFreeHours(calls, desk)).toEqual([]);
+  });
+
+  it('ignores an agreement for an account that had no Free Hour from them', () => {
+    const calls = [call({ account: 100, date: '2026-03-01' })];
+    expect(agreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 999, date: '2026-03-10' })])).toEqual([]);
+  });
+
+  it('ignores one sent before the Free Hour, or past the window', () => {
+    const calls = [call({ account: 100, date: '2026-03-01' })];
+    const before = agr({ id: 1, account: 100, date: '2026-02-20' });
+    const late = agr({ id: 2, account: 100, date: '2026-09-01' });
+    const onLastDay = agr({ id: 3, account: 100, date: '2026-05-30' }); // exactly 90 days
+    expect(agreementsAfterOwnFreeHours(calls, [before, late]).length).toBe(0);
+    expect(agreementsAfterOwnFreeHours(calls, [onLastDay]).map((a) => a.id)).toEqual([3]);
+  });
+
+  it('counts two agreements on one account separately', () => {
+    const calls = [call({ account: 100, date: '2026-03-01' })];
+    const two = [agr({ id: 1, account: 100, date: '2026-03-05' }), agr({ id: 2, account: 100, date: '2026-03-20' })];
+    expect(countAgreementsAfterOwnFreeHours(calls, two)).toBe(2);
+  });
+
+  it('counts one agreement once even when two Free Hours could claim it', () => {
+    // Two Free Hours on the same account, one agreement between them: without
+    // de-duplication a per-Free-Hour count would report 2.
+    const calls = [
+      call({ account: 100, date: '2026-03-01' }),
+      call({ account: 100, date: '2026-03-15' }),
+    ];
+    expect(countAgreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 100, date: '2026-03-20' })])).toBe(1);
+  });
+
+  it('gives each consultant only their own', () => {
+    const calls = [
+      call({ consultant: 'Ada Lovelace', account: 100, date: '2026-03-01' }),
+      call({ consultant: 'Grace Hopper', account: 200, date: '2026-03-01' }),
+    ];
+    const agreements = [
+      agr({ id: 1, account: 100, consultant: 'Ada Lovelace', date: '2026-03-05' }),
+      agr({ id: 2, account: 200, consultant: 'Grace Hopper', date: '2026-03-05' }),
+      agr({ id: 3, account: 200, consultant: 'Grace Hopper', date: '2026-03-06' }),
+    ];
+    const by = Object.fromEntries(
+      byConsultant(calls, agreements).map((r) => [r.consultant, r.agreementsSent]),
     );
-    const by = Object.fromEntries(rows.map((r) => [r.consultant, r.agreementsSent]));
-    expect(by['Ada Lovelace']).toBe(5);
-    expect(by['Zoe Quiet']).toBe(0);
+    expect(by['Ada Lovelace']).toBe(1);
+    expect(by['Grace Hopper']).toBe(2);
+  });
+
+  it('reports zero for a consultant who sent none', () => {
+    const rows = byConsultant([call({ consultant: 'Zoe Quiet', account: 100, date: '2026-03-01' })], []);
+    expect(rows[0].agreementsSent).toBe(0);
   });
 
   it('normalizes the BQ REST strings', () => {
-    expect(normalizeAgreementRow({ consultant: 'Ada', month: '2026-04', agreements_sent: '7', agreements_accepted: '2' }))
-      .toEqual({ consultant: 'Ada', month: '2026-04', sent: 7, accepted: 2 });
+    expect(normalizeAgreementRow({
+      proposal_id: '77', account_record_id: '4242', consultant: 'Ada',
+      contract_type: 'Dedicated', sent_date: '2026-04-09', accepted: 'true',
+    })).toEqual({
+      id: 77, accountRecordId: 4242, consultant: 'Ada', contractType: 'Dedicated',
+      sentDate: '2026-04-09', accepted: true, month: '2026-04',
+    });
   });
 });
 
 describe('buildAgreementsSentSql', () => {
-  it('groups by consultant and month, and only PS contract types', () => {
+  it('returns one row per agreement, with the account id to match on', () => {
     const sql = buildAgreementsSentSql();
     expect(sql).toContain('ps_proposals');
-    expect(sql).toMatch(/GROUP BY consultant, month/);
+    expect(sql).toMatch(/proposal_id/);
+    expect(sql).toMatch(/account_record_id/);
+    expect(sql).toMatch(/assigned_to AS consultant/);
+    // Pre-aggregating would throw away the account, which is what the match needs.
+    expect(sql).not.toMatch(/GROUP BY/);
     expect(sql).toMatch(/'Pay-Per-Use','Dedicated','Fast Track Dedicated'/);
     expect(sql).toMatch(/DATE\(created_date\) >= DATE '2026-01-01'/);
   });
@@ -628,9 +702,17 @@ describe('buildFreeHoursSql — the new columns', () => {
 
 describe('fetchAgreementsSent', () => {
   it('normalizes every row it is handed', async () => {
-    const query = async () => ({ rows: [{ consultant: 'Ada', month: '2026-02', agreements_sent: '4' }] });
+    const query = async () => ({
+      rows: [{
+        proposal_id: '4', account_record_id: '100', consultant: 'Ada',
+        contract_type: 'Pay-Per-Use', sent_date: '2026-02-14', accepted: 'false',
+      }],
+    });
     const rows = await fetchAgreementsSent({ query });
-    expect(rows).toEqual([{ consultant: 'Ada', month: '2026-02', sent: 4, accepted: 0 }]);
+    expect(rows).toEqual([{
+      id: 4, accountRecordId: 100, consultant: 'Ada', contractType: 'Pay-Per-Use',
+      sentDate: '2026-02-14', accepted: false, month: '2026-02',
+    }]);
   });
 });
 

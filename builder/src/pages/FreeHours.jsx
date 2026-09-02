@@ -4,8 +4,8 @@
 // the same account afterwards. No call scoring, no judgement. See lib/freeHours.js.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  fetchFreeHours, fetchAgreementsSent, filterCalls, filterAgreements, summarize,
-  byMonth, byConsultant, bySequence, byAgreementSent, totalAgreementsSent,
+  fetchFreeHours, fetchAgreementsSent, filterCalls, summarize,
+  byMonth, byConsultant, bySequence, byAgreementSent, countAgreementsAfterOwnFreeHours,
   conversions, conversionType, daysToConversion, distinctMonths, distinctConsultants,
   distinctLastFhMonths, sortRows,
   FAIR_WINDOW_DAYS, AGREEMENT_WINDOW_DAYS,
@@ -164,6 +164,7 @@ const FH_CSS = `
 const ALREADY_TIP = 'Accounts with a consulting case still open when the call happened. The hours they bill next were already committed, so they sit outside the rate but still count as Free Hours delivered. An account whose earlier case has closed is eligible again.';
 const TRIAL_TIP = 'Free Hours given to accounts with no paying SaaS subscription in the month of the call. The rest went to existing customers.';
 const NON_TRIAL_TIP = 'Free Hours given to accounts that already had a paying SaaS subscription at the call, so they were customers rather than trials.';
+const AGR_SENT_TIP = 'Pay-Per-Use or Dedicated agreements this consultant sent to an account they personally gave a Free Hour to, within 90 days of it. Agreements they wrote for other accounts are not counted, and neither are ones the proposal desk wrote.';
 const SENT_TIP = 'Non-trial Free Hours where the consultant who delivered it sent an agreement themselves, within 90 days. A proposal desk writes most agreements that follow a Free Hour, and those are not counted here.';
 const WON_TIP = 'Non-trial Free Hours where that same consultant sent a Pay-Per-Use agreement, or the account’s dedicated flag went on afterwards, divided by their non-trial Free Hours. Two routes because Pay-Per-Use is sold with an agreement and Dedicated is a flag on the account. The flag has no owner, so it is credited to whoever ran the Free Hour.';
 const CONSULTANT_RATE_TIP = 'Converted divided by the Free Hours that could convert, over the period selected above. A consultant with only a handful of Free Hours will swing wildly — read the Free Hours column first.';
@@ -191,7 +192,7 @@ const REP_COLS = [
   {
     key: 'agreementsSent',
     label: 'Agr. sent',
-    tip: 'Every Pay-Per-Use or Dedicated agreement this consultant created in the period, whether or not a Free Hour came first.',
+    tip: AGR_SENT_TIP,
     tipLabel: 'About agreements sent',
     value: (r) => r.agreementsSent,
   },
@@ -358,12 +359,14 @@ export default function FreeHours() {
     () => (calls ? filterCalls(calls, { from, to, consultant, segment, lastFrom, lastTo }) : []),
     [calls, from, to, consultant, segment, lastFrom, lastTo],
   );
-  const scopedAgreements = useMemo(
-    () => filterAgreements(agreements, { from, to, consultant }),
-    [agreements, from, to, consultant],
-  );
   const totals = useMemo(() => summarize(scoped), [scoped]);
-  const agreementsSentTotal = useMemo(() => totalAgreementsSent(scopedAgreements), [scopedAgreements]);
+  // Matching is on account + consultant + the 90-day window, and `scoped` is
+  // already bounded to the selected period, so the agreement set needs no
+  // period filter of its own.
+  const agreementsSentTotal = useMemo(
+    () => countAgreementsAfterOwnFreeHours(scoped, agreements),
+    [scoped, agreements],
+  );
   const followThrough = useMemo(() => byAgreementSent(scoped), [scoped]);
   const monthly = useMemo(() => byMonth(scoped), [scoped]);
   const repSort = useSort('rate');
@@ -373,12 +376,12 @@ export default function FreeHours() {
   // off twenty. byConsultant already applies that order; sorting keeps it.
   const reps = useMemo(() => {
     const col = REP_COLS.find((c) => c.key === repSort.key) ?? REP_COLS[0];
-    return sortRows(byConsultant(scoped, scopedAgreements), {
+    return sortRows(byConsultant(scoped, agreements), {
       value: col.value,
       dir: repSort.dir,
       tiebreak: (a, b) => b.delivered - a.delivered || a.consultant.localeCompare(b.consultant),
     });
-  }, [scoped, scopedAgreements, repSort.key, repSort.dir]);
+  }, [scoped, agreements, repSort.key, repSort.dir]);
 
   const won = useMemo(() => {
     const col = WON_COLS.find((c) => c.key === wonSort.key) ?? WON_COLS[0];
@@ -536,8 +539,8 @@ export default function FreeHours() {
           lab={<>Agreements sent<InfoDot label="About agreements sent" content={<div style={s.tipNote}>{SENT_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
           big={agreementsSentTotal}
           foot={totals.nonTrialFreeHours
-            ? `${totals.nonTrialRepSentAgreement} after a non-trial Free Hour · ${totals.nonTrialWonRate ?? 0}% won PPU or DEP`
-            : 'no non-trial Free Hours in this selection'}
+            ? `to accounts they ran a Free Hour for · ${totals.nonTrialWonRate ?? 0}% of non-trial FH won PPU or DEP`
+            : 'to accounts they ran a Free Hour for'}
         />
         <Tile lab="Paid hours booked" big={totals.paidHours} foot="within 90 days of the Free Hour" />
       </div>

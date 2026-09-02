@@ -450,22 +450,34 @@ function build() {
     }));
   };
 
-  // Agreements sent per consultant per month. Deliberately larger than the
-  // agreements that follow a Free Hour: a proposal desk writes most of those,
-  // and reps also write agreements for accounts that never had a Free Hour.
-  const agreement = (consultant, month, sent, accepted) => ({
-    consultant, month, agreements_sent: String(sent), agreements_accepted: String(accepted),
+  // One row per PS agreement. Accounts and consultants line up with FREE_HOURS
+  // below so the account+consultant match the screen does has something to hit,
+  // and a few deliberately do NOT: an agreement on a Free Hour account written
+  // by a different rep (the proposal desk), and one for an account that never
+  // had a Free Hour. Both must be excluded by the match.
+  const agreement = (o) => ({
+    proposal_id: String(o.id),
+    account_record_id: String(o.account),
+    consultant: o.consultant,
+    contract_type: o.type ?? 'Pay-Per-Use',
+    sent_date: o.date,
+    accepted: bool(o.accepted),
   });
 
-  const thisMonth = iso(0).slice(0, 7);
-  const lastMonth = iso(-32).slice(0, 7);
   const AGREEMENTS = [
-    agreement(ME_FULL, thisMonth, 4, 2),
-    agreement(ME_FULL, lastMonth, 6, 5),
-    agreement('Vinesh Gobin', thisMonth, 2, 1),
-    agreement('Vinesh Gobin', lastMonth, 3, 2),
-    agreement('Cheryl Tong', thisMonth, 1, 0),
-    agreement('Cheryl Tong', lastMonth, 5, 4),
+    // Sent by the rep who ran the Free Hour — these count.
+    agreement({ id: 9001, account: 4242, consultant: ME_FULL, date: iso(-118), accepted: true }),
+    agreement({ id: 9002, account: 4415, consultant: 'Vinesh Gobin', date: iso(-87), type: 'Dedicated' }),
+    agreement({ id: 9003, account: 4415, consultant: 'Cheryl Tong', date: iso(-29), accepted: true }),
+    // Second agreement on an account that already had one — counted separately,
+    // which is why the match de-duplicates on proposal id rather than account.
+    agreement({ id: 9004, account: 4242, consultant: ME_FULL, date: iso(-100) }),
+    // The proposal desk: right account, wrong rep. Must not count for anyone.
+    agreement({ id: 9005, account: 4488, consultant: 'Phuong Phan', date: iso(-66) }),
+    // An account nobody ran a Free Hour on. Must not count.
+    agreement({ id: 9006, account: 4999, consultant: ME_FULL, date: iso(-20) }),
+    // Right rep and account, but long outside the 90-day window.
+    agreement({ id: 9007, account: 4310, consultant: ME_FULL, date: iso(-2) }),
   ];
 
   const FREE_HOURS = withLastFh([

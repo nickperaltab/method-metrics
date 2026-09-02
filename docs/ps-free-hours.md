@@ -17,7 +17,7 @@ screen depends on how a call was scored or judged.
 | Open case | A `Consulting Request` case on the account still open at the call date |
 | Trial FH | The account had no paying SaaS MRR as of the call — see the MRR lag note below |
 | Non-trial FH | The other half of that split — the account already had a paying SaaS subscription. The denominator of the two columns below |
-| Agreements sent | Every PPU/Dedicated row in `call_prep.ps_proposals` a consultant created in the period (`created_date`, `assigned_to`) |
+| Agreements sent | PPU/Dedicated rows in `call_prep.ps_proposals` that consultant sent **to an account they personally gave a Free Hour to**, within 90 days of it |
 | Agr. after FH | A **non-trial** Free Hour where **that same consultant** sent an agreement within 90 days |
 | PPU/DEP rate | Non-trial Free Hours where that consultant sent a **Pay-Per-Use** agreement **or** the account's dedicated flag went on afterwards, ÷ their non-trial Free Hours |
 | Time to sign | Days from the Free Hour to the `accepted_date` on a PPU/Dedicated agreement |
@@ -40,9 +40,20 @@ who delivered it (77 of 252 in 2026). Shane Li, Phuong Phan, Harsh Patel, Urja
 Rao and Rafiya Syed write proposals but never deliver Free Hours — there is a
 proposal desk. So two different questions:
 
-- **"Agr. sent"** — everything that consultant wrote. Their own output.
-- **"After trial FH"** — agreements they sent following their own trial Free
-  Hour. Their follow-through, and the desk's work is excluded.
+- **"Agr. sent"** — agreements that consultant sent **to an account they
+  personally ran a Free Hour for**, within 90 days of it. Counting everything a
+  rep wrote overstates this by roughly **15x** — 1,683 agreements in 2026 against
+  **113** that reached one of their own Free Hour accounts — because most of a
+  rep's agreements are for accounts they never ran a Free Hour on.
+- **"Agr. after FH"** — the non-trial subset, counted per Free Hour rather than
+  per agreement, so it lines up with the rate beside it.
+
+The match needs **both** halves: same account **and** same consultant. That is
+why `buildAgreementsSentSql` returns one row per agreement instead of a count
+per consultant and month — pre-aggregating throws away the account id the match
+depends on. It de-duplicates on `proposal_id`, because one account can receive
+several agreements and can have had several Free Hours; a per-Free-Hour count
+would report the same agreement twice.
 
 A per-account "did anyone send one" number would be a third figure again, and
 much higher. Do not read the same-rep column as the funnel step.

@@ -143,22 +143,30 @@ export function buildFreeHoursSql(start = REPORTING_START) {
     ORDER BY v.call_date DESC`;
 }
 
-/** Agreements each consultant sent, by month. Independent of Free Hours. */
+/**
+ * One row per PS agreement. Deliberately NOT pre-aggregated by consultant and
+ * month: the screen only counts agreements sent to an account that consultant
+ * personally gave a Free Hour to, and that match needs the account id. Counting
+ * everything a rep wrote overstates it by roughly 15x (1,683 vs 113 in 2026),
+ * because most of their agreements are for accounts they never ran a Free Hour on.
+ */
 export function buildAgreementsSentSql(start = REPORTING_START) {
   const from = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : REPORTING_START;
   return `
     SELECT
+      proposal_id,
+      account_record_id,
       assigned_to AS consultant,
-      FORMAT_DATE('%Y-%m', DATE(created_date)) AS month,
-      COUNT(*) AS agreements_sent,
-      COUNTIF(accepted_date IS NOT NULL) AS agreements_accepted
+      contract_type,
+      FORMAT_DATE('%Y-%m-%d', DATE(created_date)) AS sent_date,
+      accepted_date IS NOT NULL AS accepted
     FROM \`project-for-method-dw.call_prep.ps_proposals\`
     WHERE created_date IS NOT NULL
       AND assigned_to IS NOT NULL
+      AND account_record_id IS NOT NULL
       AND contract_type IN ('Pay-Per-Use','Dedicated','Fast Track Dedicated')
       AND DATE(created_date) >= DATE '${from}'
-    GROUP BY consultant, month
-    ORDER BY month DESC, agreements_sent DESC`;
+    ORDER BY sent_date DESC`;
 }
 
 const toInt = (v, fallback = null) => (v == null || v === '' ? fallback : parseInt(v, 10));
@@ -204,13 +212,16 @@ export function normalizeFreeHourRow(row) {
   };
 }
 
-/** One consultant's agreements-sent count for a month. */
+/** One PS agreement. */
 export function normalizeAgreementRow(row) {
   return {
+    id: toInt(row.proposal_id),
+    accountRecordId: toInt(row.account_record_id),
     consultant: toStr(row.consultant),
-    month: toStr(row.month),
-    sent: toInt(row.agreements_sent, 0),
-    accepted: toInt(row.agreements_accepted, 0),
+    contractType: toStr(row.contract_type),
+    sentDate: toStr(row.sent_date),
+    accepted: toBool(row.accepted),
+    month: toStr(row.sent_date) ? toStr(row.sent_date).slice(0, 7) : null,
   };
 }
 
@@ -397,37 +408,73 @@ export function byMonth(calls) {
 /**
  * One summary per consultant, best rate first, then by volume.
  *
- * `agreements` is the optional agreements-sent set (see totalAgreementsSent):
- * every proposal that consultant wrote in the period, whether or not a Free Hour
- * preceded it. It is a wider count than `repSentAgreement`, which only counts
- * agreements that followed one of their own Free Hours.
+ * `agreements` is the PS agreement set. `agreementsSent` counts only the ones
+ * that consultant sent to an account they personally gave one of these Free
+ * Hours to — not everything they wrote.
  */
 export function byConsultant(calls, agreements = []) {
   return distinctConsultants(calls)
-    .map((consultant) => ({
-      consultant,
-      ...summarize(calls.filter((c) => c.consultant === consultant)),
-      agreementsSent: totalAgreementsSent(agreements, consultant),
-    }))
+    .map((consultant) => {
+      const mine = calls.filter((c) => c.consultant === consultant);
+      return {
+        consultant,
+        ...summarize(mine),
+        agreementsSent: countAgreementsAfterOwnFreeHours(mine, agreements),
+      };
+    })
     .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.delivered - a.delivered);
 }
 
-/** Agreements one consultant sent across an already-filtered agreement set. */
-export function totalAgreementsSent(agreements, consultant = null) {
-  return agreements
-    .filter((a) => consultant == null || a.consultant === consultant)
-    .reduce((sum, a) => sum + a.sent, 0);
+const DAY_MS = 86400000;
+
+/** Whole days between two `YYYY-MM-DD` strings, or null if either is unusable. */
+export function daysBetween(fromIso, toIso) {
+  if (!fromIso || !toIso) return null;
+  const a = Date.parse(`${fromIso}T00:00:00Z`);
+  const b = Date.parse(`${toIso}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / DAY_MS);
 }
 
-/** Bound the agreements-sent set to the same months the screen is showing. */
-export function filterAgreements(agreements, { from = null, to = null, consultant = 'all' } = {}) {
-  return agreements.filter((a) => {
-    if (from && a.month < from) return false;
-    if (to && a.month > to) return false;
-    if (consultant !== 'all' && a.consultant !== consultant) return false;
-    return true;
-  });
+/**
+ * The agreements a consultant sent to accounts they personally delivered one of
+ * these Free Hours to, within `withinDays` of it.
+ *
+ * Both halves have to match — same account AND same consultant — because a
+ * proposal desk writes most agreements that follow a Free Hour, and reps write
+ * plenty of agreements for accounts they never ran one on.
+ *
+ * Returns the agreements, de-duplicated by id: one account can receive several
+ * agreements, and can have had several Free Hours, so a naive per-Free-Hour
+ * count would count the same agreement more than once.
+ */
+export function agreementsAfterOwnFreeHours(calls, agreements, withinDays = AGREEMENT_WINDOW_DAYS) {
+  const callDatesByAccount = new Map();
+  for (const c of calls) {
+    if (!c.consultant || c.accountRecordId == null || !c.callDate) continue;
+    const key = `${c.accountRecordId}:${c.consultant}`;
+    const dates = callDatesByAccount.get(key);
+    if (dates) dates.push(c.callDate);
+    else callDatesByAccount.set(key, [c.callDate]);
+  }
+
+  const seen = new Map();
+  for (const a of agreements) {
+    if (!a.consultant || a.accountRecordId == null || seen.has(a.id)) continue;
+    const dates = callDatesByAccount.get(`${a.accountRecordId}:${a.consultant}`);
+    if (!dates) continue;
+    const followed = dates.some((d) => {
+      const gap = daysBetween(d, a.sentDate);
+      return gap != null && gap >= 0 && gap <= withinDays;
+    });
+    if (followed) seen.set(a.id, a);
+  }
+  return [...seen.values()];
 }
+
+/** How many of them there were. */
+export const countAgreementsAfterOwnFreeHours = (calls, agreements, withinDays = AGREEMENT_WINDOW_DAYS) =>
+  agreementsAfterOwnFreeHours(calls, agreements, withinDays).length;
 
 /**
  * How Free Hours split by whether the delivering rep sent an agreement.
