@@ -20,13 +20,10 @@ import {
   conversions,
   sortRows,
   isTrial,
-  repSentAgreement,
-  repSentPpuAgreement,
-  repWonPsWork,
   byAgreementSent,
-  agreementsAfterOwnFreeHours,
-  countAgreementsAfterOwnFreeHours,
-  daysBetween,
+  agreementsToOwnFreeHourAccounts,
+  countAgreementsToOwnFreeHourAccounts,
+  filterAgreements,
   normalizeAgreementRow,
   buildAgreementsSentSql,
   fetchAgreementsSent,
@@ -47,9 +44,6 @@ const fh = (o = {}) => ({
   payingSaasAtCall: o.payingSaasAtCall ?? false,
   saasStateUnknown: o.saasStateUnknown ?? false,
   daysToAgreementSent: o.daysToAgreementSent ?? null,
-  daysToPpuAgreementSent: o.daysToPpuAgreementSent ?? null,
-  depFlagOnAfter: o.depFlagOnAfter ?? false,
-  depAtCall: o.depAtCall ?? false,
   priorConsultingCase: o.priorConsultingCase ?? false,
   daysToPpu: o.daysToPpu ?? null,
   daysToDep: o.daysToDep ?? null,
@@ -433,87 +427,6 @@ describe('trial vs existing customer', () => {
   });
 });
 
-describe('non-trial outcome: PPU agreement or the dedicated flag', () => {
-  it('counts a Pay-Per-Use agreement from the delivering rep', () => {
-    expect(repSentPpuAgreement(fh({ daysToPpuAgreementSent: 3 }))).toBe(true);
-    expect(repWonPsWork(fh({ daysToPpuAgreementSent: 3 }))).toBe(true);
-  });
-
-  it('counts the dedicated flag going on afterwards', () => {
-    expect(repWonPsWork(fh({ depFlagOnAfter: true }))).toBe(true);
-  });
-
-  it('does not count a Dedicated AGREEMENT as the PPU route', () => {
-    // daysToAgreementSent covers every contract type; the PPU route must not.
-    const call = fh({ daysToAgreementSent: 5, daysToPpuAgreementSent: null });
-    expect(repSentAgreement(call)).toBe(true);
-    expect(repSentPpuAgreement(call)).toBe(false);
-    expect(repWonPsWork(call)).toBe(false);
-  });
-
-  it('is false when the rep did neither', () => {
-    expect(repWonPsWork(fh())).toBe(false);
-    expect(repWonPsWork(fh({ depFlagOnAfter: false }))).toBe(false);
-  });
-
-  it('rates the outcome against non-trial Free Hours only', () => {
-    const t = summarize([
-      // non-trial, won by agreement
-      fh({ payingSaasAtCall: true, daysToPpuAgreementSent: 2 }),
-      // non-trial, won by the flag
-      fh({ payingSaasAtCall: true, depFlagOnAfter: true }),
-      // non-trial, neither
-      fh({ payingSaasAtCall: true }),
-      fh({ payingSaasAtCall: true }),
-      // a trial that won must not touch the non-trial rate
-      fh({ payingSaasAtCall: false, daysToPpuAgreementSent: 1 }),
-    ]);
-    expect(t.nonTrialFreeHours).toBe(4);
-    expect(t.nonTrialPpuSent).toBe(1);
-    expect(t.nonTrialDepFlagOn).toBe(1);
-    expect(t.nonTrialWon).toBe(2);
-    expect(t.nonTrialWonRate).toBe(50);
-  });
-
-  it('counts a Free Hour once when both routes fired', () => {
-    const t = summarize([fh({ payingSaasAtCall: true, daysToPpuAgreementSent: 2, depFlagOnAfter: true })]);
-    expect(t.nonTrialPpuSent).toBe(1);
-    expect(t.nonTrialDepFlagOn).toBe(1);
-    expect(t.nonTrialWon).toBe(1);
-    expect(t.nonTrialWonRate).toBe(100);
-  });
-
-  it('has no rate when the selection holds no non-trial Free Hours', () => {
-    expect(summarize([fh({ payingSaasAtCall: false })]).nonTrialWonRate).toBeNull();
-  });
-
-  it('counts agreements of any type after a non-trial Free Hour separately', () => {
-    const t = summarize([
-      fh({ payingSaasAtCall: true, daysToAgreementSent: 4 }),
-      fh({ payingSaasAtCall: true }),
-    ]);
-    expect(t.nonTrialRepSentAgreement).toBe(1);
-  });
-});
-
-describe('buildFreeHoursSql — the dedicated flag', () => {
-  const sql = buildFreeHoursSql();
-
-  it('reads HasDEP from the monthly MRR series', () => {
-    expect(sql).toMatch(/sa\.HasDEP AS dep_at_call/);
-    expect(sql).toContain('AS dep_flag_on_after');
-  });
-
-  it('requires the flag to be off at the call, so DEP accounts are not credited', () => {
-    expect(sql).toMatch(/NOT COALESCE\(v\.dep_at_call, FALSE\)/);
-  });
-
-  it('restricts the agreement route to Pay-Per-Use so DEP is not double-counted', () => {
-    expect(sql).toMatch(/p\.contract_type = 'Pay-Per-Use'/);
-    expect(sql).toContain('AS days_to_ppu_agreement_sent');
-  });
-});
-
 describe('agreements the rep sent', () => {
   it('rates agreements against trial Free Hours, not all of them', () => {
     const t = summarize([
@@ -554,86 +467,79 @@ describe('agreements the rep sent', () => {
   });
 });
 
-describe('daysBetween', () => {
-  it('counts whole days forward and back, and refuses junk', () => {
-    expect(daysBetween('2026-03-01', '2026-03-11')).toBe(10);
-    expect(daysBetween('2026-03-11', '2026-03-01')).toBe(-10);
-    expect(daysBetween('2026-03-01', '2026-03-01')).toBe(0);
-    // spans a month boundary and a leap-year-adjacent February
-    expect(daysBetween('2026-02-26', '2026-03-03')).toBe(5);
-    expect(daysBetween(null, '2026-03-01')).toBeNull();
-    expect(daysBetween('nonsense', '2026-03-01')).toBeNull();
-  });
-});
-
 describe('agreements sent to the rep’s own Free Hour accounts', () => {
   const agr = (o) => ({
     id: o.id,
     accountRecordId: o.account,
     consultant: o.consultant ?? 'Ada Lovelace',
     contractType: o.type ?? 'Pay-Per-Use',
-    sentDate: o.date,
+    sentDate: o.date ?? '2026-03-10',
     accepted: o.accepted ?? false,
+    month: (o.date ?? '2026-03-10').slice(0, 7),
   });
   const call = (o) => fh({
     consultant: o.consultant ?? 'Ada Lovelace',
     accountRecordId: o.account,
-    callDate: o.date,
-    month: (o.date ?? '2026-03-10').slice(0, 7),
+    callDate: o.date ?? '2026-03-01',
+    month: (o.date ?? '2026-03-01').slice(0, 7),
   });
 
-  it('counts an agreement the same rep sent to their own Free Hour account', () => {
-    const calls = [call({ account: 100, date: '2026-03-01' })];
-    const found = agreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 100, date: '2026-03-10' })]);
+  it('counts one the same rep sent to their own Free Hour account', () => {
+    const found = agreementsToOwnFreeHourAccounts(
+      [call({ account: 100 })],
+      [agr({ id: 1, account: 100 })],
+    );
     expect(found.map((a) => a.id)).toEqual([1]);
   });
 
-  it('ignores an agreement on that account from a DIFFERENT rep', () => {
-    // This is the proposal desk, and it is the whole reason for the match.
-    const calls = [call({ account: 100, date: '2026-03-01' })];
-    const desk = [agr({ id: 1, account: 100, date: '2026-03-10', consultant: 'Phuong Phan' })];
-    expect(agreementsAfterOwnFreeHours(calls, desk)).toEqual([]);
+  it('ignores one on that account from a DIFFERENT rep', () => {
+    // The proposal desk. This match is the whole reason the column exists.
+    expect(agreementsToOwnFreeHourAccounts(
+      [call({ account: 100 })],
+      [agr({ id: 1, account: 100, consultant: 'Phuong Phan' })],
+    )).toEqual([]);
   });
 
-  it('ignores an agreement for an account that had no Free Hour from them', () => {
-    const calls = [call({ account: 100, date: '2026-03-01' })];
-    expect(agreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 999, date: '2026-03-10' })])).toEqual([]);
+  it('ignores one for an account they never gave a Free Hour to', () => {
+    expect(agreementsToOwnFreeHourAccounts(
+      [call({ account: 100 })],
+      [agr({ id: 1, account: 999 })],
+    )).toEqual([]);
   });
 
-  it('ignores one sent before the Free Hour, or past the window', () => {
-    const calls = [call({ account: 100, date: '2026-03-01' })];
-    const before = agr({ id: 1, account: 100, date: '2026-02-20' });
-    const late = agr({ id: 2, account: 100, date: '2026-09-01' });
-    const onLastDay = agr({ id: 3, account: 100, date: '2026-05-30' }); // exactly 90 days
-    expect(agreementsAfterOwnFreeHours(calls, [before, late]).length).toBe(0);
-    expect(agreementsAfterOwnFreeHours(calls, [onLastDay]).map((a) => a.id)).toEqual([3]);
+  it('does not care when it was sent relative to the Free Hour', () => {
+    // Reps often write the agreement during the call, and sometimes before it.
+    const calls = [call({ account: 100, date: '2026-03-15' })];
+    const sameDay = agr({ id: 1, account: 100, date: '2026-03-15' });
+    const before = agr({ id: 2, account: 100, date: '2026-03-02' });
+    const longAfter = agr({ id: 3, account: 100, date: '2026-09-30' });
+    expect(countAgreementsToOwnFreeHourAccounts(calls, [sameDay, before, longAfter])).toBe(3);
   });
 
   it('counts two agreements on one account separately', () => {
-    const calls = [call({ account: 100, date: '2026-03-01' })];
-    const two = [agr({ id: 1, account: 100, date: '2026-03-05' }), agr({ id: 2, account: 100, date: '2026-03-20' })];
-    expect(countAgreementsAfterOwnFreeHours(calls, two)).toBe(2);
+    expect(countAgreementsToOwnFreeHourAccounts(
+      [call({ account: 100 })],
+      [agr({ id: 1, account: 100 }), agr({ id: 2, account: 100 })],
+    )).toBe(2);
   });
 
   it('counts one agreement once even when two Free Hours could claim it', () => {
-    // Two Free Hours on the same account, one agreement between them: without
-    // de-duplication a per-Free-Hour count would report 2.
     const calls = [
       call({ account: 100, date: '2026-03-01' }),
       call({ account: 100, date: '2026-03-15' }),
     ];
-    expect(countAgreementsAfterOwnFreeHours(calls, [agr({ id: 1, account: 100, date: '2026-03-20' })])).toBe(1);
+    expect(countAgreementsToOwnFreeHourAccounts(calls, [agr({ id: 1, account: 100 })])).toBe(1);
   });
 
   it('gives each consultant only their own', () => {
     const calls = [
-      call({ consultant: 'Ada Lovelace', account: 100, date: '2026-03-01' }),
-      call({ consultant: 'Grace Hopper', account: 200, date: '2026-03-01' }),
+      call({ consultant: 'Ada Lovelace', account: 100 }),
+      call({ consultant: 'Grace Hopper', account: 200 }),
     ];
     const agreements = [
-      agr({ id: 1, account: 100, consultant: 'Ada Lovelace', date: '2026-03-05' }),
-      agr({ id: 2, account: 200, consultant: 'Grace Hopper', date: '2026-03-05' }),
-      agr({ id: 3, account: 200, consultant: 'Grace Hopper', date: '2026-03-06' }),
+      agr({ id: 1, account: 100, consultant: 'Ada Lovelace' }),
+      agr({ id: 2, account: 200, consultant: 'Grace Hopper' }),
+      agr({ id: 3, account: 200, consultant: 'Grace Hopper' }),
     ];
     const by = Object.fromEntries(
       byConsultant(calls, agreements).map((r) => [r.consultant, r.agreementsSent]),
@@ -643,8 +549,17 @@ describe('agreements sent to the rep’s own Free Hour accounts', () => {
   });
 
   it('reports zero for a consultant who sent none', () => {
-    const rows = byConsultant([call({ consultant: 'Zoe Quiet', account: 100, date: '2026-03-01' })], []);
-    expect(rows[0].agreementsSent).toBe(0);
+    expect(byConsultant([call({ consultant: 'Zoe Quiet', account: 100 })], [])[0].agreementsSent).toBe(0);
+  });
+
+  it('bounds the agreement set to the months on screen', () => {
+    const agreements = [
+      agr({ id: 1, account: 100, date: '2026-01-20' }),
+      agr({ id: 2, account: 100, date: '2026-05-20' }),
+    ];
+    expect(filterAgreements(agreements, { from: '2026-05' }).map((a) => a.id)).toEqual([2]);
+    expect(filterAgreements(agreements, { to: '2026-01' }).map((a) => a.id)).toEqual([1]);
+    expect(filterAgreements(agreements, {}).length).toBe(2);
   });
 
   it('normalizes the BQ REST strings', () => {
