@@ -24,6 +24,7 @@ import { SKIPPED_RATING } from '../lib/customer.js';
 const T = {
   snapshots: 'call_prep.snapshots',
   handoffs: 'call_prep.handoffs',
+  findings: 'call_prep.time_killer_findings',
   accounts: 'revenue.int_accounts',
   timeTracking: 'revenue.TimeTracking',
   cases: 'revenue.Cases',
@@ -46,6 +47,7 @@ const T = {
   account: 'revenue.Account',
   opportunityFit: 'call_prep.opportunity_fit',
   activity: 'revenue.Activity',
+  freeHourOutcomes: 'call_prep.free_hour_outcomes',
 };
 
 const hits = (sql, table) => sql.includes(table);
@@ -421,6 +423,13 @@ const ROUTES = [
     },
   },
   {
+    name: 'free hour outcomes',
+    when: (sql) => hits(sql, T.freeHourOutcomes),
+    // The screen filters by period, consultant and segment client-side, so the
+    // whole set comes back and only the ORDER BY has to be honoured here.
+    rows: () => [...fixtures().FREE_HOURS].sort((a, b) => b.call_date.localeCompare(a.call_date)),
+  },
+  {
     name: 'handoffs',
     when: (sql) => hits(sql, T.handoffs),
     rows: (sql) => {
@@ -436,6 +445,28 @@ const ROUTES = [
       const orderCol = qualifyOrderCol(sql);
       if (orderCol) rows = latestPerAccount(rows, orderCol);
       return rows.sort(desc('created_at'));
+    },
+  },
+  {
+    // EOD follow-through findings. Unlike every other PS route this dedupes on
+    // finding_id, not account_record_id — one account can carry a follow-up gap,
+    // a logging gap and an MIA finding at once, and partitioning by account
+    // would throw away two of the three.
+    name: 'time killer findings',
+    when: (sql) => hits(sql, T.findings),
+    rows: (sql) => {
+      const matchers = consultantMatchers(sql);
+      const rows = fixtures().FINDINGS.filter((r) => matchesAnyConsultant(r, matchers));
+      const best = new Map();
+      for (const row of rows) {
+        const current = best.get(row.finding_id);
+        if (!current || String(row.created_at) > String(current.created_at)) {
+          best.set(row.finding_id, row);
+        }
+      }
+      return [...best.values()].sort(
+        (a, b) => desc('last_seen')(a, b) || asc('account_name')(a, b)
+      );
     },
   },
   // The projects route must precede the items and work-log routes:

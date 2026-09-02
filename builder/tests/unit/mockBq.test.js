@@ -9,6 +9,12 @@ import { describe, it, expect } from 'vitest';
 import { routeMockSql } from '../../src/dev/mockBq.js';
 import { ME_FULL, ME_SHORT } from '../../src/dev/fixtures/ps.js';
 import {
+  buildFreeHoursSql,
+  normalizeFreeHourRow,
+  summarize,
+  bySequence,
+} from '../../src/lib/freeHours.js';
+import {
   buildConsultantsSql,
   buildBookSql,
   buildAccountSnapshotsSql,
@@ -39,6 +45,14 @@ import {
   buildAccountHandoffsSql,
   normalizeHandoffRow,
 } from '../../src/lib/handoffs.js';
+import {
+  buildMyFindingsSql,
+  buildAllFindingsSql,
+  normalizeFindingRow,
+  groupByAccount,
+  findingAgeDays,
+  isOpen,
+} from '../../src/lib/eod.js';
 
 const EMAIL = 'b.saltzman@method.me';
 const TODAY = localIsoDate();
@@ -232,6 +246,86 @@ describe('mock router — handoffs', () => {
     expect(ids).toContain(900109); // incoming to me
     expect(ids).toContain(900106); // outgoing from me
     expect(ids).not.toContain(900110); // neither side is me
+  });
+});
+
+describe('mock router — EOD findings', () => {
+  it('scopes to my findings and normalizes them', () => {
+    const mine = rowsFor(buildMyFindingsSql(EMAIL)).map(normalizeFindingRow);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((f) => /saltzman/i.test(f.consultant))).toBe(true);
+    // Written against Vinesh, so a working consultant filter excludes it.
+    expect(mine.map((f) => f.accountRecordId)).not.toContain(900110);
+  });
+
+  it('keeps several findings for one account instead of deduping to the latest', () => {
+    const mine = rowsFor(buildMyFindingsSql(EMAIL)).map(normalizeFindingRow);
+    const northwind = mine.filter((f) => f.accountRecordId === 900101);
+    expect(northwind.length).toBe(2);
+    expect(new Set(northwind.map((f) => f.findingType)).size).toBe(2);
+  });
+
+  it('carries every status through, so the screen can filter rather than the query', () => {
+    const statuses = new Set(rowsFor(buildMyFindingsSql(EMAIL)).map((r) => r.status));
+    expect(statuses).toContain('open');
+    expect(statuses).toContain('drafted');
+    expect(statuses).toContain('resolved');
+  });
+
+  it('groups and ranks into a screen-ready shape', () => {
+    const mine = rowsFor(buildMyFindingsSql(EMAIL)).map(normalizeFindingRow).filter(isOpen);
+    const today = localIsoDate();
+    const groups = groupByAccount(mine, today);
+    expect(groups.length).toBeGreaterThan(1);
+
+    // Accounts descend by the age of their oldest gap.
+    const ages = groups.map((g) => findingAgeDays(g.findings[0], today) ?? 0);
+    expect([...ages].sort((a, b) => b - a)).toEqual(ages);
+
+    // Within an account, the client-facing gap leads the bookkeeping one.
+    const northwind = groups.find((g) => g.accountRecordId === 900101);
+    expect(northwind.findings.map((f) => f.findingType))
+      .toEqual(['followup_missing', 'email_not_logged']);
+  });
+
+  it('reaches every consultant when the name predicate is dropped', () => {
+    const all = rowsFor(buildAllFindingsSql()).map(normalizeFindingRow);
+    expect(all.map((f) => f.accountRecordId)).toContain(900110);
+  });
+});
+
+describe('free hours', () => {
+  const calls = () => rowsFor(buildFreeHoursSql()).map(normalizeFreeHourRow);
+
+  it('routes the real SQL and normalizes what comes back', () => {
+    const rows = calls();
+    expect(rows.length).toBeGreaterThan(0);
+    // A fixture typo would surface here as nulls rather than as a blank screen.
+    expect(rows.every((c) => c.account && c.consultant && c.callDate && c.month)).toBe(true);
+    expect(rows.every((c) => Number.isInteger(c.seq) && c.seq >= 1)).toBe(true);
+  });
+
+  it('honours the newest-first ordering the screen relies on', () => {
+    const dates = calls().map((c) => c.callDate);
+    expect([...dates].sort().reverse()).toEqual(dates);
+  });
+
+  it('summarizes into a shape the screen can render', () => {
+    const t = summarize(calls());
+    expect(t.delivered).toBeGreaterThan(0);
+    expect(t.eligible + t.alreadyPaying).toBe(t.delivered);
+    expect(t.converted).toBeLessThanOrEqual(t.eligible);
+    expect(t.ppu + t.dep).toBe(t.converted);
+    expect(t.medianDaysToAgreement).not.toBeNull();
+  });
+
+  it('keeps repeat Free Hours skewed toward accounts already paying', () => {
+    const seq = bySequence(calls());
+    const first = seq.find((b) => b.key === '1st');
+    const second = seq.find((b) => b.key === '2nd');
+    expect(first.delivered).toBeGreaterThan(0);
+    expect(first.alreadyPaying).toBe(0);
+    expect(second.alreadyPaying).toBeGreaterThan(0);
   });
 });
 

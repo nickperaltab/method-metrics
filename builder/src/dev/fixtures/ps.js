@@ -87,6 +87,38 @@ function handoff(o) {
   };
 }
 
+// A call_prep.time_killer_findings row — the EOD follow-through screen's input.
+// `anchor` is the date the gap happened (the meeting, the message, the last
+// touch); it forms the finding_id's last segment exactly as the routine does,
+// which is what keeps one gap from becoming a new finding every afternoon.
+function finding(o) {
+  const slug = String(o.consultant ?? '').toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+  return {
+    finding_id: `${slug}-${o.id}-${o.type}-${o.anchor}`,
+    run_date: o.runDate,
+    consultant: o.consultant,
+    consultant_email: o.consultantEmail ?? null,
+    account_record_id: str(o.id),
+    account_name: o.name,
+    account_is_dep: bool(o.dep),
+    finding_type: o.type,
+    detail: o.detail,
+    evidence: o.evidence ?? null,
+    missing_elements: repeated(o.missing),
+    days_since_touch: o.daysSinceTouch == null ? null : str(o.daysSinceTouch),
+    motion: o.motion ?? null,
+    fit: o.fit ?? null,
+    recommended_hook: o.hook ?? null,
+    status: o.status,
+    first_seen: o.firstSeen,
+    last_seen: o.lastSeen ?? o.runDate,
+    drafted_at: o.draftId ? `${o.runDate}T21:05:00Z` : null,
+    draft_id: o.draftId ?? null,
+    resolved_at: o.status === 'resolved' ? `${o.runDate}T21:05:00Z` : null,
+    created_at: `${o.runDate}T21:06:00Z`,
+  };
+}
+
 // Ten invented accounts spanning the states the UI has to render: failing sync,
 // open cases, a cold account, DEP accounts, a multi-entity child, a churned
 // account, and a couple of clean ones so "nothing wrong" also has a look.
@@ -402,7 +434,156 @@ function build() {
     }),
   ];
 
-  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT };
+  // call_prep.time_killer_findings — the /eod screen. Covers all three checks,
+  // both live statuses, and the three states that made the real table awkward
+  // to render: a finding carried for days (ages from first_seen, not run_date),
+  // a null days_since_touch on an account with no touch on record at all, and
+  // the two spellings the routine has written for the same missing element
+  // (`hours_estimate` on one row, `time_estimate` on another) which the
+  // normalizer has to collapse to one chip.
+  const FINDINGS = [
+    // Carried four days and still unsent — the top of the list.
+    finding({
+      id: 900101, name: 'Northwind Traders', dep: true, consultant: ME_FULL,
+      consultantEmail: 'b.saltzman@method.me', type: 'followup_missing',
+      detail: 'Reply to the 6-item scope request proposes a call but has no itemized recap, no time estimate and no delivery date.',
+      evidence: 'Zoom 2026-08-09 14:00 · 1.5h logged · thread "Portal rollout — remaining items"',
+      missing: ['recap', 'hours_estimate', 'delivery_date'],
+      status: 'open', anchor: iso(-4), firstSeen: iso(-4), runDate: iso(0), daysSinceTouch: 0,
+    }),
+    // Same check, partially done, and already drafted — shows the drafted state
+    // and a single-element gap rather than the full three.
+    finding({
+      id: 900104, name: 'Pike & Powell Supply', dep: true, consultant: ME_SHORT,
+      type: 'followup_missing',
+      detail: 'Recap and a one-hour estimate are both present. No delivery date stated.',
+      evidence: '1h logged · thread "Non-branded delivery tickets"',
+      missing: ['time_estimate'],
+      status: 'drafted', draftId: 'r6545737900120636866',
+      anchor: iso(-1), firstSeen: iso(-1), runDate: iso(0), daysSinceTouch: 0,
+    }),
+    finding({
+      id: 900101, name: 'Northwind Traders', dep: true, consultant: ME_FULL,
+      type: 'email_not_logged',
+      detail: 'Outgoing email at 08:30 has no matching Email Outgoing Activity for today.',
+      evidence: 'to dana@northwindtraders.example · "Re: Portal rollout — remaining items"',
+      missing: [], status: 'open',
+      anchor: iso(0), firstSeen: iso(0), runDate: iso(0), daysSinceTouch: 0,
+    }),
+    finding({
+      id: 900102, name: 'Harborview Dental Group', dep: false, consultant: ME_SHORT,
+      type: 'email_not_logged',
+      detail: 'Inbound email at 18:47 yesterday has no matching Email Incoming Activity for that date.',
+      evidence: 'from ops@harborviewdental.example · "Recurring invoices question"',
+      missing: [], status: 'open',
+      anchor: iso(-1), firstSeen: iso(-1), runDate: iso(0), daysSinceTouch: 1,
+    }),
+    // Quiet account with a scored opportunity — the hook comes from
+    // opportunity_fit, never invented.
+    finding({
+      id: 900105, name: 'Bright Harbor Logistics', dep: false, consultant: ME_FULL,
+      type: 'mia',
+      detail: 'No touch of any kind in 11 days.',
+      missing: [], status: 'drafted', draftId: 'r-423205447828831169',
+      motion: 'Method Pay', fit: 'strong',
+      hook: 'They raised manual payment chasing on the last call; Method Pay closes that loop.',
+      anchor: iso(-11), firstSeen: iso(-11), lastSeen: iso(0), runDate: iso(0), daysSinceTouch: 11,
+    }),
+    // No touch on record at all — days_since_touch is genuinely null, and the
+    // anchor is the literal string the routine uses so it doesn't re-fire daily.
+    finding({
+      id: 900103, name: 'Cedarline Millwork', dep: false, consultant: ME_FULL,
+      type: 'mia',
+      detail: 'No TimeTracking on record and no unambiguously attributable activity. The only contact email resolves to three accounts, so no draft was created.',
+      missing: [], status: 'open', daysSinceTouch: null,
+      anchor: 'no-touch', firstSeen: iso(-9), lastSeen: iso(0), runDate: iso(0),
+    }),
+    // Settled work — kept out of the default view, counted as the counterweight.
+    finding({
+      id: 900107, name: 'Vantage Point Interiors', dep: false, consultant: ME_FULL,
+      type: 'followup_missing',
+      detail: 'Recap, estimate and delivery date all present in the reply sent this morning.',
+      missing: [], status: 'resolved',
+      anchor: iso(-3), firstSeen: iso(-3), lastSeen: iso(0), runDate: iso(0), daysSinceTouch: 0,
+    }),
+    finding({
+      id: 900108, name: 'Ridgeway Plumbing Co.', dep: false, consultant: ME_FULL,
+      type: 'mia',
+      detail: 'No touch in 14 days.',
+      missing: [], status: 'dismissed', daysSinceTouch: 14,
+      anchor: iso(-14), firstSeen: iso(-14), lastSeen: iso(-2), runDate: iso(-2),
+    }),
+    // Someone else's, so a team view differs from "mine".
+    finding({
+      id: 900110, name: 'Lumen Fabrication', dep: true, consultant: 'Vinesh Gobin',
+      type: 'followup_missing',
+      detail: 'Reply has a recap but no estimate and no delivery date.',
+      missing: ['hours_estimate', 'delivery_date'], status: 'open',
+      anchor: iso(-2), firstSeen: iso(-2), runDate: iso(0), daysSinceTouch: 0,
+    }),
+  ];
+
+
+  // ── Free Hours ───────────────────────────────────────────────────────────
+  // Shaped to mirror the real distribution so the screen gets designed against
+  // reality: most Free Hours are an account's first and convert around 30%;
+  // repeats are fewer and skew heavily toward accounts already paying, so they
+  // sit outside the rate. See lib/freeHours.js.
+  const freeHour = (o) => ({
+    fh_id: String(o.id),
+    account_record_id: String(o.account),
+    account: o.name,
+    consultant: o.consultant,
+    call_date: o.date,
+    cohort_month: o.date.slice(0, 7),
+    fh_seq: String(o.seq ?? 1),
+    already_paying: String(!!o.alreadyPaying),
+    prior_consulting_case: String(!!o.priorCase),
+    days_to_ppu: o.ppu == null ? null : String(o.ppu),
+    days_to_dep: o.dep == null ? null : String(o.dep),
+    days_to_agreement: o.signed == null ? null : String(o.signed),
+    paid_hours_90d: String(o.hours ?? 0),
+    days_elapsed: String(o.elapsed ?? 120),
+  });
+
+  const withLastFh = (rows) => {
+    const last = new Map();
+    const count = new Map();
+    for (const r of rows) {
+      const k = r.account_record_id;
+      if (!last.has(k) || r.call_date > last.get(k)) last.set(k, r.call_date);
+      count.set(k, (count.get(k) ?? 0) + 1);
+    }
+    return rows.map((r) => ({
+      ...r,
+      last_fh_month: last.get(r.account_record_id).slice(0, 7),
+      account_fh_count: String(count.get(r.account_record_id)),
+    }));
+  };
+
+  const FREE_HOURS = withLastFh([
+    // Converted, first Free Hour — the common winning shape.
+    freeHour({ id: 8001, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
+    freeHour({ id: 8002, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
+    freeHour({ id: 8003, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
+    freeHour({ id: 8004, account: 4488, name: 'cedar-mill-works', consultant: 'Cheryl Tong', date: iso(-70), dep: 21, signed: 16, hours: 30, elapsed: 70 }),
+    // Did not convert.
+    freeHour({ id: 8005, account: 4501, name: 'atlas-plumbing', consultant: ME_FULL, date: iso(-64), elapsed: 64 }),
+    freeHour({ id: 8006, account: 4523, name: 'quill-and-press', consultant: 'Vinesh Gobin', date: iso(-58), elapsed: 58 }),
+    freeHour({ id: 8007, account: 4544, name: 'bayside-marine', consultant: 'Cheryl Tong', date: iso(-51), elapsed: 51 }),
+    freeHour({ id: 8008, account: 4560, name: 'ridgeline-hvac', consultant: ME_FULL, date: iso(-44), elapsed: 44 }),
+    // Repeat Free Hours: mostly accounts already paying, so out of the rate.
+    freeHour({ id: 8009, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-38), seq: 2, alreadyPaying: true, priorCase: true, hours: 4, elapsed: 38 }),
+    freeHour({ id: 8010, account: 4310, name: 'lumen-fabrication', consultant: 'Vinesh Gobin', date: iso(-30), seq: 2, alreadyPaying: true, priorCase: true, elapsed: 30 }),
+    freeHour({ id: 8011, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-12), seq: 3, alreadyPaying: true, priorCase: true, elapsed: 12 }),
+    // A repeat that did convert — rarer, but it happens.
+    freeHour({ id: 8012, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
+    // Too recent to have had a full 30 days — drives the "still converting" note.
+    freeHour({ id: 8013, account: 4601, name: 'granite-state-tile', consultant: ME_FULL, date: iso(-6), elapsed: 6 }),
+    freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),
+  ]);
+
+  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FINDINGS, FREE_HOURS };
 }
 
 let cache = null;
