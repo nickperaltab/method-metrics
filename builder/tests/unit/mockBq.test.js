@@ -16,7 +16,7 @@ import {
   summarize,
   bySequence,
   byConsultant,
-  totalAgreementsSent,
+  countAgreementsAfterOwnFreeHours,
 } from '../../src/lib/freeHours.js';
 import {
   buildConsultantsSql,
@@ -267,13 +267,29 @@ describe('free hours', () => {
     expect(routeFor(buildFreeHoursSql())).toBe('free hour outcomes');
   });
 
-  it('serves agreements a consultant can be credited with', () => {
+  it('serves one row per agreement, with the account id to match on', () => {
     const rows = rowsFor(buildAgreementsSentSql()).map(normalizeAgreementRow);
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.consultant && /^\d{4}-\d{2}$/.test(r.month))).toBe(true);
-    expect(rows.every((r) => Number.isInteger(r.sent) && r.sent >= 0)).toBe(true);
-    expect(rows.every((r) => r.accepted <= r.sent)).toBe(true);
-    expect(totalAgreementsSent(rows, ME_FULL)).toBeGreaterThan(0);
+    expect(rows.every((r) => Number.isInteger(r.id))).toBe(true);
+    expect(rows.every((r) => Number.isInteger(r.accountRecordId))).toBe(true);
+    expect(rows.every((r) => r.consultant && /^\d{4}-\d{2}-\d{2}$/.test(r.sentDate))).toBe(true);
+    expect(rows.every((r) => typeof r.accepted === 'boolean')).toBe(true);
+    // ids must be unique or the de-duplication in the match is meaningless
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+  });
+
+  it('credits only agreements the rep sent to their own Free Hour accounts', () => {
+    const agreements = rowsFor(buildAgreementsSentSql()).map(normalizeAgreementRow);
+    const all = calls();
+    const mine = all.filter((c) => c.consultant === ME_FULL);
+    const credited = countAgreementsAfterOwnFreeHours(mine, agreements);
+
+    expect(credited).toBeGreaterThan(0);
+    // The fixtures deliberately include an agreement from the proposal desk, one
+    // for an account with no Free Hour, and one outside the window — so the
+    // credited count must come in under the raw total.
+    expect(credited).toBeLessThan(agreements.length);
+    expect(countAgreementsAfterOwnFreeHours(all, agreements)).toBeLessThan(agreements.length);
   });
 
   it('attaches agreements to the consultant rows the table renders', () => {

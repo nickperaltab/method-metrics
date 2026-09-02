@@ -426,6 +426,11 @@ function build() {
     days_to_dep: o.dep == null ? null : String(o.dep),
     days_to_agreement: o.signed == null ? null : String(o.signed),
     days_to_agreement_sent: o.sent == null ? null : String(o.sent),
+    // Pay-Per-Use agreements and the dedicated flag are separate routes to PS
+    // work, so a fixture can carry either one.
+    days_to_ppu_agreement_sent: o.ppuSent == null ? null : String(o.ppuSent),
+    dep_flag_on_after: String(!!o.depFlagOn),
+    dep_at_call: String(!!o.depAtCall),
     paid_hours_90d: String(o.hours ?? 0),
     days_elapsed: String(o.elapsed ?? 120),
   });
@@ -445,29 +450,41 @@ function build() {
     }));
   };
 
-  // Agreements sent per consultant per month. Deliberately larger than the
-  // agreements that follow a Free Hour: a proposal desk writes most of those,
-  // and reps also write agreements for accounts that never had a Free Hour.
-  const agreement = (consultant, month, sent, accepted) => ({
-    consultant, month, agreements_sent: String(sent), agreements_accepted: String(accepted),
+  // One row per PS agreement. Accounts and consultants line up with FREE_HOURS
+  // below so the account+consultant match the screen does has something to hit,
+  // and a few deliberately do NOT: an agreement on a Free Hour account written
+  // by a different rep (the proposal desk), and one for an account that never
+  // had a Free Hour. Both must be excluded by the match.
+  const agreement = (o) => ({
+    proposal_id: String(o.id),
+    account_record_id: String(o.account),
+    consultant: o.consultant,
+    contract_type: o.type ?? 'Pay-Per-Use',
+    sent_date: o.date,
+    accepted: bool(o.accepted),
   });
 
-  const thisMonth = iso(0).slice(0, 7);
-  const lastMonth = iso(-32).slice(0, 7);
   const AGREEMENTS = [
-    agreement(ME_FULL, thisMonth, 4, 2),
-    agreement(ME_FULL, lastMonth, 6, 5),
-    agreement('Vinesh Gobin', thisMonth, 2, 1),
-    agreement('Vinesh Gobin', lastMonth, 3, 2),
-    agreement('Cheryl Tong', thisMonth, 1, 0),
-    agreement('Cheryl Tong', lastMonth, 5, 4),
+    // Sent by the rep who ran the Free Hour — these count.
+    agreement({ id: 9001, account: 4242, consultant: ME_FULL, date: iso(-118), accepted: true }),
+    agreement({ id: 9002, account: 4415, consultant: 'Vinesh Gobin', date: iso(-87), type: 'Dedicated' }),
+    agreement({ id: 9003, account: 4415, consultant: 'Cheryl Tong', date: iso(-29), accepted: true }),
+    // Second agreement on an account that already had one — counted separately,
+    // which is why the match de-duplicates on proposal id rather than account.
+    agreement({ id: 9004, account: 4242, consultant: ME_FULL, date: iso(-100) }),
+    // The proposal desk: right account, wrong rep. Must not count for anyone.
+    agreement({ id: 9005, account: 4488, consultant: 'Phuong Phan', date: iso(-66) }),
+    // An account nobody ran a Free Hour on. Must not count.
+    agreement({ id: 9006, account: 4999, consultant: ME_FULL, date: iso(-20) }),
+    // Right rep and account, but long outside the 90-day window.
+    agreement({ id: 9007, account: 4310, consultant: ME_FULL, date: iso(-2) }),
   ];
 
   const FREE_HOURS = withLastFh([
     // Converted, first Free Hour — the common winning shape.
-    freeHour({ id: 8001, sent: 2, payingSaas: true, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
+    freeHour({ id: 8001, ppuSent: 2, sent: 2, payingSaas: true, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-120), ppu: 6, signed: 3, hours: 12.5, elapsed: 120 }),
     freeHour({ id: 8002, sent: 5, account: 4310, name: 'lumen-fabrication', consultant: ME_FULL, date: iso(-96), dep: 11, signed: 8, hours: 24, elapsed: 96 }),
-    freeHour({ id: 8003, sent: 1, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
+    freeHour({ id: 8003, depFlagOn: true, sent: 1, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Vinesh Gobin', date: iso(-88), ppu: 2, signed: 0, hours: 6, elapsed: 88 }),
     freeHour({ id: 8004, sent: 12, account: 4488, name: 'cedar-mill-works', consultant: 'Cheryl Tong', date: iso(-70), dep: 21, signed: 16, hours: 30, elapsed: 70 }),
     // Did not convert.
     freeHour({ id: 8005, payingSaas: true, account: 4501, name: 'atlas-plumbing', consultant: ME_FULL, date: iso(-64), elapsed: 64 }),
@@ -479,7 +496,7 @@ function build() {
     freeHour({ id: 8010, account: 4310, name: 'lumen-fabrication', consultant: 'Vinesh Gobin', date: iso(-30), seq: 2, openCase: true, priorCase: true, elapsed: 30 }),
     freeHour({ id: 8011, account: 4242, name: 'northwind-supply', consultant: ME_FULL, date: iso(-12), seq: 3, openCase: true, priorCase: true, elapsed: 12 }),
     // A repeat that did convert — rarer, but it happens.
-    freeHour({ id: 8012, sent: 4, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
+    freeHour({ id: 8012, ppuSent: 4, sent: 4, payingSaas: true, account: 4415, name: 'harbor-freight-co', consultant: 'Cheryl Tong', date: iso(-33), seq: 2, priorCase: true, ppu: 9, signed: 5, hours: 8, elapsed: 33 }),
     // Too recent to have had a full 30 days — drives the "still converting" note.
     freeHour({ id: 8013, account: 4601, name: 'granite-state-tile', consultant: ME_FULL, date: iso(-6), elapsed: 6 }),
     freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),

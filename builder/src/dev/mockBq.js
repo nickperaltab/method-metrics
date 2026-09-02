@@ -423,12 +423,12 @@ const ROUTES = [
     },
   },
   {
-    // Agreements sent, a different grain from Free Hours: every proposal a
-    // consultant wrote, whether or not a Free Hour came first. Must precede the
-    // free-hour route only in spirit — it keys off the GROUP BY, which the
-    // free-hour query never has.
+    // Agreements, one row per proposal. A different grain from Free Hours, and
+    // the screen matches them on account + consultant, so the account id has to
+    // survive into the fixture rows.
     name: 'agreements sent by consultant',
-    when: (sql) => hits(sql, T.psProposals) && /GROUP BY consultant, month/.test(sql),
+    // Both PS queries name ps_proposals; only this one selects proposal_id.
+    when: (sql) => hits(sql, T.psProposals) && sql.includes('proposal_id'),
     rows: () => [...fixtures().AGREEMENTS],
   },
   {
