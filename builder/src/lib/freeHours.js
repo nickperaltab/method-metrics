@@ -58,11 +58,8 @@ export function buildFreeHoursSql(start = REPORTING_START) {
       SELECT account_record_id, entity_record_id
       FROM \`project-for-method-dw.revenue.int_accounts\`
     ),
-    -- HasDEP is a genuine monthly series, not current state stamped on every row
-    -- (338 of 450 DEP entities carry it in only some months), so the month it
-    -- first turns true is when the dedicated flag went on.
     saas AS (
-      SELECT EntityRecordID, Month, StartMRR, HasDEP
+      SELECT EntityRecordID, Month, StartMRR
       FROM \`project-for-method-dw.revenue.int_customer_mrr\`
       WHERE Month >= DATE_SUB(DATE '${from}', INTERVAL 12 MONTH)
     ),
@@ -82,8 +79,7 @@ export function buildFreeHoursSql(start = REPORTING_START) {
     -- account with a gap in its MRR history. BigQuery cannot de-correlate a
     -- "latest row" subquery here, hence the window.
     v AS (
-      SELECT v0.*, a.entity_record_id,
-             sa.StartMRR AS mrr_at_call, sa.HasDEP AS dep_at_call,
+      SELECT v0.*, sa.StartMRR AS mrr_at_call,
              ROW_NUMBER() OVER (PARTITION BY v0.fh_id ORDER BY sa.Month DESC) AS mrr_rn
       FROM v0
       LEFT JOIN acct a ON a.account_record_id = v0.account_record_id
@@ -117,25 +113,6 @@ export function buildFreeHoursSql(start = REPORTING_START) {
            AND p.sent_date >= v.call_date
            AND p.sent_date <= DATE_ADD(v.call_date, INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY)
         ), v.call_date, DAY) AS days_to_agreement_sent,
-      -- Pay-Per-Use only. Dedicated arrives through the flag below instead, so
-      -- counting Dedicated agreements here too would double-count that route.
-      DATE_DIFF((SELECT MIN(p.sent_date) FROM props p
-         WHERE p.account_record_id = v.account_record_id
-           AND p.assigned_to = v.consultant
-           AND p.contract_type = 'Pay-Per-Use'
-           AND p.sent_date >= v.call_date
-           AND p.sent_date <= DATE_ADD(v.call_date, INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY)
-        ), v.call_date, DAY) AS days_to_ppu_agreement_sent,
-      -- The dedicated flag going on AFTER the call. Requires it to be off at the
-      -- call, so an account that was already Dedicated is not credited to it.
-      -- Month grain: a flag set in the call's own month counts.
-      (NOT COALESCE(v.dep_at_call, FALSE) AND (
-        SELECT COUNT(1) > 0 FROM saas s
-        WHERE s.EntityRecordID = v.entity_record_id
-          AND s.HasDEP
-          AND s.Month >= DATE_TRUNC(v.call_date, MONTH)
-      )) AS dep_flag_on_after,
-      COALESCE(v.dep_at_call, FALSE) AS dep_at_call,
       ROUND(v.paid_hours_90d, 1) AS paid_hours_90d,
       v.days_elapsed
     FROM v
@@ -203,10 +180,6 @@ export function normalizeFreeHourRow(row) {
     daysToAgreement: toInt(row.days_to_agreement),
     // Days until the SAME consultant sent an agreement, or null if they didn't.
     daysToAgreementSent: toInt(row.days_to_agreement_sent),
-    // Pay-Per-Use only — the Dedicated route is the flag below, not an agreement.
-    daysToPpuAgreementSent: toInt(row.days_to_ppu_agreement_sent),
-    depFlagOnAfter: toBool(row.dep_flag_on_after),
-    depAtCall: toBool(row.dep_at_call),
     paidHours90d: toNum(row.paid_hours_90d, 0),
     daysElapsed: toInt(row.days_elapsed, 0),
   };
@@ -267,21 +240,6 @@ export const isTrial = (call) => !call.payingSaasAtCall;
 /** The Free Hour's own consultant sent an agreement within the window. */
 export const repSentAgreement = (call) => call.daysToAgreementSent != null;
 
-/** …and specifically a Pay-Per-Use one. */
-export const repSentPpuAgreement = (call) => call.daysToPpuAgreementSent != null;
-
-/**
- * What "the rep turned this Free Hour into something" means on an account that
- * was already a paying SaaS customer: they sent a Pay-Per-Use agreement, or the
- * account's dedicated flag went on afterwards. Two routes because PS work
- * arrives two ways — PPU is sold with an agreement, Dedicated is a flag on the
- * account — and only counting agreements would miss every DEP win.
- *
- * The agreement half is restricted to the delivering consultant. The flag half
- * cannot be: it is account state with nobody's name on it, so it is credited to
- * whoever ran the Free Hour.
- */
-export const repWonPsWork = (call) => repSentPpuAgreement(call) || call.depFlagOnAfter === true;
 
 export const SEGMENTS = ['all', 'first', 'repeat', 'prior', 'trial', 'customer'];
 
@@ -352,7 +310,6 @@ export function summarize(calls) {
   // trial's path runs through the subscription first.
   const nonTrials = calls.filter((c) => !isTrial(c));
   const nonTrialSent = nonTrials.filter(repSentAgreement);
-  const nonTrialWon = nonTrials.filter(repWonPsWork);
   return {
     delivered: calls.length,
     openCaseAtCall: calls.length - eligible.length,
@@ -369,10 +326,6 @@ export function summarize(calls) {
     // Non-trial Free Hours and what the delivering rep did with them.
     nonTrialFreeHours: nonTrials.length,
     nonTrialRepSentAgreement: nonTrialSent.length,
-    nonTrialPpuSent: nonTrials.filter(repSentPpuAgreement).length,
-    nonTrialDepFlagOn: nonTrials.filter((c) => c.depFlagOnAfter === true).length,
-    nonTrialWon: nonTrialWon.length,
-    nonTrialWonRate: percent(nonTrialWon.length, nonTrials.length),
     ppu: won.filter((c) => conversionType(c) === 'ppu').length,
     dep: won.filter((c) => conversionType(c) === 'dep').length,
     paidHours: Math.round(won.reduce((a, c) => a + (c.paidHours90d || 0), 0)),
@@ -419,62 +372,57 @@ export function byConsultant(calls, agreements = []) {
       return {
         consultant,
         ...summarize(mine),
-        agreementsSent: countAgreementsAfterOwnFreeHours(mine, agreements),
+        agreementsSent: countAgreementsToOwnFreeHourAccounts(mine, agreements),
       };
     })
     .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.delivered - a.delivered);
 }
 
-const DAY_MS = 86400000;
-
-/** Whole days between two `YYYY-MM-DD` strings, or null if either is unusable. */
-export function daysBetween(fromIso, toIso) {
-  if (!fromIso || !toIso) return null;
-  const a = Date.parse(`${fromIso}T00:00:00Z`);
-  const b = Date.parse(`${toIso}T00:00:00Z`);
-  if (Number.isNaN(a) || Number.isNaN(b)) return null;
-  return Math.round((b - a) / DAY_MS);
+/** Bound the agreement set to the months the screen is showing. */
+export function filterAgreements(agreements, { from = null, to = null } = {}) {
+  return agreements.filter((a) => {
+    if (from && (a.month ?? '') < from) return false;
+    if (to && (a.month ?? '') > to) return false;
+    return true;
+  });
 }
 
 /**
- * The agreements a consultant sent to accounts they personally delivered one of
- * these Free Hours to, within `withinDays` of it.
+ * The agreements a consultant sent to an account they personally gave one of
+ * these Free Hours to.
  *
  * Both halves have to match — same account AND same consultant — because a
  * proposal desk writes most agreements that follow a Free Hour, and reps write
- * plenty of agreements for accounts they never ran one on.
+ * plenty of agreements for accounts they never ran one on. That match is the
+ * whole rule; the period the screen is showing is the only other bound.
  *
- * Returns the agreements, de-duplicated by id: one account can receive several
- * agreements, and can have had several Free Hours, so a naive per-Free-Hour
- * count would count the same agreement more than once.
+ * Deliberately no ordering or elapsed-time test. Reps often write the agreement
+ * during the call itself (49 of 131 in 2026 were sent the same day), and the
+ * dates either side are coarse enough that policing the order buys nothing: a
+ * 90-day window drops 13 later agreements and an on-or-after test drops 5 more,
+ * out of 131.
+ *
+ * Returns the agreements de-duplicated by id, since one account can receive
+ * several and can have had several Free Hours.
  */
-export function agreementsAfterOwnFreeHours(calls, agreements, withinDays = AGREEMENT_WINDOW_DAYS) {
-  const callDatesByAccount = new Map();
+export function agreementsToOwnFreeHourAccounts(calls, agreements) {
+  const ownAccounts = new Set();
   for (const c of calls) {
-    if (!c.consultant || c.accountRecordId == null || !c.callDate) continue;
-    const key = `${c.accountRecordId}:${c.consultant}`;
-    const dates = callDatesByAccount.get(key);
-    if (dates) dates.push(c.callDate);
-    else callDatesByAccount.set(key, [c.callDate]);
+    if (!c.consultant || c.accountRecordId == null) continue;
+    ownAccounts.add(`${c.accountRecordId}:${c.consultant}`);
   }
 
   const seen = new Map();
   for (const a of agreements) {
-    if (!a.consultant || a.accountRecordId == null || seen.has(a.id)) continue;
-    const dates = callDatesByAccount.get(`${a.accountRecordId}:${a.consultant}`);
-    if (!dates) continue;
-    const followed = dates.some((d) => {
-      const gap = daysBetween(d, a.sentDate);
-      return gap != null && gap >= 0 && gap <= withinDays;
-    });
-    if (followed) seen.set(a.id, a);
+    if (a.id == null || !a.consultant || a.accountRecordId == null || seen.has(a.id)) continue;
+    if (ownAccounts.has(`${a.accountRecordId}:${a.consultant}`)) seen.set(a.id, a);
   }
   return [...seen.values()];
 }
 
 /** How many of them there were. */
-export const countAgreementsAfterOwnFreeHours = (calls, agreements, withinDays = AGREEMENT_WINDOW_DAYS) =>
-  agreementsAfterOwnFreeHours(calls, agreements, withinDays).length;
+export const countAgreementsToOwnFreeHourAccounts = (calls, agreements) =>
+  agreementsToOwnFreeHourAccounts(calls, agreements).length;
 
 /**
  * How Free Hours split by whether the delivering rep sent an agreement.

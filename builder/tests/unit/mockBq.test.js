@@ -16,7 +16,7 @@ import {
   summarize,
   bySequence,
   byConsultant,
-  countAgreementsAfterOwnFreeHours,
+  countAgreementsToOwnFreeHourAccounts,
 } from '../../src/lib/freeHours.js';
 import {
   buildConsultantsSql,
@@ -282,14 +282,14 @@ describe('free hours', () => {
     const agreements = rowsFor(buildAgreementsSentSql()).map(normalizeAgreementRow);
     const all = calls();
     const mine = all.filter((c) => c.consultant === ME_FULL);
-    const credited = countAgreementsAfterOwnFreeHours(mine, agreements);
+    const credited = countAgreementsToOwnFreeHourAccounts(mine, agreements);
 
     expect(credited).toBeGreaterThan(0);
     // The fixtures deliberately include an agreement from the proposal desk, one
     // for an account with no Free Hour, and one outside the window — so the
     // credited count must come in under the raw total.
     expect(credited).toBeLessThan(agreements.length);
-    expect(countAgreementsAfterOwnFreeHours(all, agreements)).toBeLessThan(agreements.length);
+    expect(countAgreementsToOwnFreeHourAccounts(all, agreements)).toBeLessThan(agreements.length);
   });
 
   it('attaches agreements to the consultant rows the table renders', () => {

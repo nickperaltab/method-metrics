@@ -16,10 +16,8 @@ screen depends on how a call was scored or judged.
 | Led to paid work | The first **billed** `Pay-per-use` or `Dedicated` time entry on that account, any time after the Free Hour |
 | Open case | A `Consulting Request` case on the account still open at the call date |
 | Trial FH | The account had no paying SaaS MRR as of the call — see the MRR lag note below |
-| Non-trial FH | The other half of that split — the account already had a paying SaaS subscription. The denominator of the two columns below |
-| Agreements sent | PPU/Dedicated rows in `call_prep.ps_proposals` that consultant sent **to an account they personally gave a Free Hour to**, within 90 days of it |
-| Agr. after FH | A **non-trial** Free Hour where **that same consultant** sent an agreement within 90 days |
-| PPU/DEP rate | Non-trial Free Hours where that consultant sent a **Pay-Per-Use** agreement **or** the account's dedicated flag went on afterwards, ÷ their non-trial Free Hours |
+| Non-trial FH | The other half of that split — the account already had a paying SaaS subscription |
+| Agr. sent | PPU/Dedicated rows in `call_prep.ps_proposals` that consultant sent **to an account they personally gave a Free Hour to**, with both inside the selected period. No ordering or window test |
 | Time to sign | Days from the Free Hour to the `accepted_date` on a PPU/Dedicated agreement |
 | Rate within 30 days | Conversions inside 30 days ÷ calls at least 30 days old |
 
@@ -38,15 +36,14 @@ alone** (eligible 546 → 649, converted 164 → 199). The blended rate barely m
 Only **31%** of agreements that follow a Free Hour are written by the consultant
 who delivered it (77 of 252 in 2026). Shane Li, Phuong Phan, Harsh Patel, Urja
 Rao and Rafiya Syed write proposals but never deliver Free Hours — there is a
-proposal desk. So two different questions:
+proposal desk, and it is why the column matches on the consultant as well as
+the account.
 
-- **"Agr. sent"** — agreements that consultant sent **to an account they
-  personally ran a Free Hour for**, within 90 days of it. Counting everything a
-  rep wrote overstates this by roughly **15x** — 1,683 agreements in 2026 against
-  **113** that reached one of their own Free Hour accounts — because most of a
-  rep's agreements are for accounts they never ran a Free Hour on.
-- **"Agr. after FH"** — the non-trial subset, counted per Free Hour rather than
-  per agreement, so it lines up with the rate beside it.
+**"Agr. sent"** counts agreements that consultant sent **to an account they
+personally ran a Free Hour for**, both inside the selected period. Counting
+everything a rep wrote overstates it by roughly **15x** — 1,683 agreements in
+2026 against **131** that reached one of their own Free Hour accounts — because
+most of a rep's agreements are for accounts they never ran a Free Hour on.
 
 The match needs **both** halves: same account **and** same consultant. That is
 why `buildAgreementsSentSql` returns one row per agreement instead of a count
@@ -58,34 +55,35 @@ would report the same agreement twice.
 A per-account "did anyone send one" number would be a third figure again, and
 much higher. Do not read the same-rep column as the funnel step.
 
-### PS work arrives two ways, so the rate has two routes
+### Timing is deliberately not tested
 
-An existing customer becomes PS revenue either by signing a **Pay-Per-Use
-agreement** or by having their **dedicated flag** switched on. Counting only
-agreements would miss every DEP win, so `PPU/DEP rate` is the union:
+Reps often write the agreement **during the call** — 49 of 131 in 2026 were sent
+the same day — and the dates either side are coarse enough that policing the
+order buys nothing. Every candidate rule lands within 18 agreements of the next:
 
-- **Pay-Per-Use route** — a `contract_type = 'Pay-Per-Use'` proposal from the
-  delivering consultant within 90 days. Deliberately **not** all contract types:
-  including Dedicated agreements here would double-count the flag route.
-- **Dedicated route** — `int_customer_mrr.HasDEP` turning true in the call's
-  month or later, and **off at the call**, so an account that was already
-  Dedicated is not credited to the Free Hour. 38 of 663 were already DEP.
+| Rule | Agreements (2026) |
+|---|---|
+| Any order, both inside the period — **what we use** | **131** |
+| On or after the Free Hour, no cap | 126 |
+| Within 90 days after | 113 |
+| Only ever sent *before* the Free Hour | 5 |
+| More than 90 days after | 13 |
 
-`HasDEP` is a real month-by-month series, not current state stamped on every row
-— 338 of 450 DEP entities carry it in only some months, and first-DEP months run
-through 2026-08. But it is **month grain**: a flag set in the same month as the
-call counts, and the order of the two within that month is not knowable.
+So the only bounds are the account+consultant match and the period on screen.
 
-The flag half cannot be attributed to a person — it is account state with nobody's
-name on it — so it is credited to whoever ran the Free Hour. The agreement half
-is restricted to that consultant.
+Note the per-Free-Hour flag behind the **"Did the rep send an agreement?"** panel
+is a *different* rule — it still uses a 90-day window after that specific call,
+because it attributes to one Free Hour rather than counting over a period. The
+panel says so on screen. Don't reconcile the two numbers; they answer different
+questions.
 
-2026 YTD: **269 non-trial Free Hours · 34 PPU agreements · 13 dedicated flags ·
-46 won (17.1%)**, with 1 Free Hour hitting both routes.
-
-Note that an agreement is close to a **precondition** for billed PPU/Dedicated
-work, so the agreement-sent split (60.8% vs 5.9% on existing customers) is a
-funnel step, not a cause. Do not present it as one.
+A **PPU/DEP rate** column existed briefly, built from a Pay-Per-Use agreement or
+`int_customer_mrr.HasDEP` turning on after the call. It was dropped as
+redundant: `Converted` and `Rate` already measure the outcome from **billed**
+PPU/Dedicated time, which captures DEP wins too, since a dedicated account bills
+hours. If it is ever wanted back, `HasDEP` is a real month-by-month series
+(338 of 450 DEP entities carry it in only some months) but month grain, and the
+flag carries nobody's name, so it cannot be attributed to a consultant.
 
 ### There is no "did the rep email them" metric
 
@@ -98,20 +96,6 @@ rows, `Email Outgoing` on 264 of 17,139, and the `Contacts` bridge fails too
 follow-ups). Agreement-sent is the available proxy. Do not re-derive this.
 
 ## Four traps in the upstream data
-
-**3. SaaS MRR is keyed on `entity_record_id`, not `account_record_id`.** The
-Free Hour grain carries `account_record_id`; `revenue.int_customer_mrr` is keyed
-on `EntityRecordID`. Joining MRR straight onto `account_record_id` returns rows
-and looks fine but matches **25 of 663** — under 4%. Bridge through
-`revenue.int_accounts`, which carries both (663/663, then 654/663 to MRR).
-
-**4. `int_customer_mrr` publishes a month in arrears.** Its newest month is the
-*previous* one, so joining on the call's own month makes every Free Hour in the
-current month read as a trial — an error that grows all month. `buildFreeHoursSql`
-takes the latest MRR month **at or before** the call instead, which also covers
-accounts with a gap in their MRR history. BigQuery will not de-correlate a
-"latest row" subquery across tables here, hence the `ROW_NUMBER()` window; check
-`COUNT(DISTINCT fh_id)` still equals `COUNT(*)` if you touch that join.
 
 **1. Do not count Free Hours from `revenue.Activity`.** It stores
 `AI Summary - Free Hour` in two shapes:
@@ -135,6 +119,20 @@ join fans out to the wrong customer.
 with zero hours, no case, no activity and empty notes. Three such rows exist in
 2026 and they all land in recent months, so without the filter a consultant's
 current-month count reads one or two too high.
+
+**3. SaaS MRR is keyed on `entity_record_id`, not `account_record_id`.** The
+Free Hour grain carries `account_record_id`; `revenue.int_customer_mrr` is keyed
+on `EntityRecordID`. Joining MRR straight onto `account_record_id` returns rows
+and looks fine but matches **25 of 663** — under 4%. Bridge through
+`revenue.int_accounts`, which carries both (663/663, then 654/663 to MRR).
+
+**4. `int_customer_mrr` publishes a month in arrears.** Its newest month is the
+*previous* one, so joining on the call's own month makes every Free Hour in the
+current month read as a trial — an error that grows all month. `buildFreeHoursSql`
+takes the latest MRR month **at or before** the call instead, which also covers
+accounts with a gap in their MRR history. BigQuery will not de-correlate a
+"latest row" subquery across tables here, hence the `ROW_NUMBER()` window; check
+`COUNT(DISTINCT fh_id)` still equals `COUNT(*)` if you touch that join.
 
 ## Refreshing
 
