@@ -18,6 +18,7 @@ import {
   byConsultant,
   bySequence,
   conversions,
+  sortRows,
   fetchFreeHours,
 } from '../../src/lib/freeHours.js';
 
@@ -316,6 +317,61 @@ describe('conversions', () => {
       fh({ id: 4, callDate: '2026-06-05', alreadyPaying: true, daysToPpu: 1 }),
     ]);
     expect(rows.map((r) => r.id)).toEqual([2, 1]);
+  });
+});
+
+describe('sortRows', () => {
+  const rows = [
+    { name: 'ada', rate: 40 },
+    { name: 'cyd', rate: 90 },
+    { name: 'bo', rate: null },
+    { name: 'dev', rate: 40 },
+  ];
+  const byRate = (dir) => sortRows(rows, { value: (r) => r.rate, dir }).map((r) => r.name);
+
+  it('sorts numbers descending by default', () => {
+    expect(byRate()).toEqual(['cyd', 'ada', 'dev', 'bo']);
+  });
+
+  it('sorts ascending when asked', () => {
+    expect(byRate('asc')).toEqual(['ada', 'dev', 'cyd', 'bo']);
+  });
+
+  it('keeps missing values last in both directions', () => {
+    expect(byRate().at(-1)).toBe('bo');
+    expect(byRate('asc').at(-1)).toBe('bo');
+  });
+
+  it('sorts text case-insensitively by locale', () => {
+    const out = sortRows(
+      [{ n: 'Zoe' }, { n: 'ada' }, { n: 'Bo' }],
+      { value: (r) => r.n, dir: 'asc' },
+    );
+    expect(out.map((r) => r.n)).toEqual(['ada', 'Bo', 'Zoe']);
+  });
+
+  it('breaks ties with the tiebreak, ignoring direction', () => {
+    const tiebreak = (a, b) => a.name.localeCompare(b.name);
+    const desc = sortRows(rows, { value: (r) => r.rate, dir: 'desc', tiebreak });
+    const asc = sortRows(rows, { value: (r) => r.rate, dir: 'asc', tiebreak });
+    expect(desc.map((r) => r.name)).toEqual(['cyd', 'ada', 'dev', 'bo']);
+    expect(asc.map((r) => r.name)).toEqual(['ada', 'dev', 'cyd', 'bo']);
+  });
+
+  it('leaves the input array untouched', () => {
+    const before = rows.map((r) => r.name);
+    sortRows(rows, { value: (r) => r.rate, dir: 'asc' });
+    expect(rows.map((r) => r.name)).toEqual(before);
+  });
+
+  it('sinks a consultant with no eligible Free Hours rather than ranking them 0%', () => {
+    const reps = byConsultant([
+      fh({ consultant: 'Only paying', alreadyPaying: true, daysToPpu: null }),
+      fh({ consultant: 'Converted', daysToPpu: 4 }),
+      fh({ consultant: 'Missed', daysToPpu: null }),
+    ]);
+    const asc = sortRows(reps, { value: (r) => (r.eligible ? r.rate : null), dir: 'asc' });
+    expect(asc.map((r) => r.consultant)).toEqual(['Missed', 'Converted', 'Only paying']);
   });
 });
 
