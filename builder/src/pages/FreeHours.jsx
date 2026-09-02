@@ -13,6 +13,10 @@ import {
 
 const PPU = '#1d4ed8';
 const DEP = '#b45309';
+// Not a third category, so deliberately not a third hue: a neutral says "this is
+// a caveat about the bar you are looking at", where another colour would imply
+// another kind of conversion sitting alongside Pay-Per-Use and Dedicated.
+const PROVISIONAL = '#6b7280';
 
 // Past this many rows the table stops being scannable; the filters above are how
 // you reach the rest.
@@ -61,6 +65,11 @@ const s = {
   xlab: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace", textAlign: 'center' },
   legend: { display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12.5, color: '#4b5563', marginTop: 10 },
   swatch: (c) => ({ display: 'inline-block', width: 11, height: 11, borderRadius: 3, background: c, marginRight: 7, verticalAlign: 'middle' }),
+  // The legend mark has to be the same shape as the mark it stands for. A square
+  // swatch next to "too recent" implied a third stack segment; the thing on the
+  // chart is a dot beside the percentage.
+  swatchDot: (c) => ({ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: c, marginRight: 8, marginLeft: 2, verticalAlign: 'middle' }),
+  provisionalDot: { display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: PROVISIONAL, marginLeft: 5, verticalAlign: 'middle' },
   note: { fontSize: 12.5, color: '#6b7280', marginTop: 14, paddingTop: 12, borderTop: '1px solid #f0f1f3' },
   seqRow: { display: 'grid', gridTemplateColumns: '78px 1fr 122px', alignItems: 'center', gap: 14, padding: '10px 0', borderBottom: '1px solid #f0f1f3' },
   seqLab: { fontSize: 13.5, fontWeight: 700, color: '#1a1a1a' },
@@ -108,14 +117,19 @@ const s = {
   },
 };
 
-/** What a screen reader announces for one column of the month chart. */
+/**
+ * What a screen reader announces for one column of the month chart. The
+ * provisional dot is the only thing on the chart carried by a mark alone, so it
+ * has to be spoken here too.
+ */
 const summaryOf = (m) => [
   monthLabel(m.month),
   `${m.delivered} Free Hours`,
   `${m.eligible} could convert`,
   `${m.converted} converted`,
   m.rate == null ? 'no rate' : `${m.rate} percent`,
-].join(', ');
+  m.youngest < FAIR_WINDOW_DAYS ? 'rate can still rise' : null,
+].filter(Boolean).join(', ');
 
 const ppuPill = () => s.pill(PPU, '#eff6ff', '#bfdbfe');
 const depPill = () => s.pill(DEP, '#fffbeb', '#fde68a');
@@ -129,6 +143,7 @@ const DEFINITIONS = [
   ['Could convert', 'Delivered minus open-case. This, not delivered, is the denominator of the rate.'],
   ['Rate', 'Converted divided by could-convert, counting a conversion whenever it happened. Older months therefore flatter themselves simply for having had more time.'],
   [`Rate within ${FAIR_WINDOW_DAYS} days`, `Bounds both sides to ${FAIR_WINDOW_DAYS} days and counts only calls old enough to have had the full window. This is the one to compare month against month. Hover a bar in the chart to see it.`],
+  ['Rate can still rise', `The grey dot beside a month's percentage. It means that month is holding Free Hours less than ${FAIR_WINDOW_DAYS} days old, so its rate is not final — a conversion can still land, and nothing already counted can be taken back, so the number can only go up. Grey rather than a third colour because it is a caveat about the bar, not another kind of conversion.`],
   ['Trial Free Hours', 'Free Hours given to accounts with no paying SaaS subscription in the month of the call. The rest went to existing customers.'],
   ['Non-trial FH', 'The other side of that split: Free Hours to accounts that already had a paying SaaS subscription at the call. This is the denominator of the two columns below, because an existing customer needs a new agreement or a dedicated flag to become PS revenue.'],
   ['Agr. sent', 'Pay-Per-Use or Dedicated agreements that consultant sent to an account they personally gave a Free Hour to, with both the agreement and the Free Hour inside the selected period. Two matches are required — same account and same consultant — because a proposal desk writes most agreements that follow a Free Hour, and reps write plenty for accounts they never ran one on. Counting everything a rep wrote overstates this roughly 15-fold.'],
@@ -420,6 +435,12 @@ export default function FreeHours() {
           ? `Based on the ${m.fairReady} call${m.fairReady === 1 ? '' : 's'} old enough to have had the full ${FAIR_WINDOW_DAYS} days. Use this to compare months.`
           : `No call here is ${FAIR_WINDOW_DAYS} days old yet, so there is nothing comparable to show.`}
       </div>
+      {m.youngest < FAIR_WINDOW_DAYS && (
+        <div style={s.tipNote}>
+          Some Free Hours here are under {FAIR_WINDOW_DAYS} days old, so this month’s
+          rate can still rise.
+        </div>
+      )}
     </>
   );
 
@@ -427,7 +448,7 @@ export default function FreeHours() {
     <>
       <div style={s.tipHead}>{b.label} Free Hour on the account</div>
       <TipRow k="Free Hours" v={b.delivered} />
-      <TipRow k="Already paying" v={b.openCaseAtCall} />
+      <TipRow k="Open case" v={b.openCaseAtCall} />
       <TipRow k="Could convert" v={b.eligible} />
       <TipRow k="Converted" v={b.converted} />
       <TipRow k="Rate" v={b.rate == null ? '—' : `${b.rate}%`} accent />
@@ -556,7 +577,7 @@ export default function FreeHours() {
                 >
                   <div style={s.rate}>
                     {m.eligible ? `${m.rate ?? 0}%` : '—'}
-                    {young && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: DEP, marginLeft: 5, verticalAlign: 'middle' }} />}
+                    {young && <span style={s.provisionalDot} aria-hidden="true" />}
                   </div>
                   <div style={s.sub2}>{m.converted} conv · {m.delivered} FH</div>
                   <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', flex: 1 }}>
@@ -580,11 +601,14 @@ export default function FreeHours() {
           <div style={s.legend}>
             <span><i style={s.swatch(PPU)} />Pay-Per-Use</span>
             <span><i style={s.swatch(DEP)} />Dedicated</span>
-            {totals.stillYoung > 0 && <span><i style={s.swatch(DEP)} />Still converting</span>}
+            {totals.stillYoung > 0 && <span><i style={s.swatchDot(PROVISIONAL)} />Rate can still rise</span>}
           </div>
           {totals.stillYoung > 0 && (
             <div style={s.note}>
-              <strong>{totals.stillYoung}</strong> Free Hours here are from the last {FAIR_WINDOW_DAYS} days and may still convert.
+              A dot marks a month holding Free Hours less than {FAIR_WINDOW_DAYS} days old.
+              Its rate can only go up — a conversion can still land, and nothing already
+              counted can be taken back. <strong>{totals.stillYoung}</strong> of the Free
+              Hours in this selection are that recent.
             </div>
           )}
         </div>
@@ -629,7 +653,7 @@ export default function FreeHours() {
             );
           })}
           <div style={s.legend}>
-            <span><i style={s.swatch(DEP)} />Already paying</span>
+            <span><i style={s.swatch(DEP)} />Open case</span>
             <span><i style={s.swatch(PPU)} />Could convert</span>
           </div>
         </div>
