@@ -16,8 +16,10 @@ screen depends on how a call was scored or judged.
 | Led to paid work | The first **billed** `Pay-per-use` or `Dedicated` time entry on that account, any time after the Free Hour |
 | Open case | A `Consulting Request` case on the account still open at the call date |
 | Trial FH | The account had no paying SaaS MRR as of the call — see the MRR lag note below |
+| Non-trial FH | The other half of that split — the account already had a paying SaaS subscription. The denominator of the two columns below |
 | Agreements sent | Every PPU/Dedicated row in `call_prep.ps_proposals` a consultant created in the period (`created_date`, `assigned_to`) |
-| After trial FH | A trial Free Hour where **that same consultant** sent an agreement within 90 days |
+| Agr. after FH | A **non-trial** Free Hour where **that same consultant** sent an agreement within 90 days |
+| PPU/DEP rate | Non-trial Free Hours where that consultant sent a **Pay-Per-Use** agreement **or** the account's dedicated flag went on afterwards, ÷ their non-trial Free Hours |
 | Time to sign | Days from the Free Hour to the `accepted_date` on a PPU/Dedicated agreement |
 | Rate within 30 days | Conversions inside 30 days ÷ calls at least 30 days old |
 
@@ -44,6 +46,31 @@ proposal desk. So two different questions:
 
 A per-account "did anyone send one" number would be a third figure again, and
 much higher. Do not read the same-rep column as the funnel step.
+
+### PS work arrives two ways, so the rate has two routes
+
+An existing customer becomes PS revenue either by signing a **Pay-Per-Use
+agreement** or by having their **dedicated flag** switched on. Counting only
+agreements would miss every DEP win, so `PPU/DEP rate` is the union:
+
+- **Pay-Per-Use route** — a `contract_type = 'Pay-Per-Use'` proposal from the
+  delivering consultant within 90 days. Deliberately **not** all contract types:
+  including Dedicated agreements here would double-count the flag route.
+- **Dedicated route** — `int_customer_mrr.HasDEP` turning true in the call's
+  month or later, and **off at the call**, so an account that was already
+  Dedicated is not credited to the Free Hour. 38 of 663 were already DEP.
+
+`HasDEP` is a real month-by-month series, not current state stamped on every row
+— 338 of 450 DEP entities carry it in only some months, and first-DEP months run
+through 2026-08. But it is **month grain**: a flag set in the same month as the
+call counts, and the order of the two within that month is not knowable.
+
+The flag half cannot be attributed to a person — it is account state with nobody's
+name on it — so it is credited to whoever ran the Free Hour. The agreement half
+is restricted to that consultant.
+
+2026 YTD: **269 non-trial Free Hours · 34 PPU agreements · 13 dedicated flags ·
+46 won (17.1%)**, with 1 Free Hour hitting both routes.
 
 Note that an agreement is close to a **precondition** for billed PPU/Dedicated
 work, so the agreement-sent split (60.8% vs 5.9% on existing customers) is a

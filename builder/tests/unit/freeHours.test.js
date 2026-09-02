@@ -20,6 +20,9 @@ import {
   conversions,
   sortRows,
   isTrial,
+  repSentAgreement,
+  repSentPpuAgreement,
+  repWonPsWork,
   byAgreementSent,
   totalAgreementsSent,
   filterAgreements,
@@ -43,6 +46,9 @@ const fh = (o = {}) => ({
   payingSaasAtCall: o.payingSaasAtCall ?? false,
   saasStateUnknown: o.saasStateUnknown ?? false,
   daysToAgreementSent: o.daysToAgreementSent ?? null,
+  daysToPpuAgreementSent: o.daysToPpuAgreementSent ?? null,
+  depFlagOnAfter: o.depFlagOnAfter ?? false,
+  depAtCall: o.depAtCall ?? false,
   priorConsultingCase: o.priorConsultingCase ?? false,
   daysToPpu: o.daysToPpu ?? null,
   daysToDep: o.daysToDep ?? null,
@@ -423,6 +429,87 @@ describe('trial vs existing customer', () => {
     ]);
     expect(t.trialFreeHours).toBe(2);
     expect(t.customerFreeHours).toBe(1);
+  });
+});
+
+describe('non-trial outcome: PPU agreement or the dedicated flag', () => {
+  it('counts a Pay-Per-Use agreement from the delivering rep', () => {
+    expect(repSentPpuAgreement(fh({ daysToPpuAgreementSent: 3 }))).toBe(true);
+    expect(repWonPsWork(fh({ daysToPpuAgreementSent: 3 }))).toBe(true);
+  });
+
+  it('counts the dedicated flag going on afterwards', () => {
+    expect(repWonPsWork(fh({ depFlagOnAfter: true }))).toBe(true);
+  });
+
+  it('does not count a Dedicated AGREEMENT as the PPU route', () => {
+    // daysToAgreementSent covers every contract type; the PPU route must not.
+    const call = fh({ daysToAgreementSent: 5, daysToPpuAgreementSent: null });
+    expect(repSentAgreement(call)).toBe(true);
+    expect(repSentPpuAgreement(call)).toBe(false);
+    expect(repWonPsWork(call)).toBe(false);
+  });
+
+  it('is false when the rep did neither', () => {
+    expect(repWonPsWork(fh())).toBe(false);
+    expect(repWonPsWork(fh({ depFlagOnAfter: false }))).toBe(false);
+  });
+
+  it('rates the outcome against non-trial Free Hours only', () => {
+    const t = summarize([
+      // non-trial, won by agreement
+      fh({ payingSaasAtCall: true, daysToPpuAgreementSent: 2 }),
+      // non-trial, won by the flag
+      fh({ payingSaasAtCall: true, depFlagOnAfter: true }),
+      // non-trial, neither
+      fh({ payingSaasAtCall: true }),
+      fh({ payingSaasAtCall: true }),
+      // a trial that won must not touch the non-trial rate
+      fh({ payingSaasAtCall: false, daysToPpuAgreementSent: 1 }),
+    ]);
+    expect(t.nonTrialFreeHours).toBe(4);
+    expect(t.nonTrialPpuSent).toBe(1);
+    expect(t.nonTrialDepFlagOn).toBe(1);
+    expect(t.nonTrialWon).toBe(2);
+    expect(t.nonTrialWonRate).toBe(50);
+  });
+
+  it('counts a Free Hour once when both routes fired', () => {
+    const t = summarize([fh({ payingSaasAtCall: true, daysToPpuAgreementSent: 2, depFlagOnAfter: true })]);
+    expect(t.nonTrialPpuSent).toBe(1);
+    expect(t.nonTrialDepFlagOn).toBe(1);
+    expect(t.nonTrialWon).toBe(1);
+    expect(t.nonTrialWonRate).toBe(100);
+  });
+
+  it('has no rate when the selection holds no non-trial Free Hours', () => {
+    expect(summarize([fh({ payingSaasAtCall: false })]).nonTrialWonRate).toBeNull();
+  });
+
+  it('counts agreements of any type after a non-trial Free Hour separately', () => {
+    const t = summarize([
+      fh({ payingSaasAtCall: true, daysToAgreementSent: 4 }),
+      fh({ payingSaasAtCall: true }),
+    ]);
+    expect(t.nonTrialRepSentAgreement).toBe(1);
+  });
+});
+
+describe('buildFreeHoursSql — the dedicated flag', () => {
+  const sql = buildFreeHoursSql();
+
+  it('reads HasDEP from the monthly MRR series', () => {
+    expect(sql).toMatch(/sa\.HasDEP AS dep_at_call/);
+    expect(sql).toContain('AS dep_flag_on_after');
+  });
+
+  it('requires the flag to be off at the call, so DEP accounts are not credited', () => {
+    expect(sql).toMatch(/NOT COALESCE\(v\.dep_at_call, FALSE\)/);
+  });
+
+  it('restricts the agreement route to Pay-Per-Use so DEP is not double-counted', () => {
+    expect(sql).toMatch(/p\.contract_type = 'Pay-Per-Use'/);
+    expect(sql).toContain('AS days_to_ppu_agreement_sent');
   });
 });
 

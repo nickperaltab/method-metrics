@@ -58,8 +58,11 @@ export function buildFreeHoursSql(start = REPORTING_START) {
       SELECT account_record_id, entity_record_id
       FROM \`project-for-method-dw.revenue.int_accounts\`
     ),
+    -- HasDEP is a genuine monthly series, not current state stamped on every row
+    -- (338 of 450 DEP entities carry it in only some months), so the month it
+    -- first turns true is when the dedicated flag went on.
     saas AS (
-      SELECT EntityRecordID, Month, StartMRR
+      SELECT EntityRecordID, Month, StartMRR, HasDEP
       FROM \`project-for-method-dw.revenue.int_customer_mrr\`
       WHERE Month >= DATE_SUB(DATE '${from}', INTERVAL 12 MONTH)
     ),
@@ -67,7 +70,7 @@ export function buildFreeHoursSql(start = REPORTING_START) {
     -- most proposals that follow a Free Hour (69% of them), so matching on
     -- assigned_to is what separates the rep's own follow-through from the desk's.
     props AS (
-      SELECT account_record_id, assigned_to, DATE(created_date) AS sent_date
+      SELECT account_record_id, assigned_to, contract_type, DATE(created_date) AS sent_date
       FROM \`project-for-method-dw.call_prep.ps_proposals\`
       WHERE created_date IS NOT NULL AND account_record_id IS NOT NULL
         AND contract_type IN ('Pay-Per-Use','Dedicated','Fast Track Dedicated')
@@ -79,7 +82,8 @@ export function buildFreeHoursSql(start = REPORTING_START) {
     -- account with a gap in its MRR history. BigQuery cannot de-correlate a
     -- "latest row" subquery here, hence the window.
     v AS (
-      SELECT v0.*, sa.StartMRR AS mrr_at_call,
+      SELECT v0.*, a.entity_record_id,
+             sa.StartMRR AS mrr_at_call, sa.HasDEP AS dep_at_call,
              ROW_NUMBER() OVER (PARTITION BY v0.fh_id ORDER BY sa.Month DESC) AS mrr_rn
       FROM v0
       LEFT JOIN acct a ON a.account_record_id = v0.account_record_id
@@ -113,6 +117,25 @@ export function buildFreeHoursSql(start = REPORTING_START) {
            AND p.sent_date >= v.call_date
            AND p.sent_date <= DATE_ADD(v.call_date, INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY)
         ), v.call_date, DAY) AS days_to_agreement_sent,
+      -- Pay-Per-Use only. Dedicated arrives through the flag below instead, so
+      -- counting Dedicated agreements here too would double-count that route.
+      DATE_DIFF((SELECT MIN(p.sent_date) FROM props p
+         WHERE p.account_record_id = v.account_record_id
+           AND p.assigned_to = v.consultant
+           AND p.contract_type = 'Pay-Per-Use'
+           AND p.sent_date >= v.call_date
+           AND p.sent_date <= DATE_ADD(v.call_date, INTERVAL ${AGREEMENT_WINDOW_DAYS} DAY)
+        ), v.call_date, DAY) AS days_to_ppu_agreement_sent,
+      -- The dedicated flag going on AFTER the call. Requires it to be off at the
+      -- call, so an account that was already Dedicated is not credited to it.
+      -- Month grain: a flag set in the call's own month counts.
+      (NOT COALESCE(v.dep_at_call, FALSE) AND (
+        SELECT COUNT(1) > 0 FROM saas s
+        WHERE s.EntityRecordID = v.entity_record_id
+          AND s.HasDEP
+          AND s.Month >= DATE_TRUNC(v.call_date, MONTH)
+      )) AS dep_flag_on_after,
+      COALESCE(v.dep_at_call, FALSE) AS dep_at_call,
       ROUND(v.paid_hours_90d, 1) AS paid_hours_90d,
       v.days_elapsed
     FROM v
@@ -172,6 +195,10 @@ export function normalizeFreeHourRow(row) {
     daysToAgreement: toInt(row.days_to_agreement),
     // Days until the SAME consultant sent an agreement, or null if they didn't.
     daysToAgreementSent: toInt(row.days_to_agreement_sent),
+    // Pay-Per-Use only — the Dedicated route is the flag below, not an agreement.
+    daysToPpuAgreementSent: toInt(row.days_to_ppu_agreement_sent),
+    depFlagOnAfter: toBool(row.dep_flag_on_after),
+    depAtCall: toBool(row.dep_at_call),
     paidHours90d: toNum(row.paid_hours_90d, 0),
     daysElapsed: toInt(row.days_elapsed, 0),
   };
@@ -228,6 +255,22 @@ export const isTrial = (call) => !call.payingSaasAtCall;
 
 /** The Free Hour's own consultant sent an agreement within the window. */
 export const repSentAgreement = (call) => call.daysToAgreementSent != null;
+
+/** …and specifically a Pay-Per-Use one. */
+export const repSentPpuAgreement = (call) => call.daysToPpuAgreementSent != null;
+
+/**
+ * What "the rep turned this Free Hour into something" means on an account that
+ * was already a paying SaaS customer: they sent a Pay-Per-Use agreement, or the
+ * account's dedicated flag went on afterwards. Two routes because PS work
+ * arrives two ways — PPU is sold with an agreement, Dedicated is a flag on the
+ * account — and only counting agreements would miss every DEP win.
+ *
+ * The agreement half is restricted to the delivering consultant. The flag half
+ * cannot be: it is account state with nobody's name on it, so it is credited to
+ * whoever ran the Free Hour.
+ */
+export const repWonPsWork = (call) => repSentPpuAgreement(call) || call.depFlagOnAfter === true;
 
 export const SEGMENTS = ['all', 'first', 'repeat', 'prior', 'trial', 'customer'];
 
@@ -293,6 +336,12 @@ export function summarize(calls) {
   const trials = calls.filter(isTrial);
   const sentAny = calls.filter(repSentAgreement);
   const trialSent = trials.filter(repSentAgreement);
+  // The non-trial set is the one the consultant table reports on: an existing
+  // customer needs a new agreement or a flag to become PS revenue, whereas a
+  // trial's path runs through the subscription first.
+  const nonTrials = calls.filter((c) => !isTrial(c));
+  const nonTrialSent = nonTrials.filter(repSentAgreement);
+  const nonTrialWon = nonTrials.filter(repWonPsWork);
   return {
     delivered: calls.length,
     openCaseAtCall: calls.length - eligible.length,
@@ -306,6 +355,13 @@ export function summarize(calls) {
     trialRepSentAgreement: trialSent.length,
     agreementRateOfTrial: percent(trialSent.length, trials.length),
     medianDaysToAgreementSent: median(sentAny.map((c) => c.daysToAgreementSent)),
+    // Non-trial Free Hours and what the delivering rep did with them.
+    nonTrialFreeHours: nonTrials.length,
+    nonTrialRepSentAgreement: nonTrialSent.length,
+    nonTrialPpuSent: nonTrials.filter(repSentPpuAgreement).length,
+    nonTrialDepFlagOn: nonTrials.filter((c) => c.depFlagOnAfter === true).length,
+    nonTrialWon: nonTrialWon.length,
+    nonTrialWonRate: percent(nonTrialWon.length, nonTrials.length),
     ppu: won.filter((c) => conversionType(c) === 'ppu').length,
     dep: won.filter((c) => conversionType(c) === 'dep').length,
     paidHours: Math.round(won.reduce((a, c) => a + (c.paidHours90d || 0), 0)),
