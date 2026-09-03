@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 // discoverable by browsing. Requested 2026-08-14.
 const PS_ITEMS = [
   { path: '/free-hours', label: 'Free Hours', icon: '◷' },
+  { path: '/utilization', label: 'Utilization', icon: '▤' },
 ];
 
 

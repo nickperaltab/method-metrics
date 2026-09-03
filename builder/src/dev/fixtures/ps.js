@@ -445,6 +445,71 @@ function build() {
     }));
   };
 
+
+  // One row per consultant per month, matching buildUtilizationSql(). The eight
+  // hour buckets are disjoint, so a row's fields add up to everything that
+  // consultant logged that month; the mock would otherwise let a bad `total`
+  // pass unnoticed.
+  //
+  // Shapes worth keeping: a rep carrying heavy bankable time, one whose month is
+  // almost all internal project work, and the current month with no bankable
+  // hours at all (that is what a real in-progress month looks like, since unused
+  // dedicated time is only posted on the last day).
+  const utilMonth = (o) => ({
+    consultant: o.consultant,
+    month: o.month,
+    entries: String(o.entries ?? 40),
+    dedicated_hours: String(o.dedicated ?? 0),
+    ppu_hours: String(o.ppu ?? 0),
+    free_hours: String(o.free ?? 0),
+    other_hours: String(o.other ?? 0),
+    unused_dedicated_hours: String(o.unused ?? 0),
+    discounted_paid_hours: String(o.discountedPaid ?? 0),
+    discounted_free_hours: String(o.discountedFree ?? 0),
+    internal_project_hours: String(o.internalProject ?? 0),
+    internal_other_hours: String(o.internalOther ?? 0),
+  });
+
+  // Three closed months plus the month the clock is in, so the in-progress
+  // banner and the grey dot always have something to attach to.
+  const utilMonths = (() => {
+    const d = new Date();
+    const at = (back) => {
+      const m = new Date(d.getFullYear(), d.getMonth() - back, 1);
+      return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
+    };
+    return [at(3), at(2), at(1), at(0)];
+  })();
+
+  const UTILIZATION = [
+    // A full book: mostly dedicated, a normal amount of bankable time.
+    ...utilMonths.map((month, i) => utilMonth({
+      consultant: ME_FULL, month, entries: 96 - i,
+      dedicated: 128 + i * 4, ppu: 14, free: 6,
+      unused: month === utilMonths[3] ? 0 : 18 + i, discountedPaid: 3,
+      internalProject: 4, internalOther: 2,
+    })),
+    // Heavy bankable time: a book of dedicated accounts that under-use their hours.
+    ...utilMonths.map((month, i) => utilMonth({
+      consultant: 'Vinesh Gobin', month, entries: 70,
+      dedicated: 92, ppu: 6, free: 12,
+      unused: month === utilMonths[3] ? 0 : 44 - i * 3, discountedPaid: 9,
+      internalOther: 6,
+    })),
+    // Mostly internal project work, so the rate lands far below the others.
+    ...utilMonths.map((month, i) => utilMonth({
+      consultant: 'Cheryl Tong', month, entries: 52,
+      dedicated: 61, ppu: 22, free: 4,
+      unused: month === utilMonths[3] ? 0 : 7,
+      internalProject: 48 + i * 2, internalOther: 12,
+    })),
+    // Only two months on the team, which is what billablePerMonth exists to handle.
+    ...utilMonths.slice(2).map((month) => utilMonth({
+      consultant: 'Phuong Phan', month, entries: 31,
+      dedicated: 44, free: 9, discountedPaid: 2, internalOther: 21,
+    })),
+  ];
+
   // One row per PS agreement. Accounts and consultants line up with FREE_HOURS
   // below so the account+consultant match the screen does has something to hit,
   // and two deliberately do NOT: an agreement on a Free Hour account written by
@@ -498,7 +563,7 @@ function build() {
     freeHour({ id: 8014, account: 4622, name: 'oakfield-dental', consultant: 'Vinesh Gobin', date: iso(-3), ppu: 1, signed: 1, hours: 2, elapsed: 3 }),
   ]);
 
-  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS, AGREEMENTS };
+  return { SNAPSHOTS, ACCOUNTS, SESSIONS, CASES, HANDOFFS, ACTIVITIES, OPPORTUNITY_FIT, FREE_HOURS, AGREEMENTS, UTILIZATION };
 }
 
 let cache = null;
