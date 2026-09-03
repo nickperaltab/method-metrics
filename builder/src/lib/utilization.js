@@ -4,24 +4,30 @@
 // same reporting window so the two screens can be read side by side.
 //
 // Reads `revenue.TimeTracking` directly rather than the `int_consultant_work`
-// view, for two reasons. The view drops `ItemServiceRecordID`, which is the only
-// way to tell internal project time from internal onboarding, and it drops
-// nothing else this needs. Four things about the source are worth knowing before
-// changing anything here:
+// view. The view drops `ItemServiceRecordID`, which is the only way to tell
+// internal project time from internal onboarding, and it doubles every duration
+// (see 1 below). Five things about the source are worth knowing before changing
+// anything here:
 //
-// 1. Two of the five buckets live in the NOTES, not in a column. Method has no
+// 1. `DurationHours` and `DurationMinutes` are the SAME duration in two units,
+//    not hours plus a remainder: a two-hour entry stores 2.0 and 120.0. All
+//    18,083 entries in 2026 satisfy `DurationMinutes = DurationHours * 60`, with
+//    no exceptions. So `DurationHours + DurationMinutes / 60` — which is what
+//    `int_consultant_work` computes — returns exactly twice the real figure.
+//    Read `DurationHours` alone.
+// 2. Two of the five buckets live in the NOTES, not in a column. Method has no
 //    field for either. An unused-dedicated entry carries
 //    `*** UNUSED DEDICATED TIME FOR <MONTH> ***`; a discounted one carries
 //    `*** DISCOUNT APPROVED BY <name> ***` (or REQUESTED BY). Both are billed
 //    Dedicated/Pay-per-use entries, so without the note they read as real work.
-// 2. A bare `DISCOUNT` match is wrong. 645 entries in 2026 mention "discount" in
+// 3. A bare `DISCOUNT` match is wrong. 645 entries in 2026 mention "discount" in
 //    a customer note ("add a discount box under pricelist"); only ~150 carry the
 //    approval marker. The `***` fence is what separates them.
-// 3. Internal time is the entries with NO MethodSupportType. That is Method's own
+// 4. Internal time is the entries with NO MethodSupportType. That is Method's own
 //    marker and it is exact — every such entry in 2026 was an Internal Project
 //    Hours, Internal On-boarding/Training or Product Hours line. Matching on the
 //    service item instead would go stale the day someone adds an internal item.
-// 4. Unused dedicated time is posted at MONTH END (nearly all of it on the last
+// 5. Unused dedicated time is posted at MONTH END (nearly all of it on the last
 //    day). An in-progress month therefore shows no bankable hours and a
 //    flattering rate, which is why `isInProgress` exists.
 //
@@ -53,7 +59,9 @@ export function buildUtilizationSql(start = REPORTING_START) {
       SELECT
         e.EntityFullName AS consultant,
         DATE_TRUNC(DATE(t.TxnDate), MONTH) AS txn_month,
-        ROUND(t.DurationHours + t.DurationMinutes / 60.0, 4) AS hours,
+        -- DurationHours alone. DurationMinutes is the same duration in minutes,
+        -- so adding them doubles every entry.
+        ROUND(COALESCE(t.DurationHours, t.DurationMinutes / 60.0, 0), 4) AS hours,
         t.MethodSupportType AS support_type,
         -- 'US-Method:Pro Services:Internal Project Hours' -> the last segment.
         REGEXP_EXTRACT(i.ItemFullName, r'([^:]+)$') AS service_item,
@@ -64,8 +72,7 @@ export function buildUtilizationSql(start = REPORTING_START) {
       LEFT JOIN ${ITEM} i ON i.RecordID = t.ItemServiceRecordID
       WHERE DATE(t.TxnDate) >= DATE '${from}'
         AND NOT COALESCE(t.IsDeleted, FALSE)
-        -- Attendance entries are the shift clock, not work. Counting them would
-        -- double every hour a consultant logged.
+        -- Attendance entries are the shift clock, not work.
         AND NOT COALESCE(t.IsAttendenceEntry, FALSE)
     ),
     -- No MethodSupportType means the time was never against a customer.

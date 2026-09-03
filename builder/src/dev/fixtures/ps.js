@@ -470,6 +470,8 @@ function build() {
     internal_other_hours: String(o.internalOther ?? 0),
   });
 
+  // Hours are sized to a real consultant month: roughly 105-135 logged. A month
+  // over ~200 is the signature of the DurationHours + DurationMinutes doubling.
   // Three closed months plus the month the clock is in, so the in-progress
   // banner and the grey dot always have something to attach to.
   const utilMonths = (() => {
@@ -485,28 +487,28 @@ function build() {
     // A full book: mostly dedicated, a normal amount of bankable time.
     ...utilMonths.map((month, i) => utilMonth({
       consultant: ME_FULL, month, entries: 96 - i,
-      dedicated: 128 + i * 4, ppu: 14, free: 6,
-      unused: month === utilMonths[3] ? 0 : 18 + i, discountedPaid: 3,
-      internalProject: 4, internalOther: 2,
+      dedicated: 85 + i * 2, ppu: 7, free: 3,
+      unused: month === utilMonths[3] ? 0 : 12 + i, discountedPaid: 1.5,
+      internalProject: 2, internalOther: 1,
     })),
     // Heavy bankable time: a book of dedicated accounts that under-use their hours.
     ...utilMonths.map((month, i) => utilMonth({
       consultant: 'Vinesh Gobin', month, entries: 70,
-      dedicated: 92, ppu: 6, free: 12,
-      unused: month === utilMonths[3] ? 0 : 44 - i * 3, discountedPaid: 9,
-      internalOther: 6,
+      dedicated: 60, ppu: 3, free: 6,
+      unused: month === utilMonths[3] ? 0 : 30 - i * 2, discountedPaid: 4.5,
+      internalOther: 3,
     })),
     // Mostly internal project work, so the rate lands far below the others.
     ...utilMonths.map((month, i) => utilMonth({
       consultant: 'Cheryl Tong', month, entries: 52,
-      dedicated: 61, ppu: 22, free: 4,
-      unused: month === utilMonths[3] ? 0 : 7,
-      internalProject: 48 + i * 2, internalOther: 12,
+      dedicated: 45, ppu: 11, free: 2,
+      unused: month === utilMonths[3] ? 0 : 3.5,
+      internalProject: 24 + i, internalOther: 6,
     })),
     // Only two months on the team, which is what billablePerMonth exists to handle.
     ...utilMonths.slice(2).map((month) => utilMonth({
       consultant: 'Phuong Phan', month, entries: 31,
-      dedicated: 44, free: 9, discountedPaid: 2, internalOther: 21,
+      dedicated: 55, free: 4.5, discountedPaid: 1, internalOther: 10.5,
     })),
   ];
 
