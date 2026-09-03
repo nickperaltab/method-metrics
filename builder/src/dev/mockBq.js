@@ -573,6 +573,17 @@ const ROUTES = [
     },
   },
   {
+    // Must precede the sessions route below: both read TimeTracking, and only
+    // that one carries an account id to filter on.
+    name: 'utilization (consultant x month)',
+    when: (sql) => hits(sql, T.timeTracking) && sql.includes('unused_dedicated_hours'),
+    // The screen filters by period and consultant client-side, so the whole set
+    // comes back and only the ORDER BY has to be honoured here.
+    rows: () => [...fixtures().UTILIZATION].sort(
+      (a, b) => b.month.localeCompare(a.month) || a.consultant.localeCompare(b.consultant),
+    ),
+  },
+  {
     name: 'TimeTracking sessions',
     when: (sql) => hits(sql, T.timeTracking),
     rows: (sql) => {

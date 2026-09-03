@@ -214,6 +214,12 @@ nav. Read `docs/ps-project-tracker.md` before extending it: the fixture shape is
 its draft schema, `lib/projectsStore.js` is the seam a real store plugs into, and
 the store choice (BigQuery vs. Supabase) is still open.
 
+The PS Utilization screen (`/utilization`) reads **real** BigQuery
+(`revenue.TimeTracking` + `Entity` + `Item`) and works outside mock mode. Read
+`docs/ps-utilization.md` before touching its SQL: two of its five buckets
+(unused dedicated time, discounted time) exist only as fenced markers in the time
+entry NOTES, because Method has no field for either.
+
 The customer page (`/accounts/:recordId`) is the exception — it reads **real**
 BigQuery tables (`customer_signals.v_conversations`, `call_audits.*`,
 `customer_signals.signals_by_call`, `call_prep.snapshots`) and works outside mock
