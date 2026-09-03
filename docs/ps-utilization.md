@@ -37,6 +37,27 @@ Derived from those:
 | Billable | Logged − bankable − discounted − internal |
 | Utilization | Billable ÷ Logged |
 
+## Hours come from `DurationHours` alone
+
+`DurationHours` and `DurationMinutes` are the **same duration in two units**, not
+hours plus a remainder. A two-hour entry stores `2.0` and `120.0`. Every one of
+the 18,083 non-attendance entries in 2026 satisfies
+`DurationMinutes = DurationHours * 60`, with no exceptions.
+
+So `DurationHours + DurationMinutes / 60` returns **exactly twice** the real
+figure. That expression is what `revenue.int_consultant_work` computes, and this
+screen shipped with it on 2026-09-03 before the doubling was caught.
+
+**`int_consultant_work` still carries the bug**, and so does
+`call_prep.free_hour_outcomes`, which is built on it. That makes the Free Hours
+screen's "Paid hrs" column and "Paid hours booked" tile 2x too high. Free Hour
+counts and conversion rates there are unaffected, since they only test
+`hours > 0`.
+
+Sanity check for any future change: a PS consultant logs roughly **105-135 hours
+a month**, near the 4.8 billable hours a day the PS time-tracking audit targets.
+A per-consultant month over ~200 hours means the doubling is back.
+
 ## The two markers live in the notes
 
 **Method has no field for either one.** This is the single most important thing
@@ -87,11 +108,14 @@ compare an open month to a closed one.
 
 ## Why not `int_consultant_work`
 
-The Free Hours screen reads that view; this one does not. `int_consultant_work`
+The Free Hours screen reads that view; this one does not, for two reasons. It
 drops `ItemServiceRecordID`, which is the only way to tell internal project time
-from internal onboarding. It is otherwise the same source and the same filters
-(`IsDeleted` and `IsAttendenceEntry` both false), so totals reconcile between the
-two screens.
+from internal onboarding. And it computes hours as
+`DurationHours + DurationMinutes / 60`, which doubles every entry.
+
+The source and the row filters are otherwise the same (`IsDeleted` and
+`IsAttendenceEntry` both false), so once the view's duration is fixed the two
+screens will reconcile.
 
 ## Consultant identity
 

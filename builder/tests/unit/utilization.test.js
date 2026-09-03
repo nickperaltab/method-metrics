@@ -51,6 +51,15 @@ describe('buildUtilizationSql', () => {
     expect(sql).toContain('IsDeleted');
   });
 
+  it('reads DurationHours alone, because adding DurationMinutes doubles every entry', () => {
+    // DurationHours and DurationMinutes are the same duration in two units: a
+    // two-hour entry stores 2.0 and 120.0. All 18,083 entries in 2026 satisfy
+    // DurationMinutes = DurationHours * 60. Summing both returns exactly twice
+    // the real figure, which is the bug int_consultant_work still carries.
+    expect(sql).not.toContain('t.DurationHours + t.DurationMinutes');
+    expect(sql).toContain('COALESCE(t.DurationHours, t.DurationMinutes / 60.0, 0)');
+  });
+
   it('reads both note markers, which have no column in Method', () => {
     expect(sql).toContain(UNUSED_DEDICATED_MARKER);
     expect(sql).toContain('DISCOUNT (APPROVED|REQUESTED) BY');
