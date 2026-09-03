@@ -278,7 +278,14 @@ export default function Utilization() {
         if (cancelled) return;
         setRows(data);
         const months = distinctMonths(data);
-        if (months.length) { setFrom(months[0]); setTo(months[months.length - 1]); }
+        // Opens on the latest month alone, not the whole reporting window.
+        // Utilization is a monthly figure, and a nine-month total in the same
+        // tile reads as a monthly one that is nine times too big.
+        if (months.length) {
+          const latest = months[months.length - 1];
+          setFrom(latest);
+          setTo(latest);
+        }
       })
       .catch((e) => { if (!cancelled) setError(e?.message || String(e)); });
     return () => { cancelled = true; };
@@ -320,6 +327,9 @@ export default function Utilization() {
 
   const scopeLabel = consultant === 'all' ? 'the whole team' : consultant;
   const period = from === to ? monthLabel(from) : `${monthLabel(from)} – ${monthLabel(to)}`;
+  // A multi-month selection is the one way to read a tile as a monthly figure
+  // when it is not one, so a span carries its own per-month average.
+  const perMonth = totals.months > 1 ? ` · ${hrs(totals.billable / totals.months)}/mo` : '';
   const openMonth = monthly.some((m) => m.inProgress);
   // Bars are scaled to the busiest month on screen, so a light month reads light.
   const peak = Math.max(1, ...monthly.map((m) => m.total));
@@ -389,7 +399,7 @@ export default function Utilization() {
         <Tile
           lab={<>Billable hours<InfoDot label="About billable hours" content={<div style={s.tipNote}>{BILLABLE_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
           big={hrs(totals.billable)}
-          foot={`${period} · ${scopeLabel}`}
+          foot={`${period} · ${scopeLabel}${perMonth}`}
         />
         <Tile
           lab={<>Utilization<InfoDot label="About utilization" content={<div style={s.tipNote}>{RATE_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
