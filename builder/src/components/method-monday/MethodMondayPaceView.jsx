@@ -342,8 +342,12 @@ export function PaceRow({ row, isOpen, onToggle, detailSection, dataMap, onMetri
   );
 }
 
-export default function MethodMondayPaceView({ dataMap, detailSections = [], onMetricClick }) {
-  const rows = buildPaceRows(dataMap);
+// `now` is injectable purely so tests can pin the date. buildPaceRows applies
+// the day-1 guard against the real clock, so without this the rendered output
+// differs on the 1st of the month and any assertion about trajectory numbers
+// passes 30 days out of 31. Production never passes it.
+export default function MethodMondayPaceView({ dataMap, detailSections = [], onMetricClick, now }) {
+  const rows = buildPaceRows(dataMap, now ? { now } : undefined);
   const [openKeys, setOpenKeys] = useState(() => new Set());
 
   const sectionByTitle = useMemo(
