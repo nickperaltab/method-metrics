@@ -268,11 +268,28 @@ export function summarize(rows, asOf = new Date()) {
   const billable = dedicated + ppu + free + other;
   const total = billed + freeTotal + internal;
 
+  // Everything that went against a customer: the four clean buckets plus both
+  // deductions. Internal time is the only thing outside it. This is the top of
+  // the reconciliation ladder — "all in" — and each figure below removes one
+  // deduction from it, so the four can be read against each other.
+  const allIn = total - internal;
+  const exBankable = allIn - unusedDedicated;
+  const exDiscounted = allIn - discounted;
+
   // Capacity: 8 hours x the working days of each roster consultant-month, with
   // an open month prorated to the working days that have actually happened.
   const onRoster = rows.filter((r) => r.onRoster);
   const capacity = sum((r) => monthCapacityHours(r.month, asOf), onRoster);
-  const rosterBillable = sum((r) => r.dedicated + r.ppu + r.free + r.other, onRoster);
+  // Roster-only copies of the ladder. Utilization draws numerator and
+  // denominator from the same population, so an off-roster consultant's hours
+  // cannot be measured against capacity nobody was charged.
+  const rosterBankable = sum((r) => r.unusedDedicated, onRoster);
+  const rosterDiscounted = sum((r) => r.discountedPaid + r.discountedFree, onRoster);
+  const rosterAllIn = sum(
+    (r) => r.dedicated + r.ppu + r.free + r.other + r.unusedDedicated + r.discountedPaid + r.discountedFree,
+    onRoster,
+  );
+  const rosterBillable = rosterAllIn - rosterBankable - rosterDiscounted;
 
   return {
     entries: sum((r) => r.entries),
@@ -289,12 +306,26 @@ export function summarize(rows, asOf = new Date()) {
     nonBillable: floor2(discounted + internal),
     billable: floor2(billable),
     total: floor2(total),
-    // ── The two rates ────────────────────────────────────────────────────
+    // ── The reconciliation ladder ────────────────────────────────────────
+    // Four bases for the same month, differing only in which deduction comes
+    // out. Brandon audits Miguel Teodoro's August against these: 101.83 all in,
+    // 99.83 without discounted, 87.32 without bankable, 85.32 without either.
+    /** Everything against a customer. Internal time is all that is outside it. */
+    allIn: floor2(allIn),
+    /** All in, less bankable. */
+    exBankable: floor2(exBankable),
+    /** All in, less discounted. */
+    exDiscounted: floor2(exDiscounted),
+    // ── The rates ────────────────────────────────────────────────────────
     /** Working hours the roster was available for: the utilization denominator. */
     capacity: floor2(capacity),
     rosterBillable: floor2(rosterBillable),
     /** Billable hours as a share of the hours the consultant was available. */
     utilization: percent(rosterBillable, capacity),
+    /** The same rate on each of the other three bases. */
+    utilizationAllIn: percent(rosterAllIn, capacity),
+    utilizationExBankable: percent(rosterAllIn - rosterBankable, capacity),
+    utilizationExDiscounted: percent(rosterAllIn - rosterDiscounted, capacity),
     /** Billable hours as a share of the hours actually logged. */
     billableShare: percent(billable, total),
     // Roster size, for the working-hours tile's footnote.
@@ -348,6 +379,19 @@ export function byConsultant(rows, asOf = new Date()) {
     })
     .sort((a, b) => b.billable - a.billable || a.consultant.localeCompare(b.consultant));
 }
+
+/**
+ * The four bases of the reconciliation ladder, all-in first.
+ *
+ * Exists so the audit view does not have to hardcode which deduction belongs to
+ * which figure, and so a test can assert the four still descend.
+ */
+export const ladder = (t) => [
+  { key: 'allIn', label: 'All in', hours: t.allIn, utilization: t.utilizationAllIn },
+  { key: 'exDiscounted', label: 'Less discounted', hours: t.exDiscounted, utilization: t.utilizationExDiscounted },
+  { key: 'exBankable', label: 'Less bankable', hours: t.exBankable, utilization: t.utilizationExBankable },
+  { key: 'billable', label: 'Less both', hours: t.billable, utilization: t.utilization },
+];
 
 /** How the hours split across the five buckets, largest first. */
 export function composition(rows, asOf = new Date()) {

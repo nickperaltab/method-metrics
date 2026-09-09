@@ -15,7 +15,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   fetchUtilization, filterMonths, summarize, byMonth, byConsultant, composition,
-  distinctMonths, distinctConsultants, isInProgress, floor2,
+  distinctMonths, distinctConsultants, isInProgress, floor2, ladder,
 } from '../lib/utilization';
 import { workingDaysInMonth, workingDaysElapsed } from '../lib/workingTime';
 import { sortRows } from '../lib/freeHours';
@@ -106,6 +106,19 @@ const s = {
   mixBar: { height: 22, borderRadius: 4, background: '#f3f4f6', overflow: 'hidden' },
   mixVal: { display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 7 },
   mixCount: { fontSize: 11, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" },
+  // The reconciliation ladder: label, bar, hours, utilization. Four rows that
+  // descend, so the bar length carries the deduction and the two right columns
+  // stay aligned for reading off.
+  ladderRow: { display: 'grid', gridTemplateColumns: '150px 1fr 92px 84px', alignItems: 'center', gap: 14, padding: '9px 0', borderBottom: '1px solid #f0f1f3' },
+  ladderLab: { fontSize: 13.5, color: '#1a1a1a' },
+  ladderBar: { height: 20, borderRadius: 4, background: '#f3f4f6', overflow: 'hidden' },
+  ladderHrs: { textAlign: 'right', fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" },
+  ladderPct: { textAlign: 'right', fontSize: 13, color: '#6b7280', fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" },
+  ladderFoot: {
+    display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 14, paddingTop: 12,
+    borderTop: '1px solid #f0f1f3', fontSize: 12.5, color: '#6b7280',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
   // The share-by-month rows: month, bar, value.
   shareRow: { display: 'grid', gridTemplateColumns: '84px 1fr 92px', alignItems: 'center', gap: 14, padding: '8px 0', borderBottom: '1px solid #f0f1f3' },
   shareLab: { fontSize: 13, color: '#1a1a1a', fontFamily: "'JetBrains Mono', monospace" },
@@ -158,7 +171,8 @@ const UTIL_CSS = `
 
 const CARETS = { asc: '▲', desc: '▼' };
 
-const BILLED_TIP = 'Dedicated and pay-per-use hours as invoiced, before bankable and discounted time comes out.';
+const ALL_IN_TIP = 'Every hour against a customer: dedicated, pay-per-use, free, bankable and discounted.';
+const FREE_TIP = 'Free Hour sessions. Not invoiced, but they count as billable work.';
 const BANKABLE_TIP = 'Dedicated hours a customer paid for and did not use. Logged at month end.';
 const DISCOUNTED_TIP = 'Billed hours written off on a ticket.';
 const INTERNAL_TIP = 'Time logged with no support type: internal projects, onboarding, training, product work.';
@@ -172,8 +186,12 @@ const SHARE_TIP = 'Billable hours as a share of the hours logged.';
 // hours so they sink instead of ranking as 0%.
 const REP_COLS = [
   { key: 'consultant', label: 'Consultant', text: true, value: (r) => r.consultant },
-  { key: 'billed', label: 'Billed', tip: BILLED_TIP, tipLabel: 'About billed hours', value: (r) => r.billed },
-  { key: 'free', label: 'Free', value: (r) => r.free },
+  // "All in" rather than "Billed": the two differ only by Free hours, and two
+  // adjacent columns that close to within a few hours invite the exact
+  // billed-vs-billable confusion this screen exists to remove. Billed is still
+  // in the tooltip vocabulary and the definitions list.
+  { key: 'allIn', label: 'All in', tip: ALL_IN_TIP, tipLabel: 'About hours all in', value: (r) => r.allIn },
+  { key: 'free', label: 'Free', tip: FREE_TIP, tipLabel: 'About free hours', value: (r) => r.free },
   { key: 'unusedDedicated', label: 'Bankable', tip: BANKABLE_TIP, tipLabel: 'About bankable hours', value: (r) => r.unusedDedicated },
   { key: 'discounted', label: 'Discounted', tip: DISCOUNTED_TIP, tipLabel: 'About discounted hours', value: (r) => r.discounted },
   { key: 'internal', label: 'Internal', tip: INTERNAL_TIP, tipLabel: 'About internal hours', value: (r) => r.internalProject + r.internalOther },
@@ -203,12 +221,14 @@ const REP_COLS = [
 const DEFINITIONS = [
   ['Working hours', 'Eight hours for every working day, for each consultant on the roster. August 2026 has 20 working days, so one consultant is 160 hours. Weekends and Ontario stat holidays are excluded. Method tracks no PTO, so a consultant on vacation is still charged full hours.'],
   ['Hours logged', 'Every time entry in the period. Attendance entries are the shift clock, so they are left out.'],
+  ['All in', 'Every hour against a customer: dedicated, pay-per-use, free, bankable and discounted. Hours logged minus internal time.'],
   ['Billed', 'Dedicated and pay-per-use hours as invoiced. This still contains the bankable and discounted hours below.'],
   ['Free', 'Free Hour sessions. Not invoiced, but they count as billable work.'],
   ['Bankable', 'Dedicated hours a customer paid for and did not use, written off at month end as unused dedicated time. Method has no field for it, so it is read from the entry note.'],
   ['Discounted', 'Billed hours given back on a ticket. Also read from the entry note, which carries the name of whoever approved the discount.'],
   ['Internal', 'Time logged with no Method support type: internal projects, onboarding, training and product work.'],
-  ['Billable', 'Hours logged minus bankable, discounted and internal. The hours that were real, paid customer work.'],
+  ['Billable', 'All in, minus bankable and discounted. The hours that were real, paid customer work.'],
+  ['Hours reconciliation', 'The same month on four bases: all in, then without discounted, without bankable, without either. Each shows its own utilization, so a figure can be checked against the deduction that produced it.'],
   ['Utilization', 'Billable divided by working hours. Answers whether enough billable work got done.'],
   ['% of billable work', 'Billable divided by hours logged. Answers how much of the logged time was billable. A consultant who logs 40 hours and bills them all is at 100% here and 25% utilization.'],
   ['Roster', 'Consultants with an attendance record that month. Only they are charged working hours.'],
@@ -401,7 +421,7 @@ export default function Utilization() {
     <>
       <div style={s.tipHead}>{monthLabel(m.month)}</div>
       <TipRow k="Hours logged" v={hrs(m.total)} />
-      <TipRow k="Billed" v={hrs(m.billed)} />
+      <TipRow k="All in" v={hrs(m.allIn)} />
       <TipRow k="Free" v={hrs(m.free)} />
       <TipRow k="Bankable" v={hrs(m.unusedDedicated)} />
       <TipRow k="Discounted" v={hrs(m.discounted)} />
@@ -467,9 +487,14 @@ export default function Utilization() {
           foot={`${hrs(totals.rosterBillable)} of ${hrs(totals.capacity)} working hours`}
         />
         <Tile
+          lab={<>Hours all in<InfoDot label="About hours all in" content={<div style={s.tipNote}>{ALL_IN_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
+          big={hrs(totals.allIn)}
+          foot={`${period} · ${scopeLabel}`}
+        />
+        <Tile
           lab={<>Billable hours<InfoDot label="About billable hours" content={<div style={s.tipNote}>{BILLABLE_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
           big={hrs(totals.billable)}
-          foot={`${period} · ${scopeLabel}${perMonth}`}
+          foot={`all in, less bankable and discounted${perMonth}`}
         />
         <Tile
           lab={<>Working hours<InfoDot label="About working hours" content={<div style={s.tipNote}>{WORKING_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
@@ -496,7 +521,47 @@ export default function Utilization() {
           big={hrs(totals.internalProject + totals.internalOther)}
           foot={`${hrs(totals.internalProject)} on internal projects`}
         />
-        <Tile lab="Billed" big={hrs(totals.billed)} foot="dedicated and pay-per-use, as invoiced" />
+        <Tile
+          lab={<>Free<InfoDot label="About free hours" content={<div style={s.tipNote}>{FREE_TIP}</div>} onShow={showTip} onHide={hideTip} /></>}
+          big={hrs(totals.free)}
+          foot="free hour sessions"
+        />
+      </div>
+
+      <div style={s.panel}>
+        <div style={s.phead}>
+          <div style={s.ph2}>Hours reconciliation</div>
+          <div style={s.phsub}>
+            {period}, {scopeLabel}. Each row takes one deduction off the row above.
+          </div>
+        </div>
+        <div style={s.pbody}>
+          {totals.allIn === 0 && <div style={s.note2}>No customer hours in this selection.</div>}
+          {totals.allIn > 0 && (
+            <>
+              {ladder(totals).map((b) => (
+                <div key={b.key} style={s.ladderRow}>
+                  <div style={s.ladderLab}>{b.label}</div>
+                  <div style={s.ladderBar}>
+                    <i style={{
+                      display: 'block', height: '100%', width: `${(b.hours / totals.allIn) * 100}%`,
+                      background: b.key === 'billable' ? BILLABLE : '#9aa9c4',
+                    }} />
+                  </div>
+                  <div style={s.ladderHrs}>{hrs(b.hours)}</div>
+                  <div style={s.ladderPct}>{pct(b.utilization)}</div>
+                </div>
+              ))}
+              <div style={s.ladderFoot}>
+                <span>Bankable {hrs(totals.unusedDedicated)}</span>
+                <span>Discounted {hrs(totals.discounted)}</span>
+                <span>Free {hrs(totals.free)}</span>
+                <span>Internal {hrs(totals.internalProject + totals.internalOther)}</span>
+                <span>Logged {hrs(totals.total)}</span>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={s.panel}>
@@ -620,7 +685,7 @@ export default function Utilization() {
             {reps.map((r) => (
               <tr key={r.consultant}>
                 <td style={s.td}>{r.consultant}</td>
-                <td style={{ ...s.td, ...s.tdn }}>{hrs(r.billed)}</td>
+                <td style={{ ...s.td, ...s.tdn }}>{hrs(r.allIn)}</td>
                 <td style={{ ...s.td, ...s.tdn }}>{hrs(r.free)}</td>
                 <td style={{ ...s.td, ...s.tdn, color: BANKABLE }}>{hrs(r.unusedDedicated)}</td>
                 <td style={{ ...s.td, ...s.tdn, color: DISCOUNTED }}>{hrs(r.discounted)}</td>

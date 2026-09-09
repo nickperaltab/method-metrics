@@ -17,6 +17,7 @@ import {
   byMonth,
   byConsultant,
   composition,
+  ladder,
   fetchUtilization,
 } from '../../src/lib/utilization.js';
 import { parseDay } from '../../src/lib/workingTime.js';
@@ -287,6 +288,58 @@ describe('summarize', () => {
         cm({ month: '2026-08', dedicated: 100 }),
       ], AS_OF);
       expect(t.capacity).toBe(176 + 160);
+    });
+  });
+
+  // Miguel Teodoro's real August 2026, pulled entry by entry on 2026-09-09 while
+  // auditing why the screen disagreed with Brandon's 99.83. It is the regression
+  // case for the whole ladder: every one of the four bases has a known value.
+  describe('the reconciliation ladder (Miguel Teodoro, August 2026)', () => {
+    const miguel = [cm({
+      consultant: 'Miguel Teodoro', month: '2026-08', entries: 127,
+      dedicated: 74.3167, ppu: 2, free: 9,
+      unusedDedicated: 14.5167, discountedPaid: 2,
+    })];
+    const t = summarize(miguel, AS_OF);
+
+    it('puts every customer hour in the all-in figure', () => {
+      expect(t.allIn).toBe(101.83);
+      // Internal is zero for this month, so all in equals hours logged.
+      expect(t.total).toBe(101.83);
+    });
+
+    it('reproduces the 99.83 the audit was reconciling to', () => {
+      expect(t.exDiscounted).toBe(99.83);
+    });
+
+    it('takes bankable off for the without-bankable figure', () => {
+      expect(t.exBankable).toBe(87.31);
+    });
+
+    it('takes both off for billable', () => {
+      expect(t.billable).toBe(85.31);
+    });
+
+    it('reports the two deductions separately so the ladder can be checked', () => {
+      expect(t.unusedDedicated).toBe(14.51);
+      expect(t.discounted).toBe(2);
+      expect(t.free).toBe(9);
+      expect(t.internalProject + t.internalOther).toBe(0);
+    });
+
+    it('rates all four bases against the same 160 working hours', () => {
+      expect(t.capacity).toBe(160);
+      expect(t.utilizationAllIn).toBe(63.64);
+      expect(t.utilizationExDiscounted).toBe(62.39);
+      expect(t.utilizationExBankable).toBe(54.57);
+      expect(t.utilization).toBe(53.32);
+    });
+
+    it('descends monotonically, all in first', () => {
+      const rungs = ladder(t);
+      expect(rungs.map((r) => r.key)).toEqual(['allIn', 'exDiscounted', 'exBankable', 'billable']);
+      const hours = rungs.map((r) => r.hours);
+      expect(hours).toEqual([...hours].sort((a, b) => b - a));
     });
   });
 

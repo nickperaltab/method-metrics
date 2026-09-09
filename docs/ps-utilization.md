@@ -37,6 +37,49 @@ Verified against live data on 2026-09-09:
 | 2026-07 | 22 | 22 | 3,872 | 2,413.18 | 62.32% | 90.32% |
 | 2026-08 | 20 | 24 | 3,840 | 2,276.16 | **59.27%** | 88.67% |
 
+## The reconciliation ladder
+
+The "Hours reconciliation" panel reports the same selection on four bases, each
+removing one deduction from the row above, with its own utilization. It exists
+because "the dashboard is wrong" almost always turns out to be a disagreement
+about which deduction belongs in the figure, and the ladder settles that by
+showing all four at once. `ladder()` in `utilization.js` builds the rungs.
+
+| Rung | Formula | Field |
+|---|---|---|
+| All in | every customer hour = logged − internal | `allIn` |
+| Less discounted | all in − discounted | `exDiscounted` |
+| Less bankable | all in − bankable | `exBankable` |
+| Less both | all in − bankable − discounted (= billable) | `billable` |
+
+**Worked example — Miguel Teodoro, August 2026** (audited entry by entry on
+2026-09-09, and now the regression case in `utilization.test.js`):
+
+| Component | Hours | Entries |
+|---|---|---|
+| Dedicated, clean | 74.3167 | 105 |
+| Pay-per-use | 2.0000 | 1 |
+| Free | 9.0000 | 9 |
+| Bankable | 14.5167 | 9 |
+| Discounted | 2.0000 | 3 |
+| Internal | 0 | 0 |
+
+| Rung | Hours | Utilization (÷160) |
+|---|---|---|
+| All in | 101.83 | 63.64% |
+| Less discounted | **99.83** | 62.39% |
+| Less bankable | 87.31 | 54.57% |
+| Less both (billable) | 85.31 | 53.32% |
+
+Nothing was miscomputed in the August audit — every bucket reconciled to the
+hour. The question was only which rung to read. Miguel's three discounted
+entries (0.5h + 0.5h + 1.0h) are real work carrying
+`*** DISCOUNT APPROVED BY ***` from Ryan Karaba and Charvi Anand.
+
+**Utilization on the screen stays on the "less both" rung** (billable), and the
+other three rungs are shown beside it rather than replacing it. Do not change
+that basis without asking — it moves every consultant and every month.
+
 ## Every number is rounded DOWN to two decimals
 
 `floor2()` in `utilization.js` is the single rounding function, used by both the
@@ -140,6 +183,7 @@ Derived from those:
 | Free | Free Hour sessions. Not invoiced, but counted as billable work |
 | Logged | Everything above. Attendance entries excluded |
 | Billable | Logged − bankable − discounted − internal |
+| All in | Logged − internal: every customer hour |
 | Working hours | 8 × working days, per roster consultant |
 | Utilization | Billable ÷ Working hours |
 | % of billable work | Billable ÷ Logged |
