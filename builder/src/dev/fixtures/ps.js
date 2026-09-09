@@ -455,9 +455,15 @@ function build() {
   // almost all internal project work, and the current month with no bankable
   // hours at all (that is what a real in-progress month looks like, since unused
   // dedicated time is only posted on the last day).
+  // `on_roster` says the consultant had an attendance record that month, which
+  // is the only thing that charges them working hours. Off-roster rows carry
+  // hours but no capacity, so they must default to on-roster or every fixture
+  // month would report no utilization at all.
   const utilMonth = (o) => ({
     consultant: o.consultant,
     month: o.month,
+    on_roster: bool(o.onRoster ?? true),
+    attendance_hours: (o.onRoster ?? true) ? String(o.attendance ?? 160) : null,
     entries: String(o.entries ?? 40),
     dedicated_hours: String(o.dedicated ?? 0),
     ppu_hours: String(o.ppu ?? 0),
@@ -468,6 +474,9 @@ function build() {
     discounted_free_hours: String(o.discountedFree ?? 0),
     internal_project_hours: String(o.internalProject ?? 0),
     internal_other_hours: String(o.internalOther ?? 0),
+    // The last day with entries. Real data lags the clock by a day or so, and
+    // that is what prorates the open month's capacity, so the fixture lags too.
+    data_through: iso(-1),
   });
 
   // Hours are sized to a real consultant month: roughly 105-135 logged. A month
@@ -509,6 +518,18 @@ function build() {
     ...utilMonths.slice(2).map((month) => utilMonth({
       consultant: 'Phuong Phan', month, entries: 31,
       dedicated: 55, free: 4.5, discountedPaid: 1, internalOther: 10.5,
+    })),
+    // On the roster with no billable work: a real 0% utilization rather than an
+    // absent row. Comes out of the FULL OUTER JOIN against the attendance roster.
+    ...utilMonths.map((month) => utilMonth({
+      consultant: 'Joseph McDonald', month, entries: 0,
+    })),
+    // Logged a couple of hours with NO attendance record — a manager, not a
+    // consultant. Charged no working hours, so their utilization cell reads "—"
+    // and they never drag the team rate down.
+    ...utilMonths.map((month) => utilMonth({
+      consultant: 'Zachary Cutler', month, entries: 2, onRoster: false,
+      ppu: 3.5, internalOther: 1,
     })),
   ];
 
