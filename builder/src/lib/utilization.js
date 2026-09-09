@@ -73,13 +73,36 @@ export const DISCOUNT_MARKER = String.raw`\*\*\* *DISCOUNT (APPROVED|REQUESTED) 
 // support type is internal too, just not project time.
 export const INTERNAL_PROJECT_ITEM = 'Internal Project Hours';
 
+/**
+ * Method carries a SECOND `Entity` row for some consultants, suffixed
+ * "(as vendor)", and posts part of their attendance clock against it.
+ *
+ * There are seven in 2026 — Cheryl Tong, Ethan Miranda, Javier Chung, Justin
+ * Klein, Miguel Teodoro, Sarah Chen, Vinesh Gobin — and every one of them has
+ * ZERO work entries and attendance only. All seven also have a normal Entity row
+ * in the same month, so the vendor row is a duplicate identity for one person,
+ * not a second person.
+ *
+ * That made them phantom consultants on the roster: 2 in March, 4 in May, 2 in
+ * June, each charged a full month of capacity against no billable work. May was
+ * the worst hit, reporting a 26-person roster against a real 22.
+ *
+ * Stripping the suffix and grouping on the result merges the two identities, so
+ * the roster counts one person once and any hours logged under either identity
+ * add up. Case-insensitive because the suffix is Method-entered text.
+ */
+export const VENDOR_ALIAS_SUFFIX = String.raw`(?i) *\(as vendor\)$`;
+
 export function buildUtilizationSql(start = REPORTING_START) {
   // start is a module constant, never user input, but keep the shape strict.
   const from = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : REPORTING_START;
   return `
     WITH src AS (
       SELECT
-        e.EntityFullName AS consultant,
+        -- One person, one row. See VENDOR_ALIAS_SUFFIX: Method keeps a second
+        -- "(as vendor)" Entity for some consultants and posts attendance to it,
+        -- which put phantom consultants on the roster.
+        TRIM(REGEXP_REPLACE(e.EntityFullName, r'${VENDOR_ALIAS_SUFFIX}', '')) AS consultant,
         DATE(t.TxnDate) AS txn_date,
         DATE_TRUNC(DATE(t.TxnDate), MONTH) AS txn_month,
         -- DurationHours alone. DurationMinutes is the same duration in minutes,

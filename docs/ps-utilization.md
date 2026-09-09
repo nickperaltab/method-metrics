@@ -31,11 +31,16 @@ roster. August 2026 has 20 working days, so one consultant is 160 hours and the
 
 Verified against live data on 2026-09-09:
 
-| Month | Working days | Roster | Working hours | Billable | Utilization | % of billable work |
-|---|---|---|---|---|---|---|
-| 2026-06 | 22 | 24 | 4,224 | 2,276.56 | 53.89% | 89.48% |
-| 2026-07 | 22 | 22 | 3,872 | 2,413.18 | 62.32% | 90.32% |
-| 2026-08 | 20 | 24 | 3,840 | 2,276.16 | **59.27%** | 88.67% |
+| Month | Working days | Roster | Working hours | Billable | Utilization |
+|---|---|---|---|---|---|
+| 2026-01 | 21 | 23 | 3,864 | 2,277.56 | 58.94% |
+| 2026-02 | 19 | 21 | 3,192 | 2,232.73 | 69.94% |
+| 2026-03 | 22 | 21 | 3,696 | 2,247.49 | 60.80% |
+| 2026-04 | 21 | 21 | 3,528 | 1,949.48 | 55.25% |
+| 2026-05 | 20 | 22 | 3,520 | 1,964.85 | 55.81% |
+| 2026-06 | 22 | 22 | 3,872 | 2,276.56 | 58.79% |
+| 2026-07 | 22 | 22 | 3,872 | 2,413.18 | 62.32% |
+| 2026-08 | 20 | 24 | 3,840 | 2,276.16 | **59.27%** |
 
 ## The reconciliation ladder
 
@@ -113,6 +118,41 @@ So utilization's numerator and denominator are both drawn from roster
 consultant-months only. Off-roster hours still appear in every hour column and
 in "% of billable work"; they are excluded from the ratio, and that consultant's
 utilization cell reads `—`.
+
+### The "(as vendor)" duplicate Entity
+
+**`Entity` has only two columns — `RecordID` and `EntityFullName` — so there is
+no entity type to filter on. The type is baked into the name.**
+
+Method keeps a **second `Entity` row** for some consultants, suffixed
+`(as vendor)`, and posts part of their attendance clock against it. Seven exist
+in 2026: Cheryl Tong, Ethan Miranda, Javier Chung, Justin Klein, Miguel Teodoro,
+Sarah Chen and Vinesh Gobin. Every one has **zero work entries and attendance
+only**, and every one also has a normal `Entity` row in the same month — so it is
+a duplicate identity for one person, not a second person.
+
+Because attendance defines the roster, these were **phantom consultants**: each
+charged a full month of capacity against no billable work. They also showed up in
+the screen's consultant dropdown, which is how the bug was spotted.
+
+`buildUtilizationSql` now strips the suffix (`VENDOR_ALIAS_SUFFIX`,
+case-insensitive, anchored to the end) and groups on the result, merging the two
+identities. Corrected on 2026-09-09:
+
+| Month | Roster before | Roster after | Utilization before | After |
+|---|---|---|---|---|
+| 2026-03 | 23 | 21 | 55.52% | **60.80%** |
+| 2026-05 | 26 | 22 | 47.23% | **55.81%** |
+| 2026-06 | 24 | 22 | 53.89% | **58.79%** |
+
+May was the worst hit — 4 phantoms, 640 hours of capacity that nobody was ever
+available for — and it had been reading as the year's outlier low month purely
+because of it. March, April, July, August and September were never affected.
+
+Anything else that groups PS time by `EntityFullName` needs the same
+normalization. See also the two-conventions problem on consultant names in
+`call_prep.snapshots` (`psOverview.js`), which is a different collision with the
+same shape.
 
 ## The working calendar is derived, not listed
 
