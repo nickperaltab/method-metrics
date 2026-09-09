@@ -3,6 +3,7 @@ import {
   TIME_TRACKING,
   REPORTING_START,
   UNUSED_DEDICATED_MARKER,
+  VENDOR_ALIAS_SUFFIX,
   INTERNAL_PROJECT_ITEM,
   buildUtilizationSql,
   normalizeMonthRow,
@@ -81,6 +82,15 @@ describe('buildUtilizationSql', () => {
     expect(sql).toContain('IsDeleted');
   });
 
+  it('merges the "(as vendor)" duplicate Entity into the real consultant', () => {
+    // Method keeps a second Entity row for seven consultants in 2026 and posts
+    // part of their attendance clock to it. Left alone they become phantom
+    // consultants on the roster, each charged a full month of capacity against
+    // no billable work: 2 in March, 4 in May, 2 in June.
+    expect(sql).toContain('REGEXP_REPLACE(e.EntityFullName');
+    expect(sql).toContain(VENDOR_ALIAS_SUFFIX);
+  });
+
   it('reads DurationHours alone, because adding DurationMinutes doubles every entry', () => {
     // DurationHours and DurationMinutes are the same duration in two units: a
     // two-hour entry stores 2.0 and 120.0. All 18,083 entries in 2026 satisfy
@@ -116,6 +126,34 @@ describe('buildUtilizationSql', () => {
   it('rejects a malformed start and falls back to the reporting start', () => {
     expect(buildUtilizationSql("2026-01-01'; DROP")).toContain(`DATE '${REPORTING_START}'`);
     expect(buildUtilizationSql('nonsense')).not.toContain('nonsense');
+  });
+});
+
+describe('VENDOR_ALIAS_SUFFIX', () => {
+  // BigQuery RE2 takes the case flag inline; JS takes it as a flag.
+  const re = new RegExp(VENDOR_ALIAS_SUFFIX.replace('(?i)', ''), 'i');
+  const strip = (s) => s.replace(re, '').trim();
+
+  it('strips the suffix from all seven real aliases', () => {
+    for (const name of ['Cheryl Tong', 'Ethan Miranda', 'Javier Chung', 'Justin Klein',
+      'Miguel Teodoro', 'Sarah Chen', 'Vinesh Gobin']) {
+      expect(strip(`${name} (as vendor)`)).toBe(name);
+    }
+  });
+
+  it('ignores case, because the suffix is text someone typed into Method', () => {
+    expect(strip('Sarah Chen (as Vendor)')).toBe('Sarah Chen');
+    expect(strip('Sarah Chen (AS VENDOR)')).toBe('Sarah Chen');
+  });
+
+  it('leaves a normal consultant name alone', () => {
+    expect(strip('Miguel Teodoro')).toBe('Miguel Teodoro');
+    expect(strip('Brandon Saltzman')).toBe('Brandon Saltzman');
+  });
+
+  it('is anchored to the end, so it cannot eat a real name', () => {
+    expect(strip('Vendor Services Inc')).toBe('Vendor Services Inc');
+    expect(strip('A (as vendor) B')).toBe('A (as vendor) B');
   });
 });
 
