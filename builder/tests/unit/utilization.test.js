@@ -9,6 +9,7 @@ import {
   filterMonths,
   distinctMonths,
   distinctConsultants,
+  floor2,
   percent,
   summarize,
   currentMonth,
@@ -18,11 +19,18 @@ import {
   composition,
   fetchUtilization,
 } from '../../src/lib/utilization.js';
+import { parseDay } from '../../src/lib/workingTime.js';
+
+// Entries ran to 8 Sep 2026 while the clock said the 9th. Every test that
+// touches capacity pins this so it does not drift with the wall clock.
+const AS_OF = parseDay('2026-09-08');
 
 /** A normalized consultant-month with only the buckets an assertion cares about. */
 const cm = (o = {}) => ({
   consultant: o.consultant ?? 'Ada Lovelace',
   month: o.month ?? '2026-03',
+  onRoster: o.onRoster ?? true,
+  attendanceHours: o.attendanceHours ?? 160,
   entries: o.entries ?? 10,
   dedicated: o.dedicated ?? 0,
   ppu: o.ppu ?? 0,
@@ -43,8 +51,29 @@ describe('buildUtilizationSql', () => {
     expect(sql).toContain(`DATE '${REPORTING_START}'`);
   });
 
-  it('drops attendance entries so the shift clock is not counted as work', () => {
-    expect(sql).toContain('IsAttendenceEntry');
+  it('keeps attendance entries out of the work buckets', () => {
+    expect(sql).toContain('WHERE NOT is_attendance');
+  });
+
+  it('builds the roster from attendance entries', () => {
+    // Attendance is excluded from every hour bucket but is the only signal for
+    // who was on the clock, and utilization is charged only against those people.
+    expect(sql).toContain('roster AS (');
+    expect(sql).toContain('WHERE is_attendance');
+  });
+
+  it('keeps a roster consultant who billed nothing, so a real 0% is not hidden', () => {
+    expect(sql).toContain('FULL OUTER JOIN roster r');
+    expect(sql).toContain('r.consultant IS NOT NULL AS on_roster');
+  });
+
+  it('drops a consultant-month with neither logged hours nor an attendance row', () => {
+    expect(sql).toContain('WHERE COALESCE(w.logged_hours, 0) > 0 OR r.consultant IS NOT NULL');
+  });
+
+  it('reports the last day with entries, which is what prorates the open month', () => {
+    expect(sql).toContain('MAX(txn_date)');
+    expect(sql).toContain('AS data_through');
   });
 
   it('drops deleted entries', () => {
@@ -94,6 +123,8 @@ describe('normalizeMonthRow', () => {
     const r = normalizeMonthRow({
       consultant: 'Ada Lovelace',
       month: '2026-03',
+      on_roster: 'true',
+      attendance_hours: '160',
       entries: '42',
       dedicated_hours: '110.5',
       ppu_hours: '12',
@@ -106,14 +137,55 @@ describe('normalizeMonthRow', () => {
       internal_other_hours: '2',
     });
     expect(r).toMatchObject({
-      consultant: 'Ada Lovelace', month: '2026-03', entries: 42,
-      dedicated: 110.5, ppu: 12, free: 4, unusedDedicated: 18.25,
+      consultant: 'Ada Lovelace', month: '2026-03', entries: 42, onRoster: true,
+      attendanceHours: 160, dedicated: 110.5, ppu: 12, free: 4, unusedDedicated: 18.25,
       discountedPaid: 3, internalProject: 6, internalOther: 2,
     });
   });
 
+  it('reads the BQ boolean strings, not their truthiness', () => {
+    // 'false' is a truthy JS string; reading it as a boolean would put every
+    // consultant on the roster and charge capacity to all of them.
+    expect(normalizeMonthRow({ on_roster: 'false' }).onRoster).toBe(false);
+    expect(normalizeMonthRow({ on_roster: 'true' }).onRoster).toBe(true);
+    expect(normalizeMonthRow({}).onRoster).toBe(false);
+  });
+
   it('reads a missing bucket as zero hours, not null', () => {
     expect(normalizeMonthRow({ consultant: 'A', month: '2026-01' }).dedicated).toBe(0);
+  });
+});
+
+describe('floor2', () => {
+  it('rounds down, never up', () => {
+    expect(floor2(72.129)).toBe(72.12);
+    expect(floor2(72.125)).toBe(72.12);
+    expect(floor2(99.999)).toBe(99.99);
+  });
+
+  it('does not lose a whole number to binary floating point', () => {
+    // 0.29 * 100 is 28.999999999999996 in IEEE 754. A naive floor returns 28.99.
+    expect(floor2(29)).toBe(29);
+    expect(floor2(0.29 * 100)).toBe(29);
+    expect(floor2(1.005 * 100)).toBe(100.5);
+  });
+
+  it('is null on something that is not a number', () => {
+    expect(floor2(NaN)).toBeNull();
+    expect(floor2(Infinity)).toBeNull();
+  });
+});
+
+describe('percent', () => {
+  it('floors to two decimals', () => {
+    // Brandon's worked example: 115.4 billable against August's 160 hours.
+    expect(percent(115.4, 160)).toBe(72.12);
+    expect(percent(1, 3)).toBe(33.33);
+  });
+
+  it('is null on a zero denominator rather than zero', () => {
+    expect(percent(0, 0)).toBeNull();
+    expect(percent(1, 4)).toBe(25);
   });
 });
 
@@ -124,54 +196,127 @@ describe('summarize', () => {
 
   it('bills the hours a customer was invoiced for, deductions included', () => {
     // Dedicated + PPU + bankable + discounted: what went on the invoice.
-    expect(summarize(rows).billed).toBe(155);
+    expect(summarize(rows, AS_OF).billed).toBe(155);
   });
 
   it('excludes both deductions and internal time from billable hours', () => {
-    expect(summarize(rows).billable).toBe(130);
+    expect(summarize(rows, AS_OF).billable).toBe(130);
   });
 
   it('counts every logged hour in the total', () => {
-    expect(summarize(rows).total).toBe(175);
-  });
-
-  it('rates billable against everything logged', () => {
-    expect(summarize(rows).rate).toBe(Math.round((130 / 175) * 100));
+    expect(summarize(rows, AS_OF).total).toBe(175);
   });
 
   it('reports discounted and internal together as non-billable', () => {
-    expect(summarize(rows).nonBillable).toBe(15);
+    expect(summarize(rows, AS_OF).nonBillable).toBe(15);
   });
 
   it('keeps a discounted Free Hour off the billed side', () => {
-    const t = summarize([cm({ free: 10, discountedFree: 2 })]);
+    const t = summarize([cm({ free: 10, discountedFree: 2 })], AS_OF);
     expect(t.billed).toBe(0);
     expect(t.free).toBe(12);
     expect(t.billable).toBe(10);
   });
 
   it('counts an unknown support type as billable rather than losing it', () => {
-    const t = summarize([cm({ other: 7 })]);
+    const t = summarize([cm({ other: 7 })], AS_OF);
     expect(t.total).toBe(7);
     expect(t.billable).toBe(7);
   });
 
-  it('has no rate when nothing was logged', () => {
-    expect(summarize([]).rate).toBeNull();
-    expect(summarize([]).total).toBe(0);
-  });
-
   it('adds up across months and consultants', () => {
-    const t = summarize([cm({ dedicated: 10 }), cm({ month: '2026-04', dedicated: 15 })]);
+    const t = summarize([cm({ dedicated: 10 }), cm({ month: '2026-04', dedicated: 15 })], AS_OF);
     expect(t.billable).toBe(25);
     expect(t.months).toBe(2);
   });
-});
 
-describe('percent', () => {
-  it('is null on a zero denominator rather than zero', () => {
-    expect(percent(0, 0)).toBeNull();
-    expect(percent(1, 4)).toBe(25);
+  describe('utilization', () => {
+    it('is billable hours over the working hours of the month', () => {
+      // One consultant, August 2026: 20 working days, 160 hours.
+      const t = summarize([cm({ month: '2026-08', dedicated: 115.4 })], AS_OF);
+      expect(t.capacity).toBe(160);
+      expect(t.utilization).toBe(72.12);
+    });
+
+    it('charges every roster consultant a month of working hours', () => {
+      const rows2 = [
+        cm({ consultant: 'Ada', month: '2026-08', dedicated: 120 }),
+        cm({ consultant: 'Grace', month: '2026-08', dedicated: 120 }),
+      ];
+      const t = summarize(rows2, AS_OF);
+      expect(t.capacity).toBe(320);
+      expect(t.utilization).toBe(75);
+    });
+
+    it('charges nothing for a consultant who was not on the roster', () => {
+      // A manager who logged three hours with no attendance record: neither
+      // their hours nor a month of capacity belongs in the ratio.
+      const t = summarize([
+        cm({ consultant: 'Ada', month: '2026-08', dedicated: 120 }),
+        cm({ consultant: 'Zach', month: '2026-08', dedicated: 3, onRoster: false }),
+      ], AS_OF);
+      expect(t.capacity).toBe(160);
+      expect(t.rosterBillable).toBe(120);
+      expect(t.utilization).toBe(75);
+      // The hours themselves are still reported; only the ratio excludes them.
+      expect(t.billable).toBe(123);
+    });
+
+    it('has no utilization for a consultant with no working hours', () => {
+      const t = summarize([cm({ month: '2026-08', dedicated: 3, onRoster: false })], AS_OF);
+      expect(t.capacity).toBe(0);
+      expect(t.utilization).toBeNull();
+    });
+
+    it('is a real zero for a roster consultant who billed nothing', () => {
+      const t = summarize([cm({ month: '2026-08', internalOther: 40 })], AS_OF);
+      expect(t.capacity).toBe(160);
+      expect(t.utilization).toBe(0);
+    });
+
+    it('prorates the open month to the working days with entries', () => {
+      // September to 8 Sep is five working days, so 40 hours, not 168.
+      const t = summarize([cm({ month: '2026-09', dedicated: 30 })], AS_OF);
+      expect(t.capacity).toBe(40);
+      expect(t.utilization).toBe(75);
+    });
+
+    it('sums capacity across a multi-month span', () => {
+      const t = summarize([
+        cm({ month: '2026-07', dedicated: 100 }),
+        cm({ month: '2026-08', dedicated: 100 }),
+      ], AS_OF);
+      expect(t.capacity).toBe(176 + 160);
+    });
+  });
+
+  describe('% of billable work', () => {
+    it('rates billable against everything logged', () => {
+      expect(summarize(rows, AS_OF).billableShare).toBe(percent(130, 175));
+    });
+
+    it('separates a consultant who bills all of a short month from a full one', () => {
+      // The whole reason both rates exist: 40 billable hours in August is every
+      // logged hour and a quarter of the working month.
+      const t = summarize([cm({ month: '2026-08', dedicated: 40 })], AS_OF);
+      expect(t.billableShare).toBe(100);
+      expect(t.utilization).toBe(25);
+    });
+
+    it('has no share when nothing was logged', () => {
+      expect(summarize([], AS_OF).billableShare).toBeNull();
+      expect(summarize([], AS_OF).total).toBe(0);
+    });
+  });
+
+  it('counts the roster so the working-hours figure can be explained', () => {
+    const t = summarize([
+      cm({ consultant: 'Ada', month: '2026-08' }),
+      cm({ consultant: 'Grace', month: '2026-08' }),
+      cm({ consultant: 'Zach', month: '2026-08', onRoster: false }),
+    ], AS_OF);
+    expect(t.rosterConsultants).toBe(2);
+    expect(t.rosterMonths).toBe(2);
   });
 });
 
@@ -208,37 +353,47 @@ describe('distinct helpers', () => {
 });
 
 describe('isInProgress', () => {
-  const now = new Date(2026, 8, 3); // 3 Sep 2026
-
-  it('names the month the clock is in', () => {
-    expect(currentMonth(now)).toBe('2026-09');
+  it('names the month the newest data falls in', () => {
+    expect(currentMonth(AS_OF)).toBe('2026-09');
   });
 
-  it('flags the current month, because bankable hours post on the last day', () => {
-    expect(isInProgress('2026-09', now)).toBe(true);
+  it('flags that month, because bankable hours post on the last day', () => {
+    expect(isInProgress('2026-09', AS_OF)).toBe(true);
   });
 
   it('leaves a closed month alone', () => {
-    expect(isInProgress('2026-08', now)).toBe(false);
+    expect(isInProgress('2026-08', AS_OF)).toBe(false);
   });
 });
 
 describe('byMonth', () => {
-  const now = new Date(2026, 8, 3);
   const rows = [
     cm({ month: '2026-08', dedicated: 100, unusedDedicated: 20 }),
     cm({ month: '2026-09', dedicated: 40 }),
   ];
 
   it('returns one row per month, oldest first', () => {
-    expect(byMonth(rows, now).map((m) => m.month)).toEqual(['2026-08', '2026-09']);
+    expect(byMonth(rows, AS_OF).map((m) => m.month)).toEqual(['2026-08', '2026-09']);
   });
 
-  it('marks the open month so its rate is read as a ceiling', () => {
-    const [closed, open] = byMonth(rows, now);
+  it('marks the open month so its figures are read as a ceiling', () => {
+    const [closed, open] = byMonth(rows, AS_OF);
     expect(closed.inProgress).toBe(false);
     expect(open.inProgress).toBe(true);
-    expect(open.rate).toBe(100);
+  });
+
+  it('reports both rates per month', () => {
+    const [aug] = byMonth(rows, AS_OF);
+    expect(aug.capacity).toBe(160);
+    expect(aug.utilization).toBe(62.5);
+    expect(aug.billableShare).toBe(percent(100, 120));
+  });
+
+  it('carries the full working days of the month even when capacity is prorated', () => {
+    const [, sep] = byMonth(rows, AS_OF);
+    expect(sep.workingDays).toBe(21);
+    expect(sep.workingHours).toBe(168);
+    expect(sep.capacity).toBe(40);
   });
 });
 
@@ -249,34 +404,42 @@ describe('byConsultant', () => {
     cm({ consultant: 'Grace', month: '2026-02', dedicated: 100, internalOther: 100 }),
   ];
 
-  it('ranks on billable hours, not on rate', () => {
-    // Ada is at 100% and Grace at 50%; volume still puts Grace first.
-    expect(byConsultant(rows).map((r) => r.consultant)).toEqual(['Grace', 'Ada']);
+  it('ranks on billable hours, not on a rate', () => {
+    // Ada is at 100% of billable work and Grace at 50%; volume still puts
+    // Grace first.
+    expect(byConsultant(rows, AS_OF).map((r) => r.consultant)).toEqual(['Grace', 'Ada']);
   });
 
   it('averages billable hours over the months that consultant worked', () => {
-    const ada = byConsultant(rows).find((r) => r.consultant === 'Ada');
+    const ada = byConsultant(rows, AS_OF).find((r) => r.consultant === 'Ada');
     expect(ada.billable).toBe(40);
     expect(ada.billablePerMonth).toBe(20);
   });
 
+  it('gives each consultant their own working hours', () => {
+    // Ada worked Jan (168) and Feb (152); Grace only Feb.
+    const [grace, ada] = byConsultant(rows, AS_OF);
+    expect(ada.capacity).toBe(320);
+    expect(grace.capacity).toBe(152);
+  });
+
   it('breaks a tie on name so the order never wobbles', () => {
     const tied = [cm({ consultant: 'Zoe', dedicated: 10 }), cm({ consultant: 'Ada', dedicated: 10 })];
-    expect(byConsultant(tied).map((r) => r.consultant)).toEqual(['Ada', 'Zoe']);
+    expect(byConsultant(tied, AS_OF).map((r) => r.consultant)).toEqual(['Ada', 'Zoe']);
   });
 });
 
 describe('composition', () => {
   it('splits the logged hours into five shares that cover the whole total', () => {
     const rows = [cm({ dedicated: 50, unusedDedicated: 25, discountedPaid: 5, internalProject: 10, internalOther: 10 })];
-    const mix = composition(rows);
+    const mix = composition(rows, AS_OF);
     expect(mix.map((b) => b.key)).toEqual(['billable', 'unused', 'discounted', 'internalProject', 'internalOther']);
     expect(mix.reduce((a, b) => a + b.hours, 0)).toBe(100);
     expect(mix.find((b) => b.key === 'billable').share).toBe(50);
   });
 
   it('has no shares when nothing was logged', () => {
-    expect(composition([]).every((b) => b.share === null)).toBe(true);
+    expect(composition([], AS_OF).every((b) => b.share === null)).toBe(true);
   });
 });
 
@@ -285,10 +448,26 @@ describe('fetchUtilization', () => {
     let seen = null;
     const query = async (sql) => {
       seen = sql;
-      return { rows: [{ consultant: 'Ada', month: '2026-03', dedicated_hours: '12' }] };
+      return { rows: [{ consultant: 'Ada', month: '2026-03', dedicated_hours: '12', on_roster: 'true', data_through: '2026-09-08' }] };
     };
-    const rows = await fetchUtilization({ query });
+    const { rows } = await fetchUtilization({ query });
     expect(seen).toContain(TIME_TRACKING);
-    expect(rows).toEqual([expect.objectContaining({ consultant: 'Ada', dedicated: 12 })]);
+    expect(rows).toEqual([expect.objectContaining({ consultant: 'Ada', dedicated: 12, onRoster: true })]);
+  });
+
+  it('reads the last day with data off the result and hands back a date', async () => {
+    const query = async () => ({ rows: [{ consultant: 'Ada', month: '2026-09', data_through: '2026-09-08' }] });
+    const { dataThrough, asOf } = await fetchUtilization({ query });
+    expect(dataThrough).toBe('2026-09-08');
+    expect(asOf.getDate()).toBe(8);
+    expect(asOf.getMonth()).toBe(8);
+  });
+
+  it('falls back to today on an empty result, which has nothing to prorate anyway', async () => {
+    const query = async () => ({ rows: [] });
+    const { rows, dataThrough, asOf } = await fetchUtilization({ query });
+    expect(rows).toEqual([]);
+    expect(dataThrough).toBeNull();
+    expect(asOf).toBeInstanceOf(Date);
   });
 });

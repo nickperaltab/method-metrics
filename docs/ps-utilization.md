@@ -1,17 +1,122 @@
 # PS Utilization (`/utilization`)
 
-Of the hours a PS consultant logged in a month, how many were real billable
-work. `builder/src/lib/utilization.js` + `builder/src/pages/Utilization.jsx`,
-reading `project-for-method-dw.revenue.TimeTracking` joined to `Entity` (who
-logged it) and `Item` (which service line).
+How much of a PS consultant's available time became billable customer work.
+`builder/src/lib/utilization.js` + `builder/src/lib/workingTime.js` +
+`builder/src/pages/Utilization.jsx`, reading
+`project-for-method-dw.revenue.TimeTracking` joined to `Entity` (who logged it)
+and `Item` (which service line).
 
 Sibling of `/free-hours` and deliberately on the same reporting window
 (`2026-01-01`) and the same month-range filter, so the two screens can be read
 against each other.
 
-Every number is a sum of logged time entries. There is no capacity target and no
-headcount denominator: utilization here is billable hours over hours logged,
-which is how PS measures it.
+## Two rates, and why both exist
+
+The screen reports two figures that are easy to confuse, so it names them apart
+and shows both:
+
+| Name on screen | Formula | Answers |
+|---|---|---|
+| **Utilization** | billable ÷ **working hours** | Did enough billable work get done? |
+| **% of billable work** | billable ÷ **hours logged** | Of the time logged, how much was billable? |
+
+A consultant who logs 40 hours in August and bills all 40 is at **100% of
+billable work** and **25% utilization**. That gap is the whole point. Before
+2026-09-09 the screen called the second one "Utilization", which flattered a
+light month: the denominator moved with the numerator.
+
+Working hours are **8 × the working days in the month**, per consultant on the
+roster. August 2026 has 20 working days, so one consultant is 160 hours and the
+24-person roster is 3,840.
+
+Verified against live data on 2026-09-09:
+
+| Month | Working days | Roster | Working hours | Billable | Utilization | % of billable work |
+|---|---|---|---|---|---|---|
+| 2026-06 | 22 | 24 | 4,224 | 2,276.56 | 53.89% | 89.48% |
+| 2026-07 | 22 | 22 | 3,872 | 2,413.18 | 62.32% | 90.32% |
+| 2026-08 | 20 | 24 | 3,840 | 2,276.16 | **59.27%** | 88.67% |
+
+## Every number is rounded DOWN to two decimals
+
+`floor2()` in `utilization.js` is the single rounding function, used by both the
+data layer and the page, so a tile can never disagree with the row it came from.
+Down rather than nearest, so a rate never presents itself as having reached a
+target it missed.
+
+The `toPrecision(12)` inside it is load-bearing. `0.29 * 100` is
+`28.999999999999996` in IEEE 754, and flooring that gives `28.99`. Twelve
+significant digits is far more precision than an hour figure carries and far
+less than the error, so it collapses the representation noise without moving a
+real value. Remove it and roughly one figure in a hundred drops a cent.
+
+## The roster: who gets charged working hours
+
+Only consultants with an **attendance record** that month
+(`IsAttendenceEntry = TRUE`). Attendance entries are excluded from every hour
+bucket — they are the shift clock, not work — but their presence is the only
+signal for who was on the clock, and `revenue` has no staff table.
+
+That gate matters in both directions. In August 2026:
+
+- **Joseph McDonald** is on the roster with no billable work at all. The
+  `FULL OUTER JOIN` keeps him, so he reads as a real 0% instead of vanishing and
+  flattering the team rate.
+- **Zachary Cutler** (3.47h) and **Ashur Shamon** (4.52h) logged a few hours with
+  no attendance row. Charging them a full 160 hours each would have pulled team
+  utilization from 59.27% to 57.1%.
+
+So utilization's numerator and denominator are both drawn from roster
+consultant-months only. Off-roster hours still appear in every hour column and
+in "% of billable work"; they are excluded from the ratio, and that consultant's
+utilization cell reads `—`.
+
+## The working calendar is derived, not listed
+
+`workingTime.js` computes Ontario statutory and civic holidays from their rules
+(Family Day is the third Monday of February; Good Friday follows Easter via
+Meeus/Jones/Butcher) rather than reading a table. A hardcoded list is a dashboard
+that silently goes wrong every January.
+
+Two independent confirmations that 8 × working days is the right denominator:
+
+1. Brandon specified 160 for August 2026.
+2. Method's own attendance rows post **exactly 160.0** for August for 22 of the
+   24 consultants on the roster. The other two post 168.0, which is 21 weekdays
+   × 8 — the Civic Holiday not netted out. Method's stored figure is not
+   self-consistent, so it is not the source of truth here.
+
+`holidays()` handles observed dates: a holiday on a weekend rolls to the next
+weekday, and Boxing Day cannot land on the day Christmas moved to (in 2027
+Christmas is Sat 25 → Mon 27, so Boxing Day is Tue 28).
+
+**Time off is not modelled, because there is no data for it.** Method tracks no
+PTO, vacation or leave anywhere in `TimeTracking`, and attendance posts a flat
+monthly figure regardless. A consultant on a two-week vacation is charged full
+working hours and reads as half-utilized. The screen states this in "How these
+numbers work" rather than pretending otherwise. Fixing it needs a leave source
+that does not exist today.
+
+A related, much smaller effect in the other direction: 4 consultants logged
+22.63 hours on Labour Day 2026. Those hours count in the numerator against no
+capacity, so working a stat holiday nudges utilization above 100% at the margin.
+
+## The open month is prorated to the data, not to today
+
+An open month has not spent its whole capacity, so charging September's full 168
+hours on the 9th would report a third of the real rate. Capacity for the open
+month is therefore `8 × working days elapsed`.
+
+**Elapsed means up to the last day with time entries, not today.** Those are not
+the same day: on 2026-09-09 the newest entry in `TimeTracking` was 2026-09-08,
+because time is logged in arrears. Following the clock would have charged the
+roster a sixth working day (22 × 8 = 176 hours) against zero logged hours and
+understated September by about 14%.
+
+The query returns that date as `data_through` (a `MAX(txn_date)` scalar), and
+`fetchUtilization` hands back `{ rows, dataThrough, asOf }`. Every aggregation
+function takes `asOf` and nothing calls `new Date()` behind the caller's back,
+which is also what makes the capacity tests deterministic.
 
 ## The five buckets
 
@@ -35,7 +140,9 @@ Derived from those:
 | Free | Free Hour sessions. Not invoiced, but counted as billable work |
 | Logged | Everything above. Attendance entries excluded |
 | Billable | Logged − bankable − discounted − internal |
-| Utilization | Billable ÷ Logged |
+| Working hours | 8 × working days, per roster consultant |
+| Utilization | Billable ÷ Working hours |
+| % of billable work | Billable ÷ Logged |
 
 ## Hours come from `DurationHours` alone
 
@@ -101,9 +208,10 @@ Bankable hours are posted at **month end** — nearly all of them on the last da
 Every closed month in 2026 carries 200–330 of them; the current month carries
 zero until it closes.
 
-So an open month shows its largest deduction missing, and its utilization is
-the highest it will ever be. The screen says so in a banner, marks the month
-with a grey dot on the chart, and repeats it in that month's hover card. Do not
+So an open month shows its largest deduction missing, and both its rates are the
+highest they will ever be. That is on top of the prorated capacity above. The
+screen says so in a banner, marks the month with a grey dot on the chart and in
+the "% of billable work" panel, and repeats it in that month's hover card. Do not
 compare an open month to a closed one.
 
 ## Why not `int_consultant_work`
@@ -130,4 +238,8 @@ must stay **above** the `TimeTracking sessions` route: both match on the table
 name, and only the sessions route has an account id to filter on.
 
 The fixture covers a heavy-bankable rep, a mostly-internal rep, a rep with only
-two months on the team, and the current month with no bankable hours.
+two months on the team, the current month with no bankable hours, a roster
+consultant with no billable work (a real 0%) and an off-roster consultant whose
+utilization cell reads `—`. Its `data_through` is deliberately set to
+**yesterday**, because real data lags the clock and that is what prorates the
+open month.
