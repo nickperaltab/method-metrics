@@ -36,17 +36,26 @@ models:
       counts are available back to 2013. Query int_cookie_clicks directly for
       long-run AIO click trends; use this view for the funnel.
 
-      CAVEAT — clicks versus accounts. Untagged channels (Direct, SEO, AIO)
-      record only a browser's first visit, so their raw click volume is
-      understated against tagged channels like AdWords. The measures here are
-      account-based and every cookie's first click is always recorded, so
-      trials, syncs and paying are NOT affected. Click volume is not exposed
-      here for exactly that reason.
+      THESE ARE FIRST-TOUCH MEASURES. Untagged channels (Direct, SEO, AIO) are
+      recorded only on a browser's first ever visit; every later untagged visit
+      is discarded by the pixel. Tagged channels carry a trc code and are
+      recorded every time. Measured position in journey, 2025 onward: Facebook
+      Ads 24.3% later-touch, AdWords 22.2%, Bing 14.6%, against SEO 0.7%,
+      Direct 0.2% and AIO 0.2%. Direct at 99.8% first-touch is the proof this
+      is mechanical rather than behavioural, since typing a URL from memory is
+      definitionally a return visit.
+
+      So `trials` for AIO means "trials whose browser was FIRST introduced to
+      Method by an assistant", not "AI-influenced trials". The second number is
+      larger and currently unmeasurable. The conversion RATE is still a clean
+      read, because the cohort is coherent. It is the VOLUME that is understated,
+      and understated more for untagged channels than tagged ones, so
+      cross-channel volume comparisons are biased against AIO, Direct and SEO.
     config:
       materialized: view
       meta:
-        answers: "For each acquisition channel, including AI assistants, how many trials did it bring, how many reached a sync, and how many became paying customers?"
-        grain: "Account-level (CompanyAccount), rolled to channel x signup month. A customer with 2 accounts counts twice."
+        answers: "For each acquisition channel, including AI assistants, how many trials did it FIRST introduce, how many reached a sync, and how many became paying customers?"
+        grain: "Account-level (CompanyAccount), rolled to channel x signup month. A customer with 2 accounts counts twice. FIRST-TOUCH basis for untagged channels — see description."
         filters:
           - rule: "Trial cohort from int_trials"
             why: "canonical trial definition — excludes conversion exceptions, Method Integration partner rows, and the 0001-01-01 no-trial sentinel"
@@ -62,6 +71,8 @@ models:
           date: "2026-09-14"
           values: "Deliberately does not reconcile to v_channel_scorecard or int_channel_funnel_daily, which root in Att_*. Different question, different basis."
         caveats:
+          - "FIRST-TOUCH, not influence. AIO is credited only when an assistant was the browser's first ever contact with Method; mid-funnel AI visits are discarded by the pixel."
+          - "Cross-channel VOLUME comparison is biased: tagged channels (AdWords, Facebook) are recorded on every visit, untagged ones (AIO, Direct, SEO) only on the first. Rates are comparable; volumes are not."
           - "DIRECTIONAL. Do not quote against the Att_*-derived channel views."
           - "Even attribution split across touching channels, not the Alocet first/last/middle curve."
           - "Syncs and paying are lifetime-to-date, not within the signup month, so recent cohorts keep rising."
@@ -85,10 +96,12 @@ models:
         description: Month the trial account signed up, truncated. Current incomplete month excluded.
       - name: trials
         description: >
-          Fractionally attributed trial accounts. An account touched by three
-          channels contributes 0.333 to each, so the column sums to the true
-          account count across all channels. Canonical trial definition comes
-          from int_trials.
+          Fractionally attributed trial accounts, FIRST-TOUCH basis for
+          untagged channels. An account touched by three channels contributes
+          0.333 to each, so the column sums to the true account count across
+          all channels. Canonical trial definition comes from int_trials.
+          For AIO this counts browsers an assistant introduced, not browsers an
+          assistant influenced.
       - name: synced
         description: >
           Fractionally attributed trial accounts that reached a sync at any

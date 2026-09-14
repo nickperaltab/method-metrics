@@ -28,12 +28,37 @@
 -- cookie, because untagged repeat visits are discarded upstream (TICKETS.md,
 -- "Pixel Tracker: Three Upstream Fixes for AI Traffic").
 --
--- KNOWN CAVEAT — click counts vs account counts. Untagged channels (Direct,
--- SEO, AIO) record only a browser's FIRST visit, so their raw click volume is
--- understated relative to tagged channels like AdWords. The measures in THIS
--- view are account-based, and every cookie's first click is always recorded,
--- so trials / syncs / paying are NOT affected by that gap. Only click volume
--- would be, and it is not exposed here.
+-- THESE ARE FIRST-TOUCH MEASURES. Read that literally before quoting them.
+--
+-- Untagged channels (Direct, SEO, AIO) are recorded only on a browser's FIRST
+-- ever visit; every later untagged visit is discarded by the pixel. Tagged
+-- channels carry a trc code and are recorded on every visit. Measured position
+-- in journey, 2025 onward:
+--
+--     Facebook Ads  tagged     75.7% first   24.3% later
+--     AdWords       tagged     77.8% first   22.2% later
+--     Bing          tagged     85.4% first   14.6% later
+--     SEO           untagged   99.3% first    0.7% later
+--     Direct        untagged   99.8% first    0.2% later
+--     AIO           untagged   99.8% first    0.2% later
+--
+-- Direct at 99.8% first-touch is the proof this is mechanical, not behavioural:
+-- typing a URL from memory is definitionally a return visit.
+--
+-- CONSEQUENCE FOR AIO. An assistant can only be credited here when it was the
+-- very first thing a browser ever did. A mid-funnel AI consultation, which is
+-- the position assistants actually occupy in a buying process, is discarded.
+-- So `trials` for AIO means "trials whose browser was FIRST introduced to
+-- Method by an assistant", not "AI-influenced trials". The second number is
+-- larger and currently unmeasurable.
+--
+-- The conversion RATE is still a clean read, because the cohort is coherent:
+-- first-touch-AI browsers, followed through to paying. It is the VOLUME that
+-- is structurally understated, and understated more for untagged channels
+-- than tagged ones, so cross-channel volume comparisons are biased.
+--
+-- Fixing this is two lines in CookieTracker.cs:165. See TICKETS.md,
+-- "Pixel Tracker: Three Upstream Fixes for AI Traffic".
 --
 -- WINDOW STARTS 2025-01-01, AND NOT EARLIER. CampaignAdjustedRecordID only
 -- began syncing to BigQuery on 2026-09-01 and carries no history, so the
