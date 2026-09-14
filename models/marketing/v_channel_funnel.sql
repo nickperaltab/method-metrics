@@ -106,13 +106,47 @@ WITH trial_cohort AS (
 
 ), cookie_channels AS (
 
-    -- The distinct channels that touched each cookie. AIO is promoted here,
-    -- upstream of this view.
+    -- The distinct channels that touched each cookie.
+    --
+    -- Keyed on CampaignType, NOT Campaign.Name, so the vocabulary matches the
+    -- rest of the project: PPC, SEO, OPN, Direct, Email, Content, Partners,
+    -- Social, Backlinks, Remarketing. Campaign.Name would give AdWords, Bing
+    -- and "Intuit App Card Traffic", which is campaign grain and invents a
+    -- second channel vocabulary nobody else uses.
+    --
+    -- CampaignType is not synced to BigQuery, so the id -> name map is inlined
+    -- from the Alocet CampaignType table (read 2026-09-14, 31 rows). If a new
+    -- type is ever added there it falls to 'Other' rather than breaking, which
+    -- is the opposite of the C# switch's behaviour.
+    --
+    -- The one Att_* channel with no equivalent here is 'None', which means no
+    -- attribution at all. There is no click that represents that.
     SELECT DISTINCT
         cookie_id,
-        channel
-    FROM {{ ref('int_cookie_clicks') }}
-    WHERE channel IS NOT NULL
+        CASE
+            WHEN is_aio THEN 'AIO'
+            ELSE CASE campaign_type_id
+                WHEN 2  THEN 'Email'      WHEN 4  THEN 'Banner_Ads'
+                WHEN 5  THEN 'Seminar'    WHEN 7  THEN 'Partners'
+                WHEN 8  THEN 'Referral_Program'
+                WHEN 13 THEN 'Online_Chat' WHEN 15 THEN 'PPC'
+                WHEN 16 THEN 'OPN'        WHEN 17 THEN 'Social'
+                WHEN 18 THEN 'Remarketing' WHEN 19 THEN 'SEO'
+                WHEN 20 THEN 'Content'    WHEN 23 THEN 'Direct'
+                WHEN 26 THEN 'Direct'     WHEN 27 THEN 'Referral'
+                WHEN 29 THEN 'Direct'     WHEN 30 THEN 'Backlinks'
+                WHEN 31 THEN 'Webinar'
+                ELSE 'Other'
+            END
+        END AS channel
+    FROM (
+        SELECT cc.cookie_id, cc.is_aio, cam.CampaignTypeRecordID AS campaign_type_id
+        FROM {{ ref('int_cookie_clicks') }} cc
+        LEFT JOIN {{ source('marketing', 'Campaign') }} cam
+          ON cam.RecordID = COALESCE(NULLIF(cc.campaign_adjusted_id, 0),
+                                     NULLIF(cc.campaign_raw_id, 0))
+        WHERE cc.channel IS NOT NULL
+    )
 
 ), weighted AS (
 

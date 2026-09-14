@@ -10,6 +10,7 @@ import MotionFunnelDrill from '../components/scorecards/MotionFunnelDrill';
 import GrrIndustryDrill from '../components/scorecards/GrrIndustryDrill';
 import IntakeMixDrill from '../components/scorecards/IntakeMixDrill';
 import ChannelTrajectoryScorecard from '../components/scorecards/ChannelTrajectoryScorecard';
+import ChannelFunnelScorecard from '../components/scorecards/ChannelFunnelScorecard';
 import CohortSurvivalChart from '../components/scorecards/CohortSurvivalChart';
 import RetentionTriangle from '../components/scorecards/RetentionTriangle';
 import Chart from '../components/scorecards/Chart';
@@ -160,6 +161,9 @@ export default function Scorecard({ metrics, bqConnected, onConnect }) {
   }
   if (config.renderer === 'channelTrajectory') {
     return <ChannelTrajectoryScorecard cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
+  }
+  if (config.renderer === 'channelFunnel') {
+    return <ChannelFunnelScorecard cfg={config} bqConnected={bqConnected} onConnect={onConnect} />;
   }
 
   if (needsBq && dataMap.size === 0) {

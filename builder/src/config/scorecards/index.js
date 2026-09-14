@@ -18,6 +18,7 @@ import funnelAcquisition from './funnel-acquisition-scorecard.js';
 import motionFunnel from './motion-funnel-scorecard.js';
 import grrIndustry from './grr-industry-scorecard.js';
 import channelTrajectory from './channel-trajectory-scorecard.js';
+import channelFunnel from './channel-funnel-scorecard.js';
 import intakeMix from './intake-mix-scorecard.js';
 
 export const SCORECARDS = {
@@ -41,5 +42,6 @@ export const SCORECARDS = {
   'customer-segments': customerSegments,
   'grr-industry': grrIndustry,
   'channel-trajectory': channelTrajectory,
+  channelFunnel,
   'intake-mix': intakeMix,
 };
