@@ -72,6 +72,36 @@ This produces `2026-Q2` which `formatDateLabels` can display correctly.
 
 ---
 
+### AttributionChannel Is Defined Three Times Independently
+**Status:** Open
+`AttributionChannel` is built from scratch by three separate CASE statements over the 18 `Att_*` columns: `int_customers.sql:47`, `int_syncs.sql:40`, `int_trials.sql:36`. Ten downstream models carry the result (`int_customer_mrr`, `int_customer_annual_mrr`, `int_customer_retention_triangle`, `int_channel_cac`, `int_channel_forecast`, `int_channel_funnel_trajectory`, and the views on top of them).
+Adding or renaming a channel means editing three places, and they can silently drift. This is the single-touch counterpart to `int_attribution_fractional`, which is correctly defined once.
+**Approach:** Extract into one dbt macro or a `dim_channel` model and have all three call it. Zero numbers move, so no parity exercise is needed. Do this before any channel re-rooting.
+
+---
+
+### int_cookie_clicks Doc Says campaign_raw_id Is "Frequently Null"
+**Status:** Open
+The column description in `_int_cookie_clicks.yml` says `campaign_raw_id` is "frequently null for organic traffic." It is never null. Untagged clicks carry `0`, a sentinel, on 86.2% of 2026 rows.
+**Approach:** One-line doc fix. Worth doing when the model is next touched.
+
+---
+
+### Orphaned revenue.int_ga4_account_journey View in BigQuery
+**Status:** Open
+The model was renamed to `v_ga4_account_journey`, but the old `int_` view still exists in BigQuery and is no longer produced by dbt. Anything pointing at it is reading a frozen snapshot.
+**Approach:** Confirm nothing reads it, then drop it.
+
+---
+
+### Alocet Sync Can Report Success While Inserting Zero Rows
+**Status:** Open
+Between 1 and 14 September, `marketing.CampaignCookieClicks` took no new rows while the nightly MERGE ran daily and reported success. Signature: `inserted=0, updated=15000` on every run, exactly 15,000, which is a page-size cap. Same family as the Contacts checksum-proc issue. It recovered on its own; nothing alerted for 13 days.
+Cookies from the same batch kept arriving normally, so freshness monitoring on one table would not have caught it.
+**Approach:** Alert on `inserted=0` for N consecutive runs, or on a per-table max-date lag threshold. The exact-15,000 MERGE signature is the cheapest detector. Owner is whoever runs the Alocet sync, not this repo.
+
+---
+
 ## Improvements
 
 ### dbt as Definition Source of Truth — Frontend Reads Manifest Directly
@@ -200,6 +230,49 @@ These would show budget/forecast/trajectory broken down by attribution channel �
 **Status:** Open
 Metric 279 (Conversions Budget, queued) is a shell. No budget number for conversions exists yet. The Conversions PLAN scorecard can't be completed until it's populated.
 **Approach:** Add a conversions column to `method_forecast` and wire metric 279 to it, same shape as the existing forecast metrics (285, 286, etc.).
+
+---
+
+### Re-root Channel Attribution from Att_* to int_cookie_clicks
+**Status:** Open
+All channel reporting roots in `revenue.Account.Att_*`, which has no AIO column, is a report response fetched over HTTP rather than a modelled table, and sums to exactly 1 on only 82.1% of accounts. Because of that root, AIO cannot appear in `v_channel_scorecard`, `int_channel_funnel_daily`, or any `Att_*`-derived view no matter what dbt does downstream.
+`int_cookie_clicks` already derives a correct channel including AIO, back to 2013. Re-rooting `int_attribution_fractional` and the single-touch dimension onto it would make every downstream model inherit AIO automatically.
+**Blast radius:** changes every channel number in the business, including revenue-by-channel. Needs Justin in the room and a full snapshot-and-diff per the CLAUDE.md rule.
+**Approach:** Fix the three-way `AttributionChannel` duplication first (see Bugs), then re-root the single definition. Do not bundle with the AIO breakout.
+
+---
+
+### Pixel Tracker: Three Upstream Fixes for AI Traffic
+**Status:** Open — not this repo, needs @methodcrm/first-strike
+Three data losses happen before anything reaches BigQuery, so no dbt model can recover them. None blocks the AIO channel breakout; all three sharpen it.
+1. **Untagged repeat visits are discarded.** `CookieTracker.cs:165`, `if (TrackingOn || isNew)`. A click without a `trc` code is recorded only on a browser's first ever visit, for the 365-day cookie life. Untagged cookies average 1.00 clicks, tagged 1.25. Estimated ~442k clicks never written over 20 months. Conversion metrics are unaffected because they attribute through cookies, and every cookie's first click is always recorded.
+2. **Rule 1 marks AI clicks as ignore.** `SetToIgnore = 1` when the referrer starts with `https://*.method.me`. 74 AI clicks excluded in 2026. One row edit in `CampaignCookieSplitRules`, no deploy. Requires SQL write access, which RevOps does not have (login is `reader`).
+3. **The sales-site pixel needs JavaScript.** Fires on window load plus a 2s delay, so non-rendering crawlers never trigger it. On www.method.me: PerplexityBot 0, CCBot 0, Amazonbot 0, GPTBot 8, all of which appear normally on signup, which calls the pixel server-side. Copy `method-signup-ui`'s `PixelTrackerService.cs` pattern.
+**Approach:** Raise as one ticket with the pixel team. Warn that fix 1 raises click volume for every untagged channel and breaks comparisons at the cutover.
+
+---
+
+### Search Console BigQuery Export — Build Models On It
+**Status:** Open
+The GSC bulk export was enabled 10 September 2026 into `project-for-method-dw.searchconsole`. It does not backfill, so history starts then. Three tables land: `searchdata_site_impression`, `searchdata_url_impression`, `exportLog`.
+**Approach:** Wrap in an `int_search_console` model with the usual QA exclusions, then a page-level view joinable to `int_ga4_events` on path. Gives per-page impressions, clicks, position and CTR next to the crawl and click data.
+
+---
+
+### Non-Brand Search CTR Has Fallen 6x — Investigate
+**Status:** Open
+Page-1 non-brand CTR fell from 0.83% (June 2025) to 0.14% (August 2026) while average position held roughly flat, 6.4 to 7.6. Brand CTR was stable at 4-8% across the same window, so this is not a tracking or reporting artifact.
+Applying Method's own SEO rate of 1 paying customer per 538 clicks at $235 average MRR, the gap is roughly $192k ARR per year. Treat as an order of magnitude, not a forecast: the blended conversion rate almost certainly overstates informational non-brand traffic.
+Cause is unproven. AI Overview is the obvious suspect, but any SERP feature absorbing the click produces the same pattern, and Search Console does not label AI Overview impressions separately.
+**Approach:** Once the GSC export has a few months of data, cut CTR by query class and page type to see whether the decline concentrates in answerable informational queries. That would distinguish AI Overview from a general SERP-feature shift.
+
+---
+
+### Crawler Entry Points: forums robots.txt and llms.txt
+**Status:** Open — marketing / web owner, not this repo
+`forums.method.me/robots.txt` returns 404, so there are no crawler rules on that host at all. ClaudeBot is spending 1,044 hits on `/cs/login.aspx`, a login form. 39% of all AI crawler traffic goes to forums rather than the marketing site.
+`www.method.me/llms.txt` also 404s. That is the standard curated entry point for AI assistants.
+**Approach:** One robots.txt on the forums host disallowing `/cs/` and `/search/`. The llms.txt content is a marketing decision about which pages to surface, not a technical task.
 
 ---
 

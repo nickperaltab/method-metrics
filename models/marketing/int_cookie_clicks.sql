@@ -72,8 +72,25 @@ with clicks as (
         end as ai_source
 
     from clicks c
+    -- Coalesce adjusted -> raw before joining the campaign name.
+    --
+    -- CampaignAdjustedRecordID only began syncing to BigQuery on 2026-09-01 and
+    -- carries no history: it is 100% NULL before 2025, which left `channel`
+    -- NULL on every pre-2025 click. The raw CampaignRecordID has always been
+    -- present, so falling back to it recovers the channel for tagged traffic
+    -- across the full history.
+    --
+    -- This matches what the upstream engine already does:
+    -- MultiTouchAttribution.cs:255 selects
+    -- ISNULL(CampaignAdjustedRef, CampaignRef) AS CampaignAdjustedRef.
+    --
+    -- Untagged pre-2025 clicks (campaign 0, never adjusted) still resolve to
+    -- NULL, because nothing recorded what they were. That is a genuine gap,
+    -- not a join bug. is_aio is unaffected either way: it is derived from the
+    -- referrer and URL, never from the campaign.
     left join {{ source('marketing', 'Campaign') }} cam
-      on cam.RecordID = c.campaign_adjusted_id
+      on cam.RecordID = coalesce(nullif(c.campaign_adjusted_id, 0),
+                                 nullif(c.campaign_raw_id, 0))
 
 )
 

@@ -1,0 +1,107 @@
+version: 2
+
+models:
+  - name: v_channel_funnel
+    description: |
+      CONSUMER VIEW. Trial to sync to paying funnel by CLICK-DERIVED channel,
+      including AIO. Grain: one row per (channel x signup month).
+
+      WHY IT EXISTS. Every other channel view in this project roots in
+      revenue.Account.Att_*. There is no Att_AIO column, and adding one costs
+      three coordinated repo deploys, so AI-sourced traffic can never appear in
+      v_channel_scorecard, int_channel_funnel_daily, or anything built on them.
+      This view roots in int_cookie_clicks, which derives the channel from each
+      click's referrer and landing URL, so AIO is a first-class channel value.
+
+      DOES NOT RECONCILE to the Att_*-derived views, by design. Those answer
+      "which channel does Alocet credit this account to". This answers "which
+      channels actually touched this account's browser". Directionally
+      comparable, never penny-matched. Do not spend an afternoon on the delta.
+
+      ATTRIBUTION MODEL. Each trial account's 1.0 of credit is split evenly
+      across the distinct channels that touched its cookie. Simpler than the
+      Alocet multi-touch engine, which applies first/last/middle percentages and
+      zeroes Direct touches in mixed journeys. Even splitting is the honest
+      floor: touch ORDER is not reliable, because untagged repeat visits are
+      discarded upstream.
+
+      WINDOW STARTS 2025-01-01. CampaignAdjustedRecordID began syncing to
+      BigQuery on 2026-09-01 with no history, so the channel is unresolvable for
+      most earlier clicks. Trial-cohort coverage is 30.8% in 2023 and 34.2% in
+      2024, against 93.8% in 2025 and 90.7% in 2026. Extending the window back
+      would make every channel appear to grow in January 2025.
+
+      AIO ITSELF IS NOT WINDOW-LIMITED. is_aio in int_cookie_clicks is derived
+      from the referrer and URL, never from the campaign join, so AIO click
+      counts are available back to 2013. Query int_cookie_clicks directly for
+      long-run AIO click trends; use this view for the funnel.
+
+      CAVEAT — clicks versus accounts. Untagged channels (Direct, SEO, AIO)
+      record only a browser's first visit, so their raw click volume is
+      understated against tagged channels like AdWords. The measures here are
+      account-based and every cookie's first click is always recorded, so
+      trials, syncs and paying are NOT affected. Click volume is not exposed
+      here for exactly that reason.
+    config:
+      materialized: view
+      meta:
+        answers: "For each acquisition channel, including AI assistants, how many trials did it bring, how many reached a sync, and how many became paying customers?"
+        grain: "Account-level (CompanyAccount), rolled to channel x signup month. A customer with 2 accounts counts twice."
+        filters:
+          - rule: "Trial cohort from int_trials"
+            why: "canonical trial definition — excludes conversion exceptions, Method Integration partner rows, and the 0001-01-01 no-trial sentinel"
+          - rule: "Signup month >= 2025-01-01"
+            why: "CampaignAdjustedRecordID has no history before then, so channel coverage of the trial cohort is 30-34% in 2023-24 against 93.8% in 2025"
+          - rule: "Current incomplete month excluded"
+            why: "standard — mid-month cohorts understate downstream conversion"
+          - rule: "Accounts with no click row on their cookie are absent"
+            why: "no channel can be derived; 7.2% of the 2025+ cohort"
+        methodology_source: "Channel derived in int_cookie_clicks from each click's referrer and landing URL, independent of the Alocet split rules. Trial / sync definitions reused from int_trials and int_syncs unchanged."
+        parity_verified:
+          against: "NOT parity-verified, and not expected to be"
+          date: "2026-09-14"
+          values: "Deliberately does not reconcile to v_channel_scorecard or int_channel_funnel_daily, which root in Att_*. Different question, different basis."
+        caveats:
+          - "DIRECTIONAL. Do not quote against the Att_*-derived channel views."
+          - "Even attribution split across touching channels, not the Alocet first/last/middle curve."
+          - "Syncs and paying are lifetime-to-date, not within the signup month, so recent cohorts keep rising."
+          - "Paying is lumpy for small channels: AIO is ~21.5 customers over 20 months."
+          - "Excludes Google AI Overview entirely — those clicks arrive as ordinary google.com organic. AIO is a floor, not a total."
+        used_by:
+          - "AIO channel breakout (2026-09, leadership request to elevate AI out of SEO)"
+      labels:
+        layer: marketing
+        type: presentation
+        status: directional
+        verified_at: '2026-09-14'
+        source_table: int_cookie_clicks
+    columns:
+      - name: channel
+        description: >
+          Corrected top-level channel from int_cookie_clicks. AIO is promoted
+          out of whatever the upstream rules credited it to. Other values are
+          the Campaign name as recorded.
+      - name: signup_month
+        description: Month the trial account signed up, truncated. Current incomplete month excluded.
+      - name: trials
+        description: >
+          Fractionally attributed trial accounts. An account touched by three
+          channels contributes 0.333 to each, so the column sums to the true
+          account count across all channels. Canonical trial definition comes
+          from int_trials.
+      - name: synced
+        description: >
+          Fractionally attributed trial accounts that reached a sync at any
+          point, from int_syncs deduped to the account. Not restricted to a
+          sync within the signup month, so recent months keep rising.
+      - name: paying
+        description: >
+          Fractionally attributed trial accounts that ever paid, using
+          FirstSaaSInvoiceTxnDate past the 0001-01-01 never-paid sentinel.
+          Lumpy at low volume: read a channel's rate over several months.
+      - name: trial_accounts_touched
+        description: >
+          Unweighted distinct account count, for sanity-checking the fractional
+          measures. Double-counts an account touched by several channels, so it
+          sums to more than the real trial total. Never present it as a channel
+          split.
