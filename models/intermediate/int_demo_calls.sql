@@ -56,9 +56,12 @@ SELECT
   DATE_DIFF(c.call_date, d.demo_date, DAY)                       AS days_from_meeting,
   IF(c.call_date = d.demo_date, 'same_day', 'adjacent_day')      AS match_quality,
 
-  -- lifecycle classification: the reason to use this model at all
+  -- lifecycle classification: the reason to use this model at all.
+  -- NULL means int_demos has no row for this meeting yet, NOT that the call
+  -- was unclassifiable. Filter on is_classified to say which you mean.
   d.zone,
   d.is_demo,
+  d.entity_record_id IS NOT NULL                                 AS is_classified,
 
   -- classification_reason and confidence_note are defined ONCE in int_demos so
   -- that every meeting carries them, including the 64% with no recording.
@@ -83,7 +86,15 @@ SELECT
   d.last_cancel_month
 
 FROM calls c
-JOIN {{ source('revenue_orphans', 'int_demos') }} d
+-- LEFT, not INNER. int_demos is a frozen base table (see the header note); an
+-- INNER JOIN meant every call after its last refresh vanished from this model
+-- entirely rather than appearing unclassified. On 2026-09-15 that was 362 of
+-- 362 transcripts since 28 Aug — the demo coaching report had shown no new
+-- call for two and a half weeks, with no error and no empty-result signal.
+--
+-- A missing classification must degrade to a NULL zone, never to a missing
+-- row: an absent call is indistinguishable from a call that never happened.
+LEFT JOIN {{ source('revenue_orphans', 'int_demos') }} d
   ON d.entity_record_id = c.entity_record_id
  AND ABS(DATE_DIFF(c.call_date, d.demo_date, DAY)) <= 1
 
@@ -91,6 +102,18 @@ JOIN {{ source('revenue_orphans', 'int_demos') }} d
 -- best match so the model is genuinely one row per conversation: same-day wins,
 -- then the earlier meeting. Without this it silently duplicates 1,437 calls and
 -- inflates any count taken from it.
+-- Keep a call if EITHER int_demos classified it, OR Method typed it a demo.
+--
+-- The first arm preserves everything the old INNER JOIN produced, including
+-- the 390 free-hour and 59 customization calls it pulled in by entity+date
+-- proximity — dropping those would silently change Sarah's historical numbers.
+--
+-- The second arm is what unblocks new calls while int_demos is frozen. Without
+-- it, a bare LEFT JOIN would admit all 3,901 customization and 1,598 free-hour
+-- transcripts and rebuild the contamination this model was just cleaned of.
+WHERE d.entity_record_id IS NOT NULL
+   OR c.call_type = 'demo'
+
 QUALIFY ROW_NUMBER() OVER (
   PARTITION BY c.conversation_id
   ORDER BY ABS(DATE_DIFF(c.call_date, d.demo_date, DAY)), d.demo_date
