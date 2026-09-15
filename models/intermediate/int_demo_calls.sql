@@ -11,7 +11,50 @@
 -- dependency is at least explicit). Its classifications are frozen at
 -- 2026-08-28. Reverse-engineering it into a model is tracked separately.
 
-WITH bridge AS (
+-- Lifecycle fences, computed live rather than read from the frozen int_demos.
+--
+-- int_demos is a base table with no builder in any repo; it last refreshed
+-- 2026-08-28, so every call after that had no classification at all. The fences
+-- it carried are just aggregates over revenue.Funnel and revenue.Account, both
+-- live, so there is no reason to depend on a snapshot for them.
+--
+-- Verified against int_demos before switching: 4,261 of 4,336 classified calls
+-- agree (98.3%). Of the 75 that differ, 58 are customers who subscribed AFTER
+-- int_demos was last built — the live computation is right and the frozen table
+-- is stale. See knowledge/validations/2026-09-15-revenue-funnel.md.
+--
+-- Funnel caveat: it is safe for Trial and Conversion, NOT for sync timing —
+-- its Sync rows carry SignupDate, not the sync date, on 39.8% of rows. first_sync
+-- is passed through for context only and nothing classifies on it.
+WITH fences AS (
+  SELECT
+    eid,
+    f_trial,
+    f_sync,
+    f_sub,
+    excl
+  FROM (
+    SELECT EntityRecordID AS eid,
+           MIN(IF(EventType = 'Trial', DATE(Date), NULL)) AS f_trial,
+           MIN(IF(EventType = 'Sync',  DATE(Date), NULL)) AS f_sync
+    FROM {{ source('revenue', 'Funnel') }}
+    GROUP BY eid
+  ) f
+  -- FULL JOIN, and select the coalesced `eid` from USING — not f.eid. An entity
+  -- present only on the Account side gets f.eid = NULL, which silently dropped
+  -- 44 rows into 'no_funnel_record' when this was first written.
+  FULL JOIN (
+    SELECT EntityRecordID AS eid,
+           -- 0001-01-01 is the never-sentinel. Without NULLIF it wins every
+           -- MIN() and this fence matched int_demos on only 30% of rows.
+           MIN(NULLIF(DATE(FirstSaaSInvoiceTxnDate), DATE '0001-01-01')) AS f_sub,
+           LOGICAL_OR(IsConversionException OR Partner = 'Method Integration') AS excl
+    FROM {{ source('revenue', 'Account') }}
+    GROUP BY eid
+  ) a USING (eid)
+),
+
+bridge AS (
   SELECT DISTINCT entity_record_id, account_record_id, company_account
   FROM {{ ref('int_accounts') }}
   WHERE entity_record_id IS NOT NULL
@@ -56,10 +99,22 @@ SELECT
   DATE_DIFF(c.call_date, d.demo_date, DAY)                       AS days_from_meeting,
   IF(c.call_date = d.demo_date, 'same_day', 'adjacent_day')      AS match_quality,
 
-  -- lifecycle classification: the reason to use this model at all.
-  -- NULL means int_demos has no row for this meeting yet, NOT that the call
-  -- was unclassifiable. Filter on is_classified to say which you mean.
-  d.zone,
+  -- Lifecycle zone, computed live from the fences above. Always populated
+  -- where the entity is known, so it no longer goes NULL when int_demos is
+  -- stale. Pure date comparison — this is the whole classification.
+  CASE
+    WHEN fx.excl THEN 'excluded'
+    WHEN fx.f_trial IS NULL AND fx.f_sub IS NULL AND fx.f_sync IS NULL
+      THEN 'no_funnel_record'
+    WHEN fx.f_trial IS NOT NULL AND c.call_date < fx.f_trial THEN 'pre_signup'
+    WHEN fx.f_sub IS NULL OR c.call_date < fx.f_sub THEN 'pre_subscription'
+    ELSE 'post_subscription'
+  END                                                            AS zone,
+  d.zone                                                         AS zone_int_demos,
+
+  -- is_demo answers "did this meeting actually happen", which needs attendance
+  -- evidence rather than dates. That still comes from int_demos, so it stays
+  -- NULL for calls it has not seen. Do not infer it from zone.
   d.is_demo,
   d.entity_record_id IS NOT NULL                                 AS is_classified,
 
@@ -69,8 +124,8 @@ SELECT
   d.confidence_note,
 
   -- context a reader wants without having to compute it
-  DATE_DIFF(d.demo_date, d.first_signup, DAY)                    AS days_since_signup,
-  DATE_DIFF(d.demo_date, d.first_subscribed, DAY)                AS days_since_subscribed,
+  DATE_DIFF(c.call_date, fx.f_trial, DAY)                        AS days_since_signup,
+  DATE_DIFF(c.call_date, fx.f_sub, DAY)                          AS days_since_subscribed,
 
   d.attended,
   d.missed,
@@ -79,10 +134,11 @@ SELECT
   d.typed_deliberately,
   d.multi_account_customer,
 
-  -- fences, so a reader can see why the call was classified this way
-  d.first_signup,
-  d.first_subscribed,
-  d.first_sync,
+  -- fences, so a reader can see why the call was classified this way.
+  -- Live, not int_demos' frozen copies.
+  fx.f_trial                                                     AS first_signup,
+  fx.f_sub                                                       AS first_subscribed,
+  fx.f_sync                                                      AS first_sync,
   d.last_cancel_month
 
 FROM calls c
@@ -94,6 +150,7 @@ FROM calls c
 --
 -- A missing classification must degrade to a NULL zone, never to a missing
 -- row: an absent call is indistinguishable from a call that never happened.
+LEFT JOIN fences fx ON fx.eid = c.entity_record_id
 LEFT JOIN {{ source('revenue_orphans', 'int_demos') }} d
   ON d.entity_record_id = c.entity_record_id
  AND ABS(DATE_DIFF(c.call_date, d.demo_date, DAY)) <= 1

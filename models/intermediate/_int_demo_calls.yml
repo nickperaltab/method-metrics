@@ -19,10 +19,18 @@
 #    post_subscription -> pre_subscription, i.e. real sales demos that were
 #    being read as post-sale support sessions.
 #
-# Known limitation: int_demos is still a hand-built BigQuery base table with no
-# builder in any repo, frozen at 2026-08-28. Anything after that date is
-# unclassified. Declared under the `revenue_orphans` source so the dependency is
-# explicit; reverse-engineering it into a model is tracked separately.
+# 3. zone is computed live from revenue.Funnel and revenue.Account instead of
+#    being read from int_demos. int_demos is a hand-built base table with no
+#    builder in any repo and it froze on 2026-08-28, so every call after that
+#    had no classification. The fences it carried were only aggregates over two
+#    live sources, so depending on a snapshot for them bought nothing.
+#    zone is now populated on 100% of rows and cannot go stale.
+#
+# What still depends on int_demos: is_demo and the attendance flags (attended,
+# missed, booked, typed_deliberately). Those need attendance evidence rather
+# than dates, and reproducing them needs meeting enumeration, which is not
+# solved. They stay NULL for calls int_demos has not seen — visibly, via
+# is_classified, rather than by deleting the row.
 
 models:
   - name: int_demo_calls
@@ -61,11 +69,41 @@ models:
           Align on this rather than re-deciding per report.
       - name: zone
         description: |
-          Lifecycle zone from int_demos: pre_signup, pre_subscription,
-          post_subscription or excluded. Evaluated as of the meeting date.
-          Frozen at 2026-08-28 until int_demos has a builder.
+          Lifecycle zone, computed live: pre_signup, pre_subscription,
+          post_subscription, excluded, or no_funnel_record. Pure date
+          comparison of the call against the trial and subscription fences —
+          that is the entire classification.
+
+          Populated on 100% of rows. No longer read from int_demos, so it
+          cannot go stale: the fences are aggregates over revenue.Funnel and
+          revenue.Account, both live.
+
+          Self-correcting, which cuts both ways. If a customer's
+          first_subscribed is corrected later, a past call reclassifies. That
+          is usually right, but it means the value is a current-best reading
+          rather than a fixed historical record. If you need classifications
+          stable enough to validate a rubric against months later, snapshot
+          them; do not assume this column is immutable.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_signup, pre_subscription, post_subscription, excluded, no_funnel_record]
+      - name: zone_int_demos
+        description: |
+          What the frozen int_demos said, kept for audit. 4,261 of 4,336 agree
+          with the live zone (98.3%); of the 75 that differ, 58 are customers
+          who subscribed after int_demos was last built, where the live value
+          is right and the snapshot is stale. NULL for calls int_demos never
+          saw. Drop this column once int_demos is retired.
       - name: is_demo
-        description: Whether int_demos judged this a genuine demo. ~20% of demo-typed calls are post-subscription sessions.
+        description: |
+          Whether the meeting actually happened. Needs attendance evidence, not
+          dates, so it still comes from int_demos and is NULL for calls it has
+          not seen. Do NOT infer it from zone — zone says when a call sat in the
+          lifecycle, not whether anyone showed up.
+      - name: is_classified
+        description: Whether int_demos has a row for this meeting. Governs is_demo and the attendance flags only — zone is always populated.
       - name: classification_reason
         description: Plain-English explanation of why the meeting got its zone. Defined once in int_demos so every meeting carries it, including the 64% with no recording.
       - name: match_quality
