@@ -1,0 +1,72 @@
+# Ported from hand-written BigQuery DDL on 2026-09-15, along with
+# v_demo_transcripts. Both were unversioned objects in the `revenue` dataset;
+# 16 of 33 int_* objects were in that state at the time.
+#
+# Two behaviour changes were made during the port, both deliberate:
+#
+# 1. WHERE source = 'zoom'. customer_signals.conversations held only Zoom
+#    transcripts when this view was written, so the filter was implicit. In
+#    Sep 2026 Intercom support conversations were added to that table and
+#    2,052 support chats (32.7% of v_demo_transcripts) flowed into the demo
+#    coaching report. The rows now live in support_conversations; the filter
+#    stays so this cannot recur.
+#
+# 2. DATE(occurred_at, 'America/Toronto') instead of UTC. This moved 587 of
+#    4,336 calls to a different call_date, changed match_quality on 102, and
+#    changed zone on 13. Verified correct by spot-check: every sampled row was
+#    an evening call (19:29-21:34 ET) that UTC pushed to the next day, and in
+#    each case demo_date matched the NEW Toronto date exactly. Three flipped
+#    post_subscription -> pre_subscription, i.e. real sales demos that were
+#    being read as post-sale support sessions.
+#
+# Known limitation: int_demos is still a hand-built BigQuery base table with no
+# builder in any repo, frozen at 2026-08-28. Anything after that date is
+# unclassified. Declared under the `revenue_orphans` source so the dependency is
+# explicit; reverse-engineering it into a model is tracked separately.
+
+models:
+  - name: int_demo_calls
+    description: |
+      One row per recorded call, matched to the demo meeting it belongs to and
+      carrying that meeting's lifecycle classification. Intermediate — read
+      v_demo_transcripts instead unless you specifically need calls without a
+      transcript.
+
+      Grain: one row per conversation_id, enforced by the QUALIFY. A call can
+      fall within +/-1 day of two meetings; same-day wins, then the earlier
+      meeting. Without that dedup the model duplicates 1,437 calls and inflates
+      any count taken from it.
+    columns:
+      - name: conversation_id
+        description: |
+          The Zoom meeting UUID, base64, identical to Activity.ZoomMeetingUUID
+          in the CRM — so it is an exact join key to CRM activity, unlike
+          account_id + date. Unique in this model.
+        data_tests: [unique, not_null]
+      - name: entity_record_id
+        description: Company identity. Joins to int_accounts.entity_record_id and to v7_classification on customer_record_id.
+      - name: account_id
+        description: |
+          Method account (revenue.Account.RecordID). NOT EntityRecordID. NULL on
+          calls whose account was never resolved, which is why joining on
+          account_id + date loses ~30% of transcripts and conversation_id does not.
+      - name: call_date
+        description: Call date in America/Toronto, NOT UTC. See the header note — 9.3% of transcripts fall on a different day under UTC.
+      - name: call_type
+        description: Derived from the Method-side activity subject line. Method's own labelling, NOT independent evidence of what the call was about.
+      - name: has_transcript
+        description: |
+          transcript_chars > 200. Reports applying their own stricter threshold
+          (a stored prompt used > 2000) under-count real transcripts by ~5pp.
+          Align on this rather than re-deciding per report.
+      - name: zone
+        description: |
+          Lifecycle zone from int_demos: pre_signup, pre_subscription,
+          post_subscription or excluded. Evaluated as of the meeting date.
+          Frozen at 2026-08-28 until int_demos has a builder.
+      - name: is_demo
+        description: Whether int_demos judged this a genuine demo. ~20% of demo-typed calls are post-subscription sessions.
+      - name: classification_reason
+        description: Plain-English explanation of why the meeting got its zone. Defined once in int_demos so every meeting carries it, including the 64% with no recording.
+      - name: match_quality
+        description: same_day or adjacent_day — how the call was matched to its meeting within the +/-1 day window.
