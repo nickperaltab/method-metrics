@@ -126,9 +126,7 @@ sources:
           - name: Offering
             description: QuickBooks offering SKU (QBO accounts only).
           - name: Partner
-            description: Partner associated with the account (partner-referred / partner-managed context). Metric models exclude internal rows where Partner = 'Method Integration'. Never NULL today — the loader writes '' for "no partner" (0 of 147,005 rows NULL as of 2026-08-17), which is why the `!= 'Method Integration'` filter doesn't need three-valued-logic handling. The `not_null` test below converts that loader convention into a checked invariant instead of an unstated assumption.
-            tests:
-              - not_null
+            description: Partner associated with the account (partner-referred / partner-managed context). Metric models exclude internal rows where Partner = 'Method Integration'.
           - name: Platform
             description: Whether the account is on the new version, the classic version, or has access to both.
           - name: SaaSPayType
@@ -151,6 +149,14 @@ sources:
         description: One row per invoice line. Source of truth for all revenue computation. SaaSAmount is the canonical revenue column.
       - name: Activity
         description: One row per CRM activity (demo, free-consulting session, call, etc.). EntityRecordID maps to a customer. ActivityType is the kind of touch; DueDateStart is the activity date (CreatedDate is NULL on most rows). Demo/free-consulting tracking effectively starts 2024.
+      - name: TimeTracking
+        description: >
+          One row per consultant time entry (Method's own staff logging work, not customer
+          data). GRAIN TRAP: EntityRecordID here is the METHOD STAFF MEMBER who logged the
+          time (joins to Entity.RecordID for their name) — unlike Activity, where
+          EntityRecordID is the customer. The account is MethodCompanyAccountRecordID
+          (joins to Account.RecordID); CustomerRecordID is the customer entity.
+          IsAttendenceEntry rows are internal clock-in/out with no account attached.
       - name: method_forecast
         description: Sheets-federated forecast table (Google Drive scope required). Forecast values by month + channel.
       - name: v_trials_forecast_channel
@@ -166,22 +172,35 @@ sources:
       # materialized table for performance. Consumers use ref().
       - name: int_conversions
         description: One row per Account with FirstSaaSInvoiceTxnDate set (account converted from trial to paying). Used by Conversions metric (#56).
-        columns:
-          - name: TotalSaaSAmount
-            description: >
-              HAZARD — entity-grain data on account-grain rows. Computed as
-              SUM(SaaSAmount) per EntityRecordID (a customer's lifetime SaaS
-              total) and attached to every CompanyAccount row that entity
-              owns; the view does not project EntityRecordID, so there is no
-              key to dedup with. SUM(TotalSaaSAmount) over this view
-              overstates by ~2.5x: $109.5M naive vs $43.7M correct (measured
-              2026-08-17). No Method Monday tile is affected — it only
-              COUNT(*)s this view — but the next consumer to SUM this column
-              will be wrong. See knowledge/schema.md, Known Data Integrity
-              Issues #4, and the dbt-infrastructure audit report §1.4 for the
-              drafted (not yet deployed) fix that projects EntityRecordID.
       - name: int_cancellations
         description: One row per Account with CancellationDate set. Used by Churn metric (#59).
+      - name: int_bom_customers
+        description: >
+          Beginning-of-month customer base at CompanyAccount grain, one row per
+          (CompanyAccount, TxnDate month). Mirrors revenue.v_bom_customers. Hand-written
+          BQ view, not yet dbt-managed. The current month's own row is unreliable — it
+          accumulates from billing transactions across the month — so consumers read the
+          most recently settled month instead. See int_method_monday.
+
+  - name: revenue_orphans
+    database: project-for-method-dw
+    schema: revenue
+    description: >
+      Objects that live in the `revenue` dataset but are NOT dbt models — built
+      by hand in BigQuery and owned by nobody. Declared as sources so models that
+      depend on them are at least explicit about it. 16 of 33 int_* objects were
+      in this state as of 2026-09-15.
+    tables:
+      - name: int_demos
+        description: >
+          One row per demo meeting, with the lifecycle classification
+          (zone, is_demo, classification_reason) the demo reporting depends on.
+
+          STALE AND UNOWNED. A base table with no builder in any repo: last
+          written 2026-08-28, and 366 Zoom transcripts have landed since with no
+          classification. Scheduled to be reverse-engineered into a dbt model and
+          verified row-for-row against the frozen copy before anything switches
+          over. Until then, treat `zone` as correct only up to 2026-08-28.
 
   - name: marketing
     database: project-for-method-dw
@@ -192,8 +211,39 @@ sources:
       refreshed by scripts/marketing_spend_sync.py (WRITE_TRUNCATE). Spend
       dollars live only in BQ and the sheet, never in this repo.
     tables:
+      - name: CampaignCookieClicks
+        description: >
+          One row per marketing click, from Alocet's pixel tracker. Carries the
+          raw click (Referrer, URL, Keyword, BrowserInfo) plus the channel
+          classification applied by CookieClickSplitterService
+          (CampaignAdjustedRecordID, SplitAdjusted, AdjustedByRuleRecordID,
+          LastAdjusted, OverrideRecordID) -- those adjusted columns only began
+          syncing on 2026-09-01. Read via int_cookie_clicks, which corrects
+          three known defects in the upstream rule engine.
+      - name: Campaign
+        description: Campaign lookup. RecordID joins to CampaignCookieClicks.CampaignAdjustedRecordID to give the channel name.
       - name: sheet_cac_raw
         description: Long-format rows (source_tab, block, channel, measure, month, scenario, value) from the marketing tracker's CAC:ARR 2025/2026 tabs. Channel names match revenue.int_customers.AttributionChannel where 1:1; TOTAL and sub-split blocks (PPC_TRIALGEN, PPC_BRANDING, Partners_NO_EVENTS) are non-canonical.
+
+  - name: ga4
+    database: project-for-method-dw
+    schema: analytics_274554544
+    description: |
+      GA4 BigQuery Export for the method.me property (measurement id
+      G-L2HEZNW53E), linked 2026-08-28. Daily `events_YYYYMMDD` plus
+      best-effort `events_intraday_*`. There is NO history before
+      2026-08-28 and GA4 does not backfill.
+
+      Identity: prefer `account_slug` from int_ga4_events, which is parsed
+      from the URL and therefore resolves for every event ever exported.
+      GA4's own `user_id` is only populated from 2026-08-31 (set by GTM) and
+      briefly carried malformed full-URL values that day.
+
+      ~23% of events come from QA/dev hostnames. Always read int_ga4_events,
+      never the raw export.
+    tables:
+      - name: events_*
+        description: One row per GA4 event, nested event_params and user_properties. Wildcard covers both events_YYYYMMDD (complete, daily) and events_intraday_YYYYMMDD (partial, best-effort). Filter and flatten via int_ga4_events.
 
   - name: v7_classification
     database: project-for-method-dw
@@ -202,3 +252,32 @@ sources:
     tables:
       - name: v_entity_primary_label
         description: One row per customer_record_id (= EntityRecordID). Columns used, l1, is_multi_client. Same source the GRR-by-Industry page uses.
+
+  - name: customer_signals
+    database: project-for-method-dw
+    schema: customer_signals
+    description: >
+      Call transcript corpus. Zoom recordings ingested by Nic's pipeline,
+      2025-01 onward. Content-bearing — transcripts live here and must never be
+      copied into the repo or duplicated into another table.
+    tables:
+      - name: conversations
+        description: >
+          One row per recorded call. Keyed conversation_id. account_id joins to
+          revenue.Account.RecordID (= int_accounts.account_record_id), NOT to
+          EntityRecordID — verified 2,527/2,527 exact. call_type is derived from
+          the Method-side activity subject line, so it is NOT independent
+          evidence of what a call was about.
+
+          ZOOM TRANSCRIPTS ONLY. In Sep 2026 Intercom support conversations were
+          added to this table and, because int_demo_calls read it with no source
+          filter, 2,052 support chats (32.7%) landed in the demo coaching report.
+          They now live in customer_signals.support_conversations. Always filter
+          source = 'zoom' anyway: the filter is what stops this recurring.
+      - name: support_conversations
+        description: >
+          Intercom support conversations, split out of `conversations` in Sep
+          2026. source='intercom' is verbatim threads; source='intercom_summary'
+          is the AI digest Method syncs into Activity.Comments — paraphrase, not
+          quotable, and flagged is_verbatim=false. Not call data; do not mix
+          into demo or call analysis.

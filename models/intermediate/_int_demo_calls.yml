@@ -1,0 +1,110 @@
+# Ported from hand-written BigQuery DDL on 2026-09-15, along with
+# v_demo_transcripts. Both were unversioned objects in the `revenue` dataset;
+# 16 of 33 int_* objects were in that state at the time.
+#
+# Two behaviour changes were made during the port, both deliberate:
+#
+# 1. WHERE source = 'zoom'. customer_signals.conversations held only Zoom
+#    transcripts when this view was written, so the filter was implicit. In
+#    Sep 2026 Intercom support conversations were added to that table and
+#    2,052 support chats (32.7% of v_demo_transcripts) flowed into the demo
+#    coaching report. The rows now live in support_conversations; the filter
+#    stays so this cannot recur.
+#
+# 2. DATE(occurred_at, 'America/Toronto') instead of UTC. This moved 587 of
+#    4,336 calls to a different call_date, changed match_quality on 102, and
+#    changed zone on 13. Verified correct by spot-check: every sampled row was
+#    an evening call (19:29-21:34 ET) that UTC pushed to the next day, and in
+#    each case demo_date matched the NEW Toronto date exactly. Three flipped
+#    post_subscription -> pre_subscription, i.e. real sales demos that were
+#    being read as post-sale support sessions.
+#
+# 3. zone is computed live from revenue.Funnel and revenue.Account instead of
+#    being read from int_demos. int_demos is a hand-built base table with no
+#    builder in any repo and it froze on 2026-08-28, so every call after that
+#    had no classification. The fences it carried were only aggregates over two
+#    live sources, so depending on a snapshot for them bought nothing.
+#    zone is now populated on 100% of rows and cannot go stale.
+#
+# What still depends on int_demos: is_demo and the attendance flags (attended,
+# missed, booked, typed_deliberately). Those need attendance evidence rather
+# than dates, and reproducing them needs meeting enumeration, which is not
+# solved. They stay NULL for calls int_demos has not seen — visibly, via
+# is_classified, rather than by deleting the row.
+
+models:
+  - name: int_demo_calls
+    description: |
+      One row per recorded call, matched to the demo meeting it belongs to and
+      carrying that meeting's lifecycle classification. Intermediate — read
+      v_demo_transcripts instead unless you specifically need calls without a
+      transcript.
+
+      Grain: one row per conversation_id, enforced by the QUALIFY. A call can
+      fall within +/-1 day of two meetings; same-day wins, then the earlier
+      meeting. Without that dedup the model duplicates 1,437 calls and inflates
+      any count taken from it.
+    columns:
+      - name: conversation_id
+        description: |
+          The Zoom meeting UUID, base64, identical to Activity.ZoomMeetingUUID
+          in the CRM — so it is an exact join key to CRM activity, unlike
+          account_id + date. Unique in this model.
+        data_tests: [unique, not_null]
+      - name: entity_record_id
+        description: Company identity. Joins to int_accounts.entity_record_id and to v7_classification on customer_record_id.
+      - name: account_id
+        description: |
+          Method account (revenue.Account.RecordID). NOT EntityRecordID. NULL on
+          calls whose account was never resolved, which is why joining on
+          account_id + date loses ~30% of transcripts and conversation_id does not.
+      - name: call_date
+        description: Call date in America/Toronto, NOT UTC. See the header note — 9.3% of transcripts fall on a different day under UTC.
+      - name: call_type
+        description: Derived from the Method-side activity subject line. Method's own labelling, NOT independent evidence of what the call was about.
+      - name: has_transcript
+        description: |
+          transcript_chars > 200. Reports applying their own stricter threshold
+          (a stored prompt used > 2000) under-count real transcripts by ~5pp.
+          Align on this rather than re-deciding per report.
+      - name: zone
+        description: |
+          Lifecycle zone, computed live: pre_signup, pre_subscription,
+          post_subscription, excluded, or no_funnel_record. Pure date
+          comparison of the call against the trial and subscription fences —
+          that is the entire classification.
+
+          Populated on 100% of rows. No longer read from int_demos, so it
+          cannot go stale: the fences are aggregates over revenue.Funnel and
+          revenue.Account, both live.
+
+          Self-correcting, which cuts both ways. If a customer's
+          first_subscribed is corrected later, a past call reclassifies. That
+          is usually right, but it means the value is a current-best reading
+          rather than a fixed historical record. If you need classifications
+          stable enough to validate a rubric against months later, snapshot
+          them; do not assume this column is immutable.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_signup, pre_subscription, post_subscription, excluded, no_funnel_record]
+      - name: zone_int_demos
+        description: |
+          What the frozen int_demos said, kept for audit. 4,261 of 4,336 agree
+          with the live zone (98.3%); of the 75 that differ, 58 are customers
+          who subscribed after int_demos was last built, where the live value
+          is right and the snapshot is stale. NULL for calls int_demos never
+          saw. Drop this column once int_demos is retired.
+      - name: is_demo
+        description: |
+          Whether the meeting actually happened. Needs attendance evidence, not
+          dates, so it still comes from int_demos and is NULL for calls it has
+          not seen. Do NOT infer it from zone — zone says when a call sat in the
+          lifecycle, not whether anyone showed up.
+      - name: is_classified
+        description: Whether int_demos has a row for this meeting. Governs is_demo and the attendance flags only — zone is always populated.
+      - name: classification_reason
+        description: Plain-English explanation of why the meeting got its zone. Defined once in int_demos so every meeting carries it, including the 64% with no recording.
+      - name: match_quality
+        description: same_day or adjacent_day — how the call was matched to its meeting within the +/-1 day window.

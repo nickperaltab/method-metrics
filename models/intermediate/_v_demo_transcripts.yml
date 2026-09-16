@@ -1,0 +1,47 @@
+# The front-facing model for demo transcript analysis. `v_` rather than `int_`
+# because it is meant to be read directly — by people, by Claude sessions, by
+# the demo coaching report. Point people here, not at int_demo_calls and not at
+# customer_signals.conversations.
+#
+# Ported from hand-written BigQuery DDL on 2026-09-15. See _int_demo_calls.yml
+# for the two deliberate behaviour changes made during the port.
+
+models:
+  - name: v_demo_transcripts
+    description: |
+      One row per demo call that has a transcript, with the transcript text,
+      the lifecycle classification and the V7 industry labels already joined.
+      Nothing else needs assembling.
+
+      CONTENT-BEARING. transcript_text is real customer speech. Never copy it
+      into the repo, never duplicate it into another table.
+
+      Filtered to has_transcript (transcript_chars > 200). Use int_demo_calls if
+      you need meetings without a recording — 64% of meetings have none.
+
+      Scope: Zoom call transcripts only. Intercom support conversations live in
+      customer_signals.support_conversations and are deliberately absent; until
+      Sep 2026 they were leaking in and made up 32.7% of this model.
+    columns:
+      - name: conversation_id
+        description: Zoom meeting UUID, base64 — identical to Activity.ZoomMeetingUUID, so it joins to CRM activity exactly.
+        data_tests: [unique, not_null]
+      - name: transcript_text
+        description: |
+          The call transcript. Speaker-labelled where the source VTT carried
+          labels. This is the only independent evidence of what was said —
+          call_type and topic are Method's own labelling, not evidence.
+      - name: participants
+        description: |
+          A single guessed entry built from the CRM ContactEmail, NOT the real
+          Zoom attendee roster. Do not treat it as an attendance record.
+      - name: zone
+        description: pre_signup / pre_subscription / post_subscription / excluded. The lifecycle split to use for demo vs pre-sales vs post-sale sessions.
+      - name: classification_reason
+        description: Plain-English explanation of the zone, per meeting.
+      - name: v7_l1
+        description: V7 industry L1. L2/L3, operating model and confidence are exposed alongside rather than flattened, so no second join is needed.
+      - name: v7_confidence
+        description: The V7 label's own confidence. Check it before segmenting on industry.
+      - name: call_date
+        description: America/Toronto, not UTC.
