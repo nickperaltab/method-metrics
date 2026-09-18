@@ -23,12 +23,17 @@ Columns: what changed, who it reaches, and how to undo it.
 **Change:** the account bridge join went from INNER to LEFT, so demos with no
 CRM account now appear instead of vanishing. New `zone` value `unlinked`.
 
-**Blast radius:** 4,369 → 5,436 rows, **+24%**. Any previously published demo
-count is now low by roughly that much.
+**Blast radius:** 4,369 → 5,436 rows. Any previously published demo count is
+now low by roughly that much.
 
-The pre-existing zone buckets summed to exactly 4,369 after the change, so no
-previously visible row was reclassified. The growth is entirely new rows
-carrying `zone = 'unlinked'`.
+Two changes landed the same day and the total reflects both:
+
+  +1,053  demos with no CRM account, previously dropped by the INNER join
+    +14  calls Zoom held that Method never created an Activity for
+
+No previously visible row was reclassified. The four pre-existing zone buckets
+now hold 4,383, which is the old 4,369 plus those 14 new Zoom-sourced calls.
+Nothing moved between buckets.
 
 **Who reads this:** Sarah Trimble's demo coaching report. She reported the gap
 (her CRM roster found 9 demos for Monday where the view held 4). She had NOT
