@@ -41,7 +41,7 @@ yet been told the view had changed when it went live at ~16:00 ET.
 
 **Why it was wrong:** the INNER join came from the hand-written BigQuery view
 and was carried over unexamined during the dbt port in #61. It required a call
-to already have a Method account, so partner-led and IT-partner demos — 1,055
+to already have a Method account, so partner-led and IT-partner demos — 1,053
 of them, 50-100 a month back to February — were invisible rather than shown as
 unlinked.
 
