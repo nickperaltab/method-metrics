@@ -75,7 +75,21 @@ calls AS (
     cv.topic,
     LENGTH(COALESCE(cv.transcript_text, ''))                     AS transcript_chars
   FROM {{ source('customer_signals', 'conversations') }} cv
-  JOIN bridge b ON b.account_record_id = cv.account_id
+  -- LEFT, not INNER. An inner join here required a call to already have a CRM
+  -- account, so a demo with a prospect not yet in the CRM — partner-led and
+  -- IT-partner calls especially — was not shown as unlinked, it was not shown
+  -- at all. 1,055 demos with real transcripts, 50-100 every month back to
+  -- February, invisible to anyone without an independent roster to compare
+  -- against. Reported by Sarah Trimble 2026-09-18 from a CRM-anchored roster:
+  -- the view held 4 of Monday's 7 recorded demos.
+  --
+  -- Carried over from the hand-written BigQuery view during the 2026-09-15
+  -- port (it is on line 85 of 35c6bb07), so this predates dbt.
+  --
+  -- The WHERE arm below is what bounds the blast radius: only call_type='demo'
+  -- can enter unclassified, so this admits the 1,055 demos and none of the
+  -- 129 customization / 56 free_hour / 7 support rows that are also unlinked.
+  LEFT JOIN bridge b ON b.account_record_id = cv.account_id
   -- conversations is Zoom transcripts only, but that was implicit until Intercom
   -- rows were added to it in Sep 2026 and put 2,052 support chats into the demo
   -- coaching report. The filter is what stops that recurring.
@@ -103,6 +117,13 @@ SELECT
   -- where the entity is known, so it no longer goes NULL when int_demos is
   -- stale. Pure date comparison — this is the whole classification.
   CASE
+    -- FIRST, and before the funnel branches. An unlinked call has no entity at
+    -- all, so every fence comes back NULL and it would otherwise fall into
+    -- 'no_funnel_record' — which asserts something different and false: that we
+    -- know the company and it has no funnel row. Here we do not know the
+    -- company. Conflating the two is the same shape of bug as the 44 rows the
+    -- FULL JOIN note above describes.
+    WHEN c.entity_record_id IS NULL THEN 'unlinked'
     WHEN fx.excl THEN 'excluded'
     WHEN fx.f_trial IS NULL AND fx.f_sub IS NULL AND fx.f_sync IS NULL
       THEN 'no_funnel_record'

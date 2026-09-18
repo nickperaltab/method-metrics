@@ -84,11 +84,21 @@ models:
           rather than a fixed historical record. If you need classifications
           stable enough to validate a rubric against months later, snapshot
           them; do not assume this column is immutable.
+
+          'unlinked' means the call has no CRM account, so no entity, so no
+          fences to classify against. It is NOT a lifecycle stage and must not
+          be read as one: it says we do not know who was on the call, not that
+          they were early. Distinct from 'no_funnel_record', which means the
+          company IS known and has no funnel row. 1,055 rows, all demos.
+
+          Exclude them from any pre/post-subscription breakdown. Keep them for
+          anything counting how many demos happened — they are real calls with
+          real transcripts, and they were invisible entirely until 2026-09-18.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: [pre_signup, pre_subscription, post_subscription, excluded, no_funnel_record]
+                values: [pre_signup, pre_subscription, post_subscription, excluded, no_funnel_record, unlinked]
       - name: zone_int_demos
         description: |
           What the frozen int_demos said, kept for audit. 4,261 of 4,336 agree
