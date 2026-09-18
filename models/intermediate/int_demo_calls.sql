@@ -119,10 +119,16 @@ SELECT
   CASE
     -- FIRST, and before the funnel branches. An unlinked call has no entity at
     -- all, so every fence comes back NULL and it would otherwise fall into
-    -- 'no_funnel_record' — which asserts something different and false: that we
-    -- know the company and it has no funnel row. Here we do not know the
-    -- company. Conflating the two is the same shape of bug as the 44 rows the
-    -- FULL JOIN note above describes.
+    -- 'no_funnel_record' — which asserts something different and false: that
+    -- the company has an Account and simply has no funnel row. Here there is
+    -- no Account, because the prospect never became a customer. Conflating the
+    -- two is the same shape of bug as the 44 rows the FULL JOIN note describes.
+    --
+    -- 'unlinked' is about the ACCOUNT, not about identity. Method's Activity
+    -- table has ContactsName and ContactsEmail for these calls, keyed by
+    -- ZoomMeetingUUID = conversation_id (100 of 100 populated in a September
+    -- sample). We do not ingest them yet. Do not read this value as
+    -- "we don't know who was on the call".
     WHEN c.entity_record_id IS NULL THEN 'unlinked'
     WHEN fx.excl THEN 'excluded'
     WHEN fx.f_trial IS NULL AND fx.f_sub IS NULL AND fx.f_sync IS NULL

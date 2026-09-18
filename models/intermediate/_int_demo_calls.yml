@@ -32,6 +32,25 @@
 # solved. They stay NULL for calls int_demos has not seen — visibly, via
 # is_classified, rather than by deleting the row.
 
+#
+# The 'unlinked' zone, added 2026-09-18. It means the call has no row in
+# revenue.Account. It does NOT mean the person is unknown, and the column
+# description is too short to say why:
+#
+#   Method's Activity table carries ContactsName and ContactsEmail for these
+#   calls, keyed by ZoomMeetingUUID, which is exactly this model's
+#   conversation_id. A 100-row sample of September demo Activities had both
+#   fields populated on 100 of 100. We do not ingest them yet.
+#
+#   What is genuinely absent is an ACCOUNT. Traced end to end on one: Jordan
+#   White, jordan@decisiondigital.com, present in revenue.Contacts under
+#   entity 252306, zero rows in revenue.Account. A prospect, not missing data.
+#   Roughly 20% of demos are in that state, which matches the 19.4% unlinked
+#   share of this model.
+#
+#   Distinct from 'no_funnel_record', which means the company DOES have an
+#   Account and has no funnel row.
+
 models:
   - name: int_demo_calls
     description: |
@@ -70,30 +89,22 @@ models:
       - name: zone
         description: |
           Lifecycle zone, computed live: pre_signup, pre_subscription,
-          post_subscription, excluded, or no_funnel_record. Pure date
-          comparison of the call against the trial and subscription fences —
-          that is the entire classification.
+          post_subscription, excluded, no_funnel_record, or unlinked. Pure date
+          comparison of the call against the trial and subscription fences.
 
-          Populated on 100% of rows. No longer read from int_demos, so it
-          cannot go stale: the fences are aggregates over revenue.Funnel and
-          revenue.Account, both live.
+          Populated on 100% of rows, computed from revenue.Funnel and
+          revenue.Account rather than read from the frozen int_demos, so it
+          cannot go stale.
 
           Self-correcting, which cuts both ways. If a customer's
-          first_subscribed is corrected later, a past call reclassifies. That
-          is usually right, but it means the value is a current-best reading
-          rather than a fixed historical record. If you need classifications
-          stable enough to validate a rubric against months later, snapshot
-          them; do not assume this column is immutable.
+          first_subscribed is corrected later, a past call reclassifies.
+          Snapshot it if you need classifications stable for months.
 
-          'unlinked' means the call has no CRM account, so no entity, so no
-          fences to classify against. It is NOT a lifecycle stage and must not
-          be read as one: it says we do not know who was on the call, not that
-          they were early. Distinct from 'no_funnel_record', which means the
-          company IS known and has no funnel row. 1,055 rows, all demos.
-
-          Exclude them from any pre/post-subscription breakdown. Keep them for
-          anything counting how many demos happened — they are real calls with
-          real transcripts, and they were invisible entirely until 2026-09-18.
+          'unlinked' (1,055 rows, all demos) means no row in revenue.Account:
+          the prospect never became a customer. It is NOT a lifecycle stage and
+          NOT "we don't know who was on the call" - see the header note. Exclude
+          it from pre/post-subscription breakdowns; keep it when counting how
+          many demos happened.
         data_tests:
           - not_null
           - accepted_values:
